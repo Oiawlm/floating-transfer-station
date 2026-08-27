@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 私密报告安全问题
+    url: https://github.com/Oiawlm/floating-transfer-station/security/advisories/new
+    about: 漏洞、凭据或隐私问题请不要创建公开 Issue。

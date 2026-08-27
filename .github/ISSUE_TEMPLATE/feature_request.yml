@@ -1,0 +1,36 @@
+name: 提一个功能想法
+description: 说明你想解决的问题和真实使用场景
+title: "[想法] "
+labels: ["类型：功能", "状态：待确认"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到了什么问题
+      description: 先说现在为什么不方便，不需要先设计技术方案。
+    validations:
+      required: true
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 使用场景
+      description: 你在什么软件之间、处理什么内容、希望完成什么结果？
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: 你希望的结果
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 现在有没有替代做法
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我理解路线图中的候选方向不等于版本承诺。
+          required: true

@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FloatingTransferStation/FloatingTransferStation.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FloatingTransferStation.Tests/FloatingTransferStation.Tests.csproj" />
+  </Folder>
+</Solution>

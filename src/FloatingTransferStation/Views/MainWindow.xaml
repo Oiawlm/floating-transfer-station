@@ -1,0 +1,325 @@
+<Window x:Class="FloatingTransferStation.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="clr-namespace:FloatingTransferStation.Models"
+        xmlns:vm="clr-namespace:FloatingTransferStation.ViewModels"
+        mc:Ignorable="d"
+        Title="悬浮中转站"
+        Topmost="True"
+        ShowInTaskbar="False"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        FontFamily="Segoe UI Variable, Segoe UI"
+        SizeToContent="Manual"
+        PreviewKeyDown="MainWindow_PreviewKeyDown"
+        MouseEnter="Root_MouseEnter"
+        MouseLeave="Root_MouseLeave">
+  <Window.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="../Resources/MainWindowStyles.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+      <DataTemplate x:Key="CategoryTabTemplate"
+                    DataType="{x:Type vm:CategoryViewModel}">
+        <Border Style="{StaticResource CategoryTabContainerStyle}"
+                Tag="{Binding Category}"
+                AllowDrop="True"
+                MouseEnter="CategoryTab_MouseEnter"
+                MouseLeave="CategoryTab_MouseLeave"
+                MouseLeftButtonDown="CategoryTab_MouseLeftButtonDown"
+                MouseLeftButtonUp="CategoryTab_MouseLeftButtonUp"
+                DragEnter="CategoryTab_DragEnter"
+                DragLeave="CategoryTab_DragLeave"
+                DragOver="CategoryTab_DragOver"
+                Drop="CategoryTab_Drop">
+          <Grid Background="Transparent">
+            <Border Style="{StaticResource CategoryActiveLayerStyle}" />
+            <Border Style="{StaticResource CategoryDropTargetLayerStyle}" />
+            <Border Style="{StaticResource CategoryActiveMarkerStyle}" />
+            <TextBlock Text="◎"
+                       Style="{StaticResource CategoryDefaultMarkerStyle}" />
+            <TextBlock Text="{Binding DisplayName}"
+                       Style="{StaticResource CategoryLabelTextStyle}" />
+            <TextBox Text="{Binding DraftName, UpdateSourceTrigger=Explicit}"
+                     Style="{StaticResource CategoryNameEditorStyle}"
+                     TextChanged="CategoryNameEditor_TextChanged"
+                     KeyDown="CategoryNameEditor_KeyDown"
+                     LostKeyboardFocus="CategoryNameEditor_LostKeyboardFocus" />
+          </Grid>
+        </Border>
+      </DataTemplate>
+    </ResourceDictionary>
+  </Window.Resources>
+
+  <Border x:Name="WindowShell"
+          Style="{StaticResource WindowShellStyle}"
+          SizeChanged="WindowShell_SizeChanged">
+    <Grid Background="Transparent">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="58" />
+      </Grid.ColumnDefinitions>
+
+      <Grid x:Name="PanelContentHost"
+            Grid.Column="0"
+            Background="Transparent"
+            RenderTransformOrigin="0.5,0.5">
+        <Grid.Style>
+          <Style TargetType="Grid">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding IsPanelExpanded}" Value="False">
+                <Setter Property="Visibility" Value="Hidden" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Grid.Style>
+        <Grid.RenderTransform>
+          <TranslateTransform x:Name="PanelContentTransform" />
+        </Grid.RenderTransform>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="44" />
+          <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border x:Name="HeaderSurface"
+                Grid.Row="0"
+                Style="{StaticResource HeaderSurfaceStyle}">
+          <Grid Background="Transparent">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="112" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Thumb x:Name="HeaderDragRegion"
+                   Grid.Column="0"
+                   Width="112"
+                   Style="{StaticResource HeaderThumbStyle}"
+                   DragDelta="HeaderThumb_DragDelta"
+                   DragCompleted="ResizeThumb_DragCompleted" />
+            <TextBlock Text="{Binding ActivePanel.DisplayName}"
+                       Grid.Column="0"
+                       Margin="14,0"
+                       Style="{StaticResource HeaderTitleStyle}" />
+
+            <Border x:Name="HeaderActionRegion"
+                    Grid.Column="1"
+                    Background="Transparent"
+                    Cursor="Arrow"
+                    MouseEnter="HeaderActionRegion_MouseEnter"
+                    MouseLeave="HeaderActionRegion_MouseLeave">
+              <StackPanel x:Name="HeaderActions"
+                          Orientation="Horizontal"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Center"
+                          Margin="0,0,8,0"
+                          Style="{StaticResource HeaderActionsHostStyle}">
+                <Button x:Name="ResetWindowButton"
+                        Style="{StaticResource HeaderActionButtonStyle}"
+                        ToolTip="恢复默认尺寸和位置"
+                        AutomationProperties.Name="恢复默认尺寸和位置"
+                        Click="ResetWindowButton_Click">
+                  <Viewbox Width="16" Height="16">
+                    <Path Data="M4,9 L4,4 L9,4 M15,9 L15,4 L10,4 M4,10 L4,15 L9,15 M15,10 L15,15 L10,15"
+                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                          StrokeThickness="1.8"
+                          StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round"
+                          StrokeLineJoin="Round" />
+                  </Viewbox>
+                </Button>
+
+                <Button x:Name="DeleteContentButton"
+                        ToolTip="清空当前分类"
+                        AutomationProperties.Name="清空当前分类"
+                        Foreground="{StaticResource DangerBrush}"
+                        Click="DeleteContentButton_Click">
+                  <Button.Style>
+                    <Style TargetType="Button"
+                           BasedOn="{StaticResource HeaderActionButtonStyle}">
+                      <Setter Property="Padding" Value="5" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding ActivePanel.Items.Count}" Value="0">
+                          <Setter Property="IsEnabled" Value="False" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Button.Style>
+                  <Grid Width="20" Height="20">
+                    <Viewbox Width="16"
+                             Height="16"
+                             HorizontalAlignment="Left"
+                             VerticalAlignment="Top">
+                      <Path Data="M6,7 L18,7 L17,20 L7,20 Z M9,4 L15,4 L16,6 L8,6 Z M10,10 L12,10 L12,17 L10,17 Z M14,10 L16,10 L16,17 L14,17 Z"
+                            Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                            Stretch="Uniform" />
+                    </Viewbox>
+                    <Border x:Name="SelectedCountBadge"
+                            Width="14"
+                            Height="14"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Background="{StaticResource AccentBrush}"
+                            CornerRadius="{StaticResource SelectedCountBadgeCornerRadius}"
+                            IsHitTestVisible="False"
+                            Visibility="Collapsed">
+                      <Viewbox Margin="2"
+                               Stretch="Uniform"
+                               StretchDirection="DownOnly">
+                        <TextBlock x:Name="SelectedCountText"
+                                   Foreground="White"
+                                   FontSize="9"
+                                   FontWeight="SemiBold"
+                                   TextAlignment="Center" />
+                      </Viewbox>
+                    </Border>
+                  </Grid>
+                </Button>
+              </StackPanel>
+            </Border>
+          </Grid>
+        </Border>
+
+        <ListBox x:Name="BoardList"
+                 Grid.Row="1"
+                 ItemsSource="{Binding ActivePanel.Items}"
+                 ItemContainerStyle="{StaticResource BoardListItemStyle}"
+                 Style="{StaticResource BoardListStyle}"
+                 SelectionMode="Multiple"
+                 SelectionChanged="BoardList_SelectionChanged"
+                 AllowDrop="True"
+                 PreviewMouseLeftButtonDown="BoardList_PreviewMouseLeftButtonDown"
+                 PreviewMouseLeftButtonUp="BoardList_PreviewMouseLeftButtonUp"
+                 PreviewMouseMove="BoardList_PreviewMouseMove"
+                 PreviewDragOver="BoardList_PreviewDragOver"
+                 PreviewDragLeave="BoardList_PreviewDragLeave"
+                 PreviewDrop="BoardList_PreviewDrop"
+                 ButtonBase.Click="BoardList_ButtonClick"
+                 ScrollViewer.CanContentScroll="True"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.ScrollUnit="Pixel"
+                 VirtualizingPanel.VirtualizationMode="Recycling">
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel />
+            </ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
+        </ListBox>
+
+        <Canvas Grid.Row="1"
+                Background="Transparent"
+                IsHitTestVisible="False">
+          <Border x:Name="InsertionIndicator"
+                  Canvas.Left="0"
+                  Canvas.Top="0"
+                  Width="{Binding ActualWidth, ElementName=BoardList}"
+                  Height="2"
+                  Background="{StaticResource AccentBrush}"
+                  CornerRadius="1"
+                  IsHitTestVisible="False"
+                  Opacity="0"
+                  Visibility="Collapsed" />
+        </Canvas>
+
+        <Border x:Name="StatusOverlay"
+                Grid.Row="1"
+                Panel.ZIndex="2"
+                Style="{StaticResource StatusOverlayStyle}">
+          <TextBlock Text="{Binding StatusText}"
+                     Style="{StaticResource StatusTextStyle}" />
+        </Border>
+
+        <Thumb Grid.RowSpan="2"
+               Style="{StaticResource WidthResizeThumbStyle}"
+               DragDelta="WidthThumb_DragDelta"
+               DragCompleted="ResizeThumb_DragCompleted" />
+        <Thumb Grid.Row="1"
+               Style="{StaticResource HeightResizeThumbStyle}"
+               DragDelta="HeightThumb_DragDelta"
+               DragCompleted="ResizeThumb_DragCompleted" />
+      </Grid>
+
+      <Border x:Name="CategoryRail"
+              Grid.Column="1"
+              AllowDrop="True"
+              DragEnter="CategoryRail_DragEnter"
+              DragLeave="CategoryRail_DragLeave"
+              DragOver="CategoryRail_DragOver"
+              Drop="CategoryRail_Drop">
+        <Border.Style>
+          <Style TargetType="Border" BasedOn="{StaticResource RailSurfaceStyle}">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding IsCategoryRailVisible}" Value="False">
+                <Setter Property="Visibility" Value="Hidden" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Border.Style>
+        <ItemsControl ItemsSource="{Binding Categories}"
+                      ItemTemplate="{StaticResource CategoryTabTemplate}"
+                      Background="Transparent">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <UniformGrid Rows="4" Columns="1" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+        </ItemsControl>
+      </Border>
+
+      <ContentControl x:Name="CollapsedCategoryHandle"
+                      Grid.Column="1"
+                      Content="{Binding DefaultCapturePanel}"
+                      ContentTemplate="{StaticResource CategoryTabTemplate}"
+                      Background="{StaticResource TabRailBrush}"
+                      HorizontalContentAlignment="Stretch"
+                      VerticalContentAlignment="Stretch">
+        <ContentControl.Style>
+          <Style TargetType="ContentControl">
+            <Setter Property="Visibility" Value="Visible" />
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="ContentControl">
+                  <Border Background="{TemplateBinding Background}">
+                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                  </Border>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding IsCollapsedCategoryHandleVisible}" Value="False">
+                <Setter Property="Visibility" Value="Hidden" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </ContentControl.Style>
+      </ContentControl>
+
+      <Popup x:Name="CompactStatusPopup"
+             PlacementTarget="{Binding ElementName=CategoryRail}"
+             Placement="Left"
+             HorizontalOffset="-8"
+             AllowsTransparency="True"
+             PopupAnimation="None"
+             StaysOpen="True"
+             IsHitTestVisible="False"
+             Focusable="False">
+        <Border Style="{StaticResource CompactStatusPopupStyle}">
+          <TextBlock Text="{Binding StatusText}"
+                     Style="{StaticResource StatusTextStyle}" />
+        </Border>
+      </Popup>
+
+      <Border Grid.ColumnSpan="2"
+              Panel.ZIndex="10"
+              Style="{StaticResource WindowShellOutlineStyle}" />
+    </Grid>
+  </Border>
+</Window>

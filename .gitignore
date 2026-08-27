@@ -1,0 +1,11 @@
+.superpowers/
+.worktrees/
+.tools/
+.vs/
+**/bin/
+**/obj/
+artifacts/
+TestResults/
+*.bundle
+*.user
+*.suo
