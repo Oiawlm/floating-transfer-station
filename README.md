@@ -6,13 +6,13 @@
 
 ## 下载与安装
 
-前往 [Releases](https://github.com/Oiawlm/floating-transfer-station/releases) 下载 `悬浮中转站-Setup-1.0.0.exe`。
+前往 [Releases](https://github.com/Oiawlm/floating-transfer-station/releases) 下载 `FloatingTransferStation-Setup-1.0.0.exe`。
 
 1. 运行安装程序。
 2. 选择程序安装位置和内容存储父目录；不修改时使用当前用户的本地目录。
 3. 安装完成后软件会启动，并在以后登录 Windows 时自动运行。
 
-1.0.0 安装包会在最终安装态确认完成后正式开放下载。源码和构建方式已经公开，Release 页面中的 `.zip` / `.tar.gz` 是 GitHub 自动生成的源码包，不是 Windows 安装程序。
+1.0.0 安装包会在最终安装态确认完成后正式开放下载。本地构建产物使用中文名，GitHub Release 为了稳定下载链接使用上面的英文文件名。Release 页面中的 `.zip` / `.tar.gz` 是 GitHub 自动生成的源码包，不是 Windows 安装程序。
 
 ## 它能做什么
 

@@ -205,7 +205,7 @@ public sealed class LifecycleTests
         var roadmap = File.ReadAllText(Path.Combine(repositoryRoot, "ROADMAP.md"));
         var contributing = File.ReadAllText(Path.Combine(repositoryRoot, "CONTRIBUTING.md"));
 
-        StringAssert.Contains(readme, "悬浮中转站-Setup-1.0.0.exe");
+        StringAssert.Contains(readme, "FloatingTransferStation-Setup-1.0.0.exe");
         StringAssert.Contains(changelog, "## 1.0.0");
         StringAssert.Contains(license, "MIT License");
         StringAssert.Contains(license, "Copyright (c) 2026 Oiawlm");
