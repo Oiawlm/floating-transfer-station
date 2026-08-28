@@ -133,6 +133,20 @@
                   </Viewbox>
                 </Button>
 
+                <Button x:Name="BatchPinButton"
+                        Style="{StaticResource HeaderActionButtonStyle}"
+                        ToolTip="置顶已选内容"
+                        AutomationProperties.Name="置顶已选内容"
+                        Foreground="{StaticResource AccentBrush}"
+                        Visibility="Collapsed"
+                        Click="BatchPinButton_Click">
+                  <Viewbox Width="16" Height="16">
+                    <Path Data="M8,3 L16,3 L14,8 L17,11 L12,11 L12,18 L10,20 L10,11 L5,11 L8,8 Z"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                          Stretch="Uniform" />
+                  </Viewbox>
+                </Button>
+
                 <Button x:Name="DeleteContentButton"
                         ToolTip="清空当前分类"
                         AutomationProperties.Name="清空当前分类"

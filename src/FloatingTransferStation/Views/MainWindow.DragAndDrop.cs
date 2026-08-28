@@ -164,6 +164,7 @@ public partial class MainWindow : Window
             : "清空当前分类";
         DeleteContentButton.ToolTip = label;
         AutomationProperties.SetName(DeleteContentButton, label);
+        UpdateBatchPinButton();
     }
 
     private void BeginPanelDrag()

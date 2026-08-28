@@ -49,6 +49,67 @@ public partial class MainWindow : Window
             DispatcherPriority.Send);
     }
 
+    private void UpdateBatchPinButton()
+    {
+        var selected = BoardList.SelectedItems.OfType<BoardItem>().ToArray();
+        BatchPinButton.Visibility = selected.Length > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        if (selected.Length == 0)
+        {
+            return;
+        }
+
+        var action = selected.All(item => item.IsPinned) ? "取消置顶" : "置顶";
+        var label = $"{action}已选 {selected.Length} 项";
+        BatchPinButton.ToolTip = label;
+        AutomationProperties.SetName(BatchPinButton, label);
+    }
+
+    private async void BatchPinButton_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (_isClosing || _viewModel.ActivePanel is not { } activePanel)
+        {
+            return;
+        }
+
+        var selectedBefore = CaptureSelectedItemIds();
+        if (selectedBefore.Length == 0)
+        {
+            return;
+        }
+
+        var selectedIds = activePanel.Items
+            .Where(item => selectedBefore.Contains(item.Id))
+            .Select(item => item.Id)
+            .ToArray();
+        if (selectedIds.Length != selectedBefore.Length)
+        {
+            return;
+        }
+
+        var selectedSet = selectedIds.ToHashSet();
+        var isPinned = activePanel.Items
+            .Where(item => selectedSet.Contains(item.Id))
+            .Any(item => !item.IsPinned);
+        var category = activePanel.Category;
+        var offset = CurrentScrollOffset();
+        await _mutations.SetPinnedAsync(selectedIds, isPinned);
+        await Dispatcher.InvokeAsync(
+            () =>
+            {
+                if (_viewModel.ActivePanel?.Category != category)
+                {
+                    return;
+                }
+
+                RestoreSelection(selectedBefore);
+                RestoreExplicitScrollOffset(category, offset);
+            },
+            DispatcherPriority.Send);
+    }
+
     private void HeaderActionRegion_MouseEnter(object sender, MouseEventArgs e) =>
         SetHeaderActionsVisible(true);
 
