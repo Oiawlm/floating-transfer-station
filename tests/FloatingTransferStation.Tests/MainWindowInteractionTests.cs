@@ -4229,7 +4229,7 @@ public sealed class MainWindowInteractionTests
             var batchPin = (Button?)window.FindName("BatchPinButton");
             Assert.IsNotNull(batchPin);
 
-            ((RoutedCommand)batchPin.Command).Execute(batchPin.CommandParameter, batchPin);
+            batchPin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, batchPin));
             PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
             CompleteLayout(window);
 
@@ -4276,7 +4276,7 @@ public sealed class MainWindowInteractionTests
             var batchPin = (Button?)window.FindName("BatchPinButton");
             Assert.IsNotNull(batchPin);
 
-            ((RoutedCommand)batchPin.Command).Execute(batchPin.CommandParameter, batchPin);
+            batchPin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, batchPin));
             PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
             CompleteLayout(window);
 
@@ -4317,7 +4317,7 @@ public sealed class MainWindowInteractionTests
             var batchPin = (Button?)window.FindName("BatchPinButton");
             Assert.IsNotNull(batchPin);
 
-            ((RoutedCommand)batchPin.Command).Execute(batchPin.CommandParameter, batchPin);
+            batchPin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, batchPin));
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
             CompleteLayout(window);
 
@@ -4337,9 +4337,20 @@ public sealed class MainWindowInteractionTests
             Assert.AreEqual(
                 "正在保存 2 项置顶状态",
                 AutomationProperties.GetName(batchPin));
+            var buttonReenabled = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            batchPin.IsEnabledChanged += (_, _) =>
+            {
+                if (batchPin.IsEnabled)
+                {
+                    buttonReenabled.TrySetResult();
+                }
+            };
 
             store.ReleaseFirstSave();
-            PumpDispatcherUntil(window.Dispatcher, store.FirstSaveCompleted.Task);
+            PumpDispatcherUntil(
+                window.Dispatcher,
+                Task.WhenAll(store.FirstSaveCompleted.Task, buttonReenabled.Task));
             CompleteLayout(window);
 
             CollectionAssert.AreEquivalent(
@@ -4386,7 +4397,7 @@ public sealed class MainWindowInteractionTests
             var batchPin = (Button?)window.FindName("BatchPinButton");
             Assert.IsNotNull(batchPin);
 
-            ((RoutedCommand)batchPin.Command).Execute(batchPin.CommandParameter, batchPin);
+            batchPin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, batchPin));
             CompleteLayout(window);
 
             CollectionAssert.AreEqual(before, board.Items(BoardCategory.Inbox).ToArray());

@@ -65,6 +65,7 @@ public partial class MainWindow : Window
         BatchPinButton.Visibility = selected.Length > 0
             ? Visibility.Visible
             : Visibility.Collapsed;
+        BatchPinButton.IsEnabled = selected.Length > 0 && !_isBatchPinPending;
         if (selected.Length == 0)
         {
             CommandManager.InvalidateRequerySuggested();
@@ -77,6 +78,12 @@ public partial class MainWindow : Window
         BatchPinButton.ToolTip = label;
         AutomationProperties.SetName(BatchPinButton, label);
         CommandManager.InvalidateRequerySuggested();
+    }
+
+    private async void BatchPinButton_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        await ApplyBatchPinSelectionAsync();
     }
 
     private void BatchPinCommand_CanExecute(object sender, CanExecuteRoutedEventArgs e)
