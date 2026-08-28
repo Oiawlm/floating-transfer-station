@@ -216,6 +216,9 @@ public sealed class LifecycleTests
         Assert.IsFalse(
             readme.Contains("当前发布构建为 0.10.0", StringComparison.Ordinal),
             "README must not describe 0.10.0 as the current release.");
+        Assert.IsFalse(
+            readme.Contains("会在最终安装态确认完成后正式开放下载", StringComparison.Ordinal),
+            "README must not describe an already approved release as pending install confirmation.");
     }
 
     [TestMethod]
