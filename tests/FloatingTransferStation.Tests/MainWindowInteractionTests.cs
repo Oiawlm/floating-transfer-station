@@ -4154,6 +4154,52 @@ public sealed class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void BatchPinCommand_CtrlPInvokesTheCurrentSelection()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selectedBottom = board.AddText("selected bottom");
+        var selectedTop = board.AddText("selected top");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(selectedBottom);
+            list.SelectedItems.Add(selectedTop);
+            var batchPin = (Button?)window.FindName("BatchPinButton");
+            Assert.IsNotNull(batchPin);
+            Assert.AreEqual("Ctrl+P", AutomationProperties.GetAccessKey(batchPin));
+            var commandProperty = typeof(MainWindow).GetProperty(
+                "BatchPinCommand",
+                BindingFlags.Public | BindingFlags.Static);
+            Assert.IsNotNull(commandProperty);
+            var command = commandProperty.GetValue(null) as RoutedUICommand;
+            Assert.IsNotNull(command);
+            Assert.IsTrue(command.InputGestures.OfType<KeyGesture>().Any(
+                gesture => gesture.Key == Key.P &&
+                           gesture.Modifiers == ModifierKeys.Control));
+            Assert.IsTrue(command.CanExecute(null, window));
+
+            command.Execute(null, window);
+            PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
+            CompleteLayout(window);
+
+            Assert.IsTrue(selectedTop.IsPinned);
+            Assert.IsTrue(selectedBottom.IsPinned);
+            Assert.AreEqual(1, store.SaveCount);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void BatchPinButton_MixedSelectionPinsAllInSourceOrderAndPreservesSelectionAndScroll()
     {
         using var directory = new TestDirectory();
@@ -4286,6 +4332,11 @@ public sealed class MainWindowInteractionTests
                 "删除已选 2 项",
                 ((Button)window.FindName("DeleteContentButton")).ToolTip);
             Assert.AreEqual(Visibility.Visible, batchPin.Visibility);
+            Assert.IsFalse(batchPin.IsEnabled);
+            Assert.AreEqual("正在保存 2 项置顶状态", batchPin.ToolTip);
+            Assert.AreEqual(
+                "正在保存 2 项置顶状态",
+                AutomationProperties.GetName(batchPin));
 
             store.ReleaseFirstSave();
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveCompleted.Task);
@@ -4294,6 +4345,8 @@ public sealed class MainWindowInteractionTests
             CollectionAssert.AreEquivalent(
                 new[] { selectedTop, selectedOther },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.IsTrue(batchPin.IsEnabled);
+            Assert.AreEqual("取消置顶已选 2 项", batchPin.ToolTip);
         }
         finally
         {
