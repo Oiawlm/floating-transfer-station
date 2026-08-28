@@ -12,6 +12,7 @@ public enum BoardBatchMoveResult
 
 public enum BoardPinResult
 {
+    Invalid,
     NoChange,
     Changed,
     Failed
@@ -121,7 +122,16 @@ public sealed class BoardMutationService
         CancellationToken cancellationToken = default) =>
         _operationGate.RunAsync(async () =>
         {
-            var change = _board.SetPinnedMany(itemIds, isPinned);
+            BoardPinChange change;
+            try
+            {
+                change = _board.SetPinnedMany(itemIds, isPinned);
+            }
+            catch (Exception exception) when (exception is ArgumentException or KeyNotFoundException)
+            {
+                return BoardPinResult.Invalid;
+            }
+
             if (!change.Changed)
             {
                 return BoardPinResult.NoChange;

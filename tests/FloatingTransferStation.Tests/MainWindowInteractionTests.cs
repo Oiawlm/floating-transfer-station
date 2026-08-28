@@ -4229,7 +4229,7 @@ public sealed class MainWindowInteractionTests
             var batchPin = (Button?)window.FindName("BatchPinButton");
             Assert.IsNotNull(batchPin);
 
-            batchPin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, batchPin));
+            ((RoutedCommand)batchPin.Command).Execute(batchPin.CommandParameter, batchPin);
             PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
             CompleteLayout(window);
 
@@ -4276,7 +4276,7 @@ public sealed class MainWindowInteractionTests
             var batchPin = (Button?)window.FindName("BatchPinButton");
             Assert.IsNotNull(batchPin);
 
-            batchPin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, batchPin));
+            ((RoutedCommand)batchPin.Command).Execute(batchPin.CommandParameter, batchPin);
             PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
             CompleteLayout(window);
 
@@ -4317,7 +4317,7 @@ public sealed class MainWindowInteractionTests
             var batchPin = (Button?)window.FindName("BatchPinButton");
             Assert.IsNotNull(batchPin);
 
-            batchPin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, batchPin));
+            ((RoutedCommand)batchPin.Command).Execute(batchPin.CommandParameter, batchPin);
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
             CompleteLayout(window);
 
@@ -4386,7 +4386,7 @@ public sealed class MainWindowInteractionTests
             var batchPin = (Button?)window.FindName("BatchPinButton");
             Assert.IsNotNull(batchPin);
 
-            batchPin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, batchPin));
+            ((RoutedCommand)batchPin.Command).Execute(batchPin.CommandParameter, batchPin);
             CompleteLayout(window);
 
             CollectionAssert.AreEqual(before, board.Items(BoardCategory.Inbox).ToArray());
