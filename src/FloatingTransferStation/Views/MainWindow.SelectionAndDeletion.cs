@@ -16,6 +16,16 @@ namespace FloatingTransferStation.Views;
 
 public partial class MainWindow : Window
 {
+    public static RoutedUICommand BatchPinCommand { get; } = new(
+        "批量置顶或取消置顶",
+        nameof(BatchPinCommand),
+        typeof(MainWindow),
+        new InputGestureCollection
+        {
+            new KeyGesture(Key.P, ModifierKeys.Control)
+        });
+
+    private bool _isBatchPinPending;
 
     private async void BoardList_ButtonClick(object sender, RoutedEventArgs e)
     {
@@ -47,6 +57,109 @@ public partial class MainWindow : Window
                 RestoreExplicitScrollOffset(category, offset);
             },
             DispatcherPriority.Send);
+    }
+
+    private void UpdateBatchPinButton()
+    {
+        var selected = BoardList.SelectedItems.OfType<BoardItem>().ToArray();
+        BatchPinButton.Visibility = selected.Length > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        BatchPinButton.IsEnabled = selected.Length > 0 && !_isBatchPinPending;
+        if (selected.Length == 0)
+        {
+            CommandManager.InvalidateRequerySuggested();
+            return;
+        }
+
+        var label = _isBatchPinPending
+            ? $"正在保存 {selected.Length} 项置顶状态"
+            : $"{(selected.All(item => item.IsPinned) ? "取消置顶" : "置顶")}已选 {selected.Length} 项";
+        BatchPinButton.ToolTip = label;
+        AutomationProperties.SetName(BatchPinButton, label);
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private async void BatchPinButton_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        await ApplyBatchPinSelectionAsync();
+    }
+
+    private void BatchPinCommand_CanExecute(object sender, CanExecuteRoutedEventArgs e)
+    {
+        e.CanExecute =
+            BoardList is not null &&
+            BoardList.SelectedItems.Count > 0 &&
+            !_isClosing &&
+            !_isBatchPinPending;
+        e.Handled = true;
+    }
+
+    private async void BatchPinCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        await ApplyBatchPinSelectionAsync();
+    }
+
+    private async Task ApplyBatchPinSelectionAsync()
+    {
+        if (_isClosing ||
+            _isBatchPinPending ||
+            _viewModel.ActivePanel is not { } activePanel)
+        {
+            return;
+        }
+
+        var selectedBefore = CaptureSelectedItemIds();
+        if (selectedBefore.Length == 0)
+        {
+            return;
+        }
+
+        var selectedSet = selectedBefore.ToHashSet();
+        var selectedIds = activePanel.Items
+            .Where(item => selectedSet.Contains(item.Id))
+            .Select(item => item.Id)
+            .ToArray();
+        if (selectedIds.Length != selectedBefore.Length)
+        {
+            return;
+        }
+
+        var isPinned = activePanel.Items
+            .Where(item => selectedSet.Contains(item.Id))
+            .Any(item => !item.IsPinned);
+        var category = activePanel.Category;
+        var offset = CurrentScrollOffset();
+        _isBatchPinPending = true;
+        UpdateBatchPinButton();
+        try
+        {
+            await _mutations.SetPinnedAsync(selectedIds, isPinned);
+            await Dispatcher.InvokeAsync(
+                () =>
+                {
+                    if (_viewModel.ActivePanel?.Category != category)
+                    {
+                        return;
+                    }
+
+                    RestoreSelection(selectedBefore);
+                    RestoreExplicitScrollOffset(category, offset);
+                },
+                DispatcherPriority.Send);
+        }
+        finally
+        {
+            await Dispatcher.InvokeAsync(
+                () =>
+                {
+                    _isBatchPinPending = false;
+                    UpdateBatchPinButton();
+                },
+                DispatcherPriority.Send);
+        }
     }
 
     private void HeaderActionRegion_MouseEnter(object sender, MouseEventArgs e) =>

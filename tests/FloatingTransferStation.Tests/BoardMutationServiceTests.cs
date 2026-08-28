@@ -161,6 +161,39 @@ public sealed class BoardMutationServiceTests
     }
 
     [TestMethod]
+    [TestCategory("Adversarial")]
+    public async Task SetPinned_QueuedBehindDeleteReturnsInvalidWithoutSecondSave()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("delete before queued pin");
+        var store = new MutationStore(directory.Root);
+        var gate = new BoardOperationGate();
+        var service = new BoardMutationService(board, store, _ => { }, gate);
+        var blockerStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseBlocker = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var blocker = gate.RunAsync(async () =>
+        {
+            blockerStarted.TrySetResult();
+            await releaseBlocker.Task;
+            return true;
+        });
+        await blockerStarted.Task;
+
+        var delete = service.DeleteManyAsync([item.Id]);
+        var pin = service.SetPinnedAsync([item.Id], true);
+        releaseBlocker.TrySetResult();
+
+        Assert.IsTrue(await delete);
+        Assert.AreEqual("Invalid", (await pin).ToString());
+        Assert.IsTrue(await blocker);
+        Assert.AreEqual(1, store.SaveCount);
+        Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
+    }
+
+    [TestMethod]
     public async Task DeleteMany_RemovesMixedItemsWithOneSaveAndCleansImages()
     {
         using var directory = new TestDirectory();

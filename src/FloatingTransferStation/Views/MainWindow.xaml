@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:models="clr-namespace:FloatingTransferStation.Models"
         xmlns:vm="clr-namespace:FloatingTransferStation.ViewModels"
+        xmlns:views="clr-namespace:FloatingTransferStation.Views"
         mc:Ignorable="d"
         Title="悬浮中转站"
         Topmost="True"
@@ -18,6 +19,11 @@
         PreviewKeyDown="MainWindow_PreviewKeyDown"
         MouseEnter="Root_MouseEnter"
         MouseLeave="Root_MouseLeave">
+  <Window.CommandBindings>
+    <CommandBinding Command="{x:Static views:MainWindow.BatchPinCommand}"
+                    CanExecute="BatchPinCommand_CanExecute"
+                    Executed="BatchPinCommand_Executed" />
+  </Window.CommandBindings>
   <Window.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
@@ -130,6 +136,21 @@
                           StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round"
                           StrokeLineJoin="Round" />
+                  </Viewbox>
+                </Button>
+
+                <Button x:Name="BatchPinButton"
+                        Style="{StaticResource HeaderActionButtonStyle}"
+                        ToolTip="置顶已选内容"
+                        AutomationProperties.Name="置顶已选内容"
+                        AutomationProperties.AccessKey="Ctrl+P"
+                        Foreground="{StaticResource AccentBrush}"
+                        Visibility="Collapsed"
+                        Click="BatchPinButton_Click">
+                  <Viewbox Width="16" Height="16">
+                    <Path Data="M8,3 L16,3 L14,8 L17,11 L12,11 L12,18 L10,20 L10,11 L5,11 L8,8 Z"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                          Stretch="Uniform" />
                   </Viewbox>
                 </Button>
 

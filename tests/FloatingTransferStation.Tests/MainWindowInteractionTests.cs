@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Collections.Specialized;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
@@ -4109,6 +4110,312 @@ public sealed class MainWindowInteractionTests
         finally
         {
             window.Closed -= closedHandler;
+        }
+    }
+
+    [STATestMethod]
+    public void BatchPinButton_TracksSelectionAndAdvertisesOneDeterministicAction()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var normal = board.AddText("normal");
+        var pinned = board.AddText("pinned");
+        board.SetPinnedMany([pinned.Id], true);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var batchPin = (Button?)window.FindName("BatchPinButton");
+            Assert.IsNotNull(batchPin);
+            Assert.AreEqual(Visibility.Collapsed, batchPin.Visibility);
+
+            list.SelectedItems.Add(pinned);
+            list.SelectedItems.Add(normal);
+            CompleteLayout(window);
+
+            Assert.AreEqual(Visibility.Visible, batchPin.Visibility);
+            Assert.AreEqual("置顶已选 2 项", batchPin.ToolTip);
+            Assert.AreEqual("置顶已选 2 项", AutomationProperties.GetName(batchPin));
+
+            list.SelectedItems.Remove(normal);
+            CompleteLayout(window);
+
+            Assert.AreEqual("取消置顶已选 1 项", batchPin.ToolTip);
+            Assert.AreEqual("取消置顶已选 1 项", AutomationProperties.GetName(batchPin));
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void BatchPinCommand_CtrlPInvokesTheCurrentSelection()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selectedBottom = board.AddText("selected bottom");
+        var selectedTop = board.AddText("selected top");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(selectedBottom);
+            list.SelectedItems.Add(selectedTop);
+            var batchPin = (Button?)window.FindName("BatchPinButton");
+            Assert.IsNotNull(batchPin);
+            Assert.AreEqual("Ctrl+P", AutomationProperties.GetAccessKey(batchPin));
+            var commandProperty = typeof(MainWindow).GetProperty(
+                "BatchPinCommand",
+                BindingFlags.Public | BindingFlags.Static);
+            Assert.IsNotNull(commandProperty);
+            var command = commandProperty.GetValue(null) as RoutedUICommand;
+            Assert.IsNotNull(command);
+            Assert.IsTrue(command.InputGestures.OfType<KeyGesture>().Any(
+                gesture => gesture.Key == Key.P &&
+                           gesture.Modifiers == ModifierKeys.Control));
+            Assert.IsTrue(command.CanExecute(null, window));
+
+            command.Execute(null, window);
+            PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
+            CompleteLayout(window);
+
+            Assert.IsTrue(selectedTop.IsPinned);
+            Assert.IsTrue(selectedBottom.IsPinned);
+            Assert.AreEqual(1, store.SaveCount);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void BatchPinButton_MixedSelectionPinsAllInSourceOrderAndPreservesSelectionAndScroll()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var keep = board.AddText("keep");
+        var selectedBottom = board.AddText("selected bottom");
+        var selectedTop = board.AddText("selected top");
+        var existingPin = board.AddText("existing pin");
+        board.SetPinnedMany([existingPin.Id], true);
+        AddScrollableItems(board, BoardCategory.Inbox);
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var viewer = FindDescendant<ScrollViewer>(list);
+            Assert.IsNotNull(viewer);
+            ScrollTo(window, viewer, 120);
+            var offset = viewer.VerticalOffset;
+            list.SelectedItems.Add(existingPin);
+            list.SelectedItems.Add(selectedBottom);
+            list.SelectedItems.Add(selectedTop);
+            var batchPin = (Button?)window.FindName("BatchPinButton");
+            Assert.IsNotNull(batchPin);
+
+            batchPin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, batchPin));
+            PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
+            CompleteLayout(window);
+
+            Assert.IsTrue(existingPin.IsPinned);
+            Assert.IsTrue(selectedTop.IsPinned);
+            Assert.IsTrue(selectedBottom.IsPinned);
+            Assert.IsFalse(keep.IsPinned);
+            CollectionAssert.AreEqual(
+                new[] { existingPin, selectedTop, selectedBottom },
+                board.Items(BoardCategory.Inbox).Take(3).ToArray());
+            Assert.AreEqual(1, store.SaveCount);
+            CollectionAssert.AreEquivalent(
+                new[] { existingPin, selectedTop, selectedBottom },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(offset, viewer.VerticalOffset, 0.5);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void BatchPinButton_AllPinnedSelectionUnpinsAsOneSourceOrderedBlock()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var normal = board.AddText("normal");
+        var selectedLower = board.AddText("selected lower");
+        var selectedUpper = board.AddText("selected upper");
+        var keepPinned = board.AddText("keep pinned");
+        board.SetPinnedMany([keepPinned.Id, selectedUpper.Id, selectedLower.Id], true);
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(selectedLower);
+            list.SelectedItems.Add(selectedUpper);
+            var batchPin = (Button?)window.FindName("BatchPinButton");
+            Assert.IsNotNull(batchPin);
+
+            batchPin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, batchPin));
+            PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
+            CompleteLayout(window);
+
+            CollectionAssert.AreEqual(
+                new[] { keepPinned, selectedUpper, selectedLower, normal },
+                board.Items(BoardCategory.Inbox).ToArray());
+            Assert.IsTrue(keepPinned.IsPinned);
+            Assert.IsFalse(selectedUpper.IsPinned);
+            Assert.IsFalse(selectedLower.IsPinned);
+            CollectionAssert.AreEquivalent(
+                new[] { selectedUpper, selectedLower },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void BatchPinButton_SlowSaveKeepsSelectionAndDeleteScope()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selectedOther = board.AddText("selected other");
+        var selectedTop = board.AddText("selected top");
+        var store = new BlockingFirstSuccessfulSaveBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(selectedTop);
+            list.SelectedItems.Add(selectedOther);
+            var batchPin = (Button?)window.FindName("BatchPinButton");
+            Assert.IsNotNull(batchPin);
+
+            batchPin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, batchPin));
+            PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
+            CompleteLayout(window);
+
+            CollectionAssert.AreEquivalent(
+                new[] { selectedTop, selectedOther },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(
+                Visibility.Visible,
+                ((Border)window.FindName("SelectedCountBadge")).Visibility);
+            Assert.AreEqual("2", ((TextBlock)window.FindName("SelectedCountText")).Text);
+            Assert.AreEqual(
+                "删除已选 2 项",
+                ((Button)window.FindName("DeleteContentButton")).ToolTip);
+            Assert.AreEqual(Visibility.Visible, batchPin.Visibility);
+            Assert.IsFalse(batchPin.IsEnabled);
+            Assert.AreEqual("正在保存 2 项置顶状态", batchPin.ToolTip);
+            Assert.AreEqual(
+                "正在保存 2 项置顶状态",
+                AutomationProperties.GetName(batchPin));
+            var buttonReenabled = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            batchPin.IsEnabledChanged += (_, _) =>
+            {
+                if (batchPin.IsEnabled)
+                {
+                    buttonReenabled.TrySetResult();
+                }
+            };
+
+            store.ReleaseFirstSave();
+            PumpDispatcherUntil(
+                window.Dispatcher,
+                Task.WhenAll(store.FirstSaveCompleted.Task, buttonReenabled.Task));
+            CompleteLayout(window);
+
+            CollectionAssert.AreEquivalent(
+                new[] { selectedTop, selectedOther },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.IsTrue(batchPin.IsEnabled);
+            Assert.AreEqual("取消置顶已选 2 项", batchPin.ToolTip);
+        }
+        finally
+        {
+            store.ReleaseFirstSave();
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void BatchPinButton_SaveFailureRestoresStateOrderSelectionAndScroll()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        AddScrollableItems(board, BoardCategory.Inbox);
+        var selectedTop = board.Items(BoardCategory.Inbox)[3];
+        var selectedBottom = board.Items(BoardCategory.Inbox)[5];
+        var before = board.Items(BoardCategory.Inbox).ToArray();
+        var beforePinStates = before.Select(item => item.IsPinned).ToArray();
+        var store = new RecordingBoardStore(directory.Root)
+        {
+            SaveFailure = new IOException("Injected failure.")
+        };
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var viewer = FindDescendant<ScrollViewer>(list);
+            Assert.IsNotNull(viewer);
+            ScrollTo(window, viewer, 120);
+            var offset = viewer.VerticalOffset;
+            list.SelectedItems.Add(selectedTop);
+            list.SelectedItems.Add(selectedBottom);
+            var batchPin = (Button?)window.FindName("BatchPinButton");
+            Assert.IsNotNull(batchPin);
+
+            batchPin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, batchPin));
+            CompleteLayout(window);
+
+            CollectionAssert.AreEqual(before, board.Items(BoardCategory.Inbox).ToArray());
+            CollectionAssert.AreEqual(
+                beforePinStates,
+                before.Select(item => item.IsPinned).ToArray());
+            CollectionAssert.AreEquivalent(
+                new[] { selectedTop, selectedBottom },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(offset, viewer.VerticalOffset, 0.5);
+            Assert.AreEqual(
+                "置顶状态未保存，内容已恢复。",
+                ((MainWindowViewModel)window.DataContext).StatusText);
+        }
+        finally
+        {
+            store.SaveFailure = null;
+            CloseWindow(window);
         }
     }
 
