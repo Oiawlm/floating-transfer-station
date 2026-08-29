@@ -6,13 +6,13 @@
 
 ## 下载与安装
 
-前往 [Releases](https://github.com/Oiawlm/floating-transfer-station/releases) 下载 `FloatingTransferStation-Setup-1.0.0.exe`。
+前往 [Releases](https://github.com/Oiawlm/floating-transfer-station/releases) 下载 `FloatingTransferStation-Setup-1.1.0.exe`。
 
 1. 运行安装程序。
 2. 选择程序安装位置和内容存储父目录；不修改时使用当前用户的本地目录。
 3. 安装完成后软件会启动，并在以后登录 Windows 时自动运行。
 
-1.0.0 最终候选已经通过自动质量门和安装态总体试用，安装包现已开放下载。本地构建产物使用中文名，GitHub Release 为了稳定下载链接使用上面的英文文件名。Release 页面中的 `.zip` / `.tar.gz` 是 GitHub 自动生成的源码包，不是 Windows 安装程序。
+1.1.0 已通过自动质量门和安装包构建验证，安装包现已开放下载。本地构建产物使用中文名，GitHub Release 为了稳定下载链接使用上面的英文文件名。Release 页面中的 `.zip` / `.tar.gz` 是 GitHub 自动生成的源码包，不是 Windows 安装程序。
 
 ## 它能做什么
 
@@ -43,7 +43,7 @@
 
 ## 当前限制
 
-- 动态分类增删、设置界面、快捷启动和常驻模式仍在路线图中，不属于 1.0.0 承诺。
+- 动态分类增删、设置界面、快捷启动和常驻模式仍在路线图中，不属于 1.1.0 承诺。
 - 外部拖放基于 Windows 通用格式；不同软件实际提供的格式不同，因此不是所有来源都能接收。
 - B-005 图片分类反馈稍晚、B-006 微信复制图片偶发生成两份目前属于低优先级现场观察，自动测试环境未能稳定复现。
 
