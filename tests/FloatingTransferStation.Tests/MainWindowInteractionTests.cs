@@ -2627,6 +2627,232 @@ public sealed class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void SelectAllCommand_CtrlASelectsEveryCurrentItemWithoutSaving()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var bottom = board.AddText("bottom");
+        var middle = board.AddText("middle");
+        var top = board.AddText("top");
+        board.AddText("other category", BoardCategory.Reference);
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var badge = (Border?)window.FindName("SelectedCountBadge");
+            var count = (TextBlock?)window.FindName("SelectedCountText");
+            var batchPin = (Button?)window.FindName("BatchPinButton");
+            Assert.IsNotNull(badge);
+            Assert.IsNotNull(count);
+            Assert.IsNotNull(batchPin);
+            Assert.IsTrue(ApplicationCommands.SelectAll.InputGestures.OfType<KeyGesture>().Any(
+                gesture => gesture.Key == Key.A &&
+                           gesture.Modifiers == ModifierKeys.Control));
+            Assert.IsTrue(ApplicationCommands.SelectAll.CanExecute(null, window));
+
+            ApplicationCommands.SelectAll.Execute(null, window);
+            CompleteLayout(window);
+
+            CollectionAssert.AreEquivalent(
+                new[] { top, middle, bottom },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(Visibility.Visible, badge.Visibility);
+            Assert.AreEqual("3", count.Text);
+            Assert.AreEqual(Visibility.Visible, batchPin.Visibility);
+            Assert.AreEqual(0, store.SaveCount);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void SelectAllCommand_CategoryNameEditorSelectsTextWithoutExpandingCardSelection()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selected = board.AddText("selected");
+        board.AddText("not selected");
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(selected);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var panel = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.Inbox);
+            viewModel.BeginCategoryNameEdit(panel);
+            CompleteLayout(window);
+            var editor = FindDescendants<TextBox>(FindCategoryTab(window, panel)).Single();
+            Assert.IsTrue(editor.Focus());
+            Keyboard.Focus(editor);
+            editor.CaretIndex = editor.Text.Length;
+            editor.SelectionLength = 0;
+
+            ApplicationCommands.SelectAll.Execute(null, editor);
+            CompleteLayout(window);
+
+            Assert.AreEqual(0, editor.SelectionStart);
+            Assert.AreEqual(editor.Text.Length, editor.SelectionLength);
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void SelectAllCommand_EmptyCategoryCannotExecuteOrSave()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("reference", BoardCategory.Reference);
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            Keyboard.ClearFocus();
+
+            Assert.IsFalse(ApplicationCommands.SelectAll.CanExecute(null, window));
+
+            ApplicationCommands.SelectAll.Execute(null, window);
+            CompleteLayout(window);
+
+            Assert.AreEqual(0, list.SelectedItems.Count);
+            Assert.AreEqual(0, store.SaveCount);
+            Assert.IsNull(store.LastSavedSettings);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void SelectAllCommand_CollapsedPanelCannotExecuteOrSelectHiddenItems()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selected = board.AddText("first");
+        board.AddText("second");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            list.SelectedItems.Add(selected);
+            Assert.IsTrue(viewModel.IsPanelExpanded);
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+
+            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+            CompleteLayout(window);
+
+            Assert.IsFalse(viewModel.IsPanelExpanded);
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Keyboard.ClearFocus();
+            Assert.IsFalse(ApplicationCommands.SelectAll.CanExecute(null, window));
+
+            ApplicationCommands.SelectAll.Execute(null, window);
+            CompleteLayout(window);
+
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(0, store.SaveCount);
+            Assert.IsNull(store.LastSavedSettings);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void SelectAllCommand_ClosingWindowCannotExecuteOrChangeSelection()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selected = board.AddText("selected");
+        board.AddText("not selected");
+        var store = new BlockingSettingsSaveBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        window.Closed += (_, _) => closed.TrySetResult();
+        var closeStarted = false;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(selected);
+            Keyboard.ClearFocus();
+
+            window.Close();
+            closeStarted = true;
+            PumpDispatcherUntil(window.Dispatcher, store.SettingsSaveStarted.Task);
+
+            Assert.IsFalse(window.IsEnabled);
+            Assert.IsFalse(ApplicationCommands.SelectAll.CanExecute(null, window));
+            var boardSaveCount = store.BoardSaveCount;
+            var settingsSaveCount = store.SettingsSaveCount;
+
+            ApplicationCommands.SelectAll.Execute(null, window);
+            CompleteLayout(window);
+
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(boardSaveCount, store.BoardSaveCount);
+            Assert.AreEqual(settingsSaveCount, store.SettingsSaveCount);
+        }
+        finally
+        {
+            if (closeStarted)
+            {
+                store.ReleaseSettingsSave();
+                if (!closed.Task.IsCompleted)
+                {
+                    PumpDispatcherUntil(window.Dispatcher, closed.Task);
+                }
+            }
+            else
+            {
+                CloseWindow(window);
+            }
+        }
+    }
+
+    [STATestMethod]
     public void SelectionSurvivesAutoCollapseButClearsOnUserCategorySwitch()
     {
         using var directory = new TestDirectory();
@@ -5245,6 +5471,46 @@ public sealed class MainWindowInteractionTests
             ImageDeleted.TrySetResult();
             return true;
         }
+    }
+
+    private sealed class BlockingSettingsSaveBoardStore(string root) : IBoardStore
+    {
+        private readonly TaskCompletionSource _releaseSettingsSave = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource SettingsSaveStarted { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        public int BoardSaveCount { get; private set; }
+        public int SettingsSaveCount { get; private set; }
+        public string ImagesDirectory { get; } = Path.Combine(root, "images");
+
+        public Task<BoardSnapshot> LoadBoardAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new BoardSnapshot());
+
+        public Task SaveBoardAsync(
+            BoardSnapshot snapshot,
+            CancellationToken cancellationToken = default)
+        {
+            BoardSaveCount++;
+            return Task.CompletedTask;
+        }
+
+        public Task<WindowSettings> LoadSettingsAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(WindowSettings.Default);
+
+        public async Task SaveSettingsAsync(
+            WindowSettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            SettingsSaveCount++;
+            SettingsSaveStarted.TrySetResult();
+            await _releaseSettingsSave.Task.WaitAsync(cancellationToken);
+        }
+
+        public bool TryDeleteImage(string? absolutePath) => true;
+
+        public void ReleaseSettingsSave() => _releaseSettingsSave.TrySetResult();
     }
 
     private sealed class BlockingFirstSuccessfulSaveBoardStore(string root) : IBoardStore

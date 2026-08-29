@@ -102,6 +102,34 @@ public partial class MainWindow : Window
         await ApplyBatchPinSelectionAsync();
     }
 
+    private void SelectAllCommand_CanExecute(object sender, CanExecuteRoutedEventArgs e)
+    {
+        if (Keyboard.FocusedElement is TextBoxBase)
+        {
+            return;
+        }
+
+        e.CanExecute =
+            !_isClosing &&
+            _viewModel.IsPanelExpanded &&
+            _viewModel.ActivePanel is { Items.Count: > 0 };
+        e.Handled = true;
+    }
+
+    private void SelectAllCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (_isClosing ||
+            Keyboard.FocusedElement is TextBoxBase ||
+            !_viewModel.IsPanelExpanded ||
+            _viewModel.ActivePanel is not { Items.Count: > 0 })
+        {
+            return;
+        }
+
+        BoardList.SelectAll();
+        e.Handled = true;
+    }
+
     private async Task ApplyBatchPinSelectionAsync()
     {
         if (_isClosing ||
