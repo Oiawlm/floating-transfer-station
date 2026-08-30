@@ -2548,7 +2548,9 @@ public sealed class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void Backspace_DeletesSelectionButNeverClearsWithoutSelection()
+    [DataRow(Key.Back)]
+    [DataRow(Key.Delete)]
+    public void DeleteShortcut_DeletesSelectionButNeverClearsWithoutSelection(Key key)
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -2564,17 +2566,40 @@ public sealed class MainWindowInteractionTests
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
             list.SelectedItems.Add(remove);
+            InvokePrivate(window, "SetHeaderActionsVisible", true);
+            CompleteLayout(window);
+            var shell = (Border)window.FindName("WindowShell");
+            if (key == Key.Delete)
+            {
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(250));
+                CompleteLayout(window);
+                SaveVisualEvidence(
+                    shell,
+                    "before-delete.png",
+                    "FTS_DELETE_SHORTCUT_EVIDENCE_DIR");
+            }
 
-            window.RaiseEvent(NewKeyEventArgs(window, Key.Back));
+            var deleteShortcut = NewKeyEventArgs(window, key);
+            window.RaiseEvent(deleteShortcut);
+            Assert.IsTrue(deleteShortcut.Handled);
             PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
             CompleteLayout(window);
+            if (key == Key.Delete)
+            {
+                SaveVisualEvidence(
+                    shell,
+                    "after-delete.png",
+                    "FTS_DELETE_SHORTCUT_EVIDENCE_DIR");
+            }
 
             CollectionAssert.AreEqual(
                 new[] { keep.Id },
                 board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
             var saves = store.SaveCount;
-            window.RaiseEvent(NewKeyEventArgs(window, Key.Back));
+            var emptySelectionKey = NewKeyEventArgs(window, key);
+            window.RaiseEvent(emptySelectionKey);
             CompleteLayout(window);
+            Assert.IsFalse(emptySelectionKey.Handled);
             Assert.AreEqual(saves, store.SaveCount);
             Assert.AreSame(keep, board.Items(BoardCategory.Inbox).Single());
         }
@@ -2585,7 +2610,9 @@ public sealed class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void Backspace_CategoryNameEditorFocusNeverDeletesSelectedCards()
+    [DataRow(Key.Back)]
+    [DataRow(Key.Delete)]
+    public void DeleteShortcut_CategoryNameEditorFocusNeverDeletesSelectedCards(Key key)
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -2608,12 +2635,12 @@ public sealed class MainWindowInteractionTests
             var editor = FindDescendants<TextBox>(FindCategoryTab(window, panel)).Single();
             Assert.IsTrue(editor.Focus());
             Keyboard.Focus(editor);
-            var backspace = NewKeyEventArgs(window, Key.Back);
+            var deleteKey = NewKeyEventArgs(window, key);
 
-            InvokePrivate(window, "MainWindow_PreviewKeyDown", window, backspace);
+            InvokePrivate(window, "MainWindow_PreviewKeyDown", window, deleteKey);
             CompleteLayout(window);
 
-            Assert.IsFalse(backspace.Handled);
+            Assert.IsFalse(deleteKey.Handled);
             Assert.AreSame(selected, board.Items(BoardCategory.Inbox).Single());
             Assert.AreEqual(0, store.SaveCount);
             CollectionAssert.AreEqual(
@@ -2734,7 +2761,10 @@ public sealed class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void Escape_CollapsedPanelPreservesHiddenSelection()
+    [DataRow(Key.Escape)]
+    [DataRow(Key.Back)]
+    [DataRow(Key.Delete)]
+    public void Shortcut_CollapsedPanelPreservesHiddenSelection(Key key)
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -2752,12 +2782,12 @@ public sealed class MainWindowInteractionTests
             InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
             InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
             CompleteLayout(window);
-            var escape = NewKeyEventArgs(window, Key.Escape);
+            var shortcut = NewKeyEventArgs(window, key);
 
-            window.RaiseEvent(escape);
+            window.RaiseEvent(shortcut);
             CompleteLayout(window);
 
-            Assert.IsFalse(escape.Handled);
+            Assert.IsFalse(shortcut.Handled);
             CollectionAssert.AreEqual(
                 new[] { selected },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
@@ -2800,7 +2830,10 @@ public sealed class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void Escape_ClosingWindowDoesNotChangeSelection()
+    [DataRow(Key.Escape)]
+    [DataRow(Key.Back)]
+    [DataRow(Key.Delete)]
+    public void Shortcut_ClosingWindowDoesNotChangeSelection(Key key)
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -2825,12 +2858,12 @@ public sealed class MainWindowInteractionTests
             PumpDispatcherUntil(window.Dispatcher, store.SettingsSaveStarted.Task);
             var boardSaveCount = store.BoardSaveCount;
             var settingsSaveCount = store.SettingsSaveCount;
-            var escape = NewKeyEventArgs(window, Key.Escape);
+            var shortcut = NewKeyEventArgs(window, key);
 
-            window.RaiseEvent(escape);
+            window.RaiseEvent(shortcut);
             CompleteLayout(window);
 
-            Assert.IsFalse(escape.Handled);
+            Assert.IsFalse(shortcut.Handled);
             CollectionAssert.AreEqual(
                 new[] { selected },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
@@ -5557,10 +5590,12 @@ public sealed class MainWindowInteractionTests
         encoder.Save(stream);
     }
 
-    private static void SaveVisualEvidence(FrameworkElement visual, string fileName)
+    private static void SaveVisualEvidence(
+        FrameworkElement visual,
+        string fileName,
+        string environmentVariable = "FTS_CLEAR_SELECTION_EVIDENCE_DIR")
     {
-        var directory = Environment.GetEnvironmentVariable(
-            "FTS_CLEAR_SELECTION_EVIDENCE_DIR");
+        var directory = Environment.GetEnvironmentVariable(environmentVariable);
         if (string.IsNullOrWhiteSpace(directory))
         {
             return;

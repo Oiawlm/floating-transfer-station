@@ -305,9 +305,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (e.Key != Key.Back ||
+        if ((e.Key != Key.Back && e.Key != Key.Delete) ||
             _isClosing ||
             Keyboard.FocusedElement is TextBoxBase ||
+            !_viewModel.IsPanelExpanded ||
             _viewModel.ActivePanel is not { } activePanel)
         {
             return;
