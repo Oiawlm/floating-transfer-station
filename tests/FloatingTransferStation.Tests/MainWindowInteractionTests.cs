@@ -2627,6 +2627,333 @@ public sealed class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void Escape_ClearsExpandedSelectionWithoutSaving()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var first = board.AddText("first");
+        var second = board.AddText("second");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(first);
+            list.SelectedItems.Add(second);
+            InvokePrivate(window, "SetHeaderActionsVisible", true);
+            CompleteLayout(window);
+            var shell = (Border)window.FindName("WindowShell");
+            SaveVisualEvidence(shell, "before-escape.png");
+            var escape = NewKeyEventArgs(window, Key.Escape);
+
+            window.RaiseEvent(escape);
+            CompleteLayout(window);
+            SaveVisualEvidence(shell, "after-escape.png");
+
+            Assert.IsTrue(escape.Handled);
+            Assert.AreEqual(0, list.SelectedItems.Count);
+            Assert.AreEqual(0, store.SaveCount);
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                ((Border)window.FindName("SelectedCountBadge")).Visibility);
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                ((Button)window.FindName("BatchPinButton")).Visibility);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Escape_CategoryNameEditorFocusPreservesCardSelection()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selected = board.AddText("selected card");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(selected);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var panel = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.Inbox);
+            viewModel.BeginCategoryNameEdit(panel);
+            CompleteLayout(window);
+            var editor = FindDescendants<TextBox>(FindCategoryTab(window, panel)).Single();
+            Assert.IsTrue(editor.Focus());
+            Keyboard.Focus(editor);
+            Assert.IsTrue(panel.IsEditingName);
+            var previewEscape = NewKeyEventArgs(window, Key.Escape);
+            previewEscape.Source = editor;
+
+            editor.RaiseEvent(previewEscape);
+            CompleteLayout(window);
+
+            Assert.IsFalse(previewEscape.Handled);
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(0, store.SaveCount);
+
+            var escape = new KeyEventArgs(
+                Keyboard.PrimaryDevice,
+                PresentationSource.FromVisual(editor)!,
+                Environment.TickCount,
+                Key.Escape)
+            {
+                RoutedEvent = Keyboard.KeyDownEvent,
+                Source = editor
+            };
+
+            editor.RaiseEvent(escape);
+            CompleteLayout(window);
+
+            Assert.IsTrue(escape.Handled);
+            Assert.IsFalse(panel.IsEditingName);
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(0, store.SaveCount);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Escape_CollapsedPanelPreservesHiddenSelection()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selected = board.AddText("selected card");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(selected);
+            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+            CompleteLayout(window);
+            var escape = NewKeyEventArgs(window, Key.Escape);
+
+            window.RaiseEvent(escape);
+            CompleteLayout(window);
+
+            Assert.IsFalse(escape.Handled);
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(0, store.SaveCount);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Escape_EmptySelectionIsNotHandledOrSaved()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("card");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var escape = NewKeyEventArgs(window, Key.Escape);
+
+            window.RaiseEvent(escape);
+            CompleteLayout(window);
+
+            Assert.IsFalse(escape.Handled);
+            Assert.AreEqual(0, list.SelectedItems.Count);
+            Assert.AreEqual(0, store.SaveCount);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Escape_ClosingWindowDoesNotChangeSelection()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selected = board.AddText("selected");
+        var store = new BlockingSettingsSaveBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        window.Closed += (_, _) => closed.TrySetResult();
+        var closeStarted = false;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(selected);
+            Keyboard.ClearFocus();
+
+            window.Close();
+            closeStarted = true;
+            PumpDispatcherUntil(window.Dispatcher, store.SettingsSaveStarted.Task);
+            var boardSaveCount = store.BoardSaveCount;
+            var settingsSaveCount = store.SettingsSaveCount;
+            var escape = NewKeyEventArgs(window, Key.Escape);
+
+            window.RaiseEvent(escape);
+            CompleteLayout(window);
+
+            Assert.IsFalse(escape.Handled);
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(boardSaveCount, store.BoardSaveCount);
+            Assert.AreEqual(settingsSaveCount, store.SettingsSaveCount);
+        }
+        finally
+        {
+            if (closeStarted)
+            {
+                store.ReleaseSettingsSave();
+                if (!closed.Task.IsCompleted)
+                {
+                    PumpDispatcherUntil(window.Dispatcher, closed.Task);
+                }
+            }
+            else
+            {
+                CloseWindow(window);
+            }
+        }
+    }
+
+    [STATestMethod]
+    public void Escape_DuringSlowBatchPinIsNotUndoneWhenSaveCompletes()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var first = board.AddText("first");
+        var second = board.AddText("second");
+        var store = new BlockingFirstSuccessfulSaveBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(first);
+            list.SelectedItems.Add(second);
+            var batchPin = (Button)window.FindName("BatchPinButton");
+
+            batchPin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, batchPin));
+            PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
+            var escape = NewKeyEventArgs(window, Key.Escape);
+            window.RaiseEvent(escape);
+            CompleteLayout(window);
+
+            Assert.IsTrue(escape.Handled);
+            Assert.AreEqual(0, list.SelectedItems.Count);
+
+            store.ReleaseFirstSave();
+            PumpDispatcherUntil(window.Dispatcher, store.FirstSaveCompleted.Task);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+
+            Assert.AreEqual(0, list.SelectedItems.Count);
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                ((Border)window.FindName("SelectedCountBadge")).Visibility);
+            Assert.AreEqual(Visibility.Collapsed, batchPin.Visibility);
+        }
+        finally
+        {
+            store.ReleaseFirstSave();
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Escape_DuringSlowSinglePinIsNotUndoneWhenSaveCompletes()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selectedOther = board.AddText("selected other");
+        var clicked = board.AddText("clicked");
+        var store = new BlockingFirstSuccessfulSaveBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(clicked);
+            list.SelectedItems.Add(selectedOther);
+            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(clicked);
+            Assert.IsNotNull(container);
+            var pin = FindDescendants<Button>(container)
+                .Single(button => Equals(button.CommandParameter, "TogglePin"));
+
+            pin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, pin));
+            PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
+            var escape = NewKeyEventArgs(window, Key.Escape);
+            window.RaiseEvent(escape);
+            CompleteLayout(window);
+
+            Assert.IsTrue(escape.Handled);
+            Assert.AreEqual(0, list.SelectedItems.Count);
+
+            store.ReleaseFirstSave();
+            PumpDispatcherUntil(window.Dispatcher, store.FirstSaveCompleted.Task);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+
+            Assert.AreEqual(0, list.SelectedItems.Count);
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                ((Border)window.FindName("SelectedCountBadge")).Visibility);
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                ((Button)window.FindName("BatchPinButton")).Visibility);
+        }
+        finally
+        {
+            store.ReleaseFirstSave();
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void SelectAllCommand_CtrlASelectsEveryCurrentItemWithoutSaving()
     {
         using var directory = new TestDirectory();
@@ -5227,6 +5554,29 @@ public sealed class MainWindowInteractionTests
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
+
+    private static void SaveVisualEvidence(FrameworkElement visual, string fileName)
+    {
+        var directory = Environment.GetEnvironmentVariable(
+            "FTS_CLEAR_SELECTION_EVIDENCE_DIR");
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(directory);
+        var bitmap = new RenderTargetBitmap(
+            (int)Math.Ceiling(visual.ActualWidth),
+            (int)Math.Ceiling(visual.ActualHeight),
+            96,
+            96,
+            PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(Path.Combine(directory, fileName));
         encoder.Save(stream);
     }
 

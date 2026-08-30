@@ -211,12 +211,14 @@ public sealed class LifecycleTests
             "README must point to the latest installer asset.");
         StringAssert.Contains(readme, "批量置顶或取消置顶");
         StringAssert.Contains(readme, "`Ctrl + A`：选择当前分类全部内容");
+        StringAssert.Contains(readme, "`Esc`：取消当前分类的全部选择");
         Assert.IsFalse(
             readme.Contains("批量置顶和批量取消置顶还没有实现", StringComparison.Ordinal),
             "README must not describe batch pinning as unimplemented.");
         StringAssert.Contains(changelog, "## 未发布");
         StringAssert.Contains(changelog, "批量置顶与批量取消置顶");
         StringAssert.Contains(changelog, "`Ctrl + A` 选择当前分类全部内容");
+        StringAssert.Contains(changelog, "`Esc` 取消当前分类全部选择");
         StringAssert.Contains(changelog, "## 1.1.0");
         StringAssert.Contains(changelog, "## 1.0.0");
         StringAssert.Contains(license, "MIT License");

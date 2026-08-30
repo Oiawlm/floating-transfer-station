@@ -26,6 +26,7 @@ public partial class MainWindow : Window
         });
 
     private bool _isBatchPinPending;
+    private long _selectionClearVersion;
 
     private async void BoardList_ButtonClick(object sender, RoutedEventArgs e)
     {
@@ -47,13 +48,18 @@ public partial class MainWindow : Window
         }
 
         var selectedBefore = CaptureSelectedItemIds();
+        var selectionClearVersion = _selectionClearVersion;
         var category = item.Category;
         var offset = CurrentScrollOffset();
         await _mutations.SetPinnedAsync([item.Id], !item.IsPinned);
         await Dispatcher.InvokeAsync(
             () =>
             {
-                RestoreSelection(selectedBefore);
+                if (selectionClearVersion == _selectionClearVersion)
+                {
+                    RestoreSelection(selectedBefore);
+                }
+
                 RestoreExplicitScrollOffset(category, offset);
             },
             DispatcherPriority.Send);
@@ -160,6 +166,7 @@ public partial class MainWindow : Window
             .Any(item => !item.IsPinned);
         var category = activePanel.Category;
         var offset = CurrentScrollOffset();
+        var selectionClearVersion = _selectionClearVersion;
         _isBatchPinPending = true;
         UpdateBatchPinButton();
         try
@@ -173,7 +180,11 @@ public partial class MainWindow : Window
                         return;
                     }
 
-                    RestoreSelection(selectedBefore);
+                    if (selectionClearVersion == _selectionClearVersion)
+                    {
+                        RestoreSelection(selectedBefore);
+                    }
+
                     RestoreExplicitScrollOffset(category, offset);
                 },
                 DispatcherPriority.Send);
@@ -282,6 +293,18 @@ public partial class MainWindow : Window
 
     private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Escape &&
+            !_isClosing &&
+            Keyboard.FocusedElement is not TextBoxBase &&
+            _viewModel.IsPanelExpanded &&
+            BoardList.SelectedItems.Count > 0)
+        {
+            _selectionClearVersion++;
+            BoardList.UnselectAll();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key != Key.Back ||
             _isClosing ||
             Keyboard.FocusedElement is TextBoxBase ||
