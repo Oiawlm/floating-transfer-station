@@ -128,7 +128,7 @@ public sealed class LifecycleTests
     [TestCategory("Adversarial")]
     public void ReleaseMetadata_UsesOneConsistentVersion()
     {
-        const string expectedVersion = "1.1.0";
+        const string expectedVersion = "1.2.0";
         var repositoryRoot = FindRepositoryRoot();
         var project = File.ReadAllText(Path.Combine(
             repositoryRoot,
@@ -204,10 +204,11 @@ public sealed class LifecycleTests
         var license = File.ReadAllText(Path.Combine(repositoryRoot, "LICENSE"));
         var roadmap = File.ReadAllText(Path.Combine(repositoryRoot, "ROADMAP.md"));
         var contributing = File.ReadAllText(Path.Combine(repositoryRoot, "CONTRIBUTING.md"));
+        var projectGuide = File.ReadAllText(Path.Combine(repositoryRoot, "PROJECT_GUIDE.md"));
 
-        StringAssert.Contains(readme, "FloatingTransferStation-Setup-1.1.0.exe");
+        StringAssert.Contains(readme, "FloatingTransferStation-Setup-1.2.0.exe");
         Assert.IsFalse(
-            readme.Contains("FloatingTransferStation-Setup-1.0.0.exe", StringComparison.Ordinal),
+            readme.Contains("FloatingTransferStation-Setup-1.1.0.exe", StringComparison.Ordinal),
             "README must point to the latest installer asset.");
         StringAssert.Contains(readme, "批量置顶或取消置顶");
         StringAssert.Contains(readme, "`Ctrl + A`：选择当前分类全部内容");
@@ -219,8 +220,10 @@ public sealed class LifecycleTests
         StringAssert.Contains(changelog, "批量置顶与批量取消置顶");
         StringAssert.Contains(changelog, "`Ctrl + A` 选择当前分类全部内容");
         StringAssert.Contains(changelog, "`Esc` 取消当前分类全部选择");
+        StringAssert.Contains(changelog, "## 1.2.0");
         StringAssert.Contains(changelog, "## 1.1.0");
         StringAssert.Contains(changelog, "## 1.0.0");
+        StringAssert.Contains(projectGuide, "当前稳定发布为 1.2.0");
         StringAssert.Contains(license, "MIT License");
         StringAssert.Contains(license, "Copyright (c) 2026 Oiawlm");
         Assert.IsFalse(
@@ -252,7 +255,7 @@ public sealed class LifecycleTests
         string[] expectedPreprocessorDirectives =
         [
             "#define MyAppName \"悬浮中转站\"",
-            "#define MyAppVersion \"1.1.0\"",
+            "#define MyAppVersion \"1.2.0\"",
             "#define MyAppExeName \"悬浮中转站.exe\"",
             "#define MyAppMutexName \"Local\\FloatingTransferStation.App\"",
         ];
