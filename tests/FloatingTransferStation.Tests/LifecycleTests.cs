@@ -128,7 +128,7 @@ public sealed class LifecycleTests
     [TestCategory("Adversarial")]
     public void ReleaseMetadata_UsesOneConsistentVersion()
     {
-        const string expectedVersion = "1.2.0";
+        const string expectedVersion = "1.3.0";
         var repositoryRoot = FindRepositoryRoot();
         var project = File.ReadAllText(Path.Combine(
             repositoryRoot,
@@ -205,11 +205,24 @@ public sealed class LifecycleTests
         var roadmap = File.ReadAllText(Path.Combine(repositoryRoot, "ROADMAP.md"));
         var contributing = File.ReadAllText(Path.Combine(repositoryRoot, "CONTRIBUTING.md"));
         var projectGuide = File.ReadAllText(Path.Combine(repositoryRoot, "PROJECT_GUIDE.md"));
+        var installerAssetNames = Regex.Matches(
+                readme,
+                @"FloatingTransferStation-Setup-\d+\.\d+\.\d+\.exe")
+            .Select(match => match.Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var changelogSections = Regex.Matches(
+                changelog,
+                @"(?ms)^## (?<Name>[^\r\n]+)\r?\n(?<Body>.*?)(?=^## |\z)")
+            .ToDictionary(
+                match => match.Groups["Name"].Value,
+                match => match.Groups["Body"].Value,
+                StringComparer.Ordinal);
 
-        StringAssert.Contains(readme, "FloatingTransferStation-Setup-1.2.0.exe");
-        Assert.IsFalse(
-            readme.Contains("FloatingTransferStation-Setup-1.1.0.exe", StringComparison.Ordinal),
-            "README must point to the latest installer asset.");
+        CollectionAssert.AreEqual(
+            new[] { "FloatingTransferStation-Setup-1.3.0.exe" },
+            installerAssetNames,
+            "README must name only the latest installer asset.");
         StringAssert.Contains(readme, "批量置顶或取消置顶");
         StringAssert.Contains(readme, "`Ctrl + A`：选择当前分类全部内容");
         StringAssert.Contains(readme, "`Esc`：取消当前分类的全部选择");
@@ -222,10 +235,21 @@ public sealed class LifecycleTests
         StringAssert.Contains(changelog, "`Ctrl + A` 选择当前分类全部内容");
         StringAssert.Contains(changelog, "`Esc` 取消当前分类全部选择");
         StringAssert.Contains(changelog, "`Delete` 键删除当前选择");
+        StringAssert.Contains(changelog, "## 1.3.0");
+        Assert.AreEqual(
+            string.Empty,
+            changelogSections["未发布"].Trim(),
+            "Released notes must not remain in the unpublished section.");
+        StringAssert.Contains(
+            changelogSections["1.3.0"],
+            "`Delete` 键删除当前选择");
+        StringAssert.Contains(
+            changelogSections["1.3.0"],
+            "面板收起后");
         StringAssert.Contains(changelog, "## 1.2.0");
         StringAssert.Contains(changelog, "## 1.1.0");
         StringAssert.Contains(changelog, "## 1.0.0");
-        StringAssert.Contains(projectGuide, "当前稳定发布为 1.2.0");
+        StringAssert.Contains(projectGuide, "当前稳定发布为 1.3.0");
         StringAssert.Contains(roadmap, "`Delete` 删除当前选择");
         StringAssert.Contains(license, "MIT License");
         StringAssert.Contains(license, "Copyright (c) 2026 Oiawlm");
@@ -258,7 +282,7 @@ public sealed class LifecycleTests
         string[] expectedPreprocessorDirectives =
         [
             "#define MyAppName \"悬浮中转站\"",
-            "#define MyAppVersion \"1.2.0\"",
+            "#define MyAppVersion \"1.3.0\"",
             "#define MyAppExeName \"悬浮中转站.exe\"",
             "#define MyAppMutexName \"Local\\FloatingTransferStation.App\"",
         ];
