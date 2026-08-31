@@ -5,7 +5,7 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>悬浮中转站</AssemblyName>
     <RootNamespace>FloatingTransferStation</RootNamespace>
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
   </PropertyGroup>
   <ItemGroup>
