@@ -555,6 +555,237 @@ public sealed class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void F2Rename_ExpandedPanelEditsOnlyTheActiveCategoryWithoutSaving()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selected = board.AddText("selected");
+        var store = new RecordingBoardStore(directory.Root);
+        var defaultCategory = new DefaultCaptureCategoryState();
+        defaultCategory.Set(BoardCategory.Reference);
+        var window = CreateWindow(board, store, WindowSettings.Default, defaultCategory);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var active = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.Inbox);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(selected);
+            Keyboard.ClearFocus();
+
+            var rename = NewKeyEventArgs(window, Key.F2);
+            window.RaiseEvent(rename);
+            CompleteLayout(window);
+
+            var editor = FindDescendants<TextBox>(FindCategoryTab(window, active)).Single();
+            Assert.IsTrue(rename.Handled);
+            Assert.IsTrue(active.IsEditingName);
+            Assert.IsTrue(editor.IsKeyboardFocusWithin);
+            Assert.AreEqual(0, editor.SelectionStart);
+            Assert.AreEqual(active.DisplayName.Length, editor.SelectionLength);
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(BoardCategory.Reference, defaultCategory.Current);
+            Assert.AreEqual(0, store.SaveCount);
+            Assert.IsNull(store.LastSavedSettings);
+
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "f2-category-rename.png",
+                "FTS_F2_RENAME_EVIDENCE_DIR");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void F2Rename_CollapsedPanelIsIgnored()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(new BoardService(), store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            Keyboard.ClearFocus();
+            var rename = NewKeyEventArgs(window, Key.F2);
+
+            window.RaiseEvent(rename);
+            CompleteLayout(window);
+
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            Assert.IsFalse(rename.Handled);
+            Assert.IsFalse(viewModel.IsPanelExpanded);
+            Assert.IsFalse(viewModel.Categories.Any(category => category.IsEditingName));
+            Assert.IsNull(store.LastSavedSettings);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    [DataRow(ModifierKeys.Control)]
+    [DataRow(ModifierKeys.Shift)]
+    [DataRow(ModifierKeys.Alt)]
+    public void F2Rename_ModifiedShortcutIsIgnored(ModifierKeys modifiers)
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(new BoardService(), store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            Keyboard.ClearFocus();
+            var rename = NewModifiedKeyEventArgs(window, Key.F2, modifiers);
+
+            window.RaiseEvent(rename);
+            CompleteLayout(window);
+
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            Assert.IsFalse(rename.Handled);
+            Assert.IsFalse(viewModel.Categories.Any(category => category.IsEditingName));
+            Assert.IsNull(store.LastSavedSettings);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void F2Rename_ExistingTextEditorKeepsItsDraft()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(new BoardService(), store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var active = viewModel.ActivePanel!;
+            active.BeginNameEdit();
+            active.DraftName = "草稿";
+            CompleteLayout(window);
+            var editor = FindDescendants<TextBox>(FindCategoryTab(window, active)).Single();
+            Assert.IsTrue(editor.Focus());
+            Keyboard.Focus(editor);
+            var rename = NewKeyEventArgs(window, Key.F2);
+            rename.Source = editor;
+
+            editor.RaiseEvent(rename);
+            CompleteLayout(window);
+
+            Assert.IsFalse(rename.Handled);
+            Assert.IsTrue(active.IsEditingName);
+            Assert.AreEqual("草稿", active.DraftName);
+            Assert.IsTrue(editor.IsKeyboardFocusWithin);
+            Assert.IsNull(store.LastSavedSettings);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void F2Rename_DoubleClickKeepsFocusedSelectedEditorBehavior()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var active = viewModel.ActivePanel!;
+            var tab = FindCategoryTab(window, active);
+            var doubleClick = NewMouseButtonEventArgs(
+                UIElement.MouseLeftButtonDownEvent,
+                tab);
+            typeof(MouseButtonEventArgs)
+                .GetField("_count", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(doubleClick, 2);
+
+            tab.RaiseEvent(doubleClick);
+            CompleteLayout(window);
+
+            var editor = FindDescendants<TextBox>(tab).Single();
+            Assert.IsTrue(doubleClick.Handled);
+            Assert.IsTrue(active.IsEditingName);
+            Assert.IsTrue(editor.IsKeyboardFocusWithin);
+            Assert.AreEqual(0, editor.SelectionStart);
+            Assert.AreEqual(active.DisplayName.Length, editor.SelectionLength);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void F2Rename_ClosingWindowIsIgnored()
+    {
+        using var directory = new TestDirectory();
+        var store = new BlockingSettingsSaveBoardStore(directory.Root);
+        var window = CreateWindow(new BoardService(), store, WindowSettings.Default);
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        window.Closed += (_, _) => closed.TrySetResult();
+        var closeStarted = false;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            Keyboard.ClearFocus();
+            window.Close();
+            closeStarted = true;
+            PumpDispatcherUntil(window.Dispatcher, store.SettingsSaveStarted.Task);
+            var rename = NewKeyEventArgs(window, Key.F2);
+
+            InvokePrivate(window, "MainWindow_PreviewKeyDown", window, rename);
+
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            Assert.IsFalse(rename.Handled);
+            Assert.IsFalse(viewModel.Categories.Any(category => category.IsEditingName));
+        }
+        finally
+        {
+            if (closeStarted)
+            {
+                store.ReleaseSettingsSave();
+                if (!closed.Task.IsCompleted)
+                {
+                    PumpDispatcherUntil(window.Dispatcher, closed.Task);
+                }
+            }
+            else
+            {
+                CloseWindow(window);
+            }
+        }
+    }
+
+    [STATestMethod]
     public void WindowShell_RendersTransparentLeftCornersAndSquareRightEdge()
     {
         using var directory = new TestDirectory();
@@ -4648,6 +4879,44 @@ public sealed class MainWindowInteractionTests
             RoutedEvent = Keyboard.PreviewKeyDownEvent,
             Source = window
         };
+
+    private static KeyEventArgs NewModifiedKeyEventArgs(
+        Window window,
+        Key key,
+        ModifierKeys modifiers) =>
+        new(
+            new ModifierKeyboardDevice(modifiers),
+            PresentationSource.FromVisual(window)!,
+            Environment.TickCount,
+            key)
+        {
+            RoutedEvent = Keyboard.PreviewKeyDownEvent,
+            Source = window
+        };
+
+    private sealed class ModifierKeyboardDevice : KeyboardDevice
+    {
+        private readonly ModifierKeys _modifiers;
+
+        public ModifierKeyboardDevice(ModifierKeys modifiers)
+            : base(InputManager.Current)
+        {
+            _modifiers = modifiers;
+        }
+
+        protected override KeyStates GetKeyStatesFromSystem(Key key)
+        {
+            var isDown = key switch
+            {
+                Key.LeftCtrl or Key.RightCtrl => _modifiers.HasFlag(ModifierKeys.Control),
+                Key.LeftShift or Key.RightShift => _modifiers.HasFlag(ModifierKeys.Shift),
+                Key.LeftAlt or Key.RightAlt => _modifiers.HasFlag(ModifierKeys.Alt),
+                Key.LWin or Key.RWin => _modifiers.HasFlag(ModifierKeys.Windows),
+                _ => false
+            };
+            return isDown ? KeyStates.Down : KeyStates.None;
+        }
+    }
 
     private static void ScrollTo(Window window, ScrollViewer viewer, double offset)
     {

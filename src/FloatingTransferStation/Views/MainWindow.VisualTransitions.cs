@@ -136,19 +136,23 @@ public partial class MainWindow : Window
             e.ChangedButton != MouseButton.Left ||
             e.ClickCount < 2 ||
             FindAncestor<TextBox>(e.OriginalSource as DependencyObject) is not null ||
-            sender is not Border { DataContext: CategoryViewModel category })
+            sender is not Border { DataContext: CategoryViewModel category } tab)
         {
             return;
         }
 
-        _viewModel.BeginCategoryNameEdit(category);
+        BeginCategoryNameEdit(category, tab);
         e.Handled = true;
+    }
+
+    private void BeginCategoryNameEdit(CategoryViewModel category, Border tab)
+    {
+        _viewModel.BeginCategoryNameEdit(category);
         Dispatcher.BeginInvoke(
             DispatcherPriority.Input,
             new Action(() =>
             {
                 if (!category.IsEditingName ||
-                    sender is not Border tab ||
                     FindDescendant<TextBox>(tab) is not { } editor)
                 {
                     return;

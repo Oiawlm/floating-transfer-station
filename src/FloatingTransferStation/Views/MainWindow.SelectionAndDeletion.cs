@@ -293,6 +293,24 @@ public partial class MainWindow : Window
 
     private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.F2 &&
+            e.KeyboardDevice.Modifiers == ModifierKeys.None &&
+            !_isClosing &&
+            Keyboard.FocusedElement is not TextBoxBase &&
+            _viewModel.IsPanelExpanded &&
+            !IsCategoryNameEditActive() &&
+            _viewModel.ActivePanel is { } renamePanel)
+        {
+            var activeTab = CategoryTabs().SingleOrDefault(candidate =>
+                ReferenceEquals(candidate.DataContext, renamePanel));
+            if (activeTab is not null)
+            {
+                BeginCategoryNameEdit(renamePanel, activeTab);
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.Key == Key.Escape &&
             !_isClosing &&
             Keyboard.FocusedElement is not TextBoxBase &&

@@ -227,6 +227,7 @@ public sealed class LifecycleTests
         StringAssert.Contains(readme, "`Ctrl + A`：选择当前分类全部内容");
         StringAssert.Contains(readme, "`Esc`：取消当前分类的全部选择");
         StringAssert.Contains(readme, "`Delete` 或 `Backspace`：只删除选中项");
+        StringAssert.Contains(readme, "`F2`：改名当前展开分类");
         Assert.IsFalse(
             readme.Contains("批量置顶和批量取消置顶还没有实现", StringComparison.Ordinal),
             "README must not describe batch pinning as unimplemented.");
@@ -235,11 +236,8 @@ public sealed class LifecycleTests
         StringAssert.Contains(changelog, "`Ctrl + A` 选择当前分类全部内容");
         StringAssert.Contains(changelog, "`Esc` 取消当前分类全部选择");
         StringAssert.Contains(changelog, "`Delete` 键删除当前选择");
+        StringAssert.Contains(changelogSections["未发布"], "`F2` 改名当前展开分类");
         StringAssert.Contains(changelog, "## 1.3.0");
-        Assert.AreEqual(
-            string.Empty,
-            changelogSections["未发布"].Trim(),
-            "Released notes must not remain in the unpublished section.");
         StringAssert.Contains(
             changelogSections["1.3.0"],
             "`Delete` 键删除当前选择");
@@ -251,6 +249,7 @@ public sealed class LifecycleTests
         StringAssert.Contains(changelog, "## 1.0.0");
         StringAssert.Contains(projectGuide, "当前稳定发布为 1.3.0");
         StringAssert.Contains(roadmap, "`Delete` 删除当前选择");
+        StringAssert.Contains(roadmap, "`F2` 改名当前展开分类");
         StringAssert.Contains(license, "MIT License");
         StringAssert.Contains(license, "Copyright (c) 2026 Oiawlm");
         Assert.IsFalse(
