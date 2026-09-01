@@ -128,7 +128,7 @@ public sealed class LifecycleTests
     [TestCategory("Adversarial")]
     public void ReleaseMetadata_UsesOneConsistentVersion()
     {
-        const string expectedVersion = "1.3.0";
+        const string expectedVersion = "1.4.0";
         var repositoryRoot = FindRepositoryRoot();
         var project = File.ReadAllText(Path.Combine(
             repositoryRoot,
@@ -220,7 +220,7 @@ public sealed class LifecycleTests
                 StringComparer.Ordinal);
 
         CollectionAssert.AreEqual(
-            new[] { "FloatingTransferStation-Setup-1.3.0.exe" },
+            new[] { "FloatingTransferStation-Setup-1.4.0.exe" },
             installerAssetNames,
             "README must name only the latest installer asset.");
         StringAssert.Contains(readme, "批量置顶或取消置顶");
@@ -228,6 +228,8 @@ public sealed class LifecycleTests
         StringAssert.Contains(readme, "`Esc`：取消当前分类的全部选择");
         StringAssert.Contains(readme, "`Delete` 或 `Backspace`：只删除选中项");
         StringAssert.Contains(readme, "`F2`：改名当前展开分类");
+        StringAssert.Contains(readme, "1.4.0 已通过自动质量门和安装包构建验证");
+        StringAssert.Contains(readme, "不属于 1.4.0 承诺");
         Assert.IsFalse(
             readme.Contains("批量置顶和批量取消置顶还没有实现", StringComparison.Ordinal),
             "README must not describe batch pinning as unimplemented.");
@@ -236,7 +238,14 @@ public sealed class LifecycleTests
         StringAssert.Contains(changelog, "`Ctrl + A` 选择当前分类全部内容");
         StringAssert.Contains(changelog, "`Esc` 取消当前分类全部选择");
         StringAssert.Contains(changelog, "`Delete` 键删除当前选择");
-        StringAssert.Contains(changelogSections["未发布"], "`F2` 改名当前展开分类");
+        StringAssert.Contains(changelog, "## 1.4.0");
+        Assert.AreEqual(
+            string.Empty,
+            changelogSections["未发布"].Trim(),
+            "Released notes must not remain in the unpublished section.");
+        StringAssert.Contains(
+            changelogSections["1.4.0"],
+            "`F2` 改名当前展开分类");
         StringAssert.Contains(changelog, "## 1.3.0");
         StringAssert.Contains(
             changelogSections["1.3.0"],
@@ -247,7 +256,7 @@ public sealed class LifecycleTests
         StringAssert.Contains(changelog, "## 1.2.0");
         StringAssert.Contains(changelog, "## 1.1.0");
         StringAssert.Contains(changelog, "## 1.0.0");
-        StringAssert.Contains(projectGuide, "当前稳定发布为 1.3.0");
+        StringAssert.Contains(projectGuide, "当前稳定发布为 1.4.0");
         StringAssert.Contains(roadmap, "`Delete` 删除当前选择");
         StringAssert.Contains(roadmap, "`F2` 改名当前展开分类");
         StringAssert.Contains(license, "MIT License");
@@ -281,7 +290,7 @@ public sealed class LifecycleTests
         string[] expectedPreprocessorDirectives =
         [
             "#define MyAppName \"悬浮中转站\"",
-            "#define MyAppVersion \"1.3.0\"",
+            "#define MyAppVersion \"1.4.0\"",
             "#define MyAppExeName \"悬浮中转站.exe\"",
             "#define MyAppMutexName \"Local\\FloatingTransferStation.App\"",
         ];
