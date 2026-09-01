@@ -94,10 +94,16 @@ public partial class MainWindow : Window
 
     private void BatchPinCommand_CanExecute(object sender, CanExecuteRoutedEventArgs e)
     {
+        if (Keyboard.FocusedElement is TextBoxBase)
+        {
+            return;
+        }
+
         e.CanExecute =
             BoardList is not null &&
             BoardList.SelectedItems.Count > 0 &&
             !_isClosing &&
+            _viewModel.IsPanelExpanded &&
             !_isBatchPinPending;
         e.Handled = true;
     }
@@ -139,6 +145,8 @@ public partial class MainWindow : Window
     private async Task ApplyBatchPinSelectionAsync()
     {
         if (_isClosing ||
+            Keyboard.FocusedElement is TextBoxBase ||
+            !_viewModel.IsPanelExpanded ||
             _isBatchPinPending ||
             _viewModel.ActivePanel is not { } activePanel)
         {

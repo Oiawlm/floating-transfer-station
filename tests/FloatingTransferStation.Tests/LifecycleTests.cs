@@ -228,6 +228,9 @@ public sealed class LifecycleTests
         StringAssert.Contains(readme, "`Esc`：取消当前分类的全部选择");
         StringAssert.Contains(readme, "`Delete` 或 `Backspace`：只删除选中项");
         StringAssert.Contains(readme, "`F2`：改名当前展开分类");
+        StringAssert.Contains(
+            readme,
+            "`Ctrl + P` 只在面板展开且不在编辑分类名称时生效");
         StringAssert.Contains(readme, "1.4.0 已通过自动质量门和安装包构建验证");
         StringAssert.Contains(readme, "不属于 1.4.0 承诺");
         Assert.IsFalse(
@@ -239,10 +242,9 @@ public sealed class LifecycleTests
         StringAssert.Contains(changelog, "`Esc` 取消当前分类全部选择");
         StringAssert.Contains(changelog, "`Delete` 键删除当前选择");
         StringAssert.Contains(changelog, "## 1.4.0");
-        Assert.AreEqual(
-            string.Empty,
-            changelogSections["未发布"].Trim(),
-            "Released notes must not remain in the unpublished section.");
+        StringAssert.Contains(
+            changelogSections["未发布"],
+            "面板收起或编辑分类名称时，`Ctrl + P` 不再修改保留选择");
         StringAssert.Contains(
             changelogSections["1.4.0"],
             "`F2` 改名当前展开分类");

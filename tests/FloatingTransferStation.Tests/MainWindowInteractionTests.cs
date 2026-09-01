@@ -5055,6 +5055,161 @@ public sealed class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void BatchPinCommand_CollapsedPanelDoesNotChangeRetainedSelection()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selected = board.AddText("selected card");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(selected);
+            InvokePrivate(window, "SetHeaderActionsVisible", true);
+            CompleteLayout(window);
+            var shell = (Border)window.FindName("WindowShell");
+            SaveVisualEvidence(
+                shell,
+                "before-collapse.png",
+                "FTS_BATCH_PIN_GUARD_EVIDENCE_DIR");
+            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            Assert.IsFalse(viewModel.IsPanelExpanded);
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            var canExecute = MainWindow.BatchPinCommand.CanExecute(null, window);
+            MainWindow.BatchPinCommand.Execute(null, window);
+            CompleteLayout(window);
+            ExpandCategory(window, BoardCategory.Inbox);
+            InvokePrivate(window, "SetHeaderActionsVisible", true);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(250));
+            CompleteLayout(window);
+            SaveVisualEvidence(
+                shell,
+                "after-reexpand.png",
+                "FTS_BATCH_PIN_GUARD_EVIDENCE_DIR");
+
+            Assert.IsFalse(canExecute);
+            Assert.IsTrue(viewModel.IsPanelExpanded);
+            Assert.IsFalse(selected.IsPinned);
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(0, store.SaveCount);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void BatchPinCommand_CategoryNameEditorFocusDoesNotChangeSelection()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selected = board.AddText("selected card");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(selected);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var panel = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.Inbox);
+            viewModel.BeginCategoryNameEdit(panel);
+            CompleteLayout(window);
+            var editor = FindDescendants<TextBox>(FindCategoryTab(window, panel)).Single();
+            Assert.IsTrue(editor.Focus());
+            Keyboard.Focus(editor);
+            Assert.IsTrue(editor.IsKeyboardFocusWithin);
+
+            var canExecute = MainWindow.BatchPinCommand.CanExecute(null, editor);
+            MainWindow.BatchPinCommand.Execute(null, editor);
+            CompleteLayout(window);
+
+            Assert.IsFalse(canExecute);
+            Assert.IsTrue(panel.IsEditingName);
+            Assert.IsFalse(selected.IsPinned);
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(0, store.SaveCount);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void BatchPinExecutionGuard_InvalidContextDoesNotChangeSelection(bool isEditingName)
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var selected = board.AddText("selected card");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(selected);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            if (isEditingName)
+            {
+                var panel = viewModel.Categories.Single(
+                    category => category.Category == BoardCategory.Inbox);
+                viewModel.BeginCategoryNameEdit(panel);
+                CompleteLayout(window);
+                var editor = FindDescendants<TextBox>(FindCategoryTab(window, panel)).Single();
+                Assert.IsTrue(editor.Focus());
+                Keyboard.Focus(editor);
+                Assert.IsTrue(editor.IsKeyboardFocusWithin);
+            }
+            else
+            {
+                InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+                InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                CompleteLayout(window);
+                Assert.IsFalse(viewModel.IsPanelExpanded);
+            }
+
+            InvokePrivateTask(window, "ApplyBatchPinSelectionAsync");
+            CompleteLayout(window);
+
+            Assert.IsFalse(selected.IsPinned);
+            CollectionAssert.AreEqual(
+                new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.AreEqual(0, store.SaveCount);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void BatchPinButton_MixedSelectionPinsAllInSourceOrderAndPreservesSelectionAndScroll()
     {
         using var directory = new TestDirectory();
