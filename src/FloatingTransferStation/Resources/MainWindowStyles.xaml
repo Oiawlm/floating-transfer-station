@@ -18,8 +18,6 @@
   <SolidColorBrush x:Key="SelectedCardBorderBrush" Color="#8B7CF6" />
   <SolidColorBrush x:Key="ActiveCategoryBrush" Color="#E7E4FF" />
   <SolidColorBrush x:Key="DropTargetBrush" Color="#EAE7FF" />
-  <SolidColorBrush x:Key="DangerHoverBrush" Color="#FEECEB" />
-  <SolidColorBrush x:Key="DangerPressedBrush" Color="#FDD8D5" />
   <SolidColorBrush x:Key="ScrollThumbBrush" Color="#B8BDC7" />
   <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#969CA7" />
 

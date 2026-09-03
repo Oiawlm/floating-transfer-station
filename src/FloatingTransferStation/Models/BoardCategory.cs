@@ -23,15 +23,6 @@ public static class BoardCategoryCatalog
             BoardCategory.Inbox
         });
 
-    public static IReadOnlyDictionary<BoardCategory, string> DefaultNames { get; } =
-        new Dictionary<BoardCategory, string>
-        {
-            [BoardCategory.CustomerOriginal] = "客户原图",
-            [BoardCategory.Reference] = "对标图",
-            [BoardCategory.Prompt] = "提示词",
-            [BoardCategory.Inbox] = "待分类"
-        };
-
     public static string DisplayName(BoardCategory category) => category switch
     {
         BoardCategory.CustomerOriginal => "客户原图",

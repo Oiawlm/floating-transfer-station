@@ -79,17 +79,19 @@ public sealed class ClipboardCaptureService
         try
         {
             var snapshot = await ReadWithRetryAsync(cancellationToken);
+            await predecessor;
             if (snapshot is null || !TryAcceptSequence(snapshot.SequenceNumber))
             {
                 return;
             }
 
-            await predecessor;
             cancellationToken.ThrowIfCancellationRequested();
             await ProcessSnapshotAsync(snapshot, targetCategory, cancellationToken);
         }
         finally
         {
+            // Failed or canceled reads must still keep their place behind earlier captures.
+            await predecessor;
             completion.TrySetResult();
         }
     }

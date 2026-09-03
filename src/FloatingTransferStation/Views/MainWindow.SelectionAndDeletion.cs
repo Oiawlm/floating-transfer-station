@@ -55,6 +55,11 @@ public partial class MainWindow : Window
         await Dispatcher.InvokeAsync(
             () =>
             {
+                if (_viewModel.ActivePanel?.Category != category)
+                {
+                    return;
+                }
+
                 if (selectionClearVersion == _selectionClearVersion)
                 {
                     RestoreSelection(selectedBefore);
@@ -257,11 +262,16 @@ public partial class MainWindow : Window
         await Dispatcher.InvokeAsync(
             () =>
             {
+                if (_viewModel.ActivePanel?.Category != targetCategory)
+                {
+                    return;
+                }
+
                 if (success)
                 {
                     BoardList.UnselectAll();
                 }
-                else if (_viewModel.ActivePanel?.Category == targetCategory)
+                else
                 {
                     RestoreSelection(selectedBefore);
                 }

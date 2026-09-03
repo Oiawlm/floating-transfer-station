@@ -2,16 +2,7 @@ namespace FloatingTransferStation.Services;
 
 public sealed class AppLifecycleService : IDisposable
 {
-    private readonly StartupRegistrationService _startup;
     private SingleInstanceGuard? _singleInstance;
-
-    public AppLifecycleService(StartupRegistrationService startup)
-    {
-        _startup = startup;
-    }
-
-    public static AppLifecycleService CreateDefault(string executablePath) =>
-        new(StartupRegistrationService.CreateDefault(executablePath));
 
     public bool TryStart(string mutexName = SingleInstanceGuard.ApplicationMutexName)
     {
@@ -22,9 +13,6 @@ public sealed class AppLifecycleService : IDisposable
 
         return SingleInstanceGuard.TryAcquire(mutexName, out _singleInstance);
     }
-
-    public bool EnsureStartup(string executablePath) =>
-        _startup.EnsureRegistered(executablePath);
 
     public void Dispose()
     {
