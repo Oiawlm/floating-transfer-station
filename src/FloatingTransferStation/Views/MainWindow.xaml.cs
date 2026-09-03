@@ -50,7 +50,6 @@ public partial class MainWindow : Window
     private readonly MainWindowViewModel _viewModel;
     private readonly object _pendingOperationsLock = new();
     private readonly HashSet<Task> _pendingOperations = [];
-    private readonly HashSet<TextBox> _activeCategoryNameCompositions = [];
     private readonly SemaphoreSlim _settingsSaveGate = new(1, 1);
     private System.Windows.Interop.HwndSource? _windowSource;
     private CancellationTokenSource _windowOperationCancellation = new();
@@ -115,18 +114,7 @@ public partial class MainWindow : Window
         _collapseTimer.Tick += CollapseTimer_Tick;
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _statusTimer.Tick += StatusTimer_Tick;
-        AddHandler(
-            TextCompositionManager.PreviewTextInputStartEvent,
-            new TextCompositionEventHandler(CategoryNameEditor_CompositionStartedOrUpdated),
-            true);
-        AddHandler(
-            TextCompositionManager.PreviewTextInputUpdateEvent,
-            new TextCompositionEventHandler(CategoryNameEditor_CompositionStartedOrUpdated),
-            true);
-        AddHandler(
-            TextCompositionManager.PreviewTextInputEvent,
-            new TextCompositionEventHandler(CategoryNameEditor_CompositionCompleted),
-            true);
+        InitializeCategoryNameEditing();
         SourceInitialized += MainWindow_SourceInitialized;
 
         ApplyPlacement(WindowController.Collapsed(

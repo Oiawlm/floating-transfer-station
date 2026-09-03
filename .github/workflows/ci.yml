@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   quality:
-    name: 格式、测试与构建
+    name: 格式、测试、构建与安装包
     runs-on: windows-latest
     steps:
       - name: 检出代码
@@ -24,7 +24,7 @@ jobs:
         run: dotnet restore FloatingTransferStation.slnx
       - name: 验证格式
         run: dotnet format FloatingTransferStation.slnx --verify-no-changes --no-restore
-      - name: 运行 Release 测试
-        run: dotnet test FloatingTransferStation.slnx -c Release --no-restore
+      - name: 运行 Release 测试、安装清理契约与打包
+        run: '& .\scripts\build-release.ps1 -DotnetPath (Get-Command dotnet).Source'
       - name: 严格 Release 构建
         run: dotnet build FloatingTransferStation.slnx -c Release --no-restore -warnaserror
