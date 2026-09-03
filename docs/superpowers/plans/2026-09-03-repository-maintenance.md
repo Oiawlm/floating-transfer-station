@@ -8,7 +8,7 @@
 
 **Tech Stack:** .NET 10、WPF、MSTest、PowerShell、Inno Setup、GitHub Actions。
 
-**Status:** 本地实施与验证已于 2026-09-04 完成，工作分支 `codex/repository-maintenance-20260903`，基线 `0db9f2f`。实施范围见下方已完成任务；推送与发布尚未执行。AGENTS.md、旧工作树与唯一验证资料保留。
+**Status:** 本地实施与验证已于 2026-09-04 完成，工作分支 `codex/repository-maintenance-20260903`，基线 `0db9f2f`。维护提交 `526f7a0` 已推送并进入[草稿 PR #12](https://github.com/Oiawlm/floating-transfer-station/pull/12)，评审和发布状态以后续 PR 与 Release 为准。AGENTS.md、旧工作树与唯一验证资料保留。
 
 ## Task 1: 剪贴板通知顺序
 
@@ -73,3 +73,4 @@
 - 原第 6 份重复包位于安装输出目录，已由本轮构建按既有流程重新生成，成为不同内容的开发包并保留。历史 Release 副本未改动。
 - 剪贴板、安装/自启/交付链、窗口修复与机械迁移均完成独立规格和代码质量复核，无未解决的重要发现。
 - 真实窗口截图、清理及恢复映射、成功打包输出和结果说明保存在不提交的 `artifacts/repository-maintenance-20260903/`。新包保留原版本元数据 1.4.1，仅作本地开发验证；未执行真实安装或卸载，未触发远端 CI。
+- PR 交付时补充 CI 截图附件：复用 `FTS_CATEGORY_SWITCH_EVIDENCE_DIR`，上传四张合成内容的 WPF 回归截图并保留 30 天；源码中不增加图片或用户资料。前一条的“未触发远端 CI”是本地实施完成时的历史状态。

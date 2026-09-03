@@ -24,4 +24,6 @@ CI 先安装 SDK、还原依赖和验证格式，再通过下面的入口执行�
 & .\scripts\build-release.ps1 -DotnetPath (Get-Command dotnet).Source
 ```
 
+CI 同时启用已有跨分类回归的截图输出，将四张使用合成内容的 WPF 控件截图上传为 `category-switch-evidence` 构建附件，保留 30 天。评审时可在 PR 中链接该附件；未生成任何截图时，上传检查会失败。本机截图和构建附件都不纳入源码提交。
+
 单独检查发布记录可运行 `scripts/test-release-readiness.ps1`。已有待发布内容时它应失败，不应为通过检查而删除尚未发布的变更说明。
