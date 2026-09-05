@@ -1,9 +1,16 @@
 [CmdletBinding()]
-param()
+param(
+    [switch]$ForRelease,
+    [string]$DotnetPath
+)
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$dotnet = Join-Path $repoRoot '.tools\dotnet\dotnet.exe'
+$dotnet = if ([string]::IsNullOrWhiteSpace($DotnetPath)) {
+    Join-Path $repoRoot '.tools\dotnet\dotnet.exe'
+} else {
+    [System.IO.Path]::GetFullPath($DotnetPath)
+}
 $iscc = Join-Path $repoRoot '.tools\inno\ISCC.exe'
 $publishDirectory = Join-Path $repoRoot 'artifacts\publish'
 $installerDirectory = Join-Path $repoRoot 'artifacts\installer'
@@ -14,6 +21,10 @@ if ($innoScripts.Count -ne 1) {
     throw "Expected exactly one Inno Setup script, found $($innoScripts.Count)."
 }
 $innoScript = $innoScripts[0].FullName
+
+if ($ForRelease) {
+    & (Join-Path $PSScriptRoot 'test-release-readiness.ps1') | Out-Host
+}
 
 function Reset-WorkspaceDirectory([string]$path) {
     $resolvedRoot = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd('\') + '\'
@@ -29,8 +40,14 @@ function Reset-WorkspaceDirectory([string]$path) {
 }
 
 & (Join-Path $PSScriptRoot 'test-bootstrap-inno-path-contract.ps1') | Out-Host
-& (Join-Path $PSScriptRoot 'bootstrap-dotnet.ps1') | Out-Host
+if ([string]::IsNullOrWhiteSpace($DotnetPath)) {
+    & (Join-Path $PSScriptRoot 'bootstrap-dotnet.ps1') | Out-Host
+}
+if (-not (Test-Path -LiteralPath $dotnet -PathType Leaf)) {
+    throw "The selected .NET executable does not exist: $dotnet"
+}
 & (Join-Path $PSScriptRoot 'bootstrap-inno.ps1') | Out-Host
+& (Join-Path $PSScriptRoot 'test-installer-cleanup.ps1') -IsccPath $iscc | Out-Host
 
 $innoText = Get-Content -Raw -Encoding UTF8 -LiteralPath $innoScript
 if ($innoText -notmatch 'DisableDirPage=no' -or

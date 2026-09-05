@@ -234,6 +234,147 @@ public sealed class ClipboardCaptureServiceTests
 
     [TestMethod]
     [TestCategory("Adversarial")]
+    public async Task HandleUpdate_DuplicateNotificationPreservesCaptureOrder()
+    {
+        using var directory = new TestDirectory();
+        var image = new ClipboardSnapshot(
+            22, null, [], null, [ClipboardImageCandidate.FromEncoded("PNG", [0x89, 0x50, 0x4E, 0x47])]);
+        var reader = new QueueClipboardReader(
+            image,
+            image,
+            new ClipboardSnapshot(23, null, [], "newer text"));
+        var board = new BoardService();
+        var store = new FakeBoardStore(directory.Root);
+        var normalizer = new BlockingClipboardImageNormalizer(directory.Root);
+        var service = new ClipboardCaptureService(reader, normalizer, board, store, _ => { });
+
+        var first = service.HandleClipboardUpdateAsync();
+        await normalizer.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var duplicate = service.HandleClipboardUpdateAsync();
+        var later = service.HandleClipboardUpdateAsync();
+        var laterCompletedBeforeImage = later.IsCompleted;
+
+        normalizer.Release();
+        await Task.WhenAll(first, duplicate, later).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.IsFalse(laterCompletedBeforeImage, "Ignoring a duplicate must not let a later capture overtake an earlier image.");
+        CollectionAssert.AreEqual(
+            new[] { BoardItemKind.Text, BoardItemKind.Image },
+            board.Items(BoardCategory.Inbox).Select(item => item.Kind).ToArray());
+        Assert.AreEqual("newer text", board.Items(BoardCategory.Inbox)[0].Text);
+        Assert.AreEqual(3, reader.ReadCount);
+        Assert.AreEqual(2, store.SaveCount);
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
+    public async Task HandleUpdate_ExhaustedReadRetriesPreserveCaptureOrder()
+    {
+        using var directory = new TestDirectory();
+        var reader = new InterruptedClipboardReader(
+            new ClipboardSnapshot(
+                24, null, [], null, [ClipboardImageCandidate.FromEncoded("PNG", [0x89, 0x50, 0x4E, 0x47])]),
+            new ClipboardSnapshot(25, null, [], "newer text"),
+            busyReads: 3);
+        var board = new BoardService();
+        var store = new FakeBoardStore(directory.Root);
+        var normalizer = new BlockingClipboardImageNormalizer(directory.Root);
+        var messages = new List<string>();
+        var service = new ClipboardCaptureService(
+            reader, normalizer, board, store, messages.Add,
+            retryDelays: [TimeSpan.Zero, TimeSpan.Zero]);
+
+        var first = service.HandleClipboardUpdateAsync();
+        await normalizer.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var unreadable = service.HandleClipboardUpdateAsync();
+        var later = service.HandleClipboardUpdateAsync();
+        var laterCompletedBeforeImage = later.IsCompleted;
+
+        normalizer.Release();
+        await Task.WhenAll(first, unreadable, later).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.IsFalse(laterCompletedBeforeImage, "Exhausting read retries must not release an earlier capture's queue position.");
+        CollectionAssert.AreEqual(
+            new[] { BoardItemKind.Text, BoardItemKind.Image },
+            board.Items(BoardCategory.Inbox).Select(item => item.Kind).ToArray());
+        Assert.AreEqual("newer text", board.Items(BoardCategory.Inbox)[0].Text);
+        Assert.AreEqual(5, reader.ReadCount);
+        Assert.AreEqual(2, store.SaveCount);
+        Assert.AreEqual("本次剪贴板内容暂时无法读取，请重新复制。", messages.Single());
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
+    public async Task HandleUpdate_CanceledReadPreservesCaptureOrder()
+    {
+        using var directory = new TestDirectory();
+        var reader = new InterruptedClipboardReader(
+            new ClipboardSnapshot(
+                26, null, [], null, [ClipboardImageCandidate.FromEncoded("PNG", [0x89, 0x50, 0x4E, 0x47])]),
+            new ClipboardSnapshot(27, null, [], "newer text"));
+        var board = new BoardService();
+        var store = new FakeBoardStore(directory.Root);
+        var normalizer = new BlockingClipboardImageNormalizer(directory.Root);
+        var messages = new List<string>();
+        var service = new ClipboardCaptureService(reader, normalizer, board, store, messages.Add);
+        using var cancellation = new CancellationTokenSource();
+
+        var first = service.HandleClipboardUpdateAsync();
+        await normalizer.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+        var canceled = service.HandleClipboardUpdateAsync(cancellation.Token);
+        var later = service.HandleClipboardUpdateAsync();
+        var laterCompletedBeforeImage = later.IsCompleted;
+
+        normalizer.Release();
+        await Task.WhenAll(first, later).WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(
+            () => canceled.WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.IsFalse(laterCompletedBeforeImage, "Canceling a clipboard read must not let later work overtake an earlier image.");
+        CollectionAssert.AreEqual(
+            new[] { BoardItemKind.Text, BoardItemKind.Image },
+            board.Items(BoardCategory.Inbox).Select(item => item.Kind).ToArray());
+        Assert.AreEqual("newer text", board.Items(BoardCategory.Inbox)[0].Text);
+        Assert.AreEqual(3, reader.ReadCount);
+        Assert.AreEqual(2, store.SaveCount);
+        Assert.HasCount(0, messages);
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
+    public async Task HandleUpdate_OutOfOrderReadsKeepLatestSequenceDeduplicated()
+    {
+        using var directory = new TestDirectory();
+        var reader = new BlockingFirstClipboardReader();
+        var board = new BoardService();
+        var store = new FakeBoardStore(directory.Root);
+        var service = new ClipboardCaptureService(
+            reader, new FakeImageNormalizer(directory.Root), board, store, _ => { });
+
+        var first = service.HandleClipboardUpdateAsync();
+        await reader.FirstReadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var second = service.HandleClipboardUpdateAsync();
+        try
+        {
+            await reader.SecondReadFinished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            reader.ReleaseFirstRead();
+            await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
+        await service.HandleClipboardUpdateAsync();
+
+        CollectionAssert.AreEqual(
+            new[] { "second", "first" },
+            board.Items(BoardCategory.Inbox).Select(item => item.Text).ToArray());
+        Assert.AreEqual(2, store.SaveCount);
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
     public async Task HandleUpdate_ClipboardBusyRetriesAndThenSucceeds()
     {
         using var directory = new TestDirectory();
@@ -625,6 +766,66 @@ public sealed class ClipboardCaptureServiceTests
         {
             ReadCount++;
             throw new ExternalException("Clipboard is busy.");
+        }
+    }
+
+    private sealed class InterruptedClipboardReader(
+        ClipboardSnapshot first,
+        ClipboardSnapshot last,
+        int busyReads = 0) : IClipboardReader
+    {
+        public int ReadCount { get; private set; }
+
+        public Task<ClipboardSnapshot> ReadAsync(CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (ReadCount > 1 && ReadCount <= busyReads + 1)
+            {
+                throw new ExternalException("Clipboard is busy.");
+            }
+
+            return Task.FromResult(ReadCount == 1 ? first : last);
+        }
+    }
+
+    private sealed class BlockingClipboardImageNormalizer(string root) : IImageNormalizer
+    {
+        private readonly TaskCompletionSource<StoredImage> _result = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Started { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<StoredImage> NormalizeClipboardAsync(
+            IReadOnlyList<ClipboardImageCandidate> candidates,
+            Guid? id = null,
+            CancellationToken cancellationToken = default)
+        {
+            Started.TrySetResult();
+            return _result.Task.WaitAsync(cancellationToken);
+        }
+
+        public Task<StoredImage> NormalizeFileAsync(
+            string sourcePath,
+            Guid? id = null,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<StoredImage> NormalizeStaticFileAsync(
+            string sourcePath,
+            Guid? id = null,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<StoredImage> NormalizeBitmapAsync(
+            BitmapSource bitmap,
+            Guid? id = null,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public void Release()
+        {
+            var id = Guid.NewGuid();
+            _result.TrySetResult(new StoredImage(
+                id, $"images/{id:N}.png", Path.Combine(root, "images", $"{id:N}.png")));
         }
     }
 

@@ -464,7 +464,7 @@ end;
 
 function DeleteManagedDataDirectory(const DataDirectory: String): Boolean;
 var
-  ManagedParent: String;
+  Normalized: String;
 begin
   Result := False;
   if not IsManagedDataDirectory(DataDirectory) then
@@ -473,8 +473,10 @@ begin
     Exit;
   end;
 
-  ManagedParent := GetManagedDataParent(DataDirectory);
-  Result := DelTree(ManagedParent, True, True, True);
+  Normalized := NormalizeDirectory(DataDirectory);
+  Result := DelTree(Normalized, True, True, True);
+  if Result then
+    RemoveDir(GetManagedDataParent(Normalized));
 end;
 
 procedure RemovePreparedDataDirectory;

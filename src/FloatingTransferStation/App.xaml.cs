@@ -13,9 +13,7 @@ public partial class App : Application
         base.OnStartup(e);
         try
         {
-            var executablePath = Environment.ProcessPath
-                ?? throw new InvalidOperationException("The current executable path is unavailable.");
-            _lifecycle = AppLifecycleService.CreateDefault(executablePath);
+            _lifecycle = new AppLifecycleService();
             if (!_lifecycle.TryStart())
             {
                 Shutdown();
@@ -34,15 +32,6 @@ public partial class App : Application
                     .Where(path => !string.IsNullOrWhiteSpace(path)));
             board.Restore(snapshot);
             var settings = await store.LoadSettingsAsync();
-            try
-            {
-                _lifecycle.EnsureStartup(executablePath);
-            }
-            catch (Exception)
-            {
-                // The installer also owns this value; registration failure must not block the core workflow.
-            }
-
             MainWindow? window = null;
             void ShowStatus(string message) => window?.ShowStatus(message);
             var boardOperationGate = new BoardOperationGate();
