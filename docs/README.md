@@ -12,7 +12,7 @@
 | Delete 删除选择 | [设计](superpowers/specs/2026-08-31-delete-key-shortcut-design.md) | [计划](superpowers/plans/2026-08-31-delete-key-shortcut.md) | `935700e` / 1.3.0 |
 | F2 分类改名 | [设计](superpowers/specs/2026-09-01-f2-category-rename-design.md) | [计划](superpowers/plans/2026-09-01-f2-category-rename.md) | `925bbc6` / 1.4.0 |
 | 隐藏批量置顶守卫 | [设计](superpowers/specs/2026-09-02-batch-pin-command-guard-design.md) | [计划](superpowers/plans/2026-09-02-batch-pin-command-guard.md) | `6e73eb2` / 1.4.1 |
-| 仓库维护与边界修复 | 已批准的审查结论写入计划 | [计划与完成记录](superpowers/plans/2026-09-03-repository-maintenance.md) | 当前开发分支 / 未发布 |
+| 仓库维护与边界修复 | 已批准的审查结论写入计划 | [计划与完成记录](superpowers/plans/2026-09-03-repository-maintenance.md) | `03b748b` / 1.4.2 |
 
 批量置顶早期设计中的“恢复最初选择”，后来受到 Esc 设计中“用户已取消选择则不恢复”的修订；隐藏状态下 Ctrl+P 的约束由 1.4.1 守卫设计补充。理解当前行为时需要连同后续修订一起阅读。
 
@@ -23,5 +23,6 @@
 | [1.3.0](superpowers/plans/2026-08-31-release-1.3.0.md) | `497c414` |
 | [1.4.0](superpowers/plans/2026-09-01-release-1.4.0.md) | `28fa0c6` |
 | [1.4.1](superpowers/plans/2026-09-02-release-1.4.1.md) | `0db9f2f` |
+| [1.4.2](superpowers/plans/2026-09-06-release-1.4.2.md) | 以 [v1.4.2](https://github.com/Oiawlm/floating-transfer-station/tree/v1.4.2) 对应提交为准 |
 
 后续发布以当前发布指南为入口，旧计划留作追溯。截图、安装包和本机验证结果继续放在不提交的 `artifacts/`、`TestResults/` 中。

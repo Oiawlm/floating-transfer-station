@@ -8,7 +8,7 @@ public sealed partial class LifecycleTests
     [TestCategory("Adversarial")]
     public void ReleaseMetadata_UsesOneConsistentVersion()
     {
-        const string expectedVersion = "1.4.1";
+        const string expectedVersion = "1.4.2";
         var repositoryRoot = FindRepositoryRoot();
         var project = File.ReadAllText(Path.Combine(
             repositoryRoot,
@@ -100,7 +100,7 @@ public sealed partial class LifecycleTests
                 StringComparer.Ordinal);
 
         CollectionAssert.AreEqual(
-            new[] { "FloatingTransferStation-Setup-1.4.1.exe" },
+            new[] { "FloatingTransferStation-Setup-1.4.2.exe" },
             installerAssetNames,
             "README must name only the latest installer asset.");
         StringAssert.Contains(readme, "批量置顶或取消置顶");
@@ -111,8 +111,8 @@ public sealed partial class LifecycleTests
         StringAssert.Contains(
             readme,
             "`Ctrl + P` 只在面板展开且不在编辑分类名称时生效");
-        StringAssert.Contains(readme, "1.4.1 已通过自动质量门和安装包构建验证");
-        StringAssert.Contains(readme, "不属于 1.4.1 承诺");
+        StringAssert.Contains(readme, "1.4.2 已通过自动质量门和安装包构建验证");
+        StringAssert.Contains(readme, "不属于 1.4.2 承诺");
         Assert.IsFalse(
             readme.Contains("批量置顶和批量取消置顶还没有实现", StringComparison.Ordinal),
             "README must not describe batch pinning as unimplemented.");
@@ -121,8 +121,21 @@ public sealed partial class LifecycleTests
         StringAssert.Contains(changelog, "`Ctrl + A` 选择当前分类全部内容");
         StringAssert.Contains(changelog, "`Esc` 取消当前分类全部选择");
         StringAssert.Contains(changelog, "`Delete` 键删除当前选择");
-        StringAssert.Contains(changelog, "## 1.4.1");
         Assert.IsTrue(changelogSections.ContainsKey("未发布"));
+        Assert.IsTrue(changelogSections.ContainsKey("1.4.2"));
+        StringAssert.Contains(
+            changelogSections["1.4.2"],
+            "保留同级用户文件和程序文件");
+        StringAssert.Contains(
+            changelogSections["1.4.2"],
+            "保留新分类的选择与删除操作提示");
+        StringAssert.Contains(
+            changelogSections["1.4.2"],
+            "仍保持内容处理顺序");
+        StringAssert.Contains(
+            changelogSections["1.4.2"],
+            "开发启动不再覆盖正式安装的自启路径");
+        StringAssert.Contains(changelog, "## 1.4.1");
         StringAssert.Contains(
             changelogSections["1.4.1"],
             "面板收起或编辑分类名称时，`Ctrl + P` 不再修改保留选择");
@@ -140,7 +153,7 @@ public sealed partial class LifecycleTests
         StringAssert.Contains(changelog, "## 1.2.0");
         StringAssert.Contains(changelog, "## 1.1.0");
         StringAssert.Contains(changelog, "## 1.0.0");
-        StringAssert.Contains(projectGuide, "当前稳定发布为 1.4.1");
+        StringAssert.Contains(projectGuide, "当前稳定发布为 1.4.2");
         StringAssert.Contains(roadmap, "`Delete` 删除当前选择");
         StringAssert.Contains(roadmap, "`F2` 改名当前展开分类");
         StringAssert.Contains(license, "MIT License");
