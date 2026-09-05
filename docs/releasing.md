@@ -26,6 +26,8 @@ CI 先安装 SDK、还原依赖和验证格式，再通过下面的入口执行�
 
 CI 同时启用已有跨分类回归的截图输出，将四张使用合成内容的 WPF 控件截图上传为 `category-switch-evidence` 构建附件，保留 30 天。评审时可在 PR 中链接该附件；未生成任何截图时，上传检查会失败。本机截图和构建附件都不纳入源码提交。
 
+剪贴板图片回退回归通过合成读取器、真实图片归一化与本地存储，将损坏大图后的有效小图显示在 WPF 窗口中。CI 通过 `FTS_CLIPBOARD_IMAGE_FALLBACK_EVIDENCE_DIR` 输出截图，保存为 `clipboard-image-fallback-evidence` 附件，同样保留 30 天且缺图失败；测试不读取系统剪贴板或真实用户内容。
+
 CI 还在一次性的 GitHub-hosted Windows 虚机运行 `scripts/test-installed-lifecycle.ps1`，使用真实候选安装包验证安装、原地更新与卸载：程序与合成 Data 同级，检查自启和数据目录登记、更新后的数据哈希，以及卸载后同级无关文件完整保留。日志和断言保存在 `installed-lifecycle-evidence` 附件中。该脚本拒绝在本机或持久化 self-hosted runner 运行；不应伪造环境变量绕过守卫。它不自动操作数据目录向导，因此不声称覆盖真实跨目录迁移；迁移相关清理仍由原生隔离案例与调用方契约验证。
 
 单独检查发布记录可运行 `scripts/test-release-readiness.ps1`。已有待发布内容时它应失败，不应为通过检查而删除尚未发布的变更说明。

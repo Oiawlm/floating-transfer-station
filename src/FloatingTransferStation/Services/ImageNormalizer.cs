@@ -193,15 +193,38 @@ public sealed class ImageNormalizer : IImageNormalizer
             }
         }
 
-        var selected = selections
+        var orderedSelections = selections
             .OrderByDescending(selection => selection.PixelArea)
-            .ThenByDescending(selection => selection.PreparedBitmap is not null)
-            .FirstOrDefault()
-            ?? throw new InvalidDataException("Clipboard does not contain a usable image representation.");
+            .ThenByDescending(selection => selection.PreparedBitmap is not null);
+        foreach (var selected in orderedSelections)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (selected.PreparedBitmap is not null)
+            {
+                return SaveBitmap(selected.PreparedBitmap, id, cancellationToken);
+            }
 
-        return selected.PreparedBitmap is not null
-            ? SaveBitmap(selected.PreparedBitmap, id, cancellationToken)
-            : SaveEncodedImage(selected.Candidate.EncodedBytes, id, cancellationToken);
+            using var image = TryDecodeClipboardImage(selected.Candidate.EncodedBytes);
+            if (image is not null)
+            {
+                return SaveDecodedImage(image, id, cancellationToken);
+            }
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        throw new InvalidDataException("Clipboard does not contain a usable image representation.");
+    }
+
+    private static SixLabors.ImageSharp.Image? TryDecodeClipboardImage(ReadOnlyMemory<byte> encodedBytes)
+    {
+        try
+        {
+            return SixLabors.ImageSharp.Image.Load(encodedBytes.Span);
+        }
+        catch (Exception exception) when (exception is UnknownImageFormatException or InvalidImageContentException)
+        {
+            return null;
+        }
     }
 
     private StoredImage SaveBitmap(
@@ -240,8 +263,8 @@ public sealed class ImageNormalizer : IImageNormalizer
         }
     }
 
-    private StoredImage SaveEncodedImage(
-        ReadOnlyMemory<byte> encodedBytes,
+    private StoredImage SaveDecodedImage(
+        SixLabors.ImageSharp.Image image,
         Guid? id,
         CancellationToken cancellationToken)
     {
@@ -252,7 +275,6 @@ public sealed class ImageNormalizer : IImageNormalizer
 
         try
         {
-            using var image = SixLabors.ImageSharp.Image.Load(encodedBytes.Span);
             while (image.Frames.Count > 1)
             {
                 image.Frames.RemoveFrame(1);

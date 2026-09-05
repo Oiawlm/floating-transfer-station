@@ -46,14 +46,15 @@ public sealed partial class MainWindowInteractionTests
         IBoardStore store,
         WindowSettings settings,
         DefaultCaptureCategoryState? defaultCaptureCategory,
-        IImageNormalizer normalizer)
+        IImageNormalizer normalizer,
+        IClipboardReader? clipboardReader = null)
     {
         defaultCaptureCategory ??= new DefaultCaptureCategoryState();
         var operationGate = new BoardOperationGate();
         MainWindow? window = null;
         void ShowStatus(string message) => window?.ShowStatus(message);
         var clipboard = new ClipboardCaptureService(
-            new NeverReadClipboardReader(),
+            clipboardReader ?? new NeverReadClipboardReader(),
             normalizer,
             board,
             store,

@@ -3,6 +3,8 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace FloatingTransferStation.Tests;
 
@@ -466,6 +468,65 @@ public sealed class ClipboardCaptureServiceTests
     }
 
     [TestMethod]
+    public async Task HandleUpdate_CorruptImageRepresentationFallsBackToOneSavedImage()
+    {
+        using var directory = new TestDirectory();
+        var messages = new List<string>();
+        var board = new BoardService();
+        var store = new FakeBoardStore(directory.Root);
+        var normalizer = new ImageNormalizer(store.ImagesDirectory);
+        var damaged = (await CreateEncodedImageAsync(4, 4, new Rgba32(255, 0, 0, 255)))[..33];
+        var color = new Rgba32(20, 40, 60, 128);
+        var usable = await CreateEncodedImageAsync(2, 2, color);
+        var state = new DefaultCaptureCategoryState();
+        state.Set(BoardCategory.Prompt);
+        var service = new ClipboardCaptureService(
+            new QueueClipboardReader(new ClipboardSnapshot(42, null, [], "ignored text",
+            [
+                ClipboardImageCandidate.FromEncoded("image/png", damaged),
+                ClipboardImageCandidate.FromEncoded("PNG", usable)
+            ])),
+            normalizer, board, store, messages.Add,
+            defaultCaptureCategory: state);
+
+        await service.HandleClipboardUpdateAsync();
+
+        var item = board.Items(BoardCategory.Prompt).Single();
+        Assert.AreEqual(BoardItemKind.Image, item.Kind);
+        Assert.IsEmpty(board.Items(BoardCategory.Inbox));
+        Assert.AreEqual(1, store.SaveCount);
+        Assert.IsEmpty(messages);
+        var imagePath = Directory.GetFiles(store.ImagesDirectory).Single();
+        using var loaded = await Image.LoadAsync<Rgba32>(imagePath);
+        Assert.AreEqual(2, loaded.Width);
+        Assert.AreEqual(color, loaded[0, 0]);
+    }
+
+    [TestMethod]
+    public async Task HandleUpdate_AllImageRepresentationsCorruptDoesNotFallBackToText()
+    {
+        using var directory = new TestDirectory();
+        var messages = new List<string>();
+        var board = new BoardService();
+        var store = new FakeBoardStore(directory.Root);
+        var damaged = (await CreateEncodedImageAsync(4, 4, new Rgba32(255, 0, 0, 255)))[..33];
+        var service = new ClipboardCaptureService(
+            new QueueClipboardReader(new ClipboardSnapshot(43, null, [], "must not import",
+            [
+                ClipboardImageCandidate.FromEncoded("image/png", damaged),
+                ClipboardImageCandidate.FromEncoded("PNG", damaged)
+            ])),
+            new ImageNormalizer(store.ImagesDirectory), board, store, messages.Add);
+
+        await service.HandleClipboardUpdateAsync();
+
+        Assert.IsEmpty(board.Items(BoardCategory.Inbox));
+        Assert.AreEqual(0, store.SaveCount);
+        Assert.AreEqual("本次图片未保存，请重新复制。", messages.Single());
+        Assert.IsFalse(Directory.Exists(store.ImagesDirectory) && Directory.EnumerateFiles(store.ImagesDirectory).Any());
+    }
+
+    [TestMethod]
     public async Task HandleUpdate_NonImageFilesAndBlankTextAreIgnored()
     {
         using var directory = new TestDirectory();
@@ -827,6 +888,14 @@ public sealed class ClipboardCaptureServiceTests
             _result.TrySetResult(new StoredImage(
                 id, $"images/{id:N}.png", Path.Combine(root, "images", $"{id:N}.png")));
         }
+    }
+
+    private static async Task<byte[]> CreateEncodedImageAsync(int width, int height, Rgba32 color)
+    {
+        using var image = new Image<Rgba32>(width, height, color);
+        await using var stream = new MemoryStream();
+        await image.SaveAsPngAsync(stream);
+        return stream.ToArray();
     }
 
     private sealed class FakeImageNormalizer(string root) : IImageNormalizer
