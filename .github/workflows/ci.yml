@@ -31,6 +31,16 @@ jobs:
         run: '& .\scripts\build-release.ps1 -DotnetPath (Get-Command dotnet).Source'
       - name: 严格 Release 构建
         run: dotnet build FloatingTransferStation.slnx -c Release --no-restore -warnaserror
+      - name: 验证真实安装、更新与卸载
+        run: '& .\scripts\test-installed-lifecycle.ps1'
+      - name: 保存安装态验证结果
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: installed-lifecycle-evidence
+          path: TestResults/installed-lifecycle/
+          if-no-files-found: warn
+          retention-days: 30
       - name: 保存跨分类交互截图
         uses: actions/upload-artifact@v7
         with:

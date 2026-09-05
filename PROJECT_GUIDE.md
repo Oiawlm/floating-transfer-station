@@ -2,7 +2,7 @@
 
 ## 项目状态
 
-悬浮中转站是一个活跃维护的 Windows 10/11 64 位 WPF 应用，使用 .NET 10、MSTest 和 Inno Setup。公开仓库为 `Oiawlm/floating-transfer-station`，当前稳定发布为 1.4.1。
+悬浮中转站是一个活跃维护的 Windows 10/11 64 位 WPF 应用，使用 .NET 10、MSTest 和 Inno Setup。公开仓库为 `Oiawlm/floating-transfer-station`，当前稳定发布为 1.4.2。
 
 ## 主要目录
 
