@@ -28,6 +28,7 @@ jobs:
       - name: 运行 Release 测试、安装清理契约与打包
         env:
           FTS_CATEGORY_SWITCH_EVIDENCE_DIR: ${{ runner.temp }}/category-switch-evidence
+          FTS_CLIPBOARD_IMAGE_FALLBACK_EVIDENCE_DIR: ${{ runner.temp }}/clipboard-image-fallback-evidence
         run: '& .\scripts\build-release.ps1 -DotnetPath (Get-Command dotnet).Source'
       - name: 严格 Release 构建
         run: dotnet build FloatingTransferStation.slnx -c Release --no-restore -warnaserror
@@ -46,5 +47,12 @@ jobs:
         with:
           name: category-switch-evidence
           path: ${{ runner.temp }}/category-switch-evidence/*.png
+          if-no-files-found: error
+          retention-days: 30
+      - name: 保存剪贴板图片回退截图
+        uses: actions/upload-artifact@v7
+        with:
+          name: clipboard-image-fallback-evidence
+          path: ${{ runner.temp }}/clipboard-image-fallback-evidence/*.png
           if-no-files-found: error
           retention-days: 30

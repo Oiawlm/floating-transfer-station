@@ -195,6 +195,180 @@ public sealed class ImageNormalizerTests
     }
 
     [TestMethod]
+    public async Task NormalizeClipboard_CorruptLargestEncodedCandidateFallsBackToUsableImage()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        var damaged = (await CreatePngBytesAsync(4, 4, new Rgba32(255, 0, 0, 255)))[..33];
+        Assert.AreEqual(4, Image.Identify(damaged).Width);
+        Assert.ThrowsExactly<InvalidImageContentException>(() => Image.Load(damaged));
+        var color = new Rgba32(20, 40, 60, 128);
+        var usable = await CreatePngBytesAsync(2, 2, color);
+        var normalizer = new ImageNormalizer(paths.ImagesDirectory);
+        var id = Guid.Parse("00000000-0000-0000-0000-000000000103");
+
+        var stored = await normalizer.NormalizeClipboardAsync(
+        [
+            ClipboardImageCandidate.FromEncoded("image/png", damaged),
+            ClipboardImageCandidate.FromEncoded("PNG", usable)
+        ], id);
+
+        Assert.AreEqual($"images/{id:N}.png", stored.RelativePath);
+        CollectionAssert.AreEqual(
+            new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A },
+            (await File.ReadAllBytesAsync(stored.AbsolutePath))[..8]);
+        using var loaded = await Image.LoadAsync<Rgba32>(stored.AbsolutePath);
+        Assert.AreEqual(2, loaded.Width);
+        Assert.AreEqual(2, loaded.Height);
+        Assert.AreEqual(color, loaded[0, 0]);
+        Assert.AreEqual(1, Directory.GetFiles(paths.ImagesDirectory).Length);
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task NormalizeClipboard_SkipsCorruptCandidatesInPixelAreaOrder(bool reverseCandidates)
+    {
+        using var directory = new TestDirectory();
+        var bestColor = new Rgba32(20, 40, 60, 128);
+        var smallest = await CreatePngBytesAsync(1, 1, new Rgba32(255, 0, 0, 255));
+        var largest = (await CreatePngBytesAsync(4, 4, bestColor))[..33];
+        var bestUsable = await CreatePngBytesAsync(3, 2, bestColor);
+        var nextLargest = (await CreatePngBytesAsync(3, 3, bestColor))[..33];
+        ClipboardImageCandidate[] candidates =
+        [
+            ClipboardImageCandidate.FromEncoded("small", smallest),
+            ClipboardImageCandidate.FromEncoded("best usable", bestUsable),
+            ClipboardImageCandidate.FromEncoded("largest damaged", largest),
+            ClipboardImageCandidate.FromEncoded("next damaged", nextLargest)
+        ];
+        if (reverseCandidates)
+        {
+            Array.Reverse(candidates);
+        }
+        var normalizer = new ImageNormalizer(AppPaths.ForTests(directory.Root).ImagesDirectory);
+
+        var stored = await normalizer.NormalizeClipboardAsync(candidates);
+
+        using var loaded = await Image.LoadAsync<Rgba32>(stored.AbsolutePath);
+        Assert.AreEqual(3, loaded.Width);
+        Assert.AreEqual(2, loaded.Height);
+        Assert.AreEqual(bestColor, loaded[0, 0]);
+    }
+
+    [STATestMethod]
+    public async Task NormalizeClipboard_FallbackPrefersEqualAreaBitmapAndRepairsZeroAlpha()
+    {
+        using var directory = new TestDirectory();
+        var damaged = (await CreatePngBytesAsync(4, 4, new Rgba32(255, 0, 0, 255)))[..33];
+        var encoded = await CreatePngBytesAsync(1, 1, new Rgba32(200, 100, 50, 255));
+        var bitmap = BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 30, 20, 10, 0 }, 4);
+        bitmap.Freeze();
+        var normalizer = new ImageNormalizer(AppPaths.ForTests(directory.Root).ImagesDirectory);
+
+        var stored = await normalizer.NormalizeClipboardAsync(
+        [
+            ClipboardImageCandidate.FromEncoded("PNG", encoded),
+            ClipboardImageCandidate.FromBitmap(bitmap),
+            ClipboardImageCandidate.FromEncoded("image/png", damaged)
+        ]);
+
+        using var loaded = await Image.LoadAsync<Rgba32>(stored.AbsolutePath);
+        Assert.AreEqual(1, loaded.Width);
+        Assert.AreEqual(1, loaded.Height);
+        Assert.AreEqual(new Rgba32(10, 20, 30, 255), loaded[0, 0]);
+    }
+
+    [TestMethod]
+    public async Task NormalizeClipboard_AnimatedFallbackKeepsOnlyFirstFrame()
+    {
+        using var directory = new TestDirectory();
+        var damaged = (await CreatePngBytesAsync(4, 4, new Rgba32(255, 0, 0, 255)))[..33];
+        using var animation = new Image<Rgba32>(2, 2, new Rgba32(255, 0, 0, 255));
+        using var secondFrame = new Image<Rgba32>(2, 2, new Rgba32(0, 0, 255, 255));
+        animation.Frames.AddFrame(secondFrame.Frames.RootFrame);
+        await using var encoded = new MemoryStream();
+        await animation.SaveAsGifAsync(encoded);
+        var normalizer = new ImageNormalizer(AppPaths.ForTests(directory.Root).ImagesDirectory);
+
+        var stored = await normalizer.NormalizeClipboardAsync(
+        [
+            ClipboardImageCandidate.FromEncoded("image/png", damaged),
+            ClipboardImageCandidate.FromEncoded("image/gif", encoded.ToArray())
+        ]);
+
+        using var loaded = await Image.LoadAsync<Rgba32>(stored.AbsolutePath);
+        Assert.AreEqual(1, loaded.Frames.Count);
+        Assert.AreEqual(new Rgba32(255, 0, 0, 255), loaded[0, 0]);
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task NormalizeClipboard_UnusableCandidatesLeaveNoPartialFiles(bool readableHeader)
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        var unusable = readableHeader
+            ? (await CreatePngBytesAsync(4, 4, new Rgba32(255, 0, 0, 255)))[..33]
+            : new byte[] { 1, 2, 3 };
+        var normalizer = new ImageNormalizer(paths.ImagesDirectory);
+
+        var exception = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => normalizer.NormalizeClipboardAsync(
+        [
+            ClipboardImageCandidate.FromEncoded("image/png", unusable),
+            ClipboardImageCandidate.FromEncoded("PNG", unusable)
+        ]));
+
+        Assert.AreEqual("Clipboard does not contain a usable image representation.", exception.Message);
+        Assert.IsFalse(Directory.Exists(paths.ImagesDirectory) && Directory.EnumerateFiles(paths.ImagesDirectory).Any());
+    }
+
+    [TestMethod]
+    public async Task NormalizeClipboard_FallbackSaveFailurePreservesDestination()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        var damaged = (await CreatePngBytesAsync(4, 4, new Rgba32(255, 0, 0, 255)))[..33];
+        var usable = await CreatePngBytesAsync(2, 2, new Rgba32(20, 40, 60, 255));
+        var normalizer = new ImageNormalizer(paths.ImagesDirectory);
+        var id = Guid.Parse("00000000-0000-0000-0000-000000000104");
+        Directory.CreateDirectory(paths.ImagesDirectory);
+        var destination = Path.Combine(paths.ImagesDirectory, $"{id:N}.png");
+        byte[] original = [1, 2, 3];
+        await File.WriteAllBytesAsync(destination, original);
+
+        await Assert.ThrowsExactlyAsync<IOException>(() => normalizer.NormalizeClipboardAsync(
+        [
+            ClipboardImageCandidate.FromEncoded("image/png", damaged),
+            ClipboardImageCandidate.FromEncoded("PNG", usable)
+        ], id));
+
+        CollectionAssert.AreEqual(original, await File.ReadAllBytesAsync(destination));
+        Assert.AreEqual(1, Directory.GetFiles(paths.ImagesDirectory).Length);
+    }
+
+    [TestMethod]
+    public async Task NormalizeClipboard_CancelledFallbackWritesNoFiles()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        var damaged = (await CreatePngBytesAsync(4, 4, new Rgba32(255, 0, 0, 255)))[..33];
+        var usable = await CreatePngBytesAsync(2, 2, new Rgba32(20, 40, 60, 255));
+        var normalizer = new ImageNormalizer(paths.ImagesDirectory);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => normalizer.NormalizeClipboardAsync(
+        [
+            ClipboardImageCandidate.FromEncoded("image/png", damaged),
+            ClipboardImageCandidate.FromEncoded("PNG", usable)
+        ], cancellationToken: cancellation.Token));
+
+        Assert.IsFalse(Directory.Exists(paths.ImagesDirectory) && Directory.EnumerateFiles(paths.ImagesDirectory).Any());
+    }
+
+    [TestMethod]
     public async Task RepairStoredImagesOnce_RepairsOnlyInvalidZeroAlphaImagesAndWritesMarker()
     {
         using var directory = new TestDirectory();
