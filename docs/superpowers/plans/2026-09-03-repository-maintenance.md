@@ -8,7 +8,7 @@
 
 **Tech Stack:** .NET 10、WPF、MSTest、PowerShell、Inno Setup、GitHub Actions。
 
-**Status:** 本地实施与验证已于 2026-09-04 完成，工作分支 `codex/repository-maintenance-20260903`，基线 `0db9f2f`。维护提交 `526f7a0` 已推送并进入[草稿 PR #12](https://github.com/Oiawlm/floating-transfer-station/pull/12)，评审和发布状态以后续 PR 与 Release 为准。AGENTS.md、旧工作树与唯一验证资料保留。
+**Status:** 本地实施与验证已于 2026-09-04 完成，工作分支 `codex/repository-maintenance-20260903`，基线 `0db9f2f`。维护提交 `526f7a0` 和截图交付提交 `0efb09b` 已推送，[PR #12](https://github.com/Oiawlm/floating-transfer-station/pull/12) 已于 2026-09-05 转为待评审。2026-09-06 恢复核对发现 CI 任务名称与分支保护不匹配，补回原检查名称；合并和发布状态以后续 PR 与 Release 为准。AGENTS.md、旧工作树与唯一验证资料保留。
 
 ## Task 1: 剪贴板通知顺序
 
@@ -74,3 +74,10 @@
 - 剪贴板、安装/自启/交付链、窗口修复与机械迁移均完成独立规格和代码质量复核，无未解决的重要发现。
 - 真实窗口截图、清理及恢复映射、成功打包输出和结果说明保存在不提交的 `artifacts/repository-maintenance-20260903/`。新包保留原版本元数据 1.4.1，仅作本地开发验证；未执行真实安装或卸载，未触发远端 CI。
 - PR 交付时补充 CI 截图附件：复用 `FTS_CATEGORY_SWITCH_EVIDENCE_DIR`，上传四张合成内容的 WPF 回归截图并保留 30 天；源码中不增加图片或用户资料。前一条的“未触发远端 CI”是本地实施完成时的历史状态。
+
+## 2026-09-06 恢复与合并阻塞修复
+
+- 恢复时工作区干净，`HEAD` 与当前跟踪分支均为 `0efb09b`，相对 `origin/main` 有两笔已推送提交；既有实现、测试和文档完整，继续收尾此目标。
+- 当前 GitHub 分支保护 API 返回 `required_pull_request_reviews: null`，必需检查为“格式、测试与构建”；PR 上成功的检查却为“格式、测试、构建与安装包”，状态为 `BLOCKED`。这些是本轮新鲜证据，取代先前运行记录中“等待批准评审”的阻塞判断。
+- 修改前用实际分支保护与工作流任务名进行契约比对，稳定失败于名称不一致。仅将 `jobs.quality.name` 恢复为既有必需检查名称，保留格式、Release 测试、严格构建、原生安装清理、安装包编译与截图附件全部步骤；不修改分支保护或降低检查要求。
+- 完成标准：名称契约通过、本地必需检查通过、提交推送后当前提交的必需质量门成功，并通过普通合并验证阻塞已解除。实际运行结果保存在本轮自动化记录，后续状态以 PR 为准。
