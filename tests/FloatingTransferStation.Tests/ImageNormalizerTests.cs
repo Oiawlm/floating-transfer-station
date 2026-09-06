@@ -11,6 +11,48 @@ namespace FloatingTransferStation.Tests;
 public sealed class ImageNormalizerTests
 {
     [TestMethod]
+    public async Task NormalizeFile_AppliesExifOrientationBeforeSavingPng()
+    {
+        using var directory = new TestDirectory();
+        var source = Path.Combine(directory.Root, "camera.jpg");
+        using (var image = new Image<Rgba32>(30, 20, SixLabors.ImageSharp.Color.Red))
+        {
+            image.Metadata.ExifProfile = new SixLabors.ImageSharp.Metadata.Profiles.Exif.ExifProfile();
+            image.Metadata.ExifProfile.SetValue(
+                SixLabors.ImageSharp.Metadata.Profiles.Exif.ExifTag.Orientation, (ushort)6);
+            await image.SaveAsJpegAsync(source);
+        }
+
+        var stored = await new ImageNormalizer(AppPaths.ForTests(directory.Root).ImagesDirectory)
+            .NormalizeFileAsync(source);
+
+        using var loaded = await Image.LoadAsync(stored.AbsolutePath);
+        Assert.AreEqual(20, loaded.Width);
+        Assert.AreEqual(30, loaded.Height);
+    }
+
+    [TestMethod]
+    public async Task NormalizeClipboard_AppliesMirroredExifOrientation()
+    {
+        using var directory = new TestDirectory();
+        using var image = new Image<Rgba32>(2, 1);
+        image[0, 0] = new Rgba32(255, 0, 0, 255);
+        image[1, 0] = new Rgba32(0, 0, 255, 255);
+        image.Metadata.ExifProfile = new SixLabors.ImageSharp.Metadata.Profiles.Exif.ExifProfile();
+        image.Metadata.ExifProfile.SetValue(
+            SixLabors.ImageSharp.Metadata.Profiles.Exif.ExifTag.Orientation, (ushort)2);
+        using var encoded = new MemoryStream();
+        await image.SaveAsPngAsync(encoded);
+
+        var stored = await new ImageNormalizer(AppPaths.ForTests(directory.Root).ImagesDirectory)
+            .NormalizeClipboardAsync([ClipboardImageCandidate.FromEncoded("PNG", encoded.ToArray())]);
+
+        using var loaded = await Image.LoadAsync<Rgba32>(stored.AbsolutePath);
+        Assert.AreEqual(new Rgba32(0, 0, 255, 255), loaded[0, 0]);
+        Assert.AreEqual(new Rgba32(255, 0, 0, 255), loaded[1, 0]);
+    }
+
+    [TestMethod]
     public async Task NormalizeFile_JpegBecomesManagedPng()
     {
         using var directory = new TestDirectory();

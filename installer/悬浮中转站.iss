@@ -1,5 +1,11 @@
 #define MyAppName "悬浮中转站"
-#define MyAppVersion "1.4.3"
+#define MyAppVersionFile FileOpen(AddBackslash(SourcePath) + "..\version.txt")
+#if MyAppVersionFile == 0
+#error "Unable to read the repository version.txt file."
+#endif
+#define MyAppVersion Trim(FileRead(MyAppVersionFile))
+#expr FileClose(MyAppVersionFile)
+#undef MyAppVersionFile
 #define MyAppExeName "悬浮中转站.exe"
 #define MyAppMutexName "Local\FloatingTransferStation.App"
 
@@ -36,6 +42,7 @@ Name: "{autoprograms}\卸载{#MyAppName}"; Filename: "{uninstallexe}"
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\FloatingTransferStation"; ValueType: string; ValueName: "InstallDirectory"; ValueData: "{app}"; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait skipifsilent
@@ -68,14 +75,19 @@ function FindCloseWin32(FindHandle: THandle): Boolean;
   external 'FindClose@kernel32.dll stdcall';
 function GetLastError: LongWord;
   external 'GetLastError@kernel32.dll stdcall';
+function GetFileAttributesW(const FileName: String): LongWord;
+  external 'GetFileAttributesW@kernel32.dll stdcall';
 
 const
   DataRegistryKey = 'Software\FloatingTransferStation';
   DataDirectoryRegistryValue = 'DataDirectory';
   DataParentDirectoryRegistryValue = 'DataParentDirectory';
+  InstallDirectoryRegistryValue = 'InstallDirectory';
+  InstallRegistryKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{9F0E0B0F-4E4F-47C2-9E63-56847E509D50}_is1';
   ManagedDataParentLeaf = '悬浮中转站';
   ManagedDataLeaf = 'Data';
   ErrorFileNotFound = 2;
+  ErrorPathNotFound = 3;
   ErrorNoMoreFiles = 18;
   InvalidFindHandle = -1;
 
@@ -173,6 +185,45 @@ begin
       BackslashCount := BackslashCount + 1;
   end;
   Result := BackslashCount = 3;
+end;
+
+function IsSameInstallDirectory(const RegisteredDirectory, CurrentDirectory: String): Boolean;
+begin
+  Result := IsFullyQualifiedPath(RegisteredDirectory) and
+    IsFullyQualifiedPath(CurrentDirectory) and
+    (CompareText(NormalizeDirectory(RegisteredDirectory),
+      NormalizeDirectory(CurrentDirectory)) = 0);
+end;
+
+function IsInstallDirectorySelectionSafe(const ExistingDirectory, OwnerDirectory,
+  SelectedDirectory: String): Boolean;
+begin
+  Result := IsFullyQualifiedPath(SelectedDirectory) and
+    ((ExistingDirectory = '') or
+      IsSameInstallDirectory(ExistingDirectory, SelectedDirectory) or
+      IsSameInstallDirectory(ExistingDirectory, OwnerDirectory));
+end;
+
+function ValidateInstallDirectorySelection: Boolean;
+var
+  ExistingDirectory: String;
+  OwnerDirectory: String;
+begin
+  ExistingDirectory := '';
+  OwnerDirectory := '';
+  RegQueryStringValue(HKCU, InstallRegistryKey, 'InstallLocation', ExistingDirectory);
+  RegQueryStringValue(HKCU, DataRegistryKey, InstallDirectoryRegistryValue, OwnerDirectory);
+  Result := IsInstallDirectorySelectionSafe(ExistingDirectory, OwnerDirectory,
+    ExpandConstant('{app}'));
+end;
+
+function IsCurrentInstallation: Boolean;
+var
+  RegisteredDirectory: String;
+begin
+  Result := RegQueryStringValue(HKCU, DataRegistryKey,
+    InstallDirectoryRegistryValue, RegisteredDirectory) and
+    IsSameInstallDirectory(RegisteredDirectory, ExpandConstant('{app}'));
 end;
 
 function BuildDataDirectory(const ParentDirectory: String): String;
@@ -479,6 +530,17 @@ begin
     RemoveDir(GetManagedDataParent(Normalized));
 end;
 
+function IsMissingManagedDataDirectory(const DataDirectory: String): Boolean;
+var
+  ErrorCode: LongWord;
+begin
+  Result := False;
+  if GetFileAttributesW(DataDirectory) <> $FFFFFFFF then
+    Exit;
+  ErrorCode := GetLastError;
+  Result := (ErrorCode = ErrorFileNotFound) or (ErrorCode = ErrorPathNotFound);
+end;
+
 procedure RemovePreparedDataDirectory;
 begin
   if CreatedMigrationDirectory and IsManagedDataDirectory(SelectedDataDirectory) then
@@ -576,6 +638,11 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
+  if not ValidateInstallDirectorySelection then
+  begin
+    Result := '旧版本尚未启用卸载归属保护。请先保留原程序目录完成一次更新，再运行安装程序更改程序目录。内容存储位置可以照常选择。';
+    Exit;
+  end;
   if not PrepareDataDirectoryMigration then
     Result := '无法迁移现有内容。请确认目标文件夹可用后重试；原存储位置未作修改。';
 end;
@@ -691,6 +758,13 @@ function InitializeUninstall: Boolean;
 var
   RegisteredValue: String;
 begin
+  Result := False;
+  if not IsCurrentInstallation then
+  begin
+    SuppressibleMsgBox('此卸载程序不属于当前安装位置。请使用 Windows 设置或当前程序目录中的卸载程序；当前程序、内容和登记均未修改。',
+      mbError, MB_OK, IDOK);
+    Exit;
+  end;
   UninstallDataDirectory := '';
   UninstallDataDirectoryValid := False;
   if RegQueryStringValue(HKCU, DataRegistryKey,
@@ -723,10 +797,13 @@ begin
     if not UninstallDataDirectoryValid then
       Exit;
 
-    if (UninstallDataDirectory <> '') and DirExists(UninstallDataDirectory) and
+    if (UninstallDataDirectory <> '') and not IsMissingManagedDataDirectory(UninstallDataDirectory) and
       not DeleteManagedDataDirectory(UninstallDataDirectory) then
     begin
       Log('Failed to remove managed data directory: ' + UninstallDataDirectory);
+      SuppressibleMsgBox('部分内容未能删除：' + UninstallDataDirectory +
+        '。内容位置登记已保留，请关闭占用文件的程序后手动清理或重新安装后卸载。', mbError, MB_OK, IDOK);
+      Exit;
     end;
     RegDeleteValue(HKCU, DataRegistryKey, DataDirectoryRegistryValue);
     RegDeleteValue(HKCU, DataRegistryKey, DataParentDirectoryRegistryValue);

@@ -50,14 +50,20 @@ public sealed partial class LifecycleTests
         string[] expectedPreprocessorDirectives =
         [
             "#define MyAppName \"悬浮中转站\"",
-            "#define MyAppVersion \"1.4.3\"",
+            "#define MyAppVersionFile FileOpen(AddBackslash(SourcePath) + \"..\\version.txt\")",
+            "#if MyAppVersionFile == 0",
+            "#error \"Unable to read the repository version.txt file.\"",
+            "#endif",
+            "#define MyAppVersion Trim(FileRead(MyAppVersionFile))",
+            "#expr FileClose(MyAppVersionFile)",
+            "#undef MyAppVersionFile",
             "#define MyAppExeName \"悬浮中转站.exe\"",
             "#define MyAppMutexName \"Local\\FloatingTransferStation.App\"",
         ];
         CollectionAssert.AreEqual(
             expectedPreprocessorDirectives,
             GetInstallerPreprocessorDirectives(installer),
-            "The installer must contain only the approved literal preprocessor directives in order.");
+            "The installer must contain only the approved version-file and identity directives in order.");
 
         const string expressionRedefinitionCounterexample = """
             #define MyAppName "悬浮中转站"
@@ -352,5 +358,25 @@ public sealed partial class LifecycleTests
         StringAssert.Contains(installer, "IsManagedDataDirectory");
         StringAssert.Contains(installer, "DelTree");
         StringAssert.Contains(installer, "CurUninstallStepChanged");
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
+    public void Installer_RegistersInstallOwnershipAndChecksItBeforeDestructiveCallbacks()
+    {
+        var installer = File.ReadAllText(Directory.GetFiles(Path.Combine(FindRepositoryRoot(), "installer"), "*.iss").Single());
+        StringAssert.Contains(installer, "ValueName: \"InstallDirectory\"; ValueData: \"{app}\"");
+        var prepare = installer[installer.IndexOf("function PrepareToInstall", StringComparison.Ordinal)..];
+        Assert.IsTrue(
+            prepare.IndexOf("ValidateInstallDirectorySelection", StringComparison.Ordinal) >= 0 &&
+            prepare.IndexOf("ValidateInstallDirectorySelection", StringComparison.Ordinal) <
+            prepare.IndexOf("PrepareDataDirectoryMigration", StringComparison.Ordinal),
+            "An unsafe legacy relocation must be rejected before preparing or deleting data.");
+        var uninstall = installer[installer.IndexOf("function InitializeUninstall", StringComparison.Ordinal)..];
+        Assert.IsTrue(
+            uninstall.IndexOf("if not IsCurrentInstallation then", StringComparison.Ordinal) >= 0 &&
+            uninstall.IndexOf("if not IsCurrentInstallation then", StringComparison.Ordinal) <
+            uninstall.IndexOf("DataDirectoryRegistryValue", StringComparison.Ordinal),
+            "An old installation's uninstaller must refuse before accessing the current data registration.");
     }
 }

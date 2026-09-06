@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 
@@ -244,6 +245,114 @@ public sealed class LocalStoreTests
 
     [TestMethod]
     [TestCategory("Adversarial")]
+    [DataRow("images/invalid\0.png")]
+    [DataRow("\0")]
+    public async Task LoadBoard_MalformedImagePathDoesNotDiscardOtherItems(string relativePath)
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        Directory.CreateDirectory(paths.ImagesDirectory);
+        var validImagePath = Path.Combine(paths.ImagesDirectory, "valid.png");
+        await File.WriteAllBytesAsync(validImagePath, [1, 2, 3]);
+        var before = BoardItem.CreateText("before", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        var after = BoardItem.CreateText("after", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        var validImage = BoardItem.CreateImage(Guid.NewGuid(), "images/valid.png", validImagePath, DateTimeOffset.UtcNow);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        await store.SaveBoardAsync(new BoardSnapshot
+        {
+            Items =
+            [
+                before,
+                BoardItem.CreateImage(Guid.NewGuid(), relativePath, string.Empty, DateTimeOffset.UtcNow),
+                after,
+                validImage
+            ]
+        });
+        var originalJson = await File.ReadAllTextAsync(paths.BoardFile);
+
+        var loaded = await store.LoadBoardAsync();
+
+        CollectionAssert.AreEqual(new[] { before.Id, after.Id, validImage.Id }, loaded.Items.Select(item => item.Id).ToArray());
+        Assert.AreEqual(originalJson, await File.ReadAllTextAsync(paths.BoardFile));
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task ImagesReachedThroughDirectoryLinkAreExcludedAndNotDeleted(bool linkImagesRoot)
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(Path.Combine(directory.Root, "data"));
+        var externalDirectory = Path.Combine(directory.Root, "external");
+        Directory.CreateDirectory(externalDirectory);
+        Directory.CreateDirectory(paths.DataDirectory);
+        var externalImage = Path.Combine(externalDirectory, "sentinel.png");
+        await File.WriteAllBytesAsync(externalImage, [1, 2, 3]);
+        var link = linkImagesRoot ? paths.ImagesDirectory : Path.Combine(paths.ImagesDirectory, "linked");
+        Directory.CreateDirectory(Path.GetDirectoryName(link)!);
+        CreateDirectoryJunction(link, externalDirectory);
+        try
+        {
+            var relativePath = linkImagesRoot ? "images/sentinel.png" : "images/linked/sentinel.png";
+            var linkedImage = Path.Combine(link, "sentinel.png");
+            var store = new LocalStore(paths, new AtomicTextWriter());
+            await store.SaveBoardAsync(new BoardSnapshot
+            {
+                Items =
+                [
+                    BoardItem.CreateImage(Guid.NewGuid(), relativePath, linkedImage, DateTimeOffset.UtcNow),
+                    BoardItem.CreateText("keep", Guid.NewGuid(), DateTimeOffset.UtcNow)
+                ]
+            });
+
+            var loaded = await store.LoadBoardAsync();
+            var deleted = store.TryDeleteImage(linkedImage);
+
+            Assert.IsFalse(deleted, "A managed-looking path through a directory link must not delete its target.");
+            Assert.AreEqual("keep", loaded.Items.Single().Text);
+            CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, await File.ReadAllBytesAsync(externalImage));
+        }
+        finally
+        {
+            Directory.Delete(link);
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
+    public async Task ManagedImagesBelowLinkedDataParentRemainUsable()
+    {
+        using var directory = new TestDirectory();
+        var physicalData = Path.Combine(directory.Root, "physical-data");
+        var linkedData = Path.Combine(directory.Root, "configured-data");
+        Directory.CreateDirectory(Path.Combine(physicalData, "images"));
+        CreateDirectoryJunction(linkedData, physicalData);
+        try
+        {
+            var paths = AppPaths.ForTests(linkedData);
+            var imagePath = Path.Combine(paths.ImagesDirectory, "managed.png");
+            await File.WriteAllBytesAsync(imagePath, [1, 2, 3]);
+            var store = new LocalStore(paths, new AtomicTextWriter());
+            await store.SaveBoardAsync(new BoardSnapshot
+            {
+                Items = [BoardItem.CreateImage(Guid.NewGuid(), "images/managed.png", imagePath, DateTimeOffset.UtcNow)]
+            });
+
+            var loaded = await store.LoadBoardAsync();
+
+            Assert.AreEqual(imagePath, loaded.Items.Single().ImageAbsolutePath);
+            Assert.IsTrue(store.TryDeleteImage(imagePath));
+            Assert.IsFalse(File.Exists(Path.Combine(physicalData, "images", "managed.png")));
+        }
+        finally
+        {
+            Directory.Delete(linkedData);
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
     public async Task LoadBoard_UnknownSchemaStartsWithEmptyBoard()
     {
         using var directory = new TestDirectory();
@@ -376,6 +485,31 @@ public sealed class LocalStoreTests
                 DateTimeOffset.Parse("2026-08-09T00:00:00Z"))
         ]
     };
+
+    private static void CreateDirectoryJunction(string path, string target)
+    {
+        var startInfo = new ProcessStartInfo("powershell.exe")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        startInfo.ArgumentList.Add("-NoProfile");
+        startInfo.ArgumentList.Add("-NonInteractive");
+        startInfo.ArgumentList.Add("-Command");
+        startInfo.ArgumentList.Add("$ErrorActionPreference='Stop'; New-Item -ItemType Junction -Path $env:FTS_LINK_PATH -Target $env:FTS_LINK_TARGET | Out-Null");
+        startInfo.Environment["FTS_LINK_PATH"] = path;
+        startInfo.Environment["FTS_LINK_TARGET"] = target;
+        using var process = Process.Start(startInfo)!;
+        if (!process.WaitForExit(10000))
+        {
+            process.Kill(entireProcessTree: true);
+            Assert.Fail("Creating the synthetic directory junction timed out.");
+        }
+        Assert.AreEqual(0, process.ExitCode, process.StandardError.ReadToEnd());
+        Assert.IsTrue((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0);
+    }
 
     private sealed class ThrowingAtomicTextWriter : IAtomicTextWriter
     {

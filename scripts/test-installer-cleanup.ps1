@@ -42,8 +42,8 @@ function ConvertTo-PascalString([string]$Value) {
     return "'" + $Value.Replace("'", "''") + "'"
 }
 
-# Compile only the production path helpers and cleanup function. No production
-# setup/uninstall events, registry operations, or installation sections run.
+# Run production cleanup and uninstall callbacks only against synthetic paths.
+# Registry operations, messages and the installation location are replaced by stubs.
 $source = Get-Content -LiteralPath $installerScript -Raw -Encoding UTF8
 $constantSource = @()
 $managedLeaves = @{}
@@ -64,13 +64,35 @@ foreach ($name in @('ManagedDataParentLeaf', 'ManagedDataLeaf')) {
 $functionSource = foreach ($name in @(
     'IsExtendedDevicePath', 'IsFullyQualifiedPath', 'NormalizeDirectory',
     'IsRootDirectory', 'BuildDataDirectory', 'GetManagedDataParent',
-    'GetDataParentDirectory', 'IsManagedDataDirectory', 'DeleteManagedDataDirectory'
+    'GetDataParentDirectory', 'IsManagedDataDirectory', 'DeleteManagedDataDirectory',
+    'IsMissingManagedDataDirectory'
 )) {
     $matches = [regex]::Matches($source, "(?ms)^function[ \t]+$name\b.*?^end;[ \t]*(?=\r?$)")
     if ($matches.Count -ne 1) {
         throw "Expected exactly one complete production $name function."
     }
     $matches[0].Value
+}
+
+function ConvertTo-TestCallback([string]$Value) {
+    return $Value.Replace('RegQueryStringValue(', 'TestRegQueryStringValue(').
+        Replace('RegDeleteValue(', 'TestRegDeleteValue(').
+        Replace('SuppressibleMsgBox(', 'RecordSuppressibleMessage(').
+        Replace('MsgBox(', 'RecordMessage(').
+        Replace("ExpandConstant('{app}')", 'FixtureAppDirectory').
+        Replace('InitializeUninstall', 'TestInitializeUninstall').
+        Replace('CurUninstallStepChanged', 'TestCurUninstallStepChanged')
+}
+
+$ownershipSource = foreach ($name in @('IsSameInstallDirectory', 'IsInstallDirectorySelectionSafe', 'IsCurrentInstallation')) {
+    $matches = [regex]::Matches($source, "(?ms)^function[ \t]+$name\b.*?^end;[ \t]*(?=\r?$)")
+    if ($matches.Count -gt 1) { throw "Duplicate ownership function: $name" }
+    if ($matches.Count -eq 1) { ConvertTo-TestCallback $matches[0].Value }
+}
+$uninstallSource = foreach ($name in @('InitializeUninstall', 'CurUninstallStepChanged')) {
+    $matches = [regex]::Matches($source, "(?ms)^(?:function|procedure)[ \t]+$name\b.*?^end;[ \t]*(?=\r?$)")
+    if ($matches.Count -ne 1) { throw "Expected exactly one production callback: $name" }
+    ConvertTo-TestCallback $matches[0].Value
 }
 
 $testResultsRoot = Assert-ChildPath (Join-Path $repoRoot 'TestResults') $repoRoot
@@ -86,6 +108,7 @@ Write-Host "Installer cleanup fixture: $fixtureRoot"
 $passed = $false
 $previousTemp = $env:TEMP
 $previousTmp = $env:TMP
+$lockedStream = $null
 try {
     $runtimeTemp = Join-Path $fixtureRoot 'runtime-temp'
     [System.IO.Directory]::CreateDirectory($runtimeTemp) | Out-Null
@@ -117,12 +140,16 @@ try {
         "cases\unmanaged-parent\Other\$dataLeaf\keep.txt"
         "cases\unmanaged-parent\Other\app.exe"
         "cases\missing-data\$parentLeaf\keep.txt"
+        "cases\uninstall-locked\$managedSuffix\locked.txt"
+        "cases\uninstall-stale\$managedSuffix\board.json"
+        "cases\uninstall-not-directory\$managedSuffix"
     )
     $managedFiles = @(
         "cases\siblings\$managedSuffix\board.json"
         "cases\siblings\$managedSuffix\Images\image.bin"
         "cases\empty-parent\$managedSuffix\Images\image.bin"
         "cases\normalized\$managedSuffix\board.json"
+        "cases\uninstall-current\$managedSuffix\board.json"
     )
     foreach ($relativePath in ($preservedFiles + $managedFiles)) {
         $path = Assert-ChildPath (Join-Path $fixtureRoot $relativePath) $fixtureRoot
@@ -140,6 +167,20 @@ try {
             (ConvertTo-PascalString $inputPath) + ');'
     }
     $receiptPath = Join-Path $fixtureRoot 'native-results.txt'
+    $appA = Join-Path $fixtureRoot 'app-a'
+    $appB = Join-Path $fixtureRoot 'app-b'
+    $selectionCases = @(
+        @{ Name = 'install-new'; Existing = ''; Owner = ''; Selected = $appA; Expected = 'True' }
+        @{ Name = 'install-legacy-same'; Existing = $appA; Owner = ''; Selected = $appA; Expected = 'True' }
+        @{ Name = 'install-legacy-move'; Existing = $appA; Owner = ''; Selected = $appB; Expected = 'False' }
+        @{ Name = 'install-owned-move'; Existing = $appA; Owner = $appA; Selected = $appB; Expected = 'True' }
+        @{ Name = 'install-owner-mismatch'; Existing = $appA; Owner = $appB; Selected = $appB; Expected = 'False' }
+        @{ Name = 'install-relative-path'; Existing = ''; Owner = ''; Selected = 'relative'; Expected = 'False' }
+    )
+    $selectionCalls = foreach ($case in $selectionCases) {
+        '    RunInstallDirectoryCase(' + ((@($case.Name, $case.Existing, $case.Owner, $case.Selected) |
+            ForEach-Object { ConvertTo-PascalString $_ }) -join ', ') + ');'
+    }
     $fixtureScript = Join-Path $fixtureRoot 'cleanup-behavior.iss'
     $harness = @"
 [Setup]
@@ -160,12 +201,68 @@ OutputBaseFilename=cleanup-behavior
 Compression=none
 
 [Code]
+function GetLastError: LongWord;
+  external 'GetLastError@kernel32.dll stdcall';
+function GetFileAttributesW(const FileName: String): LongWord;
+  external 'GetFileAttributesW@kernel32.dll stdcall';
 const
   FixtureRoot = $(ConvertTo-PascalString $fixtureRoot);
   ReceiptPath = $(ConvertTo-PascalString $receiptPath);
   $($constantSource -join "`n  ")
+  DataRegistryKey = 'Synthetic.Registry';
+  DataDirectoryRegistryValue = 'DataDirectory';
+  DataParentDirectoryRegistryValue = 'DataParentDirectory';
+  InstallDirectoryRegistryValue = 'InstallDirectory';
+  ErrorFileNotFound = 2;
+  ErrorPathNotFound = 3;
+var
+  UninstallDataDirectory: String;
+  UninstallDataDirectoryValid: Boolean;
+  FixtureAppDirectory: String;
+  RegisteredInstallDirectory: String;
+  RegisteredDataDirectory: String;
+  RegistryDeleteCount: Integer;
+  MessageCount: Integer;
 
 $($functionSource -join "`n`n")
+
+function TestRegQueryStringValue(const RootKey: Integer;
+  const SubkeyName, ValueName: String; var Value: String): Boolean;
+begin
+  Result := True;
+  if ValueName = DataDirectoryRegistryValue then
+    Value := RegisteredDataDirectory
+  else if ValueName = InstallDirectoryRegistryValue then
+    Value := RegisteredInstallDirectory
+  else
+    Result := False;
+end;
+
+procedure TestRegDeleteValue(const RootKey: Integer; const SubkeyName, ValueName: String);
+begin
+  RegistryDeleteCount := RegistryDeleteCount + 1;
+end;
+
+function RecordMessage(const Text: String; const Typ: TMsgBoxType; const Buttons: Integer): Integer;
+begin
+  MessageCount := MessageCount + 1;
+  Result := IDOK;
+end;
+
+function RecordSuppressibleMessage(const Text: String; const Typ: TMsgBoxType;
+  const Buttons, Default: Integer): Integer;
+begin
+  Result := RecordMessage(Text, Typ, Buttons);
+end;
+
+function GetLegacyDataDirectory: String;
+begin
+  RaiseException('Synthetic tests must not use the legacy data location.');
+end;
+
+$($ownershipSource -join "`n`n")
+
+$($uninstallSource -join "`n`n")
 
 procedure RequireFixtureTarget(const DataDirectory: String);
 var
@@ -194,6 +291,39 @@ begin
     RaiseException('Cannot write the native test result.');
 end;
 
+function BoolText(const Value: Boolean): String;
+begin
+  if Value then Result := 'True' else Result := 'False';
+end;
+
+procedure RunInstallDirectoryCase(const Name, ExistingDirectory, OwnerDirectory,
+  SelectedDirectory: String);
+begin
+  SaveStringToFile(ReceiptPath, Name + '=' +
+    BoolText(IsInstallDirectorySelectionSafe(ExistingDirectory, OwnerDirectory, SelectedDirectory)) + #13#10, True);
+end;
+
+procedure RunUninstallCase(const Name: String; const IsCurrent: Boolean);
+var
+  Initialized: Boolean;
+begin
+  RegisteredDataDirectory := AddBackslash(FixtureRoot) + 'cases\' + Name + '\' +
+    ManagedDataParentLeaf + '\' + ManagedDataLeaf;
+  RequireFixtureTarget(RegisteredDataDirectory);
+  RegisteredInstallDirectory := AddBackslash(FixtureRoot) + 'current-app';
+  FixtureAppDirectory := RegisteredInstallDirectory;
+  if not IsCurrent then
+    FixtureAppDirectory := AddBackslash(FixtureRoot) + 'old-app';
+  RegistryDeleteCount := 0;
+  MessageCount := 0;
+  Initialized := TestInitializeUninstall;
+  if Initialized then TestCurUninstallStepChanged(usUninstall);
+  SaveStringToFile(ReceiptPath, Name + '=Initialized:' + BoolText(Initialized) +
+    ';DataExists:' + BoolText(DirExists(RegisteredDataDirectory)) +
+    ';RegistryDeletes:' + IntToStr(RegistryDeleteCount) +
+    ';Messages:' + IntToStr(MessageCount) + #13#10, True);
+end;
+
 function InitializeSetup: Boolean;
 begin
   Result := False;
@@ -201,41 +331,82 @@ begin
     if not FileExists(AddBackslash(FixtureRoot) + 'fixture.marker') then
       RaiseException('The synthetic fixture marker is missing.');
 $($caseCalls -join "`n")
+    RunUninstallCase('uninstall-locked', True);
+    RunUninstallCase('uninstall-stale', False);
+    RunUninstallCase('uninstall-current', True);
+    RunUninstallCase('uninstall-missing', True);
+    RunUninstallCase('uninstall-not-directory', True);
+$($selectionCalls -join "`n")
     SaveStringToFile(ReceiptPath, 'COMPLETED' + #13#10, True);
   except
     SaveStringToFile(ReceiptPath, 'ERROR=' + GetExceptionMessage + #13#10, True);
   end;
 end;
 "@
+    if ($harness -match '(?im)\bReg(?:Query|Write|Delete)\w*\(') {
+        throw 'The synthetic harness must not contain real registry operations.'
+    }
     [System.IO.File]::WriteAllText($fixtureScript, $harness, [System.Text.UTF8Encoding]::new($true))
     (Get-FileHash -LiteralPath $installerScript -Algorithm SHA256).Hash |
         Set-Content -LiteralPath (Join-Path $fixtureRoot 'production-source.sha256')
 
-    $compiler = Start-Process -FilePath $IsccPath -ArgumentList @('/Q', ('"' + $fixtureScript + '"')) `
-        -WorkingDirectory $fixtureRoot -WindowStyle Hidden -PassThru `
-        -RedirectStandardOutput (Join-Path $fixtureRoot 'compiler.log') `
-        -RedirectStandardError (Join-Path $fixtureRoot 'compiler-errors.log')
-    if (-not $compiler.WaitForExit(30000)) {
-        $compiler.Kill()
-        throw 'The isolated Inno test compilation timed out.'
+    # Start-Process can lose the exit code after WaitForExit on PowerShell 5.1.
+    # Process.Start retains the native process handle until the explicit Dispose.
+    $compilerInfo = [Diagnostics.ProcessStartInfo]::new()
+    $compilerInfo.FileName = $IsccPath
+    $compilerInfo.Arguments = '/Q "' + $fixtureScript + '"'
+    $compilerInfo.WorkingDirectory = $fixtureRoot
+    $compilerInfo.UseShellExecute = $false
+    $compilerInfo.CreateNoWindow = $true
+    $compilerInfo.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+    $compilerInfo.RedirectStandardOutput = $true
+    $compilerInfo.RedirectStandardError = $true
+    $compiler = [Diagnostics.Process]::Start($compilerInfo)
+    try {
+        $compilerOutput = $compiler.StandardOutput.ReadToEndAsync()
+        $compilerErrors = $compiler.StandardError.ReadToEndAsync()
+        if (-not $compiler.WaitForExit(30000)) {
+            $compiler.Kill()
+            throw 'The isolated Inno test compilation timed out.'
+        }
+        if (-not $compilerOutput.Wait(5000) -or -not $compilerErrors.Wait(5000)) {
+            throw 'The isolated Inno compiler output collection timed out.'
+        }
+        [IO.File]::WriteAllText((Join-Path $fixtureRoot 'compiler.log'), $compilerOutput.Result)
+        [IO.File]::WriteAllText((Join-Path $fixtureRoot 'compiler-errors.log'), $compilerErrors.Result)
+        if ($compiler.ExitCode -ne 0) {
+            throw "The isolated Inno test failed to compile (exit $($compiler.ExitCode)); see compiler-errors.log."
+        }
     }
-    if ($compiler.ExitCode -ne 0) {
-        throw "The isolated Inno test failed to compile (exit $($compiler.ExitCode)); see compiler-errors.log."
+    finally {
+        $compiler.Dispose()
     }
 
     $testExecutable = Assert-ChildPath (Join-Path $fixtureRoot 'cleanup-behavior.exe') $fixtureRoot
-    $process = Start-Process -FilePath $testExecutable `
-        -ArgumentList @('/SP-', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART',
-            ('/LOG="' + (Join-Path $fixtureRoot 'native.log') + '"')) `
-        -WorkingDirectory $fixtureRoot -WindowStyle Hidden -PassThru
-    if (-not $process.WaitForExit(30000)) {
-        $process.Kill()
-        throw 'The isolated Inno cleanup test timed out.'
+    $lockedPath = Join-Path $fixtureRoot "cases\uninstall-locked\$managedSuffix\locked.txt"
+    $lockedStream = [IO.File]::Open($lockedPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $processInfo = [Diagnostics.ProcessStartInfo]::new()
+    $processInfo.FileName = $testExecutable
+    $processInfo.Arguments = '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' +
+        (Join-Path $fixtureRoot 'native.log') + '"'
+    $processInfo.WorkingDirectory = $fixtureRoot
+    $processInfo.UseShellExecute = $false
+    $processInfo.CreateNoWindow = $true
+    $processInfo.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+    $process = [Diagnostics.Process]::Start($processInfo)
+    try {
+        if (-not $process.WaitForExit(30000)) {
+            $process.Kill()
+            throw 'The isolated Inno cleanup test timed out.'
+        }
+        # InitializeSetup deliberately returns False, so exit 1 is expected. The
+        # receipt plus independent filesystem assertions decide whether tests pass.
+        if ($process.ExitCode -ne 1) {
+            throw "Expected initialization-only exit 1, got $($process.ExitCode)."
+        }
     }
-    # InitializeSetup deliberately returns False, so exit 1 is expected. The
-    # receipt plus independent filesystem assertions decide whether tests pass.
-    if ($process.ExitCode -ne 1) {
-        throw "Expected initialization-only exit 1, got $($process.ExitCode)."
+    finally {
+        $process.Dispose()
     }
     $receipt = @(Get-Content -LiteralPath $receiptPath)
     $assertions = [System.Collections.Generic.List[string]]::new()
@@ -249,8 +420,20 @@ end;
             $failures.Add($Description)
         }
     }
-    Record-Assertion ($receipt.Count -eq ($cases.Count + 1) -and $receipt[-1] -eq 'COMPLETED') `
+    Record-Assertion ($receipt.Count -eq ($cases.Count + $selectionCases.Count + 6) -and $receipt[-1] -eq 'COMPLETED') `
         'all native cleanup cases completed'
+    foreach ($case in $selectionCases) {
+        Record-Assertion ($receipt -contains "$($case.Name)=$($case.Expected)") "$($case.Name): directory selection is $($case.Expected)"
+    }
+    foreach ($expected in @(
+        'uninstall-locked=Initialized:True;DataExists:True;RegistryDeletes:0;Messages:1',
+        'uninstall-stale=Initialized:False;DataExists:True;RegistryDeletes:0;Messages:1',
+        'uninstall-current=Initialized:True;DataExists:False;RegistryDeletes:2;Messages:0',
+        'uninstall-missing=Initialized:True;DataExists:False;RegistryDeletes:2;Messages:0',
+        'uninstall-not-directory=Initialized:True;DataExists:False;RegistryDeletes:0;Messages:1'
+    )) {
+        Record-Assertion ($receipt -contains $expected) $expected
+    }
     foreach ($case in $cases) {
         Record-Assertion ($receipt -contains "$($case.Name)=$($case.Expected)") `
             "$($case.Name): cleanup returned $($case.Expected)"
@@ -263,7 +446,8 @@ end;
     }
     foreach ($relativePath in @(
         "cases\siblings\$managedSuffix", "cases\empty-parent\$parentLeaf",
-        "cases\normalized\$managedSuffix", "cases\missing-data\$managedSuffix"
+        "cases\normalized\$managedSuffix", "cases\missing-data\$managedSuffix",
+        "cases\uninstall-current\$managedSuffix"
     )) {
         Record-Assertion (-not (Test-Path -LiteralPath (Join-Path $fixtureRoot $relativePath))) `
             "removed or absent: $relativePath"
@@ -273,9 +457,10 @@ end;
         throw "Installer cleanup regression failed ($($failures.Count) assertions):`n$($failures -join "`n")"
     }
     $passed = $true
-    Write-Host "Installer cleanup behavior passed: $($cases.Count) native cases, $($assertions.Count) assertions."
+    Write-Host "Installer cleanup behavior passed: $($cases.Count + $selectionCases.Count + 5) native cases, $($assertions.Count) assertions."
 }
 finally {
+    if ($null -ne $lockedStream) { $lockedStream.Dispose() }
     $env:TEMP = $previousTemp
     $env:TMP = $previousTmp
     if ($passed -and -not $KeepArtifacts) {

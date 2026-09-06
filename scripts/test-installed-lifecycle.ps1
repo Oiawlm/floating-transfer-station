@@ -60,14 +60,15 @@ function Assert-Condition([bool]$condition, [string]$message) {
     $assertions.Add($message)
 }
 
-function Invoke-SetupProcess([string]$executable, [string]$arguments, [string]$stage) {
+function Invoke-SetupProcess([string]$executable, [string]$arguments, [string]$stage, [int]$expectedExitCode = 0) {
     $process = Start-Process -FilePath $executable -ArgumentList $arguments -WindowStyle Hidden -PassThru
     try {
         if (-not $process.WaitForExit(60000)) {
             $process.Kill($true)
             throw "$stage timed out; see the installer log."
         }
-        Assert-Condition ($process.ExitCode -eq 0) "$stage must exit successfully (actual: $($process.ExitCode))."
+        $matchesExpected = if ($expectedExitCode -lt 0) { $process.ExitCode -ne 0 } else { $process.ExitCode -eq $expectedExitCode }
+        Assert-Condition $matchesExpected "$stage must have the expected outcome (actual: $($process.ExitCode), expected: $expectedExitCode; -1 means rejected)."
     } finally {
         $process.Dispose()
     }
@@ -83,10 +84,12 @@ function Assert-InstalledState {
     $registration = Get-ItemProperty -LiteralPath $settingsKey
     Assert-Condition ($registration.DataDirectory -eq $dataDirectory) 'DataDirectory must point to the synthetic registered data.'
     Assert-Condition ($registration.DataParentDirectory -eq $dataParent) 'DataParentDirectory must match the synthetic parent.'
+    Assert-Condition ($registration.InstallDirectory -eq $installedDirectory) 'InstallDirectory must identify the current installation.'
     $startup = Get-ItemPropertyValue -LiteralPath $startupKey -Name $productName
     Assert-Condition ($startup -ceq ('"' + $installedExecutable + '"')) 'Startup must quote the installed executable exactly.'
     $uninstall = Get-ItemProperty -LiteralPath $uninstallKey
     Assert-Condition ($uninstall.DisplayVersion -eq $expectedVersion) 'Windows uninstall metadata must match the installer version.'
+    Assert-Condition ($uninstall.InstallLocation.TrimEnd('\') -eq $installedDirectory) 'Windows uninstall metadata must identify the current installation directory.'
     Assert-Condition (@(Get-Process -Name $productName -ErrorAction SilentlyContinue).Count -eq 0) 'Silent setup must not start the application.'
     foreach ($entry in $dataHashes.GetEnumerator()) { Assert-FileHash $entry.Key $entry.Value }
     foreach ($entry in $sentinelHashes.GetEnumerator()) { Assert-FileHash $entry.Key $entry.Value }
@@ -125,7 +128,7 @@ $report = [ordered]@{
     InstallerSHA256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash
     VerifiedStages = @()
     Assertions = $assertions
-    Scope = 'Real install, same-version same-directory reinstall, and uninstall with synthetic registered data; cross-directory migration cleanup is verified separately by native cleanup and source contracts.'
+    Scope = 'Synthetic install and reinstall; block legacy application relocation, enable ownership with an in-place update, relocate the application, reject the old uninstaller, and uninstall the current installation. The registered data directory stays unchanged; cross-directory data migration is not claimed.'
 }
 try {
     foreach ($stage in @('install', 'update')) {
@@ -136,6 +139,42 @@ try {
         $report.VerifiedStages += $stage
     }
 
+    $oldInstalledDirectory = $installedDirectory
+    $oldUninstallers = @(Get-ChildItem -LiteralPath $oldInstalledDirectory -Filter 'unins*.exe' -File)
+    Assert-Condition ($oldUninstallers.Count -eq 1) 'The original installation must have exactly one uninstaller.'
+    $relocatedDirectory = Join-Path $fixtureRoot "Relocated application\$productName"
+
+    # A missing ownership value represents a pre-protection release. Its actual
+    # uninstall metadata remains intact, so an unsafe relocation must stop first.
+    Remove-ItemProperty -LiteralPath $settingsKey -Name InstallDirectory
+    $logPath = Join-Path $evidenceDirectory 'legacy-relocation-blocked.log'
+    $arguments = '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $relocatedDirectory + '" /LOG="' + $logPath + '"'
+    Invoke-SetupProcess $installer.FullName $arguments 'legacy-relocation-blocked' 7
+    Assert-Condition (-not (Test-Path -LiteralPath $relocatedDirectory)) 'Legacy relocation must stop before creating a replacement installation.'
+    foreach ($entry in $dataHashes.GetEnumerator()) { Assert-FileHash $entry.Key $entry.Value }
+    foreach ($entry in $sentinelHashes.GetEnumerator()) { Assert-FileHash $entry.Key $entry.Value }
+    $report.VerifiedStages += 'legacy-relocation-blocked'
+
+    $logPath = Join-Path $evidenceDirectory 'enable-ownership.log'
+    $arguments = '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $installedDirectory + '" /LOG="' + $logPath + '"'
+    Invoke-SetupProcess $installer.FullName $arguments 'enable-ownership'
+    Assert-InstalledState
+    $report.VerifiedStages += 'enable-ownership'
+
+    $logPath = Join-Path $evidenceDirectory 'relocate-application.log'
+    $arguments = '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $relocatedDirectory + '" /LOG="' + $logPath + '"'
+    Invoke-SetupProcess $installer.FullName $arguments 'relocate-application'
+    $installedDirectory = $relocatedDirectory
+    $installedExecutable = Join-Path $installedDirectory "$productName.exe"
+    Assert-InstalledState
+    $report.VerifiedStages += 'relocate-application'
+
+    $logPath = Join-Path $evidenceDirectory 'old-uninstaller-blocked.log'
+    Invoke-SetupProcess $oldUninstallers[0].FullName ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + $logPath + '"') 'old-uninstaller-blocked' -1
+    Assert-InstalledState
+    Assert-Condition (Test-Path -LiteralPath (Join-Path $oldInstalledDirectory "$productName.exe")) 'A rejected old uninstaller must not start native cleanup.'
+    $report.VerifiedStages += 'old-uninstaller-blocked'
+
     $uninstallers = @(Get-ChildItem -LiteralPath $installedDirectory -Filter 'unins*.exe' -File)
     Assert-Condition ($uninstallers.Count -eq 1) 'Exactly one product uninstaller must be installed.'
     $logPath = Join-Path $evidenceDirectory 'uninstall.log'
@@ -144,7 +183,7 @@ try {
     Assert-Condition (-not (Test-Path -LiteralPath $installedExecutable)) 'Uninstall must remove the installed product executable.'
     Assert-Condition (-not (Test-Path -LiteralPath $uninstallKey)) 'Uninstall must remove its Windows registration.'
     $remainingSettings = Get-ItemProperty -LiteralPath $settingsKey -ErrorAction SilentlyContinue
-    foreach ($name in @('DataDirectory', 'DataParentDirectory')) {
+    foreach ($name in @('DataDirectory', 'DataParentDirectory', 'InstallDirectory')) {
         Assert-Condition ($null -eq $remainingSettings -or $remainingSettings.PSObject.Properties.Name -notcontains $name) "Uninstall must remove $name registration."
     }
     $remainingStartup = Get-ItemProperty -LiteralPath $startupKey -ErrorAction SilentlyContinue
@@ -152,7 +191,7 @@ try {
     foreach ($entry in $sentinelHashes.GetEnumerator()) { Assert-FileHash $entry.Key $entry.Value }
     $report.VerifiedStages += 'uninstall'
     $report.Status = 'passed'
-    Write-Output "Installed lifecycle passed: 3 stages, $($assertions.Count) assertions."
+    Write-Output "Installed lifecycle passed: $($report.VerifiedStages.Count) stages, $($assertions.Count) assertions."
 } catch {
     $report.Status = 'failed'
     $report.Error = $_.Exception.Message

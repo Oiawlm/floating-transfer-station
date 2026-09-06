@@ -9,7 +9,7 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace FloatingTransferStation.Tests;
 
 [TestClass]
-public sealed class ClipboardCaptureServiceTests
+public sealed partial class ClipboardCaptureServiceTests
 {
     [STATestMethod]
     public async Task HandleUpdate_ImageWinsOverTextAndEntersInboxTop()

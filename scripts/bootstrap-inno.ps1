@@ -1,10 +1,34 @@
 [CmdletBinding()]
-param()
+param([switch]$VerifyOnly)
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $toolsRoot = Join-Path $repoRoot '.tools'
-$downloadUri = 'https://github.com/jrsoftware/issrc/releases/download/is-7_0_2/innosetup-7.0.2-x64.exe'
+$expectedCompilerVersion = '7.0.2'
+$downloadUri = "https://github.com/jrsoftware/issrc/releases/download/is-$($expectedCompilerVersion.Replace('.', '_'))/innosetup-$expectedCompilerVersion-x64.exe"
+
+function Assert-InnoCompilerVersion([string]$compilerPath, [string]$expectedVersion) {
+    # File resources may omit the patch version. Query the compiler's own preprocessor.
+    $probe = @'
+#pragma message "FTS_INNO_VERSION=" + DecodeVer(Ver)
+[Setup]
+AppName=CompilerVersionProbe
+AppVersion=0
+CreateAppDir=no
+Uninstallable=no
+Output=no
+OutputDir=.
+'@
+    $output = $probe | & $compilerPath '/O-' '-' 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "The Inno Setup compiler version probe failed. $output"
+    }
+    $versions = [regex]::Matches(($output | Out-String), 'FTS_INNO_VERSION=([0-9]+\.[0-9]+\.[0-9]+)')
+    if ($versions.Count -ne 1 -or $versions[0].Groups[1].Value -ne $expectedVersion) {
+        throw "Expected Inno Setup $expectedVersion; the installed compiler reported: $output"
+    }
+    return $versions[0].Groups[1].Value
+}
 
 function Resolve-PhysicalToolsRoot([string]$path) {
     $item = Get-Item -Force -LiteralPath $path
@@ -24,13 +48,21 @@ function Resolve-PhysicalToolsRoot([string]$path) {
     return [System.IO.Path]::GetFullPath($target)
 }
 
-New-Item -ItemType Directory -Force -Path $toolsRoot | Out-Null
+if (-not (Test-Path -LiteralPath $toolsRoot -PathType Container)) {
+    if ($VerifyOnly) {
+        throw 'The repository-local tool directory is missing; verification will not create or install it.'
+    }
+    New-Item -ItemType Directory -Force -Path $toolsRoot | Out-Null
+}
 $toolsRoot = Resolve-PhysicalToolsRoot $toolsRoot
 $innoRoot = Join-Path $toolsRoot 'inno'
 $iscc = Join-Path $innoRoot 'ISCC.exe'
-$installer = Join-Path $toolsRoot 'innosetup-7.0.2-x64.exe'
+$installer = Join-Path $toolsRoot "innosetup-$expectedCompilerVersion-x64.exe"
 
 if (-not (Test-Path -LiteralPath $iscc)) {
+    if ($VerifyOnly) {
+        throw 'The repository-local Inno compiler is missing; verification will not download or install it.'
+    }
     Invoke-WebRequest -UseBasicParsing -Uri $downloadUri -OutFile $installer
     $arguments = @(
         '/PORTABLE=1',
@@ -51,4 +83,5 @@ if (-not (Test-Path -LiteralPath $iscc)) {
     throw 'ISCC.exe was not created in the repository-local tool directory.'
 }
 
-& $iscc '/?'
+$compilerVersion = Assert-InnoCompilerVersion $iscc $expectedCompilerVersion
+Write-Host "Repository Inno Setup compiler: $compilerVersion."

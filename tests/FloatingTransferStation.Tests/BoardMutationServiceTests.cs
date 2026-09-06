@@ -194,6 +194,40 @@ public sealed class BoardMutationServiceTests
     }
 
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    [TestCategory("Adversarial")]
+    public async Task MoveMany_QueuedBehindDeleteReturnsInvalidWithoutSecondSave(bool toCategoryTop)
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("delete before queued drag");
+        var store = new MutationStore(directory.Root);
+        var gate = new BoardOperationGate();
+        var service = new BoardMutationService(board, store, _ => { }, gate);
+        var releaseBlocker = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var blocker = gate.RunAsync(async () =>
+        {
+            await releaseBlocker.Task;
+            return true;
+        });
+
+        var delete = service.DeleteManyAsync([item.Id]);
+        Assert.IsTrue(board.CanMoveMany([item.Id], BoardCategory.Reference, 0));
+        var move = toCategoryTop
+            ? service.MoveManyToCategoryTopAsync([item.Id], BoardCategory.Reference)
+            : service.MoveManyAsync([item.Id], BoardCategory.Reference, 0);
+        releaseBlocker.TrySetResult();
+
+        Assert.IsTrue(await blocker);
+        Assert.IsTrue(await delete);
+        Assert.AreEqual(BoardBatchMoveResult.Invalid, await move);
+        Assert.AreEqual(1, store.SaveCount);
+        Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
+        Assert.AreEqual(0, board.Items(BoardCategory.Reference).Count);
+    }
+
+    [TestMethod]
     public async Task DeleteMany_RemovesMixedItemsWithOneSaveAndCleansImages()
     {
         using var directory = new TestDirectory();

@@ -128,7 +128,7 @@ public sealed class WindowsDataImageReaderTests
     }
 
     [STATestMethod]
-    public void ReadCandidates_LaterAccessorFailureDiscardsEarlierCandidate()
+    public void ReadCandidates_LaterAccessorFailurePreservesEarlierCandidate()
     {
         var data = new SequencedImageDataObject(
             new Dictionary<string, object?>
@@ -139,11 +139,11 @@ public sealed class WindowsDataImageReaderTests
 
         var candidates = new WindowsDataImageReader().ReadCandidates(data);
 
-        Assert.IsEmpty(candidates);
+        CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, candidates.Single().EncodedBytes.ToArray());
     }
 
     [STATestMethod]
-    public void ReadCandidates_LaterStreamFailureDiscardsEarlierCandidateAndRestoresPosition()
+    public void ReadCandidates_LaterStreamFailurePreservesEarlierCandidateAndRestoresPosition()
     {
         using var stream = new SeekableThrowingReadStream(length: 8, position: 3);
         var data = new SequencedImageDataObject(
@@ -155,8 +155,36 @@ public sealed class WindowsDataImageReaderTests
 
         var candidates = new WindowsDataImageReader().ReadCandidates(data);
 
-        Assert.IsEmpty(candidates);
+        CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, candidates.Single().EncodedBytes.ToArray());
         Assert.AreEqual(3, stream.Position);
+    }
+
+    [STATestMethod]
+    public void ReadCandidates_FirstAccessorFailureStillReadsLaterRepresentation()
+    {
+        var data = new SequencedImageDataObject(new Dictionary<string, object?>
+        {
+            ["PNG"] = new IOException("provider failure"),
+            ["image/png"] = new byte[] { 10, 20, 30 }
+        });
+
+        var candidates = new WindowsDataImageReader().ReadCandidates(data);
+
+        CollectionAssert.AreEqual(new byte[] { 10, 20, 30 }, candidates.Single().EncodedBytes.ToArray());
+    }
+
+    [STATestMethod]
+    public void ReadCandidates_BitmapAccessorFailurePreservesEncodedRepresentation()
+    {
+        var data = new SequencedImageDataObject(new Dictionary<string, object?>
+        {
+            ["PNG"] = new byte[] { 10, 20, 30 },
+            [DataFormats.Bitmap] = new IOException("bitmap provider failure")
+        });
+
+        var candidates = new WindowsDataImageReader().ReadCandidates(data);
+
+        CollectionAssert.AreEqual(new byte[] { 10, 20, 30 }, candidates.Single().EncodedBytes.ToArray());
     }
 
     [STATestMethod]

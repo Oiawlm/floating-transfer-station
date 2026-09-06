@@ -1,16 +1,19 @@
 using System.Windows.Media.Imaging;
 using FloatingTransferStation.Models;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
 
 namespace FloatingTransferStation.Services;
 
 public sealed class ImageNormalizer : IImageNormalizer
 {
     private readonly string _imagesDirectory;
+    private readonly ImageInputLimits _limits;
 
-    public ImageNormalizer(string imagesDirectory)
+    public ImageNormalizer(string imagesDirectory, ImageInputLimits? limits = null)
     {
         _imagesDirectory = imagesDirectory;
+        _limits = limits ?? ImageInputLimits.Default;
     }
 
     public Task<StoredImage> NormalizeFileAsync(
@@ -38,27 +41,35 @@ public sealed class ImageNormalizer : IImageNormalizer
 
         try
         {
-            using var image = await Image.LoadAsync(sourcePath, cancellationToken);
-            if (rejectMultipleFrames && image.Frames.Count != 1)
+            await using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            _limits.ValidateEncodedLength(source.Length);
+            var information = await Image.IdentifyAsync(
+                rejectMultipleFrames ? _limits.IdentifyStaticImage : _limits.IdentifyFirstFrame,
+                source,
+                cancellationToken);
+            _limits.ValidateDimensions(information.Width, information.Height);
+            if (rejectMultipleFrames && !ImageFileSupport.HasSingleFrame(information, source))
             {
                 throw new InvalidDataException("External image files must contain exactly one frame.");
             }
 
-            while (image.Frames.Count > 1)
-            {
-                image.Frames.RemoveFrame(1);
-            }
+            source.Position = 0;
+            using var image = await Image.LoadAsync(_limits.DecodeFirstFrame, source, cancellationToken);
+            _limits.ValidateDimensions(image.Width, image.Height);
 
+            image.Mutate(operation => operation.AutoOrient());
+            EnsureManagedImagePath(temporaryPath);
             await image.SaveAsPngAsync(temporaryPath, cancellationToken);
-            File.Move(temporaryPath, stored.AbsolutePath, overwrite: false);
+            MoveManagedFile(temporaryPath, stored.AbsolutePath, overwrite: false);
             return stored;
+        }
+        catch (Exception exception) when (ImageInputLimits.IsAllocationLimitFailure(exception))
+        {
+            throw _limits.AllocationFailure(exception);
         }
         finally
         {
-            if (File.Exists(temporaryPath))
-            {
-                File.Delete(temporaryPath);
-            }
+            DeleteManagedTemporaryFile(temporaryPath);
         }
     }
 
@@ -69,6 +80,7 @@ public sealed class ImageNormalizer : IImageNormalizer
     {
         ArgumentNullException.ThrowIfNull(bitmap);
         cancellationToken.ThrowIfCancellationRequested();
+        _limits.ValidateDimensions(bitmap.PixelWidth, bitmap.PixelHeight);
         var frozenBitmap = FreezeForBackgroundUse(bitmap);
         return Task.Run(
             () => NormalizeBitmapCore(frozenBitmap, id, cancellationToken),
@@ -99,7 +111,7 @@ public sealed class ImageNormalizer : IImageNormalizer
     {
         ArgumentNullException.ThrowIfNull(imagePaths);
         var markerPath = Path.Combine(_imagesDirectory, ".zero-alpha-repair-v1");
-        if (File.Exists(markerPath))
+        if (!IsManagedImagePath(markerPath) || File.Exists(markerPath))
         {
             return;
         }
@@ -134,15 +146,13 @@ public sealed class ImageNormalizer : IImageNormalizer
         var temporaryMarker = markerPath + ".tmp";
         try
         {
+            EnsureManagedImagePath(temporaryMarker);
             await File.WriteAllTextAsync(temporaryMarker, "completed", cancellationToken).ConfigureAwait(false);
-            File.Move(temporaryMarker, markerPath, overwrite: true);
+            MoveManagedFile(temporaryMarker, markerPath, overwrite: true);
         }
         finally
         {
-            if (File.Exists(temporaryMarker))
-            {
-                File.Delete(temporaryMarker);
-            }
+            DeleteManagedTemporaryFile(temporaryMarker);
         }
     }
 
@@ -159,18 +169,26 @@ public sealed class ImageNormalizer : IImageNormalizer
     {
         cancellationToken.ThrowIfCancellationRequested();
         var selections = new List<ClipboardSelection>();
+        ImageInputLimitException? limitFailure = null;
         foreach (var candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (candidate.Bitmap is not null)
             {
-                var prepared = PrepareBitmap(candidate.Bitmap);
-                if (prepared.HasPixelData)
+                try
                 {
-                    selections.Add(new ClipboardSelection(
-                        candidate,
-                        checked((long)prepared.Bitmap.PixelWidth * prepared.Bitmap.PixelHeight),
-                        prepared.Bitmap));
+                    var prepared = PrepareBitmap(candidate.Bitmap);
+                    if (prepared.HasPixelData)
+                    {
+                        selections.Add(new ClipboardSelection(
+                            candidate,
+                            checked((long)prepared.Bitmap.PixelWidth * prepared.Bitmap.PixelHeight),
+                            prepared.Bitmap));
+                    }
+                }
+                catch (ImageInputLimitException exception)
+                {
+                    limitFailure ??= exception;
                 }
 
                 continue;
@@ -178,7 +196,10 @@ public sealed class ImageNormalizer : IImageNormalizer
 
             try
             {
-                var information = SixLabors.ImageSharp.Image.Identify(candidate.EncodedBytes.Span);
+                _limits.ValidateEncodedLength(candidate.EncodedBytes.Length);
+                var information = SixLabors.ImageSharp.Image.Identify(
+                    _limits.IdentifyFirstFrame, candidate.EncodedBytes.Span);
+                _limits.ValidateDimensions(information.Width, information.Height);
                 if (information.Width > 0 && information.Height > 0)
                 {
                     selections.Add(new ClipboardSelection(
@@ -186,6 +207,14 @@ public sealed class ImageNormalizer : IImageNormalizer
                         checked((long)information.Width * information.Height),
                         null));
                 }
+            }
+            catch (ImageInputLimitException exception)
+            {
+                limitFailure ??= exception;
+            }
+            catch (Exception exception) when (ImageInputLimits.IsAllocationLimitFailure(exception))
+            {
+                limitFailure ??= _limits.AllocationFailure(exception);
             }
             catch (Exception exception) when (exception is UnknownImageFormatException or InvalidImageContentException)
             {
@@ -204,24 +233,38 @@ public sealed class ImageNormalizer : IImageNormalizer
                 return SaveBitmap(selected.PreparedBitmap, id, cancellationToken);
             }
 
-            using var image = TryDecodeClipboardImage(selected.Candidate.EncodedBytes);
-            if (image is not null)
+            try
             {
-                return SaveDecodedImage(image, id, cancellationToken);
+                using var image = TryDecodeClipboardImage(selected.Candidate.EncodedBytes);
+                if (image is not null)
+                {
+                    return SaveDecodedImage(image, id, cancellationToken);
+                }
+            }
+            catch (Exception exception) when (ImageInputLimits.IsAllocationLimitFailure(exception))
+            {
+                limitFailure ??= _limits.AllocationFailure(exception);
             }
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        if (limitFailure is not null)
+        {
+            throw limitFailure;
+        }
+
         throw new InvalidDataException("Clipboard does not contain a usable image representation.");
     }
 
-    private static SixLabors.ImageSharp.Image? TryDecodeClipboardImage(ReadOnlyMemory<byte> encodedBytes)
+    private SixLabors.ImageSharp.Image? TryDecodeClipboardImage(ReadOnlyMemory<byte> encodedBytes)
     {
         try
         {
-            return SixLabors.ImageSharp.Image.Load(encodedBytes.Span);
+            return SixLabors.ImageSharp.Image.Load(_limits.DecodeFirstFrame, encodedBytes.Span);
         }
-        catch (Exception exception) when (exception is UnknownImageFormatException or InvalidImageContentException)
+        catch (Exception exception) when (
+            exception is UnknownImageFormatException or InvalidImageContentException &&
+            !ImageInputLimits.IsAllocationLimitFailure(exception))
         {
             return null;
         }
@@ -241,6 +284,7 @@ public sealed class ImageNormalizer : IImageNormalizer
         {
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            EnsureManagedImagePath(temporaryPath);
             using (var stream = new FileStream(
                        temporaryPath,
                        FileMode.CreateNew,
@@ -251,15 +295,12 @@ public sealed class ImageNormalizer : IImageNormalizer
                 stream.Flush(flushToDisk: true);
             }
 
-            File.Move(temporaryPath, stored.AbsolutePath, overwrite: false);
+            MoveManagedFile(temporaryPath, stored.AbsolutePath, overwrite: false);
             return stored;
         }
         finally
         {
-            if (File.Exists(temporaryPath))
-            {
-                File.Delete(temporaryPath);
-            }
+            DeleteManagedTemporaryFile(temporaryPath);
         }
     }
 
@@ -275,26 +316,21 @@ public sealed class ImageNormalizer : IImageNormalizer
 
         try
         {
-            while (image.Frames.Count > 1)
-            {
-                image.Frames.RemoveFrame(1);
-            }
-
+            image.Mutate(operation => operation.AutoOrient());
+            EnsureManagedImagePath(temporaryPath);
             image.SaveAsPng(temporaryPath);
-            File.Move(temporaryPath, stored.AbsolutePath, overwrite: false);
+            MoveManagedFile(temporaryPath, stored.AbsolutePath, overwrite: false);
             return stored;
         }
         finally
         {
-            if (File.Exists(temporaryPath))
-            {
-                File.Delete(temporaryPath);
-            }
+            DeleteManagedTemporaryFile(temporaryPath);
         }
     }
 
     private async Task RepairStoredImageAsync(string imagePath, CancellationToken cancellationToken)
     {
+        EnsureManagedImagePath(imagePath);
         using var image = await SixLabors.ImageSharp.Image.LoadAsync<
             SixLabors.ImageSharp.PixelFormats.Rgba32>(imagePath, cancellationToken).ConfigureAwait(false);
         var allAlphaZero = true;
@@ -332,15 +368,13 @@ public sealed class ImageNormalizer : IImageNormalizer
         var temporaryPath = imagePath + ".repair.tmp";
         try
         {
+            EnsureManagedImagePath(temporaryPath);
             await image.SaveAsPngAsync(temporaryPath, cancellationToken).ConfigureAwait(false);
-            File.Move(temporaryPath, imagePath, overwrite: true);
+            MoveManagedFile(temporaryPath, imagePath, overwrite: true);
         }
         finally
         {
-            if (File.Exists(temporaryPath))
-            {
-                File.Delete(temporaryPath);
-            }
+            DeleteManagedTemporaryFile(temporaryPath);
         }
     }
 
@@ -361,8 +395,9 @@ public sealed class ImageNormalizer : IImageNormalizer
         return clone;
     }
 
-    private static PreparedBitmap PrepareBitmap(BitmapSource bitmap)
+    private PreparedBitmap PrepareBitmap(BitmapSource bitmap)
     {
+        _limits.ValidateDimensions(bitmap.PixelWidth, bitmap.PixelHeight);
         BitmapSource converted = bitmap;
         if (bitmap.Format != System.Windows.Media.PixelFormats.Bgra32)
         {
@@ -407,12 +442,29 @@ public sealed class ImageNormalizer : IImageNormalizer
         return new PreparedBitmap(result, !allAlphaZero || hasNonZeroRgb);
     }
 
-    private bool IsManagedImagePath(string path)
+    private bool IsManagedImagePath(string path) => ManagedImagePath.IsAllowed(_imagesDirectory, path);
+
+    private void EnsureManagedImagePath(string path)
     {
-        var fullPath = Path.GetFullPath(path);
-        var allowedRoot = Path.GetFullPath(_imagesDirectory)
-            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        return fullPath.StartsWith(allowedRoot, StringComparison.OrdinalIgnoreCase);
+        if (!IsManagedImagePath(path))
+        {
+            throw new InvalidDataException("Image path is outside the managed directory or traverses a reparse point.");
+        }
+    }
+
+    private void MoveManagedFile(string source, string destination, bool overwrite)
+    {
+        EnsureManagedImagePath(source);
+        EnsureManagedImagePath(destination);
+        File.Move(source, destination, overwrite);
+    }
+
+    private void DeleteManagedTemporaryFile(string path)
+    {
+        if (IsManagedImagePath(path) && File.Exists(path))
+        {
+            File.Delete(path);
+        }
     }
 
     private sealed record ClipboardSelection(
@@ -425,9 +477,12 @@ public sealed class ImageNormalizer : IImageNormalizer
     private StoredImage CreateDestination(Guid id)
     {
         var fileName = $"{id:N}.png";
+        var absolutePath = Path.Combine(_imagesDirectory, fileName);
+        EnsureManagedImagePath(absolutePath);
+        EnsureManagedImagePath(absolutePath + ".tmp");
         return new StoredImage(
             id,
             $"images/{fileName}",
-            Path.Combine(_imagesDirectory, fileName));
+            absolutePath);
     }
 }

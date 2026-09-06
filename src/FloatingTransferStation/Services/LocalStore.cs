@@ -102,7 +102,8 @@ public sealed class LocalStore : IBoardStore
                     clean.Items.Add(item);
                 }
             }
-            catch (InvalidDataException)
+            catch (Exception exception) when (
+                exception is InvalidDataException or ArgumentException or NotSupportedException or PathTooLongException)
             {
                 // Invalid entries are omitted while the rest of the board remains usable.
             }
@@ -159,7 +160,7 @@ public sealed class LocalStore : IBoardStore
 
         try
         {
-            if (!IsManagedImagePath(absolutePath))
+            if (!ManagedImagePath.IsAllowed(_paths.ImagesDirectory, absolutePath))
             {
                 return false;
             }
@@ -223,20 +224,12 @@ public sealed class LocalStore : IBoardStore
     {
         var normalizedRelative = relativePath.Replace('/', Path.DirectorySeparatorChar);
         var fullPath = Path.GetFullPath(Path.Combine(_paths.DataDirectory, normalizedRelative));
-        if (!IsManagedImagePath(fullPath))
+        if (!ManagedImagePath.IsAllowed(_paths.ImagesDirectory, fullPath))
         {
             throw new InvalidDataException("Image path is outside the managed images directory.");
         }
 
         return fullPath;
-    }
-
-    private bool IsManagedImagePath(string path)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var allowedRoot = Path.GetFullPath(_paths.ImagesDirectory)
-            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        return fullPath.StartsWith(allowedRoot, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsValidBaseItem(BoardItem? item) =>

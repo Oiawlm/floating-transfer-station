@@ -87,7 +87,16 @@ public sealed class BoardMutationService
         CancellationToken cancellationToken) =>
         _operationGate.RunAsync(async () =>
         {
-            var move = createMove();
+            BoardBatchMove move;
+            try
+            {
+                move = createMove();
+            }
+            catch (Exception exception) when (exception is ArgumentException or KeyNotFoundException)
+            {
+                return BoardBatchMoveResult.Invalid;
+            }
+
             if (!move.IsValid)
             {
                 return BoardBatchMoveResult.Invalid;

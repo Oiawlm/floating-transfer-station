@@ -14,6 +14,64 @@ namespace FloatingTransferStation.Tests;
 public sealed partial class MainWindowInteractionTests
 {
     [STATestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void ExternalRail_FromExpandedPanelCanHoverOpenAgain(bool dropOnCategory)
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("外部拖入结束后仍可展开");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var state = GetPrivateField<PanelStateMachine>(window, "_panelState");
+            var tab = FindCategoryTab(window, viewModel.DefaultCapturePanel);
+            var data = new DataObject(DataFormats.UnicodeText, "新的合成拖入内容");
+            tab.RaiseEvent(NewDragEventArgs(data, DragDrop.DragEnterEvent, tab));
+            CompleteLayout(window);
+
+            Assert.IsTrue(viewModel.IsExternalDropRailVisible);
+            Assert.IsFalse(state.IsExpanded, "External rail entry must collapse the state machine with the view.");
+            if (dropOnCategory)
+            {
+                tab.RaiseEvent(NewDragEventArgs(data, DragDrop.DropEvent, tab));
+                PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
+            }
+            else
+            {
+                tab.RaiseEvent(NewDragEventArgs(data, DragDrop.DragLeaveEvent, tab));
+            }
+
+            CompleteLayout(window);
+            Assert.IsFalse(viewModel.IsExternalDropRailVisible);
+            Assert.IsFalse(viewModel.IsPanelExpanded);
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            Assert.IsTrue(state.IsExpanded);
+            Assert.IsTrue(viewModel.IsPanelExpanded);
+            Assert.AreEqual(WindowSettings.Default.PanelWidth + WindowSettings.TabWidth, window.Width);
+            Assert.AreEqual(BoardCategory.Inbox, viewModel.ActivePanel!.Category);
+            InvokePrivate(window, "StopPanelContentAnimation");
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "external-rail-hover-reopened.png",
+                "FTS_AUDIT_REMEDIATION_EVIDENCE_DIR");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void ExternalDropRailProjection_IsIndependentFromPanelAndCategoryState()
     {
         using var directory = new TestDirectory();

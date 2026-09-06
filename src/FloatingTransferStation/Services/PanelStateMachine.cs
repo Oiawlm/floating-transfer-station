@@ -64,6 +64,12 @@ public sealed class PanelStateMachine
 
     public void EndDrag() => _dragInProgress = false;
 
+    public void CollapseForExternalDrop()
+    {
+        PendingCategory = null;
+        IsExpanded = false;
+    }
+
     public bool TryCollapse()
     {
         if (_pointerInside || _dragInProgress || !IsExpanded)
