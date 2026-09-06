@@ -58,7 +58,7 @@ public partial class MainWindow : Window
     private Point _dragStart;
     private BoardItem? _dragItem;
     private bool _dragThresholdCrossed;
-    private bool _selectionTogglePending;
+    private ModifierKeys _selectionModifiers;
     private WindowSettings _settings;
     private long _externalDragSurfaceVersion;
     private int _scrollRestoreVersion;
@@ -273,7 +273,7 @@ public partial class MainWindow : Window
     {
         SaveCurrentScrollOffset();
         _panelState.Switch(category);
-        _viewModel.Activate(category);
+        ActivatePanel(category);
         _viewModel.SetPanelExpanded(true);
         ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings));
         UpdateStatusPresentation();

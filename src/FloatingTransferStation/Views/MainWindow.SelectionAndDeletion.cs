@@ -27,7 +27,48 @@ public partial class MainWindow : Window
 
     private bool _isBatchPinPending;
     private bool _isDeletePending;
-    private long _selectionClearVersion;
+    private long _selectionChangeVersion;
+    private (BoardCategory Category, Guid Id)? _selectionAnchor;
+    private (BoardCategory Category, Guid[] Ids)? _latestUserSelection;
+
+    private void ClearUserSelection()
+    {
+        _selectionAnchor = null;
+        BoardList.UnselectAll();
+        RecordUserSelection();
+    }
+
+    private void ActivatePanel(BoardCategory category)
+    {
+        if (_viewModel.ActivePanel?.Category != category)
+        {
+            ClearUserSelection();
+        }
+
+        _viewModel.Activate(category);
+    }
+
+    private void RecordUserSelection()
+    {
+        _selectionChangeVersion++;
+        _latestUserSelection = _viewModel.ActivePanel is { } panel
+            ? (panel.Category, CaptureSelectedItemIds())
+            : null;
+    }
+
+    private void RestoreSelectionAfterSave(IReadOnlyCollection<Guid> originalIds, long selectionVersion)
+    {
+        if (selectionVersion == _selectionChangeVersion)
+        {
+            RestoreSelection(originalIds);
+        }
+        else if (_latestUserSelection is { } latest && latest.Category == _viewModel.ActivePanel?.Category)
+        {
+            // A failed mutation may rebuild the collection, so restore the user's
+            // latest explicit selection rather than the now-empty ListBox selection.
+            RestoreSelection(latest.Ids);
+        }
+    }
 
     private async void BoardList_ButtonClick(object sender, RoutedEventArgs e)
     {
@@ -49,7 +90,7 @@ public partial class MainWindow : Window
         }
 
         var selectedBefore = CaptureSelectedItemIds();
-        var selectionClearVersion = _selectionClearVersion;
+        var selectionVersion = _selectionChangeVersion;
         var category = item.Category;
         var offset = CurrentScrollOffset();
         await _mutations.SetPinnedAsync([item.Id], !item.IsPinned);
@@ -61,10 +102,7 @@ public partial class MainWindow : Window
                     return;
                 }
 
-                if (selectionClearVersion == _selectionClearVersion)
-                {
-                    RestoreSelection(selectedBefore);
-                }
+                RestoreSelectionAfterSave(selectedBefore, selectionVersion);
 
                 RestoreExplicitScrollOffset(category, offset);
             },
@@ -144,7 +182,9 @@ public partial class MainWindow : Window
             return;
         }
 
+        _selectionAnchor = null;
         BoardList.SelectAll();
+        RecordUserSelection();
         e.Handled = true;
     }
 
@@ -180,7 +220,7 @@ public partial class MainWindow : Window
             .Any(item => !item.IsPinned);
         var category = activePanel.Category;
         var offset = CurrentScrollOffset();
-        var selectionClearVersion = _selectionClearVersion;
+        var selectionVersion = _selectionChangeVersion;
         _isBatchPinPending = true;
         UpdateBatchPinButton();
         try
@@ -194,10 +234,7 @@ public partial class MainWindow : Window
                         return;
                     }
 
-                    if (selectionClearVersion == _selectionClearVersion)
-                    {
-                        RestoreSelection(selectedBefore);
-                    }
+                    RestoreSelectionAfterSave(selectedBefore, selectionVersion);
 
                     RestoreExplicitScrollOffset(category, offset);
                 },
@@ -268,7 +305,7 @@ public partial class MainWindow : Window
         }
 
         _isDeletePending = true;
-        var selectionClearVersion = _selectionClearVersion;
+        var selectionVersion = _selectionChangeVersion;
         DeleteContentButton.IsEnabled = false;
         try
         {
@@ -283,14 +320,7 @@ public partial class MainWindow : Window
                         return;
                     }
 
-                    if (success)
-                    {
-                        BoardList.UnselectAll();
-                    }
-                    else if (selectionClearVersion == _selectionClearVersion)
-                    {
-                        RestoreSelection(selectedBefore);
-                    }
+                    RestoreSelectionAfterSave(success ? [] : selectedBefore, selectionVersion);
                 },
                 DispatcherPriority.Send);
         }
@@ -332,8 +362,7 @@ public partial class MainWindow : Window
             _viewModel.IsPanelExpanded &&
             (BoardList.SelectedItems.Count > 0 || _isDeletePending))
         {
-            _selectionClearVersion++;
-            BoardList.UnselectAll();
+            ClearUserSelection();
             e.Handled = true;
             return;
         }

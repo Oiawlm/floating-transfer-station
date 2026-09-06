@@ -89,7 +89,7 @@ public partial class MainWindow : Window
 
             SaveCurrentScrollOffset();
             _panelState.Switch(category.Category);
-            _viewModel.Activate(category.Category);
+            ActivatePanel(category.Category);
             RestoreScrollOffset(category.Category);
             AnimatePanelContent(isCategorySwitch: true);
             return;
@@ -139,7 +139,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        _viewModel.Activate(category);
+        ActivatePanel(category);
         ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings));
         _viewModel.SetPanelExpanded(true);
         UpdateStatusPresentation();
