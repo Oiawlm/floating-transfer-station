@@ -68,7 +68,19 @@ public sealed partial class MainWindowInteractionTests
             var customer = viewModel.Categories.Single(
                 category => category.Category == BoardCategory.CustomerOriginal);
 
+            // Let the panel fade and category reveal reach their final visible state.
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(250));
+            CompleteLayout(window);
+            SaveVisualEvidence(
+                window,
+                "01-default-category-names.png",
+                "FTS_CATEGORY_NAMES_EVIDENCE_DIR");
             InvokePrivateTask(window, "SaveCategoryNameAsync", customer, "客户");
+            CompleteLayout(window);
+            SaveVisualEvidence(
+                window,
+                "02-custom-category-name.png",
+                "FTS_CATEGORY_NAMES_EVIDENCE_DIR");
 
             Assert.AreEqual("客户", customer.DisplayName);
             Assert.AreEqual("客户", viewModel.ActivePanel!.DisplayName);
@@ -105,7 +117,7 @@ public sealed partial class MainWindowInteractionTests
 
             InvokePrivateTask(window, "SaveCategoryNameAsync", customer, "客户");
 
-            Assert.AreEqual("客户原图", customer.DisplayName);
+            Assert.AreEqual("图片", customer.DisplayName);
             Assert.AreEqual("分类名称未保存，已恢复原名称。", viewModel.StatusText);
             Assert.IsTrue(customer.IsDefaultCapture);
             Assert.AreEqual(BoardCategory.CustomerOriginal, state.Current);
@@ -152,7 +164,7 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.IsTrue(viewModel.IsPanelExpanded);
             Assert.IsTrue(customer.IsEditingName);
-            Assert.AreEqual("客户原图", customer.DisplayName);
+            Assert.AreEqual("图片", customer.DisplayName);
             Assert.AreEqual("T", customer.DraftName);
             Assert.IsNull(store.LastSavedSettings);
         }
@@ -194,7 +206,7 @@ public sealed partial class MainWindowInteractionTests
             editor.CaretIndex = editor.Text.Length;
             CompleteLayout(window);
 
-            Assert.AreEqual("客户原图", customer.DraftName);
+            Assert.AreEqual("图片", customer.DraftName);
             Assert.AreEqual(editor.Text.Length, editor.CaretIndex);
 
             InvokePrivate(window, "CommitCategoryNameEdit", customer, editor.Text);
@@ -300,7 +312,7 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.IsFalse(enter.Handled);
             Assert.IsTrue(customer.IsEditingName);
-            Assert.AreEqual("客户原图", customer.DisplayName);
+            Assert.AreEqual("图片", customer.DisplayName);
             Assert.IsNull(store.LastSavedSettings);
         }
         finally

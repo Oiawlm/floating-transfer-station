@@ -122,15 +122,15 @@ public sealed class PanelStateMachineTests
     }
 
     [TestMethod]
-    public void ViewModel_UsesSameLockedNamesForTabsAndPanels()
+    public void ViewModel_UsesSameDefaultNamesForTabsAndPanels()
     {
         var viewModel = new MainWindowViewModel(new BoardService());
 
         CollectionAssert.AreEqual(
-            new[] { "客户原图", "对标图", "提示词", "待分类" },
+            new[] { "图片", "文本1", "文本2", "待分类" },
             viewModel.Categories.Select(category => category.DisplayName).ToArray());
         viewModel.Activate(BoardCategory.Reference);
-        Assert.AreEqual("对标图", viewModel.ActivePanel!.DisplayName);
+        Assert.AreEqual("文本1", viewModel.ActivePanel!.DisplayName);
     }
 
     [TestMethod]

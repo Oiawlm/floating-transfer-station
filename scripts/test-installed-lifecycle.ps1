@@ -96,11 +96,25 @@ function Assert-InstalledState {
 }
 
 $boardPath = Join-Path $dataDirectory 'board.json'
+$settingsPath = Join-Path $dataDirectory 'settings.json'
 $imagePath = Join-Path $dataDirectory 'images\synthetic.png'
 [IO.File]::WriteAllText($boardPath, '{"schemaVersion":1,"items":[]}')
+[IO.File]::WriteAllText($settingsPath, @'
+{
+  "panelWidth": 420,
+  "windowHeight": 700,
+  "top": 120,
+  "categoryNames": {
+    "CustomerOriginal": "客户原图",
+    "Reference": "工作参考",
+    "Prompt": "",
+    "Inbox": "待分类"
+  }
+}
+'@)
 [IO.File]::WriteAllBytes($imagePath, [Convert]::FromBase64String('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aQ1sAAAAASUVORK5CYII='))
 $dataHashes = @{}
-foreach ($path in @($boardPath, $imagePath)) {
+foreach ($path in @($boardPath, $settingsPath, $imagePath)) {
     $dataHashes[$path] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
 }
 $sentinelHashes = @{}
@@ -128,7 +142,7 @@ $report = [ordered]@{
     InstallerSHA256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash
     VerifiedStages = @()
     Assertions = $assertions
-    Scope = 'Synthetic install and reinstall; block legacy application relocation, enable ownership with an in-place update, relocate the application, reject the old uninstaller, and uninstall the current installation. The registered data directory stays unchanged; cross-directory data migration is not claimed.'
+    Scope = 'Synthetic install and reinstall; block legacy application relocation, enable ownership with an in-place update, relocate the application, reject the old uninstaller, and uninstall the current installation. Board, image, and settings files (including saved category names) must retain their hashes before uninstall. The registered data directory stays unchanged; cross-directory data migration is not claimed.'
 }
 try {
     foreach ($stage in @('install', 'update')) {

@@ -25,9 +25,9 @@ public static class BoardCategoryCatalog
 
     public static string DisplayName(BoardCategory category) => category switch
     {
-        BoardCategory.CustomerOriginal => "客户原图",
-        BoardCategory.Reference => "对标图",
-        BoardCategory.Prompt => "提示词",
+        BoardCategory.CustomerOriginal => "图片",
+        BoardCategory.Reference => "文本1",
+        BoardCategory.Prompt => "文本2",
         BoardCategory.Inbox => "待分类",
         _ => throw new ArgumentOutOfRangeException(nameof(category), category, null)
     };
