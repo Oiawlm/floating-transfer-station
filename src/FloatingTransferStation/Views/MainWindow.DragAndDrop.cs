@@ -272,10 +272,16 @@ public partial class MainWindow : Window
 
     private void RevealExternalDropRail()
     {
+        if (_viewModel.IsPanelExpanded)
+        {
+            SaveCurrentScrollOffset();
+        }
+
         StopPanelContentAnimation();
         StopCategoryRevealAnimations();
         _expandIntentTimer.Stop();
         _collapseTimer.Stop();
+        _panelState.CollapseForExternalDrop();
         _viewModel.SetExternalDropRailVisible(true);
         _viewModel.SetPanelExpanded(false);
         ApplyPlacement(WindowController.CategoryRail(CurrentWorkArea(), _settings));

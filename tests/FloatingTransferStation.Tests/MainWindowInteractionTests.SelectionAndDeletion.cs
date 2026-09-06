@@ -15,6 +15,136 @@ namespace FloatingTransferStation.Tests;
 public sealed partial class MainWindowInteractionTests
 {
     [STATestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void DeletePending_SecondHeaderClickCannotClearUnselectedItems(bool startWithKeyboard)
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var keep = board.AddText("必须保留：未选中的内容");
+        var selected = board.AddText("只删除这条已选内容");
+        var store = new BlockingFirstSuccessfulSaveBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+        var previousContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(window.Dispatcher));
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var delete = (Button)window.FindName("DeleteContentButton");
+            list.SelectedItems.Add(selected);
+            if (startWithKeyboard)
+            {
+                window.RaiseEvent(NewKeyEventArgs(window, Key.Delete));
+            }
+            else
+            {
+                delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, delete));
+            }
+
+            PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
+            CompleteLayout(window);
+            Assert.AreEqual(0, list.SelectedItems.Count);
+            Assert.IsFalse(delete.IsEnabled, "Saving a deletion must disable the header action before selection is cleared.");
+            InvokePrivate(window, "SetHeaderActionsVisible", true);
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "delete-pending-keeps-unselected.png",
+                "FTS_AUDIT_REMEDIATION_EVIDENCE_DIR");
+
+            // Raising the event directly also verifies the handler's guard when input was already queued.
+            delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, delete));
+            store.ReleaseFirstSave();
+            PumpDispatcherUntil(window.Dispatcher, store.FirstSaveCompleted.Task);
+            CompleteLayout(window);
+
+            CollectionAssert.AreEqual(new[] { keep }, board.Items(BoardCategory.Inbox).ToArray());
+            Assert.IsTrue(delete.IsEnabled);
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "delete-completed-keeps-unselected.png",
+                "FTS_AUDIT_REMEDIATION_EVIDENCE_DIR");
+        }
+        finally
+        {
+            store.ReleaseFirstSave();
+            try
+            {
+                CloseWindow(window);
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previousContext);
+            }
+        }
+    }
+
+    [STATestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void DeletePending_SaveFailureRestoresSelectionAndReenablesHeader(bool cancelSelection)
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var keep = board.AddText("keep");
+        var selected = board.AddText("selected");
+        var store = new UiThreadFailingFirstSaveBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+        var previousContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(window.Dispatcher));
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var delete = (Button)window.FindName("DeleteContentButton");
+            list.SelectedItems.Add(selected);
+            delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, delete));
+            PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
+            Assert.IsFalse(delete.IsEnabled);
+            if (cancelSelection)
+            {
+                window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
+            }
+
+            store.FailFirstSave();
+            CompleteLayout(window);
+
+            Assert.IsTrue(delete.IsEnabled);
+            CollectionAssert.AreEqual(new[] { selected, keep }, board.Items(BoardCategory.Inbox).ToArray());
+            CollectionAssert.AreEqual(
+                cancelSelection ? Array.Empty<BoardItem>() : new[] { selected },
+                list.SelectedItems.Cast<BoardItem>().ToArray());
+            if (cancelSelection)
+            {
+                list.SelectedItems.Add(selected);
+            }
+
+            delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, delete));
+            CompleteLayout(window);
+            CollectionAssert.AreEqual(new[] { keep }, board.Items(BoardCategory.Inbox).ToArray());
+        }
+        finally
+        {
+            store.FailFirstSave();
+            try
+            {
+                CloseWindow(window);
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previousContext);
+            }
+        }
+    }
+
+    [STATestMethod]
     public void HeaderDeleteWithoutSelection_RemovesOnlyTheActiveCategoryWithoutConfirmation()
     {
         using var directory = new TestDirectory();

@@ -2,11 +2,13 @@
 
 ## 项目状态
 
-悬浮中转站是一个活跃维护的 Windows 10/11 64 位 WPF 应用，使用 .NET 10、MSTest 和 Inno Setup。公开仓库为 `Oiawlm/floating-transfer-station`，当前稳定发布为 1.4.3。
+悬浮中转站是一个活跃维护的 Windows 10/11 64 位 WPF 应用，使用 .NET 10、MSTest 和 Inno Setup。公开仓库为 `Oiawlm/floating-transfer-station`，当前源码版本为 1.4.4；公开安装包以 [Releases](https://github.com/Oiawlm/floating-transfer-station/releases) 为准。
 
 当前直接引用 `SixLabors.ImageSharp 3.1.12`。ImageSharp 4.x 的直接引用要求有效构建许可证；升级前须先解决许可，不自行申请或绕过密钥校验。依据见 [Six Labors 官方说明](https://sixlabors.com/posts/licence-enforcement-changes/)。
 
 ## 主要目录
+
+- 生产版本只修改根目录 version.txt；程序集、产品标识、安装器和打包脚本共同读取该来源。
 
 - `src/FloatingTransferStation/`：WPF 应用、窗口交互、模型与本地服务。
 - `tests/FloatingTransferStation.Tests/`：单元、STA 窗口交互、生命周期和对抗性回归测试。
@@ -17,6 +19,8 @@
 ## 可复现命令
 
 首次准备本地工具：
+
+已有工具可以分别运行 scripts/bootstrap-dotnet.ps1 -VerifyOnly 和 scripts/bootstrap-inno.ps1 -VerifyOnly，只核对版本，不下载或升级。SDK 按 global.json 的滚动策略解析，Inno 固定为 7.0.2。
 
 ```powershell
 & .\scripts\bootstrap-dotnet.ps1
@@ -44,6 +48,8 @@
 WPF 交互测试使用 STA 和真实 Dispatcher。若全量运行中仅有布局或滚动测试偶发失败，先单独复跑原测试，再复跑全量测试；只有稳定复现并确定根因后才修改产品或测试。
 
 ## 必须保持的契约
+
+需要打包时按发布指南组合检查，复用打包入口中的全量测试，不必先额外执行同一份全量测试。1.4.4 的修复与输入容量边界见 [CHANGELOG](CHANGELOG.md#144) 和[架构说明](docs/architecture.md)。
 
 - `LocalStore` 保持磁盘写入原子性；`BoardMutationService` 在保存失败时恢复对象、状态和精确顺序，窗口层恢复选择与滚动位置。
 - 每个分类始终先置顶区、后普通区；批量操作保持源显示顺序。

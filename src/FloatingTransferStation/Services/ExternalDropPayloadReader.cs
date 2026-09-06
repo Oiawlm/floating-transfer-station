@@ -54,7 +54,17 @@ public sealed class ExternalDropPayloadReader
                 : null;
         }
 
-        var candidates = _imageReader.ReadCandidates(data);
+        IReadOnlyList<ClipboardImageCandidate> candidates;
+        try
+        {
+            candidates = _imageReader.ReadCandidates(data);
+        }
+        catch (ImageInputLimitException)
+        {
+            // An advertised image rejected by the input budget must not become attached text.
+            return null;
+        }
+
         if (candidates.Count > 0)
         {
             return new ExternalDropPayload.ImageCandidates(candidates);

@@ -21,6 +21,10 @@ if ($innoScripts.Count -ne 1) {
     throw "Expected exactly one Inno Setup script, found $($innoScripts.Count)."
 }
 $innoScript = $innoScripts[0].FullName
+$version = (Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot 'version.txt')).Trim()
+if ($version -notmatch '\A[0-9]+\.[0-9]+\.[0-9]+\z') {
+    throw 'version.txt must contain exactly one numeric major.minor.patch version.'
+}
 
 if ($ForRelease) {
     & (Join-Path $PSScriptRoot 'test-release-readiness.ps1') | Out-Host
@@ -47,6 +51,7 @@ if (-not (Test-Path -LiteralPath $dotnet -PathType Leaf)) {
     throw "The selected .NET executable does not exist: $dotnet"
 }
 & (Join-Path $PSScriptRoot 'bootstrap-inno.ps1') | Out-Host
+& (Join-Path $PSScriptRoot 'test-bootstrap-tool-versions.ps1') -DotnetPath $dotnet -IsccPath $iscc | Out-Host
 & (Join-Path $PSScriptRoot 'test-installer-cleanup.ps1') -IsccPath $iscc | Out-Host
 
 $innoText = Get-Content -Raw -Encoding UTF8 -LiteralPath $innoScript
@@ -77,14 +82,6 @@ $recursiveDeleteMatches = [regex]::Matches(
 if ($recursiveDeleteMatches.Count -ne 0) {
     throw 'Installer contract failed: static recursive uninstall deletion is not allowed.'
 }
-$versionMatches = [regex]::Matches(
-    $innoText,
-    '(?m)^[ \t]*#define[ \t]+MyAppVersion[ \t]+"([^"\r\n]+)"[ \t]*\r?$')
-if ($versionMatches.Count -ne 1) {
-    throw "Installer contract failed: expected exactly one MyAppVersion definition, found $($versionMatches.Count)."
-}
-$version = $versionMatches[0].Groups[1].Value
-
 & $dotnet test $solution -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Release tests failed.' }
 

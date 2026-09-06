@@ -16,9 +16,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: 检出代码
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: 安装 .NET 10
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
       - name: 还原依赖
@@ -29,6 +29,7 @@ jobs:
         env:
           FTS_CATEGORY_SWITCH_EVIDENCE_DIR: ${{ runner.temp }}/category-switch-evidence
           FTS_CLIPBOARD_IMAGE_FALLBACK_EVIDENCE_DIR: ${{ runner.temp }}/clipboard-image-fallback-evidence
+          FTS_AUDIT_REMEDIATION_EVIDENCE_DIR: ${{ runner.temp }}/audit-remediation-evidence
         run: '& .\scripts\build-release.ps1 -DotnetPath (Get-Command dotnet).Source'
       - name: 严格 Release 构建
         run: dotnet build FloatingTransferStation.slnx -c Release --no-restore -warnaserror
@@ -36,23 +37,37 @@ jobs:
         run: '& .\scripts\test-installed-lifecycle.ps1'
       - name: 保存安装态验证结果
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: installed-lifecycle-evidence
           path: TestResults/installed-lifecycle/
           if-no-files-found: warn
           retention-days: 30
       - name: 保存跨分类交互截图
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: category-switch-evidence
           path: ${{ runner.temp }}/category-switch-evidence/*.png
           if-no-files-found: error
           retention-days: 30
       - name: 保存剪贴板图片回退截图
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: clipboard-image-fallback-evidence
           path: ${{ runner.temp }}/clipboard-image-fallback-evidence/*.png
+          if-no-files-found: error
+          retention-days: 30
+      - name: 保存删除与拖入回归截图
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: audit-remediation-evidence
+          path: ${{ runner.temp }}/audit-remediation-evidence/*.png
+          if-no-files-found: error
+          retention-days: 30
+      - name: 保存通过安装验证的候选安装包
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-candidate
+          path: artifacts/installer/*.exe
           if-no-files-found: error
           retention-days: 30

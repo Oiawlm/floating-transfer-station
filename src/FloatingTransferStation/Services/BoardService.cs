@@ -618,6 +618,11 @@ public sealed class BoardService
         for (var targetIndex = 0; targetIndex < desired.Length; targetIndex++)
         {
             var item = desired[targetIndex];
+            if (collection[targetIndex].Id == item.Id)
+            {
+                continue;
+            }
+
             var currentIndex = IndexOf(collection, item.Id);
             if (currentIndex < 0)
             {

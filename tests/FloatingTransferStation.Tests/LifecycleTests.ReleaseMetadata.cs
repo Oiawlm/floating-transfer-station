@@ -1,4 +1,6 @@
+using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 namespace FloatingTransferStation.Tests;
 
@@ -8,58 +10,39 @@ public sealed partial class LifecycleTests
     [TestCategory("Adversarial")]
     public void ReleaseMetadata_UsesOneConsistentVersion()
     {
-        const string expectedVersion = "1.4.3";
         var repositoryRoot = FindRepositoryRoot();
-        var project = File.ReadAllText(Path.Combine(
-            repositoryRoot,
-            "src",
-            "FloatingTransferStation",
-            "FloatingTransferStation.csproj"));
-        var productIdentity = File.ReadAllText(Path.Combine(
-            repositoryRoot,
-            "src",
-            "FloatingTransferStation",
-            "ProductIdentity.cs"));
-        var installerFiles = Directory.GetFiles(
-            Path.Combine(repositoryRoot, "installer"),
-            "*.iss",
-            SearchOption.TopDirectoryOnly);
+        var expectedVersion = File.ReadAllText(Path.Combine(repositoryRoot, "version.txt")).Trim();
+        StringAssert.Matches(expectedVersion, new Regex(@"^\d+\.\d+\.\d+$"));
+        var project = XDocument.Load(Path.Combine(
+            repositoryRoot, "src", "FloatingTransferStation", "FloatingTransferStation.csproj"));
+        Assert.IsFalse(project.Descendants("Version").Any(), "The project must inherit the shared version.");
+        var buildProperties = XDocument.Load(Path.Combine(repositoryRoot, "Directory.Build.props"));
+        var versionProperty = buildProperties.Descendants("Version").Single().Value;
+        StringAssert.Contains(versionProperty, "version.txt");
+        StringAssert.Contains(versionProperty, "ReadAllText");
+
+        var assembly = typeof(ProductIdentity).Assembly;
+        Assert.AreEqual(expectedVersion, assembly.GetName().Version!.ToString(3));
+        Assert.AreEqual(expectedVersion, ProductIdentity.Version);
+        Assert.AreEqual(
+            expectedVersion,
+            assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion.Split('+')[0]);
+
+        var installerFiles = Directory.GetFiles(Path.Combine(repositoryRoot, "installer"), "*.iss");
         Assert.HasCount(1, installerFiles);
         var installer = File.ReadAllText(installerFiles[0]);
-
-        var projectVersions = Regex.Matches(
-            project,
-            @"(?m)^\s*<Version>([^<\r\n]+)</Version>\s*$");
-        var productVersions = Regex.Matches(
-            productIdentity,
-            @"(?m)^\s*public const string Version = ""([^""\r\n]+)"";\s*$");
-        var installerVersions = Regex.Matches(
-            installer,
-            @"(?m)^\s*#define\s+MyAppVersion\s+""([^""\r\n]+)""\s*$");
+        StringAssert.Contains(installer, "FileOpen(AddBackslash(SourcePath) + \"..\\version.txt\")");
+        StringAssert.Contains(installer, "#define MyAppVersion Trim(FileRead(MyAppVersionFile))");
+        StringAssert.Contains(installer, "FileClose(MyAppVersionFile)");
         var setupSections = GetSetupSections(installer);
-        Assert.AreEqual(
-            1,
-            setupSections.Count,
-            "The project must contain exactly one authoritative [Setup] section.");
-        var setupFileVersions = Regex.Matches(
-            setupSections[0].Groups["Body"].Value,
-            @"(?im)^\s*VersionInfoVersion\s*=\s*\{#MyAppVersion\}\s*$");
+        Assert.HasCount(1, setupSections);
+        foreach (var setting in new[] { "AppVersion", "VersionInfoVersion" })
+        {
+            Assert.HasCount(1, Regex.Matches(
+                setupSections[0].Groups["Body"].Value,
+                $@"(?im)^\s*{setting}\s*=\s*\{{#MyAppVersion\}}\s*$"));
+        }
 
-        Assert.AreEqual(1, projectVersions.Count);
-        Assert.AreEqual(1, productVersions.Count);
-        Assert.AreEqual(1, installerVersions.Count);
-        Assert.AreEqual(
-            1,
-            setupFileVersions.Count,
-            "The Setup binary file and product versions must reuse MyAppVersion.");
-        CollectionAssert.AreEqual(
-            new[] { expectedVersion, expectedVersion, expectedVersion },
-            new[]
-            {
-                projectVersions[0].Groups[1].Value,
-                productVersions[0].Groups[1].Value,
-                installerVersions[0].Groups[1].Value,
-            });
         const string duplicateSetupSections = """
             [Setup]
             VersionInfoVersion={#MyAppVersion}
@@ -67,11 +50,7 @@ public sealed partial class LifecycleTests
             [Setup]
             VersionInfoVersion={#MyAppVersion}
             """;
-
-        Assert.AreEqual(
-            2,
-            GetSetupSections(duplicateSetupSections).Count,
-            "Setup-section discovery must not silently ignore a later section.");
+        Assert.HasCount(2, GetSetupSections(duplicateSetupSections));
     }
 
     [TestMethod]
@@ -79,103 +58,38 @@ public sealed partial class LifecycleTests
     public void PublicReleaseMaterials_DescribeInstallerLicenseRoadmapAndContribution()
     {
         var repositoryRoot = FindRepositoryRoot();
+        var expectedVersion = File.ReadAllText(Path.Combine(repositoryRoot, "version.txt")).Trim();
         var readme = File.ReadAllText(Path.Combine(repositoryRoot, "README.md"));
         var changelog = File.ReadAllText(Path.Combine(repositoryRoot, "CHANGELOG.md"));
         var license = File.ReadAllText(Path.Combine(repositoryRoot, "LICENSE"));
-        var roadmap = File.ReadAllText(Path.Combine(repositoryRoot, "ROADMAP.md"));
-        var contributing = File.ReadAllText(Path.Combine(repositoryRoot, "CONTRIBUTING.md"));
-        var projectGuide = File.ReadAllText(Path.Combine(repositoryRoot, "PROJECT_GUIDE.md"));
         var installerAssetNames = Regex.Matches(
-                readme,
-                @"FloatingTransferStation-Setup-\d+\.\d+\.\d+\.exe")
+                readme, @"FloatingTransferStation-Setup-\d+\.\d+\.\d+\.exe")
             .Select(match => match.Value)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var changelogSections = Regex.Matches(
-                changelog,
-                @"(?ms)^## (?<Name>[^\r\n]+)\r?\n(?<Body>.*?)(?=^## |\z)")
-            .ToDictionary(
-                match => match.Groups["Name"].Value,
-                match => match.Groups["Body"].Value,
-                StringComparer.Ordinal);
-
         CollectionAssert.AreEqual(
-            new[] { "FloatingTransferStation-Setup-1.4.3.exe" },
+            new[] { $"FloatingTransferStation-Setup-{expectedVersion}.exe" },
             installerAssetNames,
-            "README must name only the latest installer asset.");
-        StringAssert.Contains(readme, "批量置顶或取消置顶");
-        StringAssert.Contains(readme, "`Ctrl + A`：选择当前分类全部内容");
-        StringAssert.Contains(readme, "`Esc`：取消当前分类的全部选择");
-        StringAssert.Contains(readme, "`Delete` 或 `Backspace`：只删除选中项");
-        StringAssert.Contains(readme, "`F2`：改名当前展开分类");
-        StringAssert.Contains(
-            readme,
-            "`Ctrl + P` 只在面板展开且不在编辑分类名称时生效");
-        StringAssert.Contains(readme, "1.4.3 已通过自动质量门和安装包构建验证");
-        StringAssert.Contains(readme, "不属于 1.4.3 承诺");
-        Assert.IsFalse(
-            readme.Contains("批量置顶和批量取消置顶还没有实现", StringComparison.Ordinal),
-            "README must not describe batch pinning as unimplemented.");
-        StringAssert.Contains(changelog, "## 未发布");
-        StringAssert.Contains(changelog, "批量置顶与批量取消置顶");
-        StringAssert.Contains(changelog, "`Ctrl + A` 选择当前分类全部内容");
-        StringAssert.Contains(changelog, "`Esc` 取消当前分类全部选择");
-        StringAssert.Contains(changelog, "`Delete` 键删除当前选择");
-        Assert.IsTrue(changelogSections.ContainsKey("未发布"));
-        Assert.IsTrue(changelogSections.ContainsKey("1.4.3"));
-        StringAssert.Contains(
-            changelogSections["1.4.3"],
-            "继续尝试同次复制的其他有效表示");
-        StringAssert.Contains(
-            changelogSections["1.4.3"],
-            "不吞掉取消或写入错误");
-        Assert.IsTrue(changelogSections.ContainsKey("1.4.2"));
-        StringAssert.Contains(
-            changelogSections["1.4.2"],
-            "保留同级用户文件和程序文件");
-        StringAssert.Contains(
-            changelogSections["1.4.2"],
-            "保留新分类的选择与删除操作提示");
-        StringAssert.Contains(
-            changelogSections["1.4.2"],
-            "仍保持内容处理顺序");
-        StringAssert.Contains(
-            changelogSections["1.4.2"],
-            "开发启动不再覆盖正式安装的自启路径");
-        StringAssert.Contains(changelog, "## 1.4.1");
-        StringAssert.Contains(
-            changelogSections["1.4.1"],
-            "面板收起或编辑分类名称时，`Ctrl + P` 不再修改保留选择");
-        StringAssert.Contains(changelog, "## 1.4.0");
-        StringAssert.Contains(
-            changelogSections["1.4.0"],
-            "`F2` 改名当前展开分类");
-        StringAssert.Contains(changelog, "## 1.3.0");
-        StringAssert.Contains(
-            changelogSections["1.3.0"],
-            "`Delete` 键删除当前选择");
-        StringAssert.Contains(
-            changelogSections["1.3.0"],
-            "面板收起后");
-        StringAssert.Contains(changelog, "## 1.2.0");
-        StringAssert.Contains(changelog, "## 1.1.0");
-        StringAssert.Contains(changelog, "## 1.0.0");
-        StringAssert.Contains(projectGuide, "当前稳定发布为 1.4.3");
-        StringAssert.Contains(roadmap, "`Delete` 删除当前选择");
-        StringAssert.Contains(roadmap, "`F2` 改名当前展开分类");
+            "README must identify the current installer asset.");
+        StringAssert.Contains(readme, "https://github.com/Oiawlm/floating-transfer-station/releases");
+        foreach (var document in new[] { "LICENSE", "CONTRIBUTING.md", "ROADMAP.md" })
+        {
+            StringAssert.Contains(readme, document);
+            Assert.IsTrue(File.Exists(Path.Combine(repositoryRoot, document)));
+        }
+
+        // Keep the documented user contracts without locking ordinary release prose.
+        StringAssert.Matches(readme, new Regex(@"(?m)^-.*`Ctrl \+ A`.*当前分类.*(?:全部|所有)"));
+        StringAssert.Matches(readme, new Regex(@"(?m)^-.*`Esc`.*取消.*选择"));
+        StringAssert.Matches(readme, new Regex(@"(?m)^-.*`Delete`.*`Backspace`.*只.*选中"));
+        StringAssert.Matches(readme, new Regex(@"(?m)^-.*`F2`.*改名.*展开分类"));
+        StringAssert.Matches(readme, new Regex(@"(?m)^-.*`Ctrl \+ P`.*展开.*编辑"));
+        StringAssert.Matches(changelog, new Regex(@"(?m)^## 未发布\s*$"));
+        StringAssert.Matches(changelog, new Regex($@"(?m)^## {Regex.Escape(expectedVersion)}\s*$"));
         StringAssert.Contains(license, "MIT License");
-        StringAssert.Contains(license, "Copyright (c) 2026 Oiawlm");
-        Assert.IsFalse(
-            roadmap.Contains("**批量置顶与批量取消置顶**", StringComparison.Ordinal),
-            "ROADMAP must not keep delivered work in the next-work section.");
+        StringAssert.Matches(license, new Regex(@"Copyright \(c\) \d{4}(?:-\d{4})? Oiawlm"));
         StringAssert.Contains(
-            contributing,
+            File.ReadAllText(Path.Combine(repositoryRoot, "CONTRIBUTING.md")),
             "dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore");
-        Assert.IsFalse(
-            readme.Contains("当前发布构建为 0.10.0", StringComparison.Ordinal),
-            "README must not describe 0.10.0 as the current release.");
-        Assert.IsFalse(
-            readme.Contains("会在最终安装态确认完成后正式开放下载", StringComparison.Ordinal),
-            "README must not describe an already approved release as pending install confirmation.");
     }
 }

@@ -26,6 +26,7 @@ public partial class MainWindow : Window
         });
 
     private bool _isBatchPinPending;
+    private bool _isDeletePending;
     private long _selectionClearVersion;
 
     private async void BoardList_ButtonClick(object sender, RoutedEventArgs e)
@@ -245,68 +246,64 @@ public partial class MainWindow : Window
     private async void DeleteContentButton_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
-        if (_isClosing || _viewModel.ActivePanel is not { } activePanel)
+        if (_isClosing || _isDeletePending || _viewModel.ActivePanel is not { } activePanel)
         {
             return;
         }
 
-        var targetCategory = activePanel.Category;
-        var selectedBefore = CaptureSelectedItemIds();
-        if (selectedBefore.Length > 0)
-        {
-            await DeleteSelectedItemsAsync(selectedBefore, targetCategory);
-            return;
-        }
-
-        var success = await _mutations.ClearCategoryAsync(targetCategory);
-        await Dispatcher.InvokeAsync(
-            () =>
-            {
-                if (_viewModel.ActivePanel?.Category != targetCategory)
-                {
-                    return;
-                }
-
-                if (success)
-                {
-                    BoardList.UnselectAll();
-                }
-                else
-                {
-                    RestoreSelection(selectedBefore);
-                }
-            },
-            DispatcherPriority.Send);
+        await DeleteContentAsync(
+            CaptureSelectedItemIds(),
+            activePanel.Category,
+            clearWhenNoSelection: true);
     }
 
-    private async Task DeleteSelectedItemsAsync(
+    private async Task DeleteContentAsync(
         Guid[] selectedBefore,
-        BoardCategory targetCategory)
+        BoardCategory targetCategory,
+        bool clearWhenNoSelection = false)
     {
-        if (selectedBefore.Length == 0)
+        if (_isClosing || _isDeletePending || (selectedBefore.Length == 0 && !clearWhenNoSelection))
         {
             return;
         }
 
-        var success = await _mutations.DeleteManyAsync(selectedBefore);
-        await Dispatcher.InvokeAsync(
-            () =>
-            {
-                if (_viewModel.ActivePanel?.Category != targetCategory)
+        _isDeletePending = true;
+        var selectionClearVersion = _selectionClearVersion;
+        DeleteContentButton.IsEnabled = false;
+        try
+        {
+            var success = selectedBefore.Length == 0
+                ? await _mutations.ClearCategoryAsync(targetCategory)
+                : await _mutations.DeleteManyAsync(selectedBefore);
+            await Dispatcher.InvokeAsync(
+                () =>
                 {
-                    return;
-                }
+                    if (_viewModel.ActivePanel?.Category != targetCategory)
+                    {
+                        return;
+                    }
 
-                if (success)
+                    if (success)
+                    {
+                        BoardList.UnselectAll();
+                    }
+                    else if (selectionClearVersion == _selectionClearVersion)
+                    {
+                        RestoreSelection(selectedBefore);
+                    }
+                },
+                DispatcherPriority.Send);
+        }
+        finally
+        {
+            await Dispatcher.InvokeAsync(
+                () =>
                 {
-                    BoardList.UnselectAll();
-                }
-                else
-                {
-                    RestoreSelection(selectedBefore);
-                }
-            },
-            DispatcherPriority.Send);
+                    _isDeletePending = false;
+                    DeleteContentButton.ClearValue(IsEnabledProperty);
+                },
+                DispatcherPriority.Send);
+        }
     }
 
     private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -333,7 +330,7 @@ public partial class MainWindow : Window
             !_isClosing &&
             Keyboard.FocusedElement is not TextBoxBase &&
             _viewModel.IsPanelExpanded &&
-            BoardList.SelectedItems.Count > 0)
+            (BoardList.SelectedItems.Count > 0 || _isDeletePending))
         {
             _selectionClearVersion++;
             BoardList.UnselectAll();
@@ -357,7 +354,7 @@ public partial class MainWindow : Window
         }
 
         e.Handled = true;
-        await DeleteSelectedItemsAsync(selected, activePanel.Category);
+        await DeleteContentAsync(selected, activePanel.Category);
     }
 
     private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject

@@ -1,12 +1,11 @@
 using System.Windows;
-using System.Windows.Media.Imaging;
 using FloatingTransferStation.Models;
 
 namespace FloatingTransferStation.Services;
 
 public sealed class WpfClipboardReader : IClipboardReader
 {
-    private readonly WindowsDataImageReader _imageReader;
+    private readonly ClipboardPayloadReader _payloadReader;
 
     public WpfClipboardReader()
         : this(new WindowsDataImageReader())
@@ -15,7 +14,13 @@ public sealed class WpfClipboardReader : IClipboardReader
 
     internal WpfClipboardReader(WindowsDataImageReader imageReader)
     {
-        _imageReader = imageReader;
+        _payloadReader = new ClipboardPayloadReader(imageReader);
+    }
+
+    public uint? GetSequenceNumber()
+    {
+        var sequence = NativeMethods.GetClipboardSequenceNumber();
+        return sequence == 0 ? null : sequence;
     }
 
     public async Task<ClipboardSnapshot> ReadAsync(CancellationToken cancellationToken = default)
@@ -35,28 +40,7 @@ public sealed class WpfClipboardReader : IClipboardReader
         return ReadNow();
     }
 
-    private ClipboardSnapshot ReadNow()
-    {
-        BitmapSource? image = null;
-        IReadOnlyList<string> files = [];
-        string? text = null;
-        var dataObject = Clipboard.GetDataObject();
-        var imageCandidates = dataObject is null ? [] : _imageReader.ReadCandidates(dataObject);
-        image = imageCandidates.FirstOrDefault(candidate => candidate.IsBitmap)?.Bitmap;
-        var encodedImages = imageCandidates.Where(candidate => !candidate.IsBitmap).ToArray();
-
-        if (Clipboard.ContainsFileDropList())
-        {
-            files = Clipboard.GetFileDropList().Cast<string>().ToArray();
-        }
-
-        if (Clipboard.ContainsText(TextDataFormat.UnicodeText))
-        {
-            text = Clipboard.GetText(TextDataFormat.UnicodeText);
-        }
-
-        var sequence = NativeMethods.GetClipboardSequenceNumber();
-        return new ClipboardSnapshot(sequence, image, files, text, encodedImages);
-    }
+    private ClipboardSnapshot ReadNow() =>
+        _payloadReader.ReadStable(Clipboard.GetDataObject, NativeMethods.GetClipboardSequenceNumber);
 
 }
