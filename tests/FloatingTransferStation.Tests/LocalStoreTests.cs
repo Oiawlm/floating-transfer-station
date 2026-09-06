@@ -162,12 +162,73 @@ public sealed class LocalStoreTests
             .WithCategoryName(BoardCategory.Reference, "参考");
 
         await store.SaveSettingsAsync(settings);
-        var loaded = await store.LoadSettingsAsync();
+        var loaded = await new LocalStore(paths, new AtomicTextWriter()).LoadSettingsAsync();
 
         Assert.AreEqual(string.Empty, loaded.CategoryName(BoardCategory.CustomerOriginal));
         Assert.AreEqual("参考", loaded.CategoryName(BoardCategory.Reference));
-        Assert.AreEqual("提示词", loaded.CategoryName(BoardCategory.Prompt));
+        Assert.AreEqual("文本2", loaded.CategoryName(BoardCategory.Prompt));
         Assert.AreEqual("待分类", loaded.CategoryName(BoardCategory.Inbox));
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task LoadSettings_WithoutSavedCategoryNamesUsesNewDefaults(bool hasLegacySettings)
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        if (hasLegacySettings)
+        {
+            await File.WriteAllTextAsync(paths.SettingsFile, """
+                { "panelWidth": 420, "windowHeight": 700, "top": 120 }
+                """);
+        }
+
+        var loaded = await new LocalStore(paths, new AtomicTextWriter()).LoadSettingsAsync();
+
+        CollectionAssert.AreEqual(
+            new[] { "图片", "文本1", "文本2", "待分类" },
+            BoardCategoryCatalog.Ordered.Select(loaded.CategoryName).ToArray());
+        if (hasLegacySettings)
+        {
+            Assert.AreEqual(420, loaded.PanelWidth);
+            Assert.AreEqual(700, loaded.WindowHeight);
+            Assert.AreEqual(120, loaded.Top);
+        }
+    }
+
+    [TestMethod]
+    public async Task LoadSettings_LegacySavedCategoryNamesSurviveSaveAndReload()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        await File.WriteAllTextAsync(paths.SettingsFile, """
+            {
+              "panelWidth": 420,
+              "windowHeight": 700,
+              "top": 120,
+              "categoryNames": {
+                "CustomerOriginal": "客户原图",
+                "Reference": "工作参考",
+                "Prompt": "",
+                "Inbox": "待处理"
+              }
+            }
+            """);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var expectedNames = new[] { "客户原图", "工作参考", "", "待处理" };
+
+        var loaded = await store.LoadSettingsAsync();
+
+        CollectionAssert.AreEqual(
+            expectedNames,
+            BoardCategoryCatalog.Ordered.Select(loaded.CategoryName).ToArray());
+        await store.SaveSettingsAsync(loaded.Normalize(1920, 1040));
+        var reloaded = await new LocalStore(paths, new AtomicTextWriter()).LoadSettingsAsync();
+
+        CollectionAssert.AreEqual(
+            expectedNames,
+            BoardCategoryCatalog.Ordered.Select(reloaded.CategoryName).ToArray());
     }
 
     [TestMethod]
