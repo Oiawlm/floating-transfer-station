@@ -32,6 +32,8 @@ CI 同时启用已有跨分类回归的截图输出，将四张使用合成内�
 
 分类名称回归使用 `FTS_CATEGORY_NAMES_EVIDENCE_DIR` 输出新默认名称与自定义名称的真实 WPF 截图，保存为 `category-names-evidence` 附件，保留 30 天且缺图失败。
 
+连续范围选择回归使用 `FTS_RANGE_SELECTION_EVIDENCE_DIR` 输出 Shift 点击前后的真实 WPF 截图，保存为 `range-selection-evidence` 附件，同样保留 30 天且缺图失败；使用合成卡片验证连续选择、置顶边界与选择数量反馈。
+
 CI 还在一次性的 GitHub-hosted Windows 虚机运行 `scripts/test-installed-lifecycle.ps1`，使用真实候选安装包验证安装、原地更新、程序迁址和卸载：检查自启和数据目录登记、更新后的数据哈希（含保存分类名称的 `settings.json`）、旧卸载器拒绝操作，以及卸载后同级无关文件完整保留。缺少归属登记的旧版直接更改程序目录应被阻止；原地更新补齐登记后才允许迁址。日志和断言保存在 `installed-lifecycle-evidence` 附件中。
 
 该脚本拒绝在本机或持久化 self-hosted runner 运行；不应伪造环境变量绕过守卫。本地验证使用原生合成清理和注册表替身，程序迁址端到端场景须由一次性 CI 实际执行后才能标为通过。脚本不自动操作数据目录向导，因此不声称覆盖真实数据跨目录迁移。

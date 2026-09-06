@@ -2,7 +2,7 @@
 
 ## 项目状态
 
-悬浮中转站是一个活跃维护的 Windows 10/11 64 位 WPF 应用，使用 .NET 10、MSTest 和 Inno Setup。公开仓库为 `Oiawlm/floating-transfer-station`，当前源码版本为 1.4.5；公开安装包以 [Releases](https://github.com/Oiawlm/floating-transfer-station/releases) 为准。
+悬浮中转站是一个活跃维护的 Windows 10/11 64 位 WPF 应用，使用 .NET 10、MSTest 和 Inno Setup。公开仓库为 `Oiawlm/floating-transfer-station`，当前源码版本为 1.5.0；公开安装包以 [Releases](https://github.com/Oiawlm/floating-transfer-station/releases) 为准。
 
 当前直接引用 `SixLabors.ImageSharp 3.1.12`。ImageSharp 4.x 的直接引用要求有效构建许可证；升级前须先解决许可，不自行申请或绕过密钥校验。依据见 [Six Labors 官方说明](https://sixlabors.com/posts/licence-enforcement-changes/)。
 
