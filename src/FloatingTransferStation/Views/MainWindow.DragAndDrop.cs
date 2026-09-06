@@ -24,7 +24,7 @@ public partial class MainWindow : Window
         {
             _dragItem = null;
             _dragThresholdCrossed = false;
-            _selectionTogglePending = false;
+            _selectionModifiers = ModifierKeys.None;
             return;
         }
 
@@ -33,10 +33,10 @@ public partial class MainWindow : Window
         {
             _dragItem = null;
             _dragThresholdCrossed = false;
-            _selectionTogglePending = false;
+            _selectionModifiers = ModifierKeys.None;
             if (FindAncestor<ScrollBar>(source) is null)
             {
-                BoardList.UnselectAll();
+                ClearUserSelection();
             }
 
             return;
@@ -45,20 +45,22 @@ public partial class MainWindow : Window
         _dragStart = e.GetPosition(this);
         _dragItem = container.DataContext as BoardItem;
         _dragThresholdCrossed = false;
-        _selectionTogglePending = ShouldToggleSelection(
-            Keyboard.Modifiers,
-            dragThresholdCrossed: false);
+        _selectionModifiers = Keyboard.Modifiers;
         e.Handled = true;
     }
 
     private void BoardList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (_dragItem is { } item &&
-            ShouldToggleSelection(
-                _selectionTogglePending ? ModifierKeys.Control : ModifierKeys.None,
-                _dragThresholdCrossed))
+        if (_dragItem is { } item && !_dragThresholdCrossed)
         {
-            ToggleSelection(item);
+            if (_selectionModifiers.HasFlag(ModifierKeys.Shift))
+            {
+                SelectRange(item, _selectionModifiers.HasFlag(ModifierKeys.Control));
+            }
+            else if (ShouldToggleSelection(_selectionModifiers, _dragThresholdCrossed))
+            {
+                ToggleSelection(item);
+            }
         }
 
         if (_dragItem is not null)
@@ -68,7 +70,7 @@ public partial class MainWindow : Window
 
         _dragItem = null;
         _dragThresholdCrossed = false;
-        _selectionTogglePending = false;
+        _selectionModifiers = ModifierKeys.None;
     }
 
     private void BoardList_PreviewMouseMove(object sender, MouseEventArgs e)
@@ -101,7 +103,7 @@ public partial class MainWindow : Window
             EndPanelDrag();
             _dragItem = null;
             _dragThresholdCrossed = false;
-            _selectionTogglePending = false;
+            _selectionModifiers = ModifierKeys.None;
         }
     }
 
@@ -122,7 +124,7 @@ public partial class MainWindow : Window
             dragItem.Id);
         if (plan.ClearExistingSelection)
         {
-            BoardList.UnselectAll();
+            ClearUserSelection();
         }
 
         return plan.Items.Count > 1
@@ -137,7 +139,7 @@ public partial class MainWindow : Window
 
     private void ToggleSelection(BoardItem item)
     {
-        if (!BoardList.Items.Contains(item))
+        if (_isClosing || !_viewModel.IsPanelExpanded || !BoardList.Items.Contains(item))
         {
             return;
         }
@@ -150,6 +152,46 @@ public partial class MainWindow : Window
         {
             BoardList.SelectedItems.Add(item);
         }
+
+        _selectionAnchor = (item.Category, item.Id);
+        RecordUserSelection();
+    }
+
+    private void SelectRange(BoardItem target, bool additive)
+    {
+        if (_isClosing ||
+            !_viewModel.IsPanelExpanded ||
+            _viewModel.ActivePanel is not { } panel ||
+            !BoardList.Items.Contains(target))
+        {
+            return;
+        }
+
+        var items = panel.Items.ToArray();
+        var targetIndex = Array.IndexOf(items, target);
+        var anchorIndex = _selectionAnchor is { } anchor && anchor.Category == panel.Category
+            ? Array.FindIndex(items, item => item.Id == anchor.Id && BoardList.SelectedItems.Contains(item))
+            : -1;
+        if (anchorIndex < 0)
+        {
+            anchorIndex = targetIndex;
+            _selectionAnchor = (panel.Category, target.Id);
+        }
+
+        if (!additive)
+        {
+            BoardList.UnselectAll();
+        }
+
+        for (var index = Math.Min(anchorIndex, targetIndex); index <= Math.Max(anchorIndex, targetIndex); index++)
+        {
+            if (!BoardList.SelectedItems.Contains(items[index]))
+            {
+                BoardList.SelectedItems.Add(items[index]);
+            }
+        }
+
+        RecordUserSelection();
     }
 
     private void BoardList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -524,7 +566,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            BoardList.UnselectAll();
+            ClearUserSelection();
             if (sourceCategory != targetCategory && scrollTargetId is { } itemId)
             {
                 ActivateCategoryAfterBatchMove(targetCategory, itemId);
@@ -548,7 +590,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            BoardList.UnselectAll();
+            ClearUserSelection();
         }
     }
 
