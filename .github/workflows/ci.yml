@@ -32,6 +32,7 @@ jobs:
           FTS_AUDIT_REMEDIATION_EVIDENCE_DIR: ${{ runner.temp }}/audit-remediation-evidence
           FTS_CATEGORY_NAMES_EVIDENCE_DIR: ${{ runner.temp }}/category-names-evidence
           FTS_RANGE_SELECTION_EVIDENCE_DIR: ${{ runner.temp }}/range-selection-evidence
+          FTS_VISUAL_TRANSITIONS_EVIDENCE_DIR: ${{ runner.temp }}/visual-transitions-evidence
         run: '& .\scripts\build-release.ps1 -DotnetPath (Get-Command dotnet).Source'
       - name: 严格 Release 构建
         run: dotnet build FloatingTransferStation.slnx -c Release --no-restore -warnaserror
@@ -78,6 +79,13 @@ jobs:
         with:
           name: range-selection-evidence
           path: ${{ runner.temp }}/range-selection-evidence/*.png
+          if-no-files-found: error
+          retention-days: 30
+      - name: 保存窗口过渡回归截图
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: visual-transitions-evidence
+          path: ${{ runner.temp }}/visual-transitions-evidence/*.png
           if-no-files-found: error
           retention-days: 30
       - name: 保存通过安装验证的候选安装包

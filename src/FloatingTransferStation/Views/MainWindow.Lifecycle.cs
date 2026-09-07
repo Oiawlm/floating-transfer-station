@@ -69,6 +69,7 @@ public partial class MainWindow : Window
 
     private void ApplyPlacement(WindowPlacement placement)
     {
+        CancelCollapsedVisualHandoff();
         var expandsHorizontally = placement.Width > ActualWidth;
         var expandsVertically = placement.Height > ActualHeight;
         if (expandsHorizontally)

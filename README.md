@@ -6,7 +6,7 @@
 
 ## 下载与安装
 
-前往 [Releases](https://github.com/Oiawlm/floating-transfer-station/releases) 下载 `FloatingTransferStation-Setup-1.5.0.exe`。
+前往 [Releases](https://github.com/Oiawlm/floating-transfer-station/releases) 下载 `FloatingTransferStation-Setup-1.5.1.exe`。
 
 1. 运行安装程序。
 2. 选择程序安装位置和内容存储父目录；不修改时使用当前用户的本地目录。
@@ -52,7 +52,7 @@
 
 ## 当前限制
 
-- 动态分类增删、设置界面、快捷启动和常驻模式仍在路线图中，不属于 1.5.0 承诺。
+- 动态分类增删、设置界面、快捷启动和常驻模式仍在路线图中，不属于 1.5.1 承诺。
 - 每个编码图片表示或源文件最多 64 MiB、6,400 万像素；超限不会静默缩小原图。连续大量复制达到待处理容量上限时，会提示稍后重新复制。
 - 外部拖放基于 Windows 通用格式；不同软件实际提供的格式不同，因此不是所有来源都能接收。
 - B-005 图片分类反馈稍晚、B-006 微信复制图片偶发生成两份目前属于低优先级[现场观察](docs/observations.md)，自动测试环境未能稳定复现。
