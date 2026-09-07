@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Windows.Threading;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 
@@ -492,6 +493,79 @@ public sealed class LocalStoreTests
         Assert.AreEqual(before, await File.ReadAllTextAsync(paths.BoardFile));
     }
 
+    [STATestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Save_DoesNotRunStorageWorkOnDispatcher(bool saveSettings)
+    {
+        using var directory = new TestDirectory();
+        var writer = new ControlledAtomicTextWriter(Dispatcher.CurrentDispatcher);
+        writer.ReleaseFirstWrite.TrySetResult();
+        var store = new LocalStore(AppPaths.ForTests(directory.Root), writer);
+
+        await SaveValueAsync(store, saveSettings, 1);
+
+        Assert.IsFalse(writer.WasCalledOnDispatcher,
+            "Saving must leave the dispatcher free while serialization and storage work run.");
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Save_ConcurrentRequestsPreserveRequestOrder(bool saveSettings)
+    {
+        using var directory = new TestDirectory();
+        var writer = new ControlledAtomicTextWriter();
+        var store = new LocalStore(AppPaths.ForTests(directory.Root), writer);
+        var first = SaveValueAsync(store, saveSettings, 1);
+        try
+        {
+            await writer.FirstWriteStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var second = SaveValueAsync(store, saveSettings, 2);
+            var third = SaveValueAsync(store, saveSettings, 3);
+
+            Assert.AreEqual(1, writer.WriteCount);
+            writer.ReleaseFirstWrite.TrySetResult();
+            await Task.WhenAll(first, second, third);
+
+            CollectionAssert.AreEqual(new[] { 1, 2, 3 }, writer.Values.ToArray());
+        }
+        finally
+        {
+            writer.ReleaseFirstWrite.TrySetResult();
+            await first;
+        }
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Save_CanceledWaitingRequestDoesNotBlockLaterSave(bool saveSettings)
+    {
+        using var directory = new TestDirectory();
+        using var cancellation = new CancellationTokenSource();
+        var writer = new ControlledAtomicTextWriter();
+        var store = new LocalStore(AppPaths.ForTests(directory.Root), writer);
+        var first = SaveValueAsync(store, saveSettings, 1);
+        try
+        {
+            await writer.FirstWriteStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var canceled = SaveValueAsync(store, saveSettings, 2, cancellation.Token);
+            cancellation.Cancel();
+            await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => canceled);
+            var third = SaveValueAsync(store, saveSettings, 3);
+            writer.ReleaseFirstWrite.TrySetResult();
+            await Task.WhenAll(first, third);
+
+            CollectionAssert.AreEqual(new[] { 1, 3 }, writer.Values.ToArray());
+        }
+        finally
+        {
+            writer.ReleaseFirstWrite.TrySetResult();
+            await first;
+        }
+    }
+
     [TestMethod]
     public async Task Settings_RoundTripWithoutAddingCustomPathSetting()
     {
@@ -576,6 +650,43 @@ public sealed class LocalStoreTests
     {
         public Task WriteAsync(string path, string content, CancellationToken cancellationToken = default) =>
             throw new IOException("Injected write failure.");
+    }
+
+    private static Task SaveValueAsync(
+        LocalStore store,
+        bool saveSettings,
+        int value,
+        CancellationToken cancellationToken = default) =>
+        saveSettings
+            ? store.SaveSettingsAsync(WindowSettings.Default with { Top = value }, cancellationToken)
+            : store.SaveBoardAsync(SnapshotWithText(value.ToString()), cancellationToken);
+
+    private sealed class ControlledAtomicTextWriter(Dispatcher? dispatcher = null) : IAtomicTextWriter
+    {
+        private int _writeCount;
+
+        public TaskCompletionSource FirstWriteStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ReleaseFirstWrite { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int WriteCount => Volatile.Read(ref _writeCount);
+        public bool WasCalledOnDispatcher { get; private set; }
+        public List<int> Values { get; } = [];
+
+        public async Task WriteAsync(string path, string content, CancellationToken cancellationToken = default)
+        {
+            WasCalledOnDispatcher |= dispatcher?.CheckAccess() == true;
+            if (Interlocked.Increment(ref _writeCount) == 1)
+            {
+                FirstWriteStarted.TrySetResult();
+                await ReleaseFirstWrite.Task.WaitAsync(cancellationToken);
+            }
+
+            using var json = System.Text.Json.JsonDocument.Parse(content);
+            Values.Add(Path.GetFileName(path) == "settings.json"
+                ? json.RootElement.GetProperty("top").GetInt32()
+                : int.Parse(json.RootElement.GetProperty("items")[0].GetProperty("text").GetString()!));
+        }
     }
 
     private sealed class FakeDataDirectorySettings(string? dataDirectory) : IDataDirectorySettings

@@ -119,9 +119,12 @@ public sealed class LocalStore : IBoardStore
         await _boardWriteGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await _writer.WriteAsync(
-                _paths.BoardFile,
-                JsonSerializer.Serialize(snapshot, _jsonOptions),
+            // Acquire the gate before dispatching so background scheduling cannot reorder saves.
+            await Task.Run(
+                () => _writer.WriteAsync(
+                    _paths.BoardFile,
+                    JsonSerializer.Serialize(snapshot, _jsonOptions),
+                    cancellationToken),
                 cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -140,9 +143,11 @@ public sealed class LocalStore : IBoardStore
         await _settingsWriteGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await _writer.WriteAsync(
-                _paths.SettingsFile,
-                JsonSerializer.Serialize(settings, _jsonOptions),
+            await Task.Run(
+                () => _writer.WriteAsync(
+                    _paths.SettingsFile,
+                    JsonSerializer.Serialize(settings, _jsonOptions),
+                    cancellationToken),
                 cancellationToken).ConfigureAwait(false);
         }
         finally

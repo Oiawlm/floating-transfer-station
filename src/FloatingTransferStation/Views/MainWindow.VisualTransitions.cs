@@ -16,6 +16,7 @@ namespace FloatingTransferStation.Views;
 
 public partial class MainWindow : Window
 {
+    private DispatcherOperation? _pendingCollapsedVisualHandoff;
 
     private void SaveCurrentScrollOffset()
     {
@@ -324,15 +325,30 @@ public partial class MainWindow : Window
 
     private void BeginCollapsedVisualHandoff(WindowPlacement placement)
     {
+        CancelCollapsedVisualHandoff();
         WindowShell.Opacity = 0d;
         WindowShell.IsHitTestVisible = false;
-        _ = Dispatcher.BeginInvoke(
+        _pendingCollapsedVisualHandoff = Dispatcher.BeginInvoke(
             DispatcherPriority.ContextIdle,
             new Action(() => CompleteCollapsedVisualHandoff(placement)));
     }
 
+    private void CancelCollapsedVisualHandoff()
+    {
+        if (_pendingCollapsedVisualHandoff is not { } pending)
+        {
+            return;
+        }
+
+        pending.Abort();
+        _pendingCollapsedVisualHandoff = null;
+        WindowShell.Opacity = 1d;
+        WindowShell.IsHitTestVisible = true;
+    }
+
     private void CompleteCollapsedVisualHandoff(WindowPlacement placement)
     {
+        _pendingCollapsedVisualHandoff = null;
         ApplyPlacement(placement);
         _viewModel.SetPanelExpanded(false);
         UpdateStatusPresentation();
