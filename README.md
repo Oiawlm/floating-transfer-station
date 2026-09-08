@@ -2,17 +2,33 @@
 
 一个贴在屏幕边缘的文字与图片中转站。复制、拖进来、分个类，再把内容拖到真正需要它的软件里。
 
-> 当前正式版支持 Windows 10/11 64 位。macOS 14+ 的 Apple Silicon / Intel 适配已加入源码与同步构建，处于候选验证阶段，尚未正式发布。
+> 支持 Windows 10/11 64 位与 macOS 14+（Apple Silicon / Intel）。两端代码统一在 main 维护，下载包统一放在同一个 Release。Mac 包已通过原生自动验证，当前仍为未经 Apple 公证的测试版。
 
 ## 下载与安装
 
-前往 [Releases](https://github.com/Oiawlm/floating-transfer-station/releases) 下载 `FloatingTransferStation-Setup-1.5.1.exe`。
+在 [1.6.0 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.6.0) 选择你的平台：
+
+| 平台 | 下载 | 状态 |
+|---|---|---|
+| Windows 10/11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.6.0/FloatingTransferStation-Setup-1.6.0.exe) | 正式版 |
+| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.6.0/FloatingTransferStation-1.6.0-osx-arm64.zip) | 测试版，未 Apple 公证 |
+| Mac · Intel | [Mac Intel ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.6.0/FloatingTransferStation-1.6.0-osx-x64.zip) | 测试版，未 Apple 公证 |
+
+发行页同时提供 `SHA256SUMS.txt`。Windows 和 Mac 都无需另装 .NET。
+
+### Windows 安装
 
 1. 运行安装程序。
 2. 选择程序安装位置和内容存储父目录；不修改时使用当前用户的本地目录。
 3. 安装完成后软件会启动，并在以后登录 Windows 时自动运行。
 
-本地构建产物使用中文名，GitHub Release 为了稳定下载链接使用上面的英文文件名。Release 页面中的 `.zip` / `.tar.gz` 是 GitHub 自动生成的源码包，不是 Windows 安装程序。
+本地 Windows 构建产物使用中文名，GitHub Release 为了稳定下载链接使用上面的英文文件名。
+
+### Mac 安装
+
+解压对应芯片的 ZIP，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
+
+Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自动生成的源码包；Mac 应用包的文件名包含 `osx-arm64` 或 `osx-x64`。
 
 ## 它能做什么
 
@@ -44,7 +60,7 @@
 - 顶部垃圾桶：有选择时删除选中项，没有选择时清空当前分类；删除保存期间按钮暂时禁用，避免重复点击误清空。
 - `Delete` 或 `Backspace`：只删除选中项；正在编辑文字时仍然正常删字。
 
-## 数据和卸载
+## Windows 数据和卸载
 
 默认程序目录是 `%LocalAppData%\Programs\悬浮中转站\`，默认数据目录是 `%LocalAppData%\悬浮中转站\Data\`。安装或更新时可以改选两者的位置。
 
@@ -54,7 +70,7 @@
 
 ## Mac 版
 
-Mac 候选版使用 Avalonia 界面，复用 Windows 的分类、排序、置顶、批量变更和原子保存核心。支持文字/静态图片收集、四分类改名、连续选择、批量置顶/移动/删除、向外拖出文字或多张图片、右侧置顶与悬停展开。单击分类指定本次运行的默认收集分类；初始为“待分类”。两端共用 `version.txt`，版本号相同不表示 Mac 候选包已经正式发布。
+Mac 测试版使用 Avalonia 界面，复用 Windows 的分类、排序、置顶、批量变更和原子保存核心。支持文字/静态图片收集、四分类改名、连续选择、批量置顶/移动/删除、向外拖出文字或多张图片、右侧置顶与悬停展开。单击分类指定本次运行的默认收集分类；初始为“待分类”。两端共用 `version.txt`，并在同一个 Release 下载；平台验证与签名状态分别说明。
 
 Mac 使用 `⌘` 替代上述快捷键中的 `Ctrl`；双击分类或 `F2` 改名，编辑时按 `Enter` 保存、`Esc` 取消。`⌘ + V` 或“粘贴”按钮手动收集，`⌘ + C` 复制选中的一段文字或一组图片，`⌘ + Q` 或窗口右上角 × 保存后退出。
 
@@ -62,7 +78,7 @@ Mac 使用 `⌘` 替代上述快捷键中的 `Ctrl`；双击分类或 `F2` 改�
 - **数据**：保存在 `~/Library/Application Support/FloatingTransferStation/Data/`。删除应用本身保留数据；需要彻底删除时，先退出并备份，再由用户手动删除这个精确目录。Mac 不读取 Windows 安装登记。
 - **采集边界**：每 500 ms 检查一次剪贴板，规范化/保存期间只处理一个采集，极快连续复制可能无法逐条记录；手动粘贴或重新复制可补收。尊重 NSPasteboard 的隐私/临时内容标记。暂不自动登记登录启动，可在 macOS 系统设置的登录项中添加应用。
 - **验证状态**：本机可交叉编译两个 Mac 包，并运行跨平台测试和 Windows 上的 Avalonia 窗口验证。两种 Mac 架构的 CI 验证原生启动、窗口截图，以及合成文字、隐私标记、编码图片和文件剪贴板传输；具体结果以对应提交的 CI 和附件为准。第三方软件间拖放仍需 Mac 人工验收；Windows 截图不作为 Mac 实机证据。
-- **签名状态**：本机构建是未经 Apple 公证的候选包，首次打开可能被 Gatekeeper 阻止；正式分发前仍需 Developer ID 签名和公证。Mac CI 仅做临时签名供测试。
+- **签名状态**：统一发行页中的 Mac 测试包来自已通过原生 CI 的临时签名产物，尚无 Developer ID 签名和 Apple 公证，首次打开可能被 Gatekeeper 阻止。下载入口与 Windows 放在一起不代表 Mac 已通过 Apple 公证。
 
 单独生成两个 Mac 候选包：
 
@@ -76,7 +92,7 @@ Mac 使用 `⌘` 替代上述快捷键中的 `Ctrl`；双击分类或 `F2` 改�
 
 以下限制适用于 Windows 正式版。
 
-- 动态分类增删、设置界面、快捷启动和常驻模式仍在路线图中，不属于 1.5.1 承诺。
+- 动态分类增删、设置界面、快捷启动和常驻模式仍在路线图中，不属于 1.6.0 承诺。
 - 每个编码图片表示或源文件最多 64 MiB、6,400 万像素；超限不会静默缩小原图。连续大量复制达到待处理容量上限时，会提示稍后重新复制。
 - 外部拖放基于 Windows 通用格式；不同软件实际提供的格式不同，因此不是所有来源都能接收。
 - B-005 图片分类反馈稍晚、B-006 微信复制图片偶发生成两份目前属于低优先级[现场观察](docs/observations.md)，自动测试环境未能稳定复现。

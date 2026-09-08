@@ -2,6 +2,8 @@
 
 日常功能或修复先记录在 `CHANGELOG.md` 的“未发布”区。普通 `build-release.ps1` 用于验证并同步生成 Windows 安装包、Apple Silicon 与 Intel 两个 macOS 候选包，允许该区有内容；只有显式 `-ForRelease` 才要求该区清空。两个平台始终读取同一份 `version.txt`，不能单独提升 Mac 版本。
 
+版本交付采用 main 中的双端代码和同一个 GitHub Release：同时上传 Windows 安装包、两个 Mac ZIP、`SHA256SUMS.txt` 和 Mac 验证元数据；README 顶部并列提供三个下载入口。功能分支推送和单独 Mac 预发布不替代这个交付结果。统一发行页可同时包含 Windows 正式包与明确标注未公证的 Mac 测试包，不掩盖平台成熟度差异。
+
 1. 确定待发布版本，将对应条目归入新的版本段落。只在根目录 `version.txt` 设置生产版本；MSBuild、ProductIdentity、Inno 和打包脚本从它取得版本。同步 README 和 PROJECT_GUIDE 中的发布说明与安装包名称，历史设计和旧版本记录不改写。
 2. 在准备发布的代码上完成依赖还原和格式验证（命令见 CONTRIBUTING.md；WPF 设计时格式工具先预构建 Core 的 Debug 程序集），再执行包含 Release 全量测试的打包入口；无需在同一份未变化代码上先重复跑一次全量测试：
 
@@ -77,7 +79,7 @@ Intel runner 使用 `osx-x64`。打包契约要求 `Contents/MacOS` 仅含普通
 
 Mac smoke 还必须生成 `native-clipboard.json`，实际经过 NSPasteboard 验证合成文字、隐私标记、原始编码图片和文件 URL，检查持久化及源图片不变。每次发布合成剪贴板内容都附唯一标记；只读取该次 generation，并只在所有权仍匹配时清理，普通应用运行不执行这些测试。CI 检查四项结果和原生 CPU 架构，不能仅凭窗口启动就声称剪贴板已通过。
 
-目前没有配置 Apple Developer ID 证书或公证凭据。所有 Mac ZIP 都是**未经公证的候选包**；ad-hoc 签名仅用于候选程序的本机完整性与启动验证，不代表 Apple 开发者身份签名或 Gatekeeper 分发批准。不要将这些产物描述为已签名公证的正式发行版。公开发布前仍须另行完成并授权 Developer ID 签名、公证及下载后启动验证；脚本不会自动上传 Apple 或 GitHub。
+目前没有配置 Apple Developer ID 证书或公证凭据。所有 Mac ZIP 都是**未经公证的测试包**；ad-hoc 签名仅用于程序的本机完整性与启动验证，不代表 Apple 开发者身份签名或 Gatekeeper 分发批准。可按用户授权在统一 Release 提供这些包，但下载表和发行说明必须明确其测试、未公证状态。声称完成 Apple 认证前仍须另行完成并授权 Developer ID 签名、公证及下载后启动验证；本地打包脚本不会自动上传 Apple 或 GitHub。
 
 ## 磁盘占用
 

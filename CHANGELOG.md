@@ -4,6 +4,9 @@
 
 ## 未发布
 
+## 1.6.0
+
+- Windows 与 Mac 在同一 main 分支维护，并在同一个 1.6.0 Release 提供 Windows x64、Apple Silicon 和 Intel Mac 下载，首页按平台并列展示入口。
 - 新增 macOS 14+ 候选应用，支持 Apple Silicon 和 Intel，提供四分类、改名、选择、批量整理、文字/图片剪贴板采集及原生拖入/拖出。
 - Windows 和 Mac 共用分类/排序/置顶、原子存储、图片限制与业务回归；保持 Windows 安装数据目录和原有交互。
 - 发布构建入口默认同时生成 Windows 安装包与两种 Mac ZIP，版本统一读取 `version.txt`；CI 汇总 Windows 和两种 Mac 架构的质量门，Mac 启动验证生成真实窗口截图。

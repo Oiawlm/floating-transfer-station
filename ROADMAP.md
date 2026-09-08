@@ -4,7 +4,7 @@
 
 ## 最近完成
 
-- Mac 适配的共享核心、Avalonia 界面和双架构构建已加入源码；与 Windows 共用版本号和质量门。当前为候选阶段，原生 Mac 验收、Developer ID 签名和公证仍待完成，正式下载尚未发布。
+- Windows 与 Mac 统一在 main 维护，1.6.0 同一个 Release 并列提供 Windows、Apple Silicon 和 Intel Mac 下载。Mac 已通过双架构原生测试、窗口启动和剪贴板验证，当前仍为未经 Apple 公证的测试版；第三方软件间拖放人工验收及 Developer ID 签名、公证继续保留为后续工作。
 
 - 连续范围选择：`Shift + 单击` 选择连续区间，`Ctrl + Shift + 单击` 追加区间，复用现有批量整理操作。
 
