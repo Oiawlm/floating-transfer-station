@@ -2,7 +2,7 @@
 
 ## 项目状态
 
-悬浮中转站是一个活跃维护的 Windows 10/11 64 位 WPF 应用，使用 .NET 10、MSTest 和 Inno Setup。公开仓库为 `Oiawlm/floating-transfer-station`，当前源码版本为 1.5.1；公开安装包以 [Releases](https://github.com/Oiawlm/floating-transfer-station/releases) 为准。
+悬浮中转站是一个活跃维护的 .NET 10 桌面应用，Windows 10/11 64 位正式版使用 WPF 和 Inno Setup，macOS 14+ 候选版使用 Avalonia 11.3.21；两端使用 MSTest 和同一共享核心。公开仓库为 `Oiawlm/floating-transfer-station`，当前源码版本为 1.5.1；正式安装包以 [Releases](https://github.com/Oiawlm/floating-transfer-station/releases) 为准。Mac 双架构源码与构建已加入，原生验收/签名公证尚未完成。
 
 当前直接引用 `SixLabors.ImageSharp 3.1.12`。ImageSharp 4.x 的直接引用要求有效构建许可证；升级前须先解决许可，不自行申请或绕过密钥校验。依据见 [Six Labors 官方说明](https://sixlabors.com/posts/licence-enforcement-changes/)。
 
@@ -10,7 +10,10 @@
 
 - 生产版本只修改根目录 version.txt；程序集、产品标识、安装器和打包脚本共同读取该来源。
 
-- `src/FloatingTransferStation/`：WPF 应用、窗口交互、模型与本地服务。
+- `src/FloatingTransferStation/`：WPF 窗口和 Windows 系统集成。
+- `src/FloatingTransferStation.Core/`：两端共享的模型、业务、图片输入限制与原子存储。
+- `src/FloatingTransferStation.Mac/`：Mac Avalonia 界面和 NSPasteboard 适配；Windows 也可运行独立数据预览。
+- `tests/FloatingTransferStation.Core.Tests/`、`tests/FloatingTransferStation.Mac.Tests/`：跨平台业务与 Mac 适配回归。
 - `tests/FloatingTransferStation.Tests/`：单元、STA 窗口交互、生命周期和对抗性回归测试。
 - `installer/`：Inno Setup 安装与安全卸载脚本。
 - `scripts/`：本地 .NET/Inno 引导、质量门和 Release 构建入口。
@@ -30,18 +33,21 @@
 提交前质量门：
 
 ```powershell
+& .\.tools\dotnet\dotnet.exe build src/FloatingTransferStation.Core/FloatingTransferStation.Core.csproj -c Debug --no-restore -warnaserror
 & .\.tools\dotnet\dotnet.exe format FloatingTransferStation.slnx --verify-no-changes --no-restore
 & .\.tools\dotnet\dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore
 & .\.tools\dotnet\dotnet.exe build FloatingTransferStation.slnx -c Release --no-restore -warnaserror
 ```
 
-生成安装包：
+同步生成 Windows 安装包和两个 Mac 候选 ZIP：
 
 ```powershell
 & .\scripts\build-release.ps1
 ```
 
 打包入口同时执行工具路径契约、Release 全量测试及隔离 Inno 清理行为测试。CI 通过 `-DotnetPath` 复用已安装的 SDK；本地默认使用 `.tools/dotnet`。`-ForRelease` 额外要求“未发布”区为空，日常构建不受此限制。
+
+Mac 本地开发使用 `FloatingTransferStation.Mac.slnx`，单独打包使用 `scripts/build-macos.ps1`；Mac 原生执行 `-RuntimeIdentifier osx-arm64` 或 `osx-x64` 加 `-SmokeTest` 可验证包内启动并生成展开/收起截图。本机构建不能代替 Mac 实机验证，包旁 JSON 明确记录此状态。
 
 定向检查可使用 `scripts/run-adversarial.ps1 -Scope Clipboard`、`-Scope Interaction` 或 `-Scope Lifecycle`。测试文件按职责拆分，但类名和既有选集保持稳定。
 

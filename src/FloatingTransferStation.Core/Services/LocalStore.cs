@@ -5,32 +5,6 @@ using FloatingTransferStation.Models;
 
 namespace FloatingTransferStation.Services;
 
-public sealed record AppPaths(
-    string DataDirectory,
-    string BoardFile,
-    string SettingsFile,
-    string ImagesDirectory)
-{
-    public static AppPaths CreateDefault(IDataDirectorySettings? settings = null)
-    {
-        var dataDirectory = DataDirectorySettings.NormalizeManagedDataDirectory(
-            (settings ?? new WindowsDataDirectorySettings()).ReadDataDirectory())
-            ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                ProductIdentity.DisplayName,
-                "Data");
-        return FromDataDirectory(dataDirectory);
-    }
-
-    public static AppPaths ForTests(string dataDirectory) => FromDataDirectory(dataDirectory);
-
-    private static AppPaths FromDataDirectory(string dataDirectory) => new(
-        dataDirectory,
-        Path.Combine(dataDirectory, "board.json"),
-        Path.Combine(dataDirectory, "settings.json"),
-        Path.Combine(dataDirectory, "images"));
-}
-
 public sealed class LocalStore : IBoardStore
 {
     private readonly AppPaths _paths;
@@ -227,7 +201,9 @@ public sealed class LocalStore : IBoardStore
 
     private string ResolveImagePath(string relativePath)
     {
-        var normalizedRelative = relativePath.Replace('/', Path.DirectorySeparatorChar);
+        var normalizedRelative = relativePath
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
         var fullPath = Path.GetFullPath(Path.Combine(_paths.DataDirectory, normalizedRelative));
         if (!ManagedImagePath.IsAllowed(_paths.ImagesDirectory, fullPath))
         {

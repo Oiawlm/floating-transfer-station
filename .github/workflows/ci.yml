@@ -10,9 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  quality:
-    # Keep this check name aligned with main branch protection.
-    name: 格式、测试与构建
+  windows:
+    name: Windows 格式、测试与安装包
     runs-on: windows-latest
     steps:
       - name: 检出代码
@@ -23,6 +22,8 @@ jobs:
           dotnet-version: 10.0.x
       - name: 还原依赖
         run: dotnet restore FloatingTransferStation.slnx
+      - name: 为 WPF 格式工具生成共享类型程序集
+        run: dotnet build src/FloatingTransferStation.Core/FloatingTransferStation.Core.csproj -c Debug --no-restore -warnaserror
       - name: 验证格式
         run: dotnet format FloatingTransferStation.slnx --verify-no-changes --no-restore
       - name: 运行 Release 测试、安装清理契约与打包
@@ -33,7 +34,7 @@ jobs:
           FTS_CATEGORY_NAMES_EVIDENCE_DIR: ${{ runner.temp }}/category-names-evidence
           FTS_RANGE_SELECTION_EVIDENCE_DIR: ${{ runner.temp }}/range-selection-evidence
           FTS_VISUAL_TRANSITIONS_EVIDENCE_DIR: ${{ runner.temp }}/visual-transitions-evidence
-        run: '& .\scripts\build-release.ps1 -DotnetPath (Get-Command dotnet).Source'
+        run: '& .\scripts\build-release.ps1 -DotnetPath (Get-Command dotnet).Source -WindowsOnly'
       - name: 严格 Release 构建
         run: dotnet build FloatingTransferStation.slnx -c Release --no-restore -warnaserror
       - name: 验证真实安装、更新与卸载
@@ -95,3 +96,74 @@ jobs:
           path: artifacts/installer/*.exe
           if-no-files-found: error
           retention-days: 30
+
+  macos:
+    name: macOS ${{ matrix.rid }} 测试与候选包
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            rid: osx-arm64
+          - runner: macos-15-intel
+            rid: osx-x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: 安装 .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - name: 还原与验证跨平台格式
+        run: |
+          $projects = @(
+            'src/FloatingTransferStation.Core/FloatingTransferStation.Core.csproj',
+            'src/FloatingTransferStation.Mac/FloatingTransferStation.Mac.csproj',
+            'tests/FloatingTransferStation.Core.Tests/FloatingTransferStation.Core.Tests.csproj',
+            'tests/FloatingTransferStation.Mac.Tests/FloatingTransferStation.Mac.Tests.csproj')
+          foreach ($project in $projects) {
+            dotnet restore $project
+            if ($LASTEXITCODE -ne 0) { throw "Restore failed: $project" }
+            dotnet format $project --verify-no-changes --no-restore
+            if ($LASTEXITCODE -ne 0) { throw "Format failed: $project" }
+          }
+      - name: 共享核心与 Mac 测试、原生签名和启动截图
+        run: ./scripts/build-macos.ps1 -RuntimeIdentifier '${{ matrix.rid }}' -DotnetPath (Get-Command dotnet).Source -SmokeTest
+      - name: 保存 macOS 原生窗口与启动证据
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos-smoke-${{ matrix.rid }}
+          path: TestResults/macos-smoke/${{ matrix.rid }}/
+          if-no-files-found: error
+          retention-days: 30
+      - name: 保存未经公证的 macOS 候选包
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-candidate-${{ matrix.rid }}
+          path: |
+            artifacts/macos/${{ matrix.rid }}/*.zip
+            artifacts/macos/${{ matrix.rid }}/*.sha256
+            artifacts/macos/${{ matrix.rid }}/*.json
+          if-no-files-found: error
+          retention-days: 30
+
+  quality:
+    # Keep this required check name aligned with main branch protection.
+    name: 格式、测试与构建
+    needs: [windows, macos]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Windows 与两个 macOS 原生质量门必须全部通过
+        env:
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+          MACOS_RESULT: ${{ needs.macos.result }}
+        run: |
+          test "$WINDOWS_RESULT" = success
+          test "$MACOS_RESULT" = success

@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [switch]$ForRelease,
-    [string]$DotnetPath
+    [string]$DotnetPath,
+    [switch]$WindowsOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -109,3 +110,7 @@ if ($setups.Count -ne 1) {
 $setup = $setups[0].FullName
 
 Write-Host "Release installer: $setup"
+
+if (-not $WindowsOnly) {
+    & (Join-Path $PSScriptRoot 'build-macos.ps1') -DotnetPath $dotnet -ForRelease:$ForRelease
+}

@@ -1,8 +1,8 @@
 # 悬浮中转站
 
-一个贴在 Windows 屏幕边缘的文字与图片中转站。复制、拖进来、分个类，再把内容拖到真正需要它的软件里。
+一个贴在屏幕边缘的文字与图片中转站。复制、拖进来、分个类，再把内容拖到真正需要它的软件里。
 
-> 当前支持 Windows 10/11 64 位。项目刚刚公开，真实演示视频会在录制完成后补到这里。
+> 当前正式版支持 Windows 10/11 64 位。macOS 14+ 的 Apple Silicon / Intel 适配已加入源码与同步构建，处于候选验证阶段，尚未正式发布。
 
 ## 下载与安装
 
@@ -15,6 +15,8 @@
 本地构建产物使用中文名，GitHub Release 为了稳定下载链接使用上面的英文文件名。Release 页面中的 `.zip` / `.tar.gz` 是 GitHub 自动生成的源码包，不是 Windows 安装程序。
 
 ## 它能做什么
+
+以下为 Windows 正式版说明；Mac 候选版的操作与验证边界见下方“Mac 版”。
 
 - **随手收集**：复制图片或文字后，内容自动进入当前默认分类；来源标记为禁止历史记录的内容会跳过自动采集。
 - **图片容错**：同次复制提供多个图片表示时，读取或解码某个表示失败仍会尝试其他有效表示，优先保存可用图片中像素最多的一份；照片保留正确的旋转或镜像方向。
@@ -50,7 +52,29 @@
 
 从 1.4.3 或更早版本升级时，先保留原程序目录完成一次原地更新（1.4.4 或更新版本），再运行安装器更换程序目录；内容存储位置可以照常选择。新卸载器会核对当前安装目录的归属，清理失败会提示并保留数据位置登记。修复前已遗留的旧卸载器无法追溯保护，应从 Windows 设置或当前程序目录进入卸载。
 
+## Mac 版
+
+Mac 候选版使用 Avalonia 界面，复用 Windows 的分类、排序、置顶、批量变更和原子保存核心。支持文字/静态图片收集、四分类改名、连续选择、批量置顶/移动/删除、向外拖出文字或多张图片、右侧置顶与悬停展开。单击分类指定本次运行的默认收集分类；初始为“待分类”。两端共用 `version.txt`，版本号相同不表示 Mac 候选包已经正式发布。
+
+Mac 使用 `⌘` 替代上述快捷键中的 `Ctrl`；双击分类或 `F2` 改名，编辑时按 `Enter` 保存、`Esc` 取消。`⌘ + V` 或“粘贴”按钮手动收集，`⌘ + C` 复制选中的一段文字或一组图片，`⌘ + Q` 或窗口右上角 × 保存后退出。
+
+- **安装**：`FloatingTransferStation-<版本>-osx-arm64.zip` 用于 Apple Silicon，`osx-x64.zip` 用于 Intel。解压后将 `FloatingTransferStation.app` 拖入“应用程序”，无需另装 .NET。
+- **数据**：保存在 `~/Library/Application Support/FloatingTransferStation/Data/`。删除应用本身保留数据；需要彻底删除时，先退出并备份，再由用户手动删除这个精确目录。Mac 不读取 Windows 安装登记。
+- **采集边界**：每 500 ms 检查一次剪贴板，规范化/保存期间只处理一个采集，极快连续复制可能无法逐条记录；手动粘贴或重新复制可补收。尊重 NSPasteboard 的隐私/临时内容标记。暂不自动登记登录启动，可在 macOS 系统设置的登录项中添加应用。
+- **验证状态**：本机可交叉编译两个 Mac 包，并运行跨平台测试和 Windows 上的 Avalonia 窗口验证。Mac 原生剪贴板、窗口和外部软件拖放仍需在 Mac 验证；Windows 截图不作为 Mac 实机证据。CI 已配置两种 Mac 架构的原生测试、启动和截图。
+- **签名状态**：本机构建是未经 Apple 公证的候选包，首次打开可能被 Gatekeeper 阻止；正式分发前仍需 Developer ID 签名和公证。Mac CI 仅做临时签名供测试。
+
+单独生成两个 Mac 候选包：
+
+```powershell
+& ./scripts/build-macos.ps1
+```
+
+输出在 `artifacts/macos/<架构>/`，同时提供 SHA-256 和签名/原生验证状态的 JSON。中间 `.app` 打包后自动清理，只保留压缩包；开发时需要保留可加 `-KeepAppBundle`。
+
 ## 当前限制
+
+以下限制适用于 Windows 正式版。
 
 - 动态分类增删、设置界面、快捷启动和常驻模式仍在路线图中，不属于 1.5.1 承诺。
 - 每个编码图片表示或源文件最多 64 MiB、6,400 万像素；超限不会静默缩小原图。连续大量复制达到待处理容量上限时，会提示稍后重新复制。
@@ -71,13 +95,15 @@
 & .\.tools\dotnet\dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore
 ```
 
-生成安装包：
+同步生成 Windows 安装包和两种 Mac 候选包：
 
 ```powershell
 & .\scripts\build-release.ps1
 ```
 
 默认构建允许 `CHANGELOG.md` 中保留未发布记录；正式发布使用 `build-release.ps1 -ForRelease`，检查步骤见[发布指南](docs/releasing.md)。开发运行不会登记开机自启，自启项由安装器统一管理。版本变化见[更新记录](CHANGELOG.md)。
+
+Mac 上开发使用 `dotnet test FloatingTransferStation.Mac.slnx -c Release` 和 `dotnet run --project src/FloatingTransferStation.Mac`。Windows 上运行此项目仅预览 Mac 界面，数据保存在独立的 `%LocalAppData%/FloatingTransferStation.MacPreview/Data/`，自动采集关闭。
 
 更完整的改动规则见 [贡献指南](CONTRIBUTING.md)，主要组件与数据流见 [架构说明](docs/architecture.md)，可复现的仓库检查命令见 [项目指南](PROJECT_GUIDE.md)。
 

@@ -1,7 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:converters="clr-namespace:FloatingTransferStation.Converters"
-                    xmlns:models="clr-namespace:FloatingTransferStation.Models"
+                    xmlns:models="clr-namespace:FloatingTransferStation.Models;assembly=FloatingTransferStation.Core"
                     xmlns:views="clr-namespace:FloatingTransferStation.Views">
   <SolidColorBrush x:Key="WindowShellBrush" Color="#F7F8FA" />
   <SolidColorBrush x:Key="TabRailBrush" Color="#EFF1F4" />
