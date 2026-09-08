@@ -3,8 +3,6 @@ using FloatingTransferStation.Models;
 
 namespace FloatingTransferStation.Services;
 
-public readonly record struct StoredImage(Guid Id, string RelativePath, string AbsolutePath);
-
 public interface IImageNormalizer
 {
     Task<StoredImage> NormalizeFileAsync(

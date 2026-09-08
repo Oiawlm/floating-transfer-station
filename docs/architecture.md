@@ -1,10 +1,19 @@
 # 架构说明
 
-悬浮中转站是一个 .NET 10 WPF 桌面应用。代码按“状态与模型、业务服务、窗口交互、持久化与安装”分层，但没有为了分层引入额外框架。
+悬浮中转站使用 .NET 10：Windows 界面为 WPF，Mac 候选界面为 Avalonia。两端引用同一个 `FloatingTransferStation.Core`，保持同一份分类、顺序、置顶和保存规则。
+
+## 平台边界
+
+- `src/FloatingTransferStation.Core/`：共享数据模型、ViewModels、BoardService/BoardMutationService、LocalStore、原子写入、路径检查、图片输入限制与格式检查。
+- `src/FloatingTransferStation/`：保留 WPF 窗口、Windows 剪贴板格式、注册表、安装器和系统集成；启动显式向共享 `AppPaths` 传入 Windows 数据目录设置。
+- `src/FloatingTransferStation.Mac/`：Avalonia 窗口和系统拖放；NSPasteboard 只桥接变化序号、类型和编码图片。读取前后核对代际并跳过隐私标记；图片归一化在后台执行，保存/回滚复用共享操作门。窗口加载完成前禁用内容操作，关闭等待加载和已登记的改名、导入及内容保存。
+- `tests/FloatingTransferStation.Core.Tests/`：链接 Windows 已有纯业务测试，在两个平台执行；额外覆盖 Unix 符号链接、大小写和数据恢复。`FloatingTransferStation.Mac.Tests` 覆盖 Mac 选择、传输与窗口生命周期。
+
+Mac 数据与 Windows 数据独立，不提供自动跨设备同步。`board.json` 与 `settings.json` 格式继续共享；“两端同步”指功能维护和版本构建同步。
 
 ## 主要责任
 
-- `Models/`：分类、内容项、剪贴板快照、外部拖入载荷和窗口设置等数据结构。
+- `Core/Models/` 与 Windows `Models/`：分别存放共享板模型，以及 Windows 剪贴板快照/外部拖入载荷。
 - `Services/`：剪贴板采集、图片规范化、板内容变更、原子保存、拖放载荷、窗口状态机和生命周期。
 - `ViewModels/`：分类与主窗口的可绑定状态。
 - `Views/`：WPF 视觉树、指针交互、选择删除、拖放、动画和窗口生命周期。

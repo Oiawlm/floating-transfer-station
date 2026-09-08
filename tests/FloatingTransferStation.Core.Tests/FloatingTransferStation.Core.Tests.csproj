@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageReference Include="MSTest.TestAdapter" Version="4.3.2" />
+    <PackageReference Include="MSTest.TestFramework" Version="4.3.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FloatingTransferStation.Core\FloatingTransferStation.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\FloatingTransferStation.Tests\GlobalUsings.cs" Link="Shared\GlobalUsings.cs" />
+    <Compile Include="..\FloatingTransferStation.Tests\TestDirectory.cs" Link="Shared\TestDirectory.cs" />
+    <Compile Include="..\FloatingTransferStation.Tests\FailingFirstSaveBoardStore.cs" Link="Shared\FailingFirstSaveBoardStore.cs" />
+    <Compile Include="..\FloatingTransferStation.Tests\BoardServiceTests.cs" Link="Shared\BoardServiceTests.cs" />
+    <Compile Include="..\FloatingTransferStation.Tests\BoardMutationServiceTests.cs" Link="Shared\BoardMutationServiceTests.cs" />
+    <Compile Include="..\FloatingTransferStation.Tests\BoardOperationGateTests.cs" Link="Shared\BoardOperationGateTests.cs" />
+    <Compile Include="..\FloatingTransferStation.Tests\BatchDragPlannerTests.cs" Link="Shared\BatchDragPlannerTests.cs" />
+    <Compile Include="..\FloatingTransferStation.Tests\CategoryScrollStateTests.cs" Link="Shared\CategoryScrollStateTests.cs" />
+    <Compile Include="..\FloatingTransferStation.Tests\DefaultCaptureCategoryStateTests.cs" Link="Shared\DefaultCaptureCategoryStateTests.cs" />
+    <Compile Include="..\FloatingTransferStation.Tests\DropInsertionCalculatorTests.cs" Link="Shared\DropInsertionCalculatorTests.cs" />
+    <Compile Include="..\FloatingTransferStation.Tests\PanelStateMachineTests.cs" Link="Shared\PanelStateMachineTests.cs" />
+  </ItemGroup>
+</Project>

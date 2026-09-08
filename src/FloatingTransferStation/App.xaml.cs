@@ -20,7 +20,7 @@ public partial class App : Application
                 return;
             }
 
-            var paths = AppPaths.CreateDefault();
+            var paths = AppPaths.CreateDefault(new WindowsDataDirectorySettings());
             var store = new LocalStore(paths, new AtomicTextWriter());
             var board = new BoardService();
             var snapshot = await store.LoadBoardAsync();

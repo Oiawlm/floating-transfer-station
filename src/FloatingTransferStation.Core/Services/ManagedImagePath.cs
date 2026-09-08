@@ -14,7 +14,10 @@ public static class ManagedImagePath
             var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(imagesDirectory));
             var fullPath = Path.GetFullPath(path);
             var prefix = Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar;
-            if (!fullPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            var comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            if (!fullPath.StartsWith(prefix, comparison))
             {
                 return false;
             }

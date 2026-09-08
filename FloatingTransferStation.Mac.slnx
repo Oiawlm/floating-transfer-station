@@ -2,11 +2,9 @@
   <Folder Name="/src/">
     <Project Path="src/FloatingTransferStation.Core/FloatingTransferStation.Core.csproj" />
     <Project Path="src/FloatingTransferStation.Mac/FloatingTransferStation.Mac.csproj" />
-    <Project Path="src/FloatingTransferStation/FloatingTransferStation.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/FloatingTransferStation.Core.Tests/FloatingTransferStation.Core.Tests.csproj" />
     <Project Path="tests/FloatingTransferStation.Mac.Tests/FloatingTransferStation.Mac.Tests.csproj" />
-    <Project Path="tests/FloatingTransferStation.Tests/FloatingTransferStation.Tests.csproj" />
   </Folder>
 </Solution>
