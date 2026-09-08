@@ -23,6 +23,33 @@ function Test-MachOFile([string]$Path) {
     }
 }
 
+function Get-MacBundleSigningPlan([string]$BundlePath) {
+    $BundlePath = [System.IO.Path]::GetFullPath($BundlePath)
+    $codeDirectory = Join-Path $BundlePath 'Contents/MacOS'
+    $executable = Join-Path $codeDirectory 'FloatingTransferStation.Mac'
+    $files = @(Get-ChildItem -LiteralPath $codeDirectory -Force | Sort-Object Name)
+    if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+        throw 'The macOS bundle is missing its main executable.'
+    }
+    foreach ($file in $files) {
+        # Apple treats everything in this directory as nested code. Managed PE DLLs,
+        # JSON, PDBs and resources must not be left beside the single-file apphost.
+        if ($file.PSIsContainer -or ($file.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or
+            -not (Test-MachOFile $file.FullName)) {
+            throw "Contents/MacOS must contain only regular Mach-O files; unexpected content: $($file.Name)"
+        }
+    }
+    # Signing the main executable can cause codesign to inspect its enclosing bundle.
+    # Every nested library/helper must therefore be signed before the main executable.
+    foreach ($file in $files) {
+        if ($file.FullName -ne $executable) {
+            [pscustomobject]@{ Path = $file.FullName; JitEntitlements = $false }
+        }
+    }
+    [pscustomobject]@{ Path = $executable; JitEntitlements = $true }
+    [pscustomobject]@{ Path = $BundlePath; JitEntitlements = $true }
+}
+
 function New-MacAppZip([string]$BundlePath, [string]$ZipPath) {
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem

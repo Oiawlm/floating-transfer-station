@@ -54,7 +54,7 @@ Windows 上可复用仓库已有 .NET SDK 单独生成两个 Mac 包，不安装
 & .\scripts\build-macos.ps1
 ```
 
-只重建一个架构时可加 `-RuntimeIdentifier osx-arm64` 或 `-RuntimeIdentifier osx-x64`；指定 SDK 时加 `-DotnetPath (Get-Command dotnet).Source`。脚本先执行共享核心和 Mac 的 Release 测试、打包契约测试，然后以自包含、多文件模式严格发布到 `.app/Contents/MacOS`。生成的 ZIP 内包含完整 `.app`，无需目标用户另装 .NET。ZIP 中显式写入 Unix 来源与权限，因此在 Windows 交叉构建也保留 apphost 和原生库的可执行位。
+只重建一个架构时可加 `-RuntimeIdentifier osx-arm64` 或 `-RuntimeIdentifier osx-x64`；指定 SDK 时加 `-DotnetPath (Get-Command dotnet).Source`。脚本先执行共享核心和 Mac 的 Release 测试、打包契约测试，然后以自包含、单文件模式严格发布到 `.app/Contents/MacOS`：托管程序集与运行配置内嵌进 apphost，第三方原生库保留在旁边，不启用原生库运行时自解压。生成的 ZIP 内包含完整 `.app`，无需目标用户另装 .NET。ZIP 中显式写入 Unix 来源与权限，因此在 Windows 交叉构建也保留 apphost 和原生库的可执行位。
 
 产物分别保存为：
 
@@ -71,7 +71,11 @@ Mac CI 使用 [GitHub 官方标准 runner](https://docs.github.com/en/actions/re
 ./scripts/build-macos.ps1 -RuntimeIdentifier osx-arm64 -DotnetPath (Get-Command dotnet).Source -SmokeTest
 ```
 
-Intel runner 使用 `osx-x64`。Mac 上的打包会为原生库与 `.app` 添加 ad-hoc 签名并验证，随后解压实际 ZIP，检查解压后的签名和执行权限，再启动包内程序的 `--smoke-test <输出目录>`。程序必须在 60 秒内以退出码 0 结束，写出 `smoke-complete.json`、`expanded.png` 和 `collapsed.png`；超时、缺图或缺完成标识均失败。截图来自真实 Avalonia 窗口，数据来自输出目录内的合成内容；证据保存在 `macos-smoke-<rid>` 附件 30 天。
+Intel runner 使用 `osx-x64`。打包契约要求 `Contents/MacOS` 仅含普通 Mach-O 文件，若再次出现松散托管 DLL、配置文件或符号链接则立即失败；这符合 [Apple 对代码目录的签名约束](https://developer.apple.com/library/archive/technotes/tn2206/)，避免将托管 DLL 当作未签名的嵌套代码。Mac 上先逐个签署原生库和辅助可执行文件，再签主程序和 `.app`；签名不使用 `--deep`，仅在最终递归验证时使用。主程序与包使用 `Entitlements.plist` 中的 `com.apple.security.cs.allow-jit`，依据 [Avalonia 单文件部署与 JIT 指南](https://docs.avaloniaui.net/docs/deployment/macos)；当前 ad-hoc 候选不启用 hardened runtime，不添加 Apple Events、调试或动态库校验豁免。
+
+随后解压实际 ZIP，检查解压后的签名和执行权限，再启动包内程序的 `--smoke-test <输出目录>`。程序必须在 60 秒内以退出码 0 结束，写出 `smoke-complete.json`、`expanded.png` 和 `collapsed.png`；超时、缺图或缺完成标识均失败。截图来自真实 Avalonia 窗口，数据来自输出目录内的合成内容；证据保存在 `macos-smoke-<rid>` 附件 30 天。
+
+Mac smoke 还必须生成 `native-clipboard.json`，实际经过 NSPasteboard 验证合成文字、隐私标记、原始编码图片和文件 URL，检查持久化及源图片不变。每次发布合成剪贴板内容都附唯一标记；只读取该次 generation，并只在所有权仍匹配时清理，普通应用运行不执行这些测试。CI 检查四项结果和原生 CPU 架构，不能仅凭窗口启动就声称剪贴板已通过。
 
 目前没有配置 Apple Developer ID 证书或公证凭据。所有 Mac ZIP 都是**未经公证的候选包**；ad-hoc 签名仅用于候选程序的本机完整性与启动验证，不代表 Apple 开发者身份签名或 Gatekeeper 分发批准。不要将这些产物描述为已签名公证的正式发行版。公开发布前仍须另行完成并授权 Developer ID 签名、公证及下载后启动验证；脚本不会自动上传 Apple 或 GitHub。
 

@@ -45,27 +45,33 @@ try {
         try {
             & $DotnetPath publish 'src/FloatingTransferStation.Mac/FloatingTransferStation.Mac.csproj' `
                 -c Release -r $rid --self-contained true -warnaserror `
-                -p:PublishSingleFile=false -p:PublishReadyToRun=false -p:PublishTrimmed=false `
+                -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=false `
+                -p:PublishReadyToRun=false -p:PublishTrimmed=false `
                 -p:DebugType=None -p:DebugSymbols=false -o (Join-Path $bundle 'Contents/MacOS')
             if ($LASTEXITCODE -ne 0) { throw "Self-contained publish failed: $rid" }
             $executable = Join-Path $bundle 'Contents/MacOS/FloatingTransferStation.Mac'
             if (-not (Test-Path -LiteralPath $executable -PathType Leaf) -or -not (Test-MachOFile $executable)) {
                 throw "The published apphost is missing or not a Mach-O executable: $rid"
             }
+            $signingPlan = @(Get-MacBundleSigningPlan $bundle)
             $signing = 'unsigned-cross-build'
             if ($onMac) {
                 & /usr/bin/plutil -lint (Join-Path $bundle 'Contents/Info.plist')
                 if ($LASTEXITCODE -ne 0) { throw 'Info.plist validation failed.' }
-                foreach ($file in (Get-ChildItem -LiteralPath (Join-Path $bundle 'Contents/MacOS') -File -Recurse)) {
-                    if (Test-MachOFile $file.FullName) {
-                        & /bin/chmod 755 $file.FullName
+                $entitlements = Join-Path $repoRoot 'installer/macos/Entitlements.plist'
+                & /usr/bin/plutil -lint $entitlements
+                if ($LASTEXITCODE -ne 0) { throw 'JIT entitlements validation failed.' }
+                foreach ($target in $signingPlan) {
+                    if (Test-Path -LiteralPath $target.Path -PathType Leaf) {
+                        & /bin/chmod 755 $target.Path
                         if ($LASTEXITCODE -ne 0) { throw 'Could not set executable permissions.' }
-                        & /usr/bin/codesign --force --sign - --timestamp=none $file.FullName
-                        if ($LASTEXITCODE -ne 0) { throw "Ad-hoc signing failed: $($file.Name)" }
                     }
+                    $signArguments = @('--force', '--sign', '-', '--timestamp=none')
+                    if ($target.JitEntitlements) { $signArguments += @('--entitlements', $entitlements) }
+                    Write-Host "Ad-hoc signing: $($target.Path)"
+                    & /usr/bin/codesign @signArguments $target.Path
+                    if ($LASTEXITCODE -ne 0) { throw "Ad-hoc signing failed: $($target.Path)" }
                 }
-                & /usr/bin/codesign --force --sign - --timestamp=none $bundle
-                if ($LASTEXITCODE -ne 0) { throw 'App bundle ad-hoc signing failed.' }
                 & /usr/bin/codesign --verify --deep --strict --verbose=2 $bundle
                 if ($LASTEXITCODE -ne 0) { throw 'App bundle signature verification failed.' }
                 $signing = 'ad-hoc'

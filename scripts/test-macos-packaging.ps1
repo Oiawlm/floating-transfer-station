@@ -12,7 +12,30 @@ try {
     Initialize-MacAppBundle $bundle $version
     $executable = Join-Path $bundle 'Contents/MacOS/FloatingTransferStation.Mac'
     [System.IO.File]::WriteAllBytes($executable, [byte[]]@(0xCF, 0xFA, 0xED, 0xFE, 0, 0, 0, 0))
-    [System.IO.File]::WriteAllText((Join-Path $bundle 'Contents/MacOS/FloatingTransferStation.Mac.dll'), 'synthetic managed file')
+    $looseDll = Join-Path $bundle 'Contents/MacOS/System.Diagnostics.Contracts.dll'
+    [System.IO.File]::WriteAllText($looseDll, 'MZ synthetic managed PE file')
+    $looseDllRejected = $false
+    try { Get-MacBundleSigningPlan $bundle | Out-Null } catch {
+        $looseDllRejected = $_.Exception.Message -like '*only regular Mach-O files*System.Diagnostics.Contracts.dll*'
+    }
+    if (-not $looseDllRejected) { throw 'The bundle accepted a loose managed DLL in the Apple code directory.' }
+    Remove-Item -LiteralPath $looseDll
+    $nativeLibrary = Join-Path $bundle 'Contents/MacOS/libAvaloniaNative.dylib'
+    $helperExecutable = Join-Path $bundle 'Contents/MacOS/createdump'
+    [System.IO.File]::WriteAllBytes($nativeLibrary, [byte[]]@(0xCF, 0xFA, 0xED, 0xFE, 0, 0, 0, 0))
+    [System.IO.File]::WriteAllBytes($helperExecutable, [byte[]]@(0xCF, 0xFA, 0xED, 0xFE, 0, 0, 0, 0))
+    $signingPlan = @(Get-MacBundleSigningPlan $bundle)
+    if ($signingPlan.Count -ne 4 -or $signingPlan[2].Path -ne $executable -or $signingPlan[3].Path -ne $bundle -or
+        $signingPlan[0].JitEntitlements -or $signingPlan[1].JitEntitlements -or
+        -not $signingPlan[2].JitEntitlements -or -not $signingPlan[3].JitEntitlements) {
+        throw 'Nested Mach-O files must be signed before the main executable and bundle; only the app receives JIT entitlements.'
+    }
+    [xml]$entitlements = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot 'installer/macos/Entitlements.plist')
+    if ($entitlements.SelectNodes('/plist/dict/key').Count -ne 1 -or
+        $entitlements.SelectSingleNode('/plist/dict/key').InnerText -ne 'com.apple.security.cs.allow-jit' -or
+        $entitlements.SelectSingleNode('/plist/dict/key/following-sibling::*[1]').Name -ne 'true') {
+        throw 'Ad-hoc candidates require only the explicit JIT entitlement.'
+    }
     $resourceName = ([string][char]0x4E2D) + ([char]0x6587) + ' fixture.txt'
     [System.IO.File]::WriteAllText((Join-Path $bundle ('Contents/Resources/' + $resourceName)), 'synthetic resource')
     [xml]$plist = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $bundle 'Contents/Info.plist')
@@ -34,11 +57,11 @@ try {
         if ($null -eq $hostEntry -or (($hostEntry.ExternalAttributes -shr 16) -band 0xFFFF) -ne 0x81ED) {
             throw 'The ZIP does not preserve the apphost as a regular executable file (0755).'
         }
-        $dllEntry = $archive.GetEntry('FloatingTransferStation.app/Contents/MacOS/FloatingTransferStation.Mac.dll')
-        if ((($dllEntry.ExternalAttributes -shr 16) -band 0xFFFF) -ne 0x81A4) { throw 'Managed DLL permissions must be 0644.' }
-        if ($null -eq $archive.GetEntry('FloatingTransferStation.app/Contents/Resources/' + $resourceName)) {
+        $resourceEntry = $archive.GetEntry('FloatingTransferStation.app/Contents/Resources/' + $resourceName)
+        if ($null -eq $resourceEntry) {
             throw 'The ZIP lost a Unicode resource path.'
         }
+        if ((($resourceEntry.ExternalAttributes -shr 16) -band 0xFFFF) -ne 0x81A4) { throw 'Resource permissions must be 0644.' }
         foreach ($entry in $archive.Entries) {
             if ($entry.FullName.Contains('\') -or -not $entry.FullName.StartsWith('FloatingTransferStation.app/')) {
                 throw 'The ZIP contains a path outside the app bundle or Windows separators.'
@@ -66,7 +89,7 @@ try {
             $stream.Position = $offset + 46 + $nameLength + $extraLength + $commentLength
         }
     } finally { $reader.Dispose(); $stream.Dispose() }
-    Write-Host 'macOS packaging contract passed: version, plist executable, Unix ZIP creator/permissions, Unicode paths and readable entries.'
+    Write-Host 'macOS packaging contract passed: native-only code directory, nested-first signing/JIT entitlement, version, plist executable, Unix ZIP creator/permissions, Unicode paths and readable entries.'
 } finally {
     $resolvedFixture = [System.IO.Path]::GetFullPath($fixtureRoot)
     $allowedRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'TestResults')).TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar

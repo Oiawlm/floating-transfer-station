@@ -61,7 +61,7 @@ Mac 使用 `⌘` 替代上述快捷键中的 `Ctrl`；双击分类或 `F2` 改�
 - **安装**：`FloatingTransferStation-<版本>-osx-arm64.zip` 用于 Apple Silicon，`osx-x64.zip` 用于 Intel。解压后将 `FloatingTransferStation.app` 拖入“应用程序”，无需另装 .NET。
 - **数据**：保存在 `~/Library/Application Support/FloatingTransferStation/Data/`。删除应用本身保留数据；需要彻底删除时，先退出并备份，再由用户手动删除这个精确目录。Mac 不读取 Windows 安装登记。
 - **采集边界**：每 500 ms 检查一次剪贴板，规范化/保存期间只处理一个采集，极快连续复制可能无法逐条记录；手动粘贴或重新复制可补收。尊重 NSPasteboard 的隐私/临时内容标记。暂不自动登记登录启动，可在 macOS 系统设置的登录项中添加应用。
-- **验证状态**：本机可交叉编译两个 Mac 包，并运行跨平台测试和 Windows 上的 Avalonia 窗口验证。Mac 原生剪贴板、窗口和外部软件拖放仍需在 Mac 验证；Windows 截图不作为 Mac 实机证据。CI 已配置两种 Mac 架构的原生测试、启动和截图。
+- **验证状态**：本机可交叉编译两个 Mac 包，并运行跨平台测试和 Windows 上的 Avalonia 窗口验证。两种 Mac 架构的 CI 验证原生启动、窗口截图，以及合成文字、隐私标记、编码图片和文件剪贴板传输；具体结果以对应提交的 CI 和附件为准。第三方软件间拖放仍需 Mac 人工验收；Windows 截图不作为 Mac 实机证据。
 - **签名状态**：本机构建是未经 Apple 公证的候选包，首次打开可能被 Gatekeeper 阻止；正式分发前仍需 Developer ID 签名和公证。Mac CI 仅做临时签名供测试。
 
 单独生成两个 Mac 候选包：

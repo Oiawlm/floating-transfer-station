@@ -129,6 +129,7 @@ public sealed partial class MainWindow
         Collapse();
         await Task.Delay(250);
         SaveWindowImage(Path.Combine(directory, "collapsed.png"));
+        if (OperatingSystem.IsMacOS()) await RunNativeClipboardSmokeAsync(directory);
         await File.WriteAllTextAsync(marker, JsonSerializer.Serialize(new
         {
             version = ProductIdentity.Version,

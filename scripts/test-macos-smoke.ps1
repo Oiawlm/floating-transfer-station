@@ -38,7 +38,17 @@ try {
     if ($process.ExitCode -ne 0) { throw "The macOS app exited with code $($process.ExitCode)." }
     $completion = Join-Path $EvidenceDirectory 'smoke-complete.json'
     if (-not (Test-Path -LiteralPath $completion -PathType Leaf)) { throw 'The app did not write smoke-complete.json.' }
-    Get-Content -Raw -LiteralPath $completion | ConvertFrom-Json | Out-Null
+    $smokeResult = Get-Content -Raw -LiteralPath $completion | ConvertFrom-Json
+    $nativeArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+    if ($smokeResult.architecture -ne $nativeArchitecture) { throw 'The app did not run with the native machine architecture.' }
+    $clipboardEvidence = Join-Path $EvidenceDirectory 'native-clipboard.json'
+    if (-not (Test-Path -LiteralPath $clipboardEvidence -PathType Leaf)) { throw 'Native clipboard smoke evidence is missing.' }
+    $clipboardResult = Get-Content -Raw -LiteralPath $clipboardEvidence | ConvertFrom-Json
+    if ($clipboardResult.passed -ne $true) { throw 'Native clipboard smoke did not pass.' }
+    if ($clipboardResult.architecture -ne $nativeArchitecture) { throw 'Native clipboard evidence has the wrong architecture.' }
+    foreach ($check in @('text', 'private-marker', 'encoded-image', 'file-transfer')) {
+        if ($check -notin $clipboardResult.checks) { throw "Native clipboard smoke did not cover $check." }
+    }
     foreach ($name in @('expanded.png', 'collapsed.png')) {
         $path = Join-Path $EvidenceDirectory $name
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "The app did not write $name." }
