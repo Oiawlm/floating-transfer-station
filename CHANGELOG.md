@@ -4,6 +4,8 @@
 
 ## 未发布
 
+- 将“文本1”改为按天 Markdown 复盘标签：支持今天优先、历史日期列表、700ms 自动保存、空白文件删除，以及来自 Obsidian 的外部修改刷新和三方冲突合并。首次启用会清空该标签已有卡片，其他分类保持不变；Windows 与 Mac 同步提供原生多行编辑器。
+
 ## 1.6.0
 
 - Windows 与 Mac 在同一 main 分支维护，并在同一个 1.6.0 Release 提供 Windows x64、Apple Silicon 和 Intel Mac 下载，首页按平台并列展示入口。

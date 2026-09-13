@@ -32,6 +32,7 @@ public partial class App : Application
                     .Where(path => !string.IsNullOrWhiteSpace(path)));
             board.Restore(snapshot);
             var settings = await store.LoadSettingsAsync();
+            settings = await new DailyReviewMigration(store).EnsureAsync(board, settings);
             MainWindow? window = null;
             void ShowStatus(string message) => window?.ShowStatus(message);
             var boardOperationGate = new BoardOperationGate();

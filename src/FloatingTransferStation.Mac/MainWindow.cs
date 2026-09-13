@@ -22,6 +22,7 @@ public sealed partial class MainWindow : Window
     private readonly BoardOperationGate _gate = new();
     private readonly TaskCompletionSource<bool> _initialized = new();
     private readonly LocalStore _store;
+    private readonly IDailyReviewStore _dailyReviews;
     private readonly BoardMutationService _mutations;
     private readonly TransferImportService _imports;
     private readonly AvaloniaTransferReader _reader = new();
@@ -56,6 +57,7 @@ public sealed partial class MainWindow : Window
         _smokeDirectory = smokeDirectory;
         _beforeLoad = beforeLoad;
         _store = new LocalStore(paths, writer ?? new AtomicTextWriter());
+        _dailyReviews = _store;
         _mutations = new BoardMutationService(_board, _store, ShowStatus, _gate);
         _imports = new TransferImportService(new MacImageNormalizer(paths.ImagesDirectory), _board, _store, ShowStatus, _gate);
         _monitor = new ClipboardMonitorService(() => Clipboard, () => _captureCategory, _reader, _imports, ShowStatus, pasteboardStateReader);
@@ -70,6 +72,7 @@ public sealed partial class MainWindow : Window
         SystemDecorations = SystemDecorations.None;
         Background = Brush.Parse("#F3F5F2");
         Content = BuildContent();
+        InitializeDailyReviewEditing();
         _shell.IsEnabled = false;
         Opened += OnOpened;
         Closing += OnClosing;
@@ -104,13 +107,15 @@ public sealed partial class MainWindow : Window
         _panel.Children.Add(header);
 
         var tools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Margin = new Thickness(0, 14, 0, 10) };
-        tools.Children.Add(MakeButton("粘贴", "手动收集剪贴板内容", async () => await CaptureAsync()));
+        var paste = MakeButton("粘贴", "手动收集剪贴板内容", async () => await CaptureAsync());
+        tools.Children.Add(paste);
+        _mutationButtons.Add(paste);
         AddMutationButton(tools, "置顶", "批量置顶 / 取消置顶", PinSelectionAsync);
         var move = MakeButton("移动", "将选中内容移至其他分类", () => Task.CompletedTask);
         move.Click += (_, _) =>
         {
             var menu = new ContextMenu();
-            foreach (var category in BoardCategoryCatalog.Ordered.Where(c => c != _active))
+            foreach (var category in BoardCategoryCatalog.Ordered.Where(c => c != _active && c != DailyReviewMigration.ReviewCategory))
             {
                 var item = new MenuItem { Header = _settings.CategoryName(category) };
                 item.Click += async (_, _) => await RunMutationAsync(async () =>
@@ -138,6 +143,7 @@ public sealed partial class MainWindow : Window
         _list.AddHandler(DragDrop.DropEvent, OnDrop);
         Grid.SetRow(_list, 2);
         _panel.Children.Add(_list);
+        BuildReviewSurface();
         var footer = new StackPanel
         {
             Spacing = 5,
@@ -152,10 +158,15 @@ public sealed partial class MainWindow : Window
         {
             var tab = new Button { Width = 50, MinHeight = 72, Padding = new Thickness(3), HorizontalContentAlignment = HorizontalAlignment.Center };
             tab.Content = new TextBlock { Text = _settings.CategoryName(category), TextWrapping = TextWrapping.Wrap, MaxWidth = 42, TextAlignment = TextAlignment.Center, FontSize = 13 };
-            tab.Click += (_, _) => { if (_rename.IsVisible) return; _captureCategory = category; Expand(category); };
+            tab.Click += (_, _) =>
+            {
+                if (_rename.IsVisible) return;
+                if (category != DailyReviewMigration.ReviewCategory) _captureCategory = category;
+                Expand(category);
+            };
             tab.DoubleTapped += (_, e) => { Expand(category); BeginRename(); e.Handled = true; };
             tab.PointerEntered += (_, _) => { _collapseTimer.Stop(); if (!_rename.IsVisible) Expand(category); };
-            DragDrop.SetAllowDrop(tab, true);
+            DragDrop.SetAllowDrop(tab, category != DailyReviewMigration.ReviewCategory);
             tab.AddHandler(DragDrop.DragOverEvent, (_, e) => { Expand(category); OnDragOver(tab, e); });
             tab.AddHandler(DragDrop.DropEvent, async (_, e) => await DropAsync(e, category, 0));
             _tabs.Add(category, tab);
@@ -241,6 +252,7 @@ public sealed partial class MainWindow : Window
         _title.Text = _settings.CategoryName(category);
         UpdateTabs();
         SyncSelection();
+        UpdateReviewSurface();
         DockToRight();
     }
 

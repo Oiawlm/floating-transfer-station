@@ -5,11 +5,12 @@
 ## 平台边界
 
 - `src/FloatingTransferStation.Core/`：共享数据模型、ViewModels、BoardService/BoardMutationService、LocalStore、原子写入、路径检查、图片输入限制与格式检查。
+- `LocalStore` 同时提供 `IDailyReviewStore`：按本地日期读写 `reviews/yyyy-MM-dd.md`，串行化原子保存，并通过目录监听向两端窗口报告外部变更。
 - `src/FloatingTransferStation/`：保留 WPF 窗口、Windows 剪贴板格式、注册表、安装器和系统集成；启动显式向共享 `AppPaths` 传入 Windows 数据目录设置。
 - `src/FloatingTransferStation.Mac/`：Avalonia 窗口和系统拖放；NSPasteboard 只桥接变化序号、类型和编码图片。读取前后核对代际并跳过隐私标记；图片归一化在后台执行，保存/回滚复用共享操作门。窗口加载完成前禁用内容操作，关闭等待加载和已登记的改名、导入及内容保存。
 - `tests/FloatingTransferStation.Core.Tests/`：链接 Windows 已有纯业务测试，在两个平台执行；额外覆盖 Unix 符号链接、大小写和数据恢复。`FloatingTransferStation.Mac.Tests` 覆盖 Mac 选择、传输与窗口生命周期。
 
-Mac 数据与 Windows 数据独立，不提供自动跨设备同步。`board.json` 与 `settings.json` 格式继续共享；“两端同步”指功能维护和版本构建同步。
+Mac 数据与 Windows 数据独立，不提供自动跨设备同步。`board.json`、`settings.json` 与 `reviews/*.md` 格式继续共享；“两端同步”指功能维护和版本构建同步。复盘文件是普通 Markdown，可由 Obsidian 直接打开。
 
 ## 主要责任
 
@@ -29,6 +30,7 @@ Mac 数据与 Windows 数据独立，不提供自动跨设备同步。`board.jso
 2. 图片先规范化为应用管理的本地副本；文字保留实际文本。
 3. `BoardService` 和相关变更服务按分类、置顶区和顺序规则生成新快照。
 4. `LocalStore` 使用临时文件和原子替换保存 `board.json`；失败时界面操作恢复到原状态。
+5. 复盘编辑器通过 `IDailyReviewStore` 读取日期文件；输入停止后自动保存，文件监听发现外部变更时按编辑器 dirty 状态刷新或进入冲突合并。
 5. 界面只在保存成功后保留变更，并通过通用 Windows 数据格式对外拖出。
 
 `LocalStore` 先进入各文件独立的保存门，再将 JSON 序列化和原子写入调度到后台，避免线程调度改变保存顺序，同时让界面继续响应。调用方传入 `BoardService.CreateSnapshot()` 生成的独立快照；窗口设置通过新对象替换。快照构建仍在状态所属线程完成。

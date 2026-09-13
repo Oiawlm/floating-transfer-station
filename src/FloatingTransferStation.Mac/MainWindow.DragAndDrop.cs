@@ -116,6 +116,15 @@ public sealed partial class MainWindow
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {
+        if (IsReviewCategoryEnabled() && (_active == DailyReviewMigration.ReviewCategory || sender is Button &&
+            _tabs.FirstOrDefault(pair => ReferenceEquals(pair.Value, sender)).Key == DailyReviewMigration.ReviewCategory)
+        )
+        {
+            e.DragEffects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
         var isOwnDrag = IsOwnDrag(e.DataTransfer);
         var targetIndex = sender is Button ? 0 : FindDropIndex(e);
         e.DragEffects = _closing || _busy || !_initialized.Task.IsCompletedSuccessfully || !_initialized.Task.Result ? DragDropEffects.None
@@ -145,6 +154,12 @@ public sealed partial class MainWindow
     private async Task DropAsync(DragEventArgs e, BoardCategory category, int index)
     {
         e.Handled = true;
+        if (IsReviewCategoryEnabled() && category == DailyReviewMigration.ReviewCategory)
+        {
+            e.DragEffects = DragDropEffects.None;
+            return;
+        }
+
         if (_busy || _closing || !_initialized.Task.IsCompletedSuccessfully || !_initialized.Task.Result) { e.DragEffects = DragDropEffects.None; return; }
         try
         {

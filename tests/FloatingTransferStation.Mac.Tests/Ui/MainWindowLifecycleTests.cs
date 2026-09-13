@@ -186,7 +186,10 @@ public sealed class MainWindowLifecycleTests
         }).ToArray();
         var store = NewStore(paths);
         await store.SaveBoardAsync(new BoardSnapshot { Items = items.ToList() });
-        await store.SaveSettingsAsync(WindowSettings.Default.WithCategoryName(BoardCategory.Inbox, "旧名"));
+        await store.SaveSettingsAsync(WindowSettings.Default.WithCategoryName(BoardCategory.Inbox, "旧名") with
+        {
+            ReviewMigrationVersion = DailyReviewMigration.CurrentVersion
+        });
         return items;
     }
 
