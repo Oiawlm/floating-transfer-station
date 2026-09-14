@@ -5,7 +5,7 @@ using FloatingTransferStation.Models;
 
 namespace FloatingTransferStation.Services;
 
-public sealed class LocalStore : IBoardStore
+public sealed partial class LocalStore : IBoardStore, IDailyReviewStore
 {
     private readonly AppPaths _paths;
     private readonly IAtomicTextWriter _writer;

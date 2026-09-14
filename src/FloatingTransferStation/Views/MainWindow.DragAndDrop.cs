@@ -280,6 +280,14 @@ public partial class MainWindow : Window
     {
         HideInsertionIndicator();
         ClearCategoryDropTargets();
+        if (IsReviewCategoryEnabled() && sender is Border { DataContext: CategoryViewModel reviewCategory } &&
+            reviewCategory.Category == DailyReviewMigration.ReviewCategory)
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
         if (sender is Border { DataContext: CategoryViewModel category } &&
             _dragPayload.GetInternalItemIds(e.Data) is { } itemIds &&
             _board.CanMoveManyToCategoryTop(itemIds, category.Category))
@@ -397,6 +405,13 @@ public partial class MainWindow : Window
         e.Effects = DragDropEffects.None;
         e.Handled = true;
         if (sender is not Border { DataContext: CategoryViewModel category })
+        {
+            ClearExternalDragPayload();
+            HideExternalDropRail();
+            return;
+        }
+
+        if (IsReviewCategoryEnabled() && category.Category == DailyReviewMigration.ReviewCategory)
         {
             ClearExternalDragPayload();
             HideExternalDropRail();

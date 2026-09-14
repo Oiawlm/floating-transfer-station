@@ -236,6 +236,75 @@
           </ListBox.ItemsPanel>
         </ListBox>
 
+        <Border x:Name="ReviewContentHost"
+                Grid.Row="1"
+                Padding="12,8,12,10"
+                Background="Transparent"
+                Visibility="Collapsed">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="0" Margin="0,0,0,8">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Button x:Name="ReviewPreviousButton"
+                      Grid.Column="0"
+                      Content="‹"
+                      Width="30"
+                      Height="28"
+                      ToolTip="上一天"
+                      Click="ReviewPreviousButton_Click" />
+              <Button x:Name="ReviewNextButton"
+                      Grid.Column="1"
+                      Content="›"
+                      Width="30"
+                      Height="28"
+                      Margin="4,0,0,0"
+                      ToolTip="下一天"
+                      Click="ReviewNextButton_Click" />
+              <ComboBox x:Name="ReviewDateComboBox"
+                        Grid.Column="2"
+                        Margin="8,0,0,0"
+                        MinWidth="128"
+                        HorizontalAlignment="Left"
+                        VerticalContentAlignment="Center"
+                        ItemStringFormat="{}{0:yyyy-MM-dd}"
+                        SelectionChanged="ReviewDateComboBox_SelectionChanged" />
+              <TextBlock x:Name="ReviewDateState"
+                         Grid.Column="3"
+                         Margin="8,0,0,0"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource SecondaryTextBrush}"
+                         Text="今天" />
+            </Grid>
+            <TextBox x:Name="ReviewEditor"
+                     Grid.Row="1"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Disabled"
+                     VerticalContentAlignment="Top"
+                     Padding="12"
+                     FontSize="14"
+                     BorderBrush="{StaticResource BorderBrush}"
+                     Background="White"
+                     TextChanged="ReviewEditor_TextChanged"
+                     AutomationProperties.Name="每日复盘编辑器" />
+            <TextBlock x:Name="ReviewStatus"
+                       Grid.Row="2"
+                       Margin="2,8,2,0"
+                       Foreground="{StaticResource SecondaryTextBrush}"
+                       Text="今天还没有复盘内容。" />
+          </Grid>
+        </Border>
+
         <Canvas Grid.Row="1"
                 Background="Transparent"
                 IsHitTestVisible="False">

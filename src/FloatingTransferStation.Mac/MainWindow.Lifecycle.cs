@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Globalization;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
@@ -7,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using FloatingTransferStation.Mac.Services;
 using FloatingTransferStation.Models;
+using FloatingTransferStation.Services;
 
 namespace FloatingTransferStation.Mac;
 
@@ -19,6 +21,7 @@ public sealed partial class MainWindow
             if (_beforeLoad is not null) await _beforeLoad;
             _settings = await _store.LoadSettingsAsync();
             _board.Restore(await _store.LoadBoardAsync());
+            _settings = await new DailyReviewMigration(_store).EnsureAsync(_board, _settings);
             foreach (var category in BoardCategoryCatalog.Ordered)
                 _board.Items(category).CollectionChanged += (_, _) =>
                     _count.Text = $"{_board.Items(_active).Count} 项内容";
@@ -66,6 +69,12 @@ public sealed partial class MainWindow
                 return;
             }
             await _monitor.StopAsync();
+            _reviewSaveTimer.Stop();
+            if (!await FlushReviewAsync())
+            {
+                throw new IOException("复盘内容未能保存。");
+            }
+            _dailyReviews.StopWatching();
             RememberTop();
             await _mutations.SaveForShutdownAsync(() => _store.SaveSettingsAsync(_settings));
             _canClose = true;
@@ -105,6 +114,19 @@ public sealed partial class MainWindow
         if (_board.Items(_active).Count(i => i.IsPinned) != 2) throw new InvalidOperationException("Pin command did not persist two selected items.");
         _selection.Clear();
         SyncSelection();
+        var reviewDate = DateOnly.FromDateTime(DateTime.Now);
+        Expand(DailyReviewMigration.ReviewCategory);
+        if (_reviewLoadTask is { } initialReviewLoad)
+            await initialReviewLoad;
+        else
+            await LoadReviewDateAsync(reviewDate);
+        _reviewEditor.Text = "smoke daily review";
+        await FlushReviewAsync();
+        var persistedReview = await _dailyReviews.LoadAsync(reviewDate);
+        if (persistedReview.Content != "smoke daily review")
+            throw new InvalidOperationException($"Daily review persistence did not round-trip: '{persistedReview.Content}' (exists={persistedReview.Exists}, pathExists={File.Exists(Path.Combine(_dailyReviews.ReviewsDirectory, reviewDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + ".md"))}, dir={_dailyReviews.ReviewsDirectory}).");
+        SaveWindowImage(Path.Combine(directory, "daily-review-expanded.png"));
+        Expand(BoardCategory.Inbox);
         _rename.Text = "灵感";
         await CommitRenameAsync();
         var command = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
@@ -135,7 +157,7 @@ public sealed partial class MainWindow
             version = ProductIdentity.Version,
             platform = RuntimeInformation.OSDescription,
             architecture = RuntimeInformation.ProcessArchitecture.ToString(),
-            checks = new[] { "text-import", "image-import", "range-selection", "batch-pin", "rename", "keyboard", "text-and-file-drag-payload", "persistence", "expanded-window", "collapsed-window" }
+            checks = new[] { "text-import", "image-import", "range-selection", "batch-pin", "daily-review", "rename", "keyboard", "text-and-file-drag-payload", "persistence", "expanded-window", "collapsed-window" }
         }));
         await CloseSafelyAsync();
     }

@@ -128,7 +128,10 @@ public partial class MainWindow : Window
         try
         {
             operationCancellation.Cancel();
+            _reviewSaveTimer.Stop();
+            TrackPendingOperation(FlushReviewAsync());
             await DrainPendingOperationsAsync();
+            _dailyReviews?.StopWatching();
             await _mutations.SaveForShutdownAsync(() => _store.SaveSettingsAsync(_settings));
             operationCancellation.Dispose();
             _allowClose = true;

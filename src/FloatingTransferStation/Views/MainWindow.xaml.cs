@@ -91,7 +91,8 @@ public partial class MainWindow : Window
         DragPayloadService dragPayload,
         ExternalDropPayloadReader externalDropPayloadReader,
         ExternalDropImportService externalDropImportService,
-        DefaultCaptureCategoryState? defaultCaptureCategory = null)
+        DefaultCaptureCategoryState? defaultCaptureCategory = null,
+        IDailyReviewStore? dailyReviewStore = null)
     {
         InitializeComponent();
         SetResourceReference(
@@ -104,6 +105,7 @@ public partial class MainWindow : Window
         _dragPayload = dragPayload;
         _externalDropPayloadReader = externalDropPayloadReader;
         _externalDropImportService = externalDropImportService;
+        _dailyReviews = dailyReviewStore ?? store as IDailyReviewStore;
         var work = CurrentWorkArea();
         _settings = settings.Normalize(work.Width, work.Height);
         _viewModel = new MainWindowViewModel(board, _settings, defaultCaptureCategory);
@@ -114,6 +116,7 @@ public partial class MainWindow : Window
         _collapseTimer.Tick += CollapseTimer_Tick;
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _statusTimer.Tick += StatusTimer_Tick;
+        InitializeDailyReviewEditing();
         InitializeCategoryNameEditing();
         SourceInitialized += MainWindow_SourceInitialized;
 
@@ -122,7 +125,11 @@ public partial class MainWindow : Window
             _settings,
             _viewModel.DefaultCapturePanel.Category));
         Closing += MainWindow_Closing;
-        Closed += (_, _) => Application.Current?.Shutdown();
+        Closed += (_, _) =>
+        {
+            _dailyReviews?.Dispose();
+            Application.Current?.Shutdown();
+        };
     }
 
     public void ShowStatus(string message)

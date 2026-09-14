@@ -127,7 +127,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        _viewModel.SetDefaultCaptureCategory(category.Category);
+        if (!IsReviewCategoryEnabled() || category.Category != DailyReviewMigration.ReviewCategory)
+        {
+            _viewModel.SetDefaultCaptureCategory(category.Category);
+        }
         e.Handled = true;
     }
 

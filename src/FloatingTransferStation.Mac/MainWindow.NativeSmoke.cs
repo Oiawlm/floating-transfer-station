@@ -30,7 +30,7 @@ public sealed partial class MainWindow
         long? ownedChangeCount = null;
         var clearedSyntheticClipboard = false;
         IStorageFile? sourceFile = null;
-        _captureCategory = BoardCategory.Reference;
+        _captureCategory = BoardCategory.Inbox;
 
         try
         {

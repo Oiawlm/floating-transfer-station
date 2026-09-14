@@ -4,7 +4,8 @@ public sealed record AppPaths(
     string DataDirectory,
     string BoardFile,
     string SettingsFile,
-    string ImagesDirectory)
+    string ImagesDirectory,
+    string ReviewsDirectory)
 {
     public static AppPaths CreateDefault(IDataDirectorySettings? settings = null)
     {
@@ -26,5 +27,6 @@ public sealed record AppPaths(
         dataDirectory,
         Path.Combine(dataDirectory, "board.json"),
         Path.Combine(dataDirectory, "settings.json"),
-        Path.Combine(dataDirectory, "images"));
+        Path.Combine(dataDirectory, "images"),
+        Path.Combine(dataDirectory, "reviews"));
 }

@@ -4,7 +4,8 @@ public sealed record WindowSettings(
     double PanelWidth,
     double WindowHeight,
     double Top,
-    Dictionary<BoardCategory, string>? CategoryNames = null)
+    Dictionary<BoardCategory, string>? CategoryNames = null,
+    int ReviewMigrationVersion = 0)
 {
     public const double TabWidth = 58;
     public const double MinPanelWidth = 280;
@@ -49,7 +50,11 @@ public sealed record WindowSettings(
     }
 
     public WindowSettings ResetToDefault(double workAreaWidth, double workAreaHeight) =>
-        (Default with { CategoryNames = CategoryNames is null ? null : new(CategoryNames) })
+        (Default with
+        {
+            CategoryNames = CategoryNames is null ? null : new(CategoryNames),
+            ReviewMigrationVersion = ReviewMigrationVersion
+        })
             .Normalize(workAreaWidth, workAreaHeight);
 
     public WindowSettings Normalize(double workAreaWidth, double workAreaHeight)

@@ -40,12 +40,18 @@ public partial class MainWindow : Window
 
     private void ActivatePanel(BoardCategory category)
     {
+        if (IsReviewActive() && category != DailyReviewMigration.ReviewCategory)
+        {
+            TrackPendingOperation(FlushReviewAsync());
+        }
+
         if (_viewModel.ActivePanel?.Category != category)
         {
             ClearUserSelection();
         }
 
         _viewModel.Activate(category);
+        UpdateReviewSurface();
     }
 
     private void RecordUserSelection()
