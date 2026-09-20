@@ -11,6 +11,15 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        DispatcherUnhandledException += (_, args) =>
+        {
+            MessageBox.Show(
+                $"发生未处理的错误：{args.Exception.Message}",
+                ProductIdentity.DisplayName,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            args.Handled = true;
+        };
         try
         {
             _lifecycle = new AppLifecycleService();

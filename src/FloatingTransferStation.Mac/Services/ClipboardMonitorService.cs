@@ -147,9 +147,15 @@ public sealed class ClipboardMonitorService
 
             return await _importer.ImportAsync(payload, target);
         }
-        catch
+        catch (Exception) when (!automatic)
         {
             _showStatus("剪贴板读取失败或内容超出容量限制，请稍后重新复制。");
+            return false;
+        }
+        catch (Exception)
+        {
+            // Polling races with the pasteboard generation by design; transient
+            // read failures are retried on the next tick without bothering the user.
             return false;
         }
     }

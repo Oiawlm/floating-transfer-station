@@ -65,7 +65,14 @@ public sealed partial class MainWindow
         _reviewSaveTimer.Tick += async (_, _) =>
         {
             _reviewSaveTimer.Stop();
-            await SaveReviewAsync();
+            try
+            {
+                await SaveReviewAsync();
+            }
+            catch (Exception)
+            {
+                _reviewStatus.Text = "复盘自动保存失败。";
+            }
         };
         _reviewEditor.TextChanged += (_, _) =>
         {
@@ -134,7 +141,7 @@ public sealed partial class MainWindow
             await RefreshReviewDatesAsync();
             UpdateReviewDateControls();
         }
-        catch (IOException exception)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             _reviewLoading = false;
             _reviewStatus.Text = "复盘读取失败：" + exception.Message;
@@ -149,7 +156,10 @@ public sealed partial class MainWindow
         await _reviewSaveGate.WaitAsync();
         try
         {
-            if (!_reviewDirty || !IsReviewActive()) return true;
+            if (!_reviewDirty)
+            {
+                return true;
+            }
             var date = _reviewDate;
             var content = _reviewEditor.Text ?? string.Empty;
             _reviewStatus.Text = "正在保存…";
@@ -229,45 +239,53 @@ public sealed partial class MainWindow
 
     private async Task HandleDailyReviewChangeAsync(DailyReviewFileChangedEventArgs change)
     {
-        await RefreshReviewDatesAsync();
-        if (!IsReviewActive() || (change.Date is { } date && date != _reviewDate)) return;
-        var remote = await _dailyReviews.LoadAsync(_reviewDate);
-        if (!_reviewDirty)
+        try
         {
-            _reviewLoading = true;
-            _reviewEditor.Text = remote.Content;
-            _reviewLoading = false;
-            _reviewBaseContent = remote.Content;
-            _reviewBaseHash = remote.ContentHash;
-            _reviewStatus.Text = remote.Exists ? "已从文件刷新" : "文件已删除。";
-            return;
-        }
+            await RefreshReviewDatesAsync();
+            if (!IsReviewActive() || (change.Date is { } date && date != _reviewDate)) return;
+            var remote = await _dailyReviews.LoadAsync(_reviewDate);
+            if (!_reviewDirty)
+            {
+                _reviewLoading = true;
+                _reviewEditor.Text = remote.Content;
+                _reviewLoading = false;
+                _reviewBaseContent = remote.Content;
+                _reviewBaseHash = remote.ContentHash;
+                _reviewStatus.Text = remote.Exists ? "已从文件刷新" : "文件已删除。";
+                return;
+            }
 
-        var choice = await ShowReviewConflictAsync();
-        if (choice == "load")
-        {
-            _reviewLoading = true;
-            _reviewEditor.Text = remote.Content;
-            _reviewLoading = false;
-            _reviewBaseContent = remote.Content;
-            _reviewBaseHash = remote.ContentHash;
-            _reviewDirty = false;
-            _reviewStatus.Text = "已载入文件版本";
+            var choice = await ShowReviewConflictAsync();
+            if (choice == "load")
+            {
+                _reviewLoading = true;
+                _reviewEditor.Text = remote.Content;
+                _reviewLoading = false;
+                _reviewBaseContent = remote.Content;
+                _reviewBaseHash = remote.ContentHash;
+                _reviewDirty = false;
+                _reviewStatus.Text = "已载入文件版本";
+            }
+            else if (choice == "merge")
+            {
+                var merged = DailyReviewMerge.Merge(_reviewBaseContent, _reviewEditor.Text ?? string.Empty, remote.Content);
+                _reviewLoading = true;
+                _reviewEditor.Text = merged.Content;
+                _reviewLoading = false;
+                _reviewBaseContent = remote.Content;
+                _reviewBaseHash = remote.ContentHash;
+                _reviewDirty = merged.Content != remote.Content || merged.HasConflicts;
+                _reviewStatus.Text = merged.HasConflicts ? "已合并，请整理冲突后保存" : "已合并，等待保存";
+            }
+            else
+            {
+                // Closing the dialog without a choice keeps the local content pending save.
+                _reviewStatus.Text = "保留本地内容，等待保存";
+            }
         }
-        else if (choice == "merge")
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            var merged = DailyReviewMerge.Merge(_reviewBaseContent, _reviewEditor.Text ?? string.Empty, remote.Content);
-            _reviewLoading = true;
-            _reviewEditor.Text = merged.Content;
-            _reviewLoading = false;
-            _reviewBaseContent = remote.Content;
-            _reviewBaseHash = remote.ContentHash;
-            _reviewDirty = merged.Content != remote.Content || merged.HasConflicts;
-            _reviewStatus.Text = merged.HasConflicts ? "已合并，请整理冲突后保存" : "已合并，等待保存";
-        }
-        else if (choice == "keep")
-        {
-            _reviewStatus.Text = "保留本地内容，等待保存";
+            _reviewStatus.Text = "复盘刷新失败：" + exception.Message;
         }
     }
 
@@ -299,6 +317,7 @@ public sealed partial class MainWindow
         }
         };
         dialog.Content = content;
+        dialog.Closing += (_, _) => result.TrySetResult(null);
         _ = dialog.ShowDialog(this);
         return await result.Task;
     }

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -97,6 +98,10 @@ public partial class MainWindow : Window
         catch (FileNotFoundException)
         {
             ShowStatus("图片副本已缺失，无法拖出。");
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or KeyNotFoundException or COMException)
+        {
+            ShowStatus("无法拖出这些内容：" + exception.Message);
         }
         finally
         {

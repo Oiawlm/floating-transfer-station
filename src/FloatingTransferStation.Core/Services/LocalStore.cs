@@ -40,6 +40,9 @@ public sealed partial class LocalStore : IBoardStore, IDailyReviewStore
             cancellationToken);
         if (snapshot.SchemaVersion != BoardSnapshot.CurrentSchemaVersion)
         {
+            // An unknown schema (e.g. after downgrading the app) must not be
+            // silently overwritten by the next save; keep a recoverable copy.
+            PreserveCorruptFile(_paths.BoardFile);
             return new BoardSnapshot();
         }
 

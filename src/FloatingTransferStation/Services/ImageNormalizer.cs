@@ -28,7 +28,16 @@ public sealed class ImageNormalizer : IImageNormalizer
         CancellationToken cancellationToken = default) =>
         NormalizeFileCoreAsync(sourcePath, id, rejectMultipleFrames: true, cancellationToken);
 
-    private async Task<StoredImage> NormalizeFileCoreAsync(
+    private Task<StoredImage> NormalizeFileCoreAsync(
+        string sourcePath,
+        Guid? id,
+        bool rejectMultipleFrames,
+        CancellationToken cancellationToken) =>
+        Task.Run(
+            () => NormalizeFileCoreInBackgroundAsync(sourcePath, id, rejectMultipleFrames, cancellationToken),
+            cancellationToken);
+
+    private async Task<StoredImage> NormalizeFileCoreInBackgroundAsync(
         string sourcePath,
         Guid? id,
         bool rejectMultipleFrames,
