@@ -147,7 +147,7 @@ public sealed class ClipboardMonitorService
 
             return await _importer.ImportAsync(payload, target);
         }
-        catch (Exception exception) when (!automatic)
+        catch (Exception) when (!automatic)
         {
             _showStatus("剪贴板读取失败或内容超出容量限制，请稍后重新复制。");
             return false;

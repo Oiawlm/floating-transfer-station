@@ -154,6 +154,46 @@ public sealed class MainWindowLifecycleTests
         }, CancellationToken.None);
     }
 
+    [TestMethod]
+    public async Task SwitchingAwayFromReviewWithinDebounce_PersistsAndRestoresPendingInput()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessTestApplication));
+        await session.Dispatch(async () =>
+        {
+            using var directory = new UiTestDirectory();
+            await SeedAsync(directory.Paths);
+            var window = CreateWindow(directory.Paths, new ControlledAtomicTextWriter());
+            var closed = ObserveClose(window);
+            try
+            {
+                window.Show();
+                await WaitForInitializationAsync(window);
+                InvokeVoid(window, "Expand", DailyReviewMigration.ReviewCategory);
+                var firstLoad = Field<Task>(window, "_reviewLoadTask");
+                Assert.IsNotNull(firstLoad);
+                await firstLoad;
+
+                var editor = Field<TextBox>(window, "_reviewEditor");
+                editor.Text = "切换前输入";
+
+                InvokeVoid(window, "Expand", BoardCategory.Inbox);
+                await WaitForReviewFileAsync(directory.Paths, "切换前输入");
+
+                InvokeVoid(window, "Expand", DailyReviewMigration.ReviewCategory);
+                var reload = Field<Task>(window, "_reviewLoadTask");
+                Assert.IsNotNull(reload);
+                await reload;
+
+                Assert.AreEqual("切换前输入", editor.Text);
+                return true;
+            }
+            finally
+            {
+                await CloseWindowAsync(window, closed.Task);
+            }
+        }, CancellationToken.None);
+    }
+
     private static MainWindow CreateWindow(AppPaths paths, IAtomicTextWriter writer, Task? beforeLoad = null) =>
         new(paths, writer: writer, beforeLoad: beforeLoad, pasteboardStateReader: new EmptyPasteboardStateReader());
 
@@ -200,6 +240,28 @@ public sealed class MainWindowLifecycleTests
 
     private static Task InvokeTask(MainWindow window, string name, params object[] arguments) =>
         (Task)typeof(MainWindow).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, arguments)!;
+
+    private static void InvokeVoid(MainWindow window, string name, params object[] arguments) =>
+        typeof(MainWindow).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, arguments);
+
+    private static async Task WaitForReviewFileAsync(AppPaths paths, string expected)
+    {
+        var path = Path.Combine(
+            paths.ReviewsDirectory,
+            $"{DateOnly.FromDateTime(DateTime.Now):yyyy-MM-dd}.md");
+        var deadline = DateTime.UtcNow + Timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (File.Exists(path) && await File.ReadAllTextAsync(path) == expected)
+            {
+                return;
+            }
+
+            await Task.Delay(50);
+        }
+
+        Assert.Fail($"复盘文件未在超时内写入期望内容：{path}");
+    }
 
     private static void SelectItem(MainWindow window, BoardItem item) =>
         typeof(MainWindow).GetMethod("SelectItem", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, [item, false, false]);
