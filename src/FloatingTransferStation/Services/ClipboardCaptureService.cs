@@ -110,6 +110,13 @@ public sealed class ClipboardCaptureService
 
     private bool TryAcceptSequence(uint sequenceNumber)
     {
+        if (sequenceNumber == 0)
+        {
+            // GetClipboardSequenceNumber() reports failure as 0; such snapshots
+            // carry no comparable identity and must never suppress later captures.
+            return true;
+        }
+
         lock (_queueLock)
         {
             if (_lastSequence == sequenceNumber)

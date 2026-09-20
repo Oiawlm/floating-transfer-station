@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Threading;
 using Avalonia.Themes.Fluent;
 using FloatingTransferStation.Services;
 
@@ -20,6 +21,12 @@ public sealed class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            Dispatcher.UIThread.UnhandledException += (_, args) =>
+            {
+                // Keep the last-resort UI-thread failure from taking the app down;
+                // known failure paths report through the status line instead.
+                args.Handled = true;
+            };
             var args = desktop.Args ?? [];
             var smokeIndex = Array.IndexOf(args, "--smoke-test");
             var smokeDirectory = smokeIndex >= 0 && smokeIndex + 1 < args.Length
@@ -40,7 +47,7 @@ public sealed class App : Application
                 desktop.MainWindow = new MainWindow(AppPaths.FromDataDirectory(dataDirectory), smokeDirectory);
                 desktop.Exit += (_, _) => _instanceLock?.Dispose();
             }
-            catch (IOException)
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 desktop.Shutdown(1);
             }

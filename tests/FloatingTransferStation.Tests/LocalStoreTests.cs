@@ -253,6 +253,28 @@ public sealed class LocalStoreTests
 
     [TestMethod]
     [TestCategory("Adversarial")]
+    public async Task LoadBoard_UnknownSchemaVersionPreservesOriginalBeforeStartingEmpty()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        await store.SaveBoardAsync(SnapshotWithText("未来版本数据"));
+        var boardJson = await File.ReadAllTextAsync(paths.BoardFile);
+        await File.WriteAllTextAsync(
+            paths.BoardFile,
+            boardJson.Replace("\"schemaVersion\": 1", "\"schemaVersion\": 2", StringComparison.Ordinal));
+
+        var loaded = await new LocalStore(paths, new AtomicTextWriter()).LoadBoardAsync();
+
+        Assert.HasCount(0, loaded.Items);
+        var preserved = Directory.GetFiles(paths.DataDirectory, "board.json.corrupt-*.bak");
+        Assert.AreEqual(1, preserved.Length);
+        Assert.IsTrue(
+            (await File.ReadAllTextAsync(preserved[0])).Contains("未来版本数据", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
     public async Task LoadBoard_MissingPrimaryFallsBackToLastBackup()
     {
         using var directory = new TestDirectory();

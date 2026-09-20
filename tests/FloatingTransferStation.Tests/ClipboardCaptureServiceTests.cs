@@ -103,6 +103,28 @@ public sealed partial class ClipboardCaptureServiceTests
         Assert.IsTrue(board.Items(BoardCategory.Inbox).Count == 0);
     }
 
+    [TestMethod]
+    public async Task HandleUpdate_SequenceZeroSnapshotsWithoutHintAreAllCollected()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var service = new ClipboardCaptureService(
+            new QueueClipboardReader(
+                new ClipboardSnapshot(0, null, [], "first content"),
+                new ClipboardSnapshot(0, null, [], "second content")),
+            new FakeImageNormalizer(directory.Root),
+            board,
+            new FakeBoardStore(directory.Root),
+            _ => { });
+
+        await service.HandleClipboardUpdateAsync();
+        await service.HandleClipboardUpdateAsync();
+
+        CollectionAssert.AreEqual(
+            new[] { "second content", "first content" },
+            board.Items(BoardCategory.Inbox).Select(item => item.Text).ToArray());
+    }
+
     [STATestMethod]
     public async Task HandleUpdate_ClipboardImageEntersSelectedCategory()
     {

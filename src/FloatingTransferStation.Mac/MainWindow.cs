@@ -243,6 +243,13 @@ public sealed partial class MainWindow : Window
     {
         if (_closing) return;
         if (_active != category) _selection.Clear();
+        if (IsReviewActive() && category != DailyReviewMigration.ReviewCategory)
+        {
+            // Leaving the review tab must flush pending input before the switch
+            // marks the editor reloadable; the save gate serializes concurrent saves.
+            _ = FlushReviewAsync();
+        }
+
         _active = category;
         _expanded = true;
         _panel.IsVisible = true;
