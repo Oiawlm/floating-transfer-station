@@ -84,6 +84,7 @@ public partial class MainWindow : Window
             window.CancelPanelCollapseExit();
             window.StopPanelContentAnimation();
             window.StopCategoryRevealAnimations();
+            window.StopCardEntranceAnimations();
         }
     }
 

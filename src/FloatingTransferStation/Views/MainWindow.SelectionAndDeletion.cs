@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -51,6 +52,11 @@ public partial class MainWindow : Window
         }
 
         _viewModel.Activate(category);
+        if (_viewModel.ActivePanel is { } activePanel)
+        {
+            AttachCardEntrance(activePanel.Items);
+        }
+
         UpdateReviewSurface();
     }
 
@@ -313,6 +319,7 @@ public partial class MainWindow : Window
         _isDeletePending = true;
         var selectionVersion = _selectionChangeVersion;
         DeleteContentButton.IsEnabled = false;
+        BeginDeletedCardFade(selectedBefore, targetCategory, clearWhenNoSelection);
         try
         {
             var success = selectedBefore.Length == 0
@@ -337,8 +344,63 @@ public partial class MainWindow : Window
                 {
                     _isDeletePending = false;
                     DeleteContentButton.ClearValue(IsEnabledProperty);
+                    RestoreDeletedCardFade();
                 },
                 DispatcherPriority.Send);
+        }
+    }
+
+    private void BeginDeletedCardFade(
+        Guid[] selectedBefore,
+        BoardCategory targetCategory,
+        bool clearWhenNoSelection)
+    {
+        // 反馈淡出与数据管线并行执行，不延迟任何数据操作；
+        // 保存失败回滚或容器被虚拟化复用后由 RestoreDeletedCardFade 复位。
+        if (!ClientAreaAnimationsEnabled ||
+            _viewModel.ActivePanel?.Category != targetCategory)
+        {
+            return;
+        }
+
+        HashSet<Guid>? ids = selectedBefore.Length > 0
+            ? [.. selectedBefore]
+            : clearWhenNoSelection
+                ? null
+                : [];
+        var fade = new DoubleAnimation(1d, 0d, TimeSpan.FromMilliseconds(DesignTokens.DeleteFeedbackMs))
+        {
+            EasingFunction = FadeAnimation.ExitEasing,
+            FillBehavior = FillBehavior.Stop,
+        };
+
+        for (var index = 0; index < BoardList.Items.Count; index++)
+        {
+            if (BoardList.ItemContainerGenerator.ContainerFromIndex(index)
+                is not ListBoxItem container ||
+                container.DataContext is not BoardItem item ||
+                ids is not null && !ids.Contains(item.Id))
+            {
+                continue;
+            }
+
+            container.BeginAnimation(UIElement.OpacityProperty, null);
+            container.SetValue(UIElement.OpacityProperty, 0d);
+            container.BeginAnimation(UIElement.OpacityProperty, fade);
+        }
+    }
+
+    private void RestoreDeletedCardFade()
+    {
+        for (var index = 0; index < BoardList.Items.Count; index++)
+        {
+            if (BoardList.ItemContainerGenerator.ContainerFromIndex(index) is not ListBoxItem container)
+            {
+                continue;
+            }
+
+            container.BeginAnimation(UIElement.OpacityProperty, null);
+            container.SetValue(UIElement.OpacityProperty, 1d);
         }
     }
 

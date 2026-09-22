@@ -220,6 +220,7 @@ public partial class MainWindow : Window
         ClearExternalDragPayload();
         CancelPanelCollapseExit();
         StopPanelContentAnimation();
+        StopCardEntranceAnimations();
         StopCategoryRevealAnimations();
         _expandIntentTimer.Stop();
         _collapseTimer.Stop();
@@ -648,12 +649,12 @@ public partial class MainWindow : Window
     {
         Canvas.SetTop(InsertionIndicator, ClampIndicatorY(y));
         InsertionIndicator.Visibility = Visibility.Visible;
-        InsertionIndicator.Opacity = 1d;
+        FadeAnimation.SetIsActive(InsertionIndicator, true);
     }
 
     private void HideInsertionIndicator()
     {
-        InsertionIndicator.Opacity = 0d;
+        FadeAnimation.SetIsActive(InsertionIndicator, false);
         InsertionIndicator.Visibility = Visibility.Collapsed;
     }
 

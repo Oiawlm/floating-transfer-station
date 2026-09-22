@@ -157,11 +157,11 @@
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="Opacity" Value="0" />
     <Setter Property="IsHitTestVisible" Value="False" />
-    <Style.Triggers>
-      <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
-        <Setter Property="Opacity" Value="1" />
-      </DataTrigger>
-    </Style.Triggers>
+    <Setter Property="views:FadeAnimation.IsActive" Value="{Binding IsDropTarget}" />
+    <Setter Property="views:FadeAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
+    <Setter Property="views:FadeAnimation.DurationMs"
+            Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
   </Style>
 
   <Style x:Key="CategoryActiveMarkerStyle" TargetType="Border">

@@ -205,4 +205,244 @@ public sealed partial class MainWindowInteractionTests
             CloseWindow(window);
         }
     }
+
+    [STATestMethod]
+    public void NewItems_PlayStaggeredEntranceAnimations()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var existing = board.AddText("existing card");
+        var window = CreateWindow(directory, board);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+
+            var first = board.AddText("新条目一");
+            var second = board.AddText("新条目二");
+            CompleteLayout(window);
+
+            var existingContainer = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(existing);
+            var firstContainer = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(first);
+            var secondContainer = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(second);
+            Assert.IsNotNull(existingContainer);
+            Assert.IsNotNull(firstContainer);
+            Assert.IsNotNull(secondContainer);
+            Assert.IsFalse(existingContainer.HasAnimatedProperties);
+            Assert.IsTrue(firstContainer.HasAnimatedProperties);
+            Assert.IsTrue(secondContainer.HasAnimatedProperties);
+            Assert.AreEqual(
+                1d,
+                firstContainer.GetAnimationBaseValue(UIElement.OpacityProperty));
+            Assert.AreEqual(
+                1d,
+                secondContainer.GetAnimationBaseValue(UIElement.OpacityProperty));
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "card-entrance-stagger.png",
+                "FTS_MOTION_TRANSITIONS_EVIDENCE_DIR");
+
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(500));
+            Assert.AreEqual(1d, firstContainer.Opacity, 0.001);
+            Assert.AreEqual(1d, secondContainer.Opacity, 0.001);
+            Assert.AreEqual(0d, ((TranslateTransform)firstContainer.RenderTransform!).Y, 0.001);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void NewItems_AppearImmediatelyWhenSystemAnimationsAreDisabled()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var window = CreateWindow(directory, board);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+
+            var added = board.AddText("新条目");
+            CompleteLayout(window);
+
+            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(added);
+            Assert.IsNotNull(container);
+            Assert.IsFalse(container.HasAnimatedProperties);
+            Assert.AreEqual(1d, container.Opacity);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void PinnedMove_ReplaysCardEntranceAnimation()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var plain = board.AddText("plain card");
+        board.AddText("another card");
+        var window = CreateWindow(directory, board);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var containerBefore =
+                (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(plain);
+
+            board.SetPinnedMany([plain.Id], true);
+            CompleteLayout(window);
+
+            var container =
+                (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(plain);
+            Assert.IsNotNull(container);
+            Assert.IsTrue(container.HasAnimatedProperties);
+            if (ReferenceEquals(container, containerBefore))
+            {
+                Assert.AreEqual(
+                    1d,
+                    container.GetAnimationBaseValue(UIElement.OpacityProperty));
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void DeleteCardFade_PlaysAlongsideThePipelineAndCompletes()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("delete me");
+        var store = new RecordingBoardStore(directory.Root) { SaveDelay = TimeSpan.FromMilliseconds(400) };
+        var window = CreateWindow(board, store, WindowSettings.Default);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(item);
+            Assert.IsNotNull(container);
+            var method = typeof(MainWindow).GetMethod(
+                "DeleteContentAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(method);
+
+            var task = (Task)method.Invoke(window, [new[] { item.Id }, BoardCategory.Inbox, false])!;
+            Assert.IsTrue(container.HasAnimatedProperties);
+            Assert.AreEqual(
+                0d,
+                container.GetAnimationBaseValue(UIElement.OpacityProperty));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(180));
+            Assert.AreEqual(0d, container.Opacity, 0.001);
+
+            PumpDispatcherUntil(window.Dispatcher, task);
+            Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
+            Assert.AreEqual(1, store.SaveCount);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void DeleteCardFade_IsSkippedWhenSystemAnimationsAreDisabled()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("delete me");
+        var store = new RecordingBoardStore(directory.Root) { SaveDelay = TimeSpan.FromMilliseconds(400) };
+        var window = CreateWindow(board, store, WindowSettings.Default);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(item);
+            Assert.IsNotNull(container);
+            var method = typeof(MainWindow).GetMethod(
+                "DeleteContentAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(method);
+
+            var task = (Task)method.Invoke(window, [new[] { item.Id }, BoardCategory.Inbox, false])!;
+            Assert.IsFalse(container.HasAnimatedProperties);
+            Assert.AreEqual(1d, container.Opacity);
+
+            PumpDispatcherUntil(window.Dispatcher, task);
+            Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void DeleteCardFade_RestoresCardsWhenSaveFailsAndRollsBack()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("delete me");
+        var store = new RecordingBoardStore(directory.Root)
+        {
+            SaveFailure = new IOException("Injected failure."),
+        };
+        var window = CreateWindow(board, store, WindowSettings.Default);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(item);
+            Assert.IsNotNull(container);
+            var method = typeof(MainWindow).GetMethod(
+                "DeleteContentAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(method);
+
+            var task = (Task)method.Invoke(window, [new[] { item.Id }, BoardCategory.Inbox, false])!;
+            PumpDispatcherUntil(window.Dispatcher, task);
+            CompleteLayout(window);
+
+            Assert.AreEqual(1, board.Items(BoardCategory.Inbox).Count);
+            var restored = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(item);
+            Assert.IsNotNull(restored);
+            // 回滚重插入的卡片播放入场动画；结束后必须回到完全不透明。
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(500));
+            Assert.AreEqual(1d, restored.Opacity, 0.001);
+        }
+        finally
+        {
+            store.SaveFailure = null;
+            CloseWindow(window);
+        }
+    }
 }

@@ -759,6 +759,7 @@ public sealed partial class MainWindowInteractionTests
     {
         public Exception? SaveFailure { get; set; }
         public Exception? SettingsSaveFailure { get; set; }
+        public TimeSpan? SaveDelay { get; set; }
         public TaskCompletionSource ImageDeleted { get; } = new(
             TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource SaveCompleted { get; } = new(
@@ -775,6 +776,27 @@ public sealed partial class MainWindowInteractionTests
             BoardSnapshot snapshot,
             CancellationToken cancellationToken = default)
         {
+            if (SaveDelay is { } delay)
+            {
+                return SaveAfterDelayAsync(snapshot, delay, cancellationToken);
+            }
+
+            SaveCore(snapshot);
+            return Task.CompletedTask;
+        }
+
+        // 仅在显式要求慢保存时走异步路径；失败抛出保持历史同步语义。
+        private async Task SaveAfterDelayAsync(
+            BoardSnapshot snapshot,
+            TimeSpan delay,
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(delay, cancellationToken);
+            SaveCore(snapshot);
+        }
+
+        private void SaveCore(BoardSnapshot snapshot)
+        {
             if (SaveFailure is not null)
             {
                 throw SaveFailure;
@@ -783,7 +805,6 @@ public sealed partial class MainWindowInteractionTests
             LastPersistedSnapshot = snapshot;
             SaveCount++;
             SaveCompleted.TrySetResult();
-            return Task.CompletedTask;
         }
 
         public Task<WindowSettings> LoadSettingsAsync(

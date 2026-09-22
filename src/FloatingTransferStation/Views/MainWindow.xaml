@@ -328,7 +328,9 @@
                   CornerRadius="1"
                   IsHitTestVisible="False"
                   Opacity="0"
-                  Visibility="Collapsed" />
+                  Visibility="Collapsed"
+                  views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                  views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.PressFeedbackMs}" />
         </Canvas>
 
         <Border x:Name="StatusOverlay"
