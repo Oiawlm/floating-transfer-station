@@ -12,6 +12,8 @@
 
 Mac 数据与 Windows 数据独立，不提供自动跨设备同步。`board.json`、`settings.json` 与 `reviews/*.md` 格式继续共享；“两端同步”指功能维护和版本构建同步。复盘文件是普通 Markdown，可由 Obsidian 直接打开。
 
+两端视觉层共用同一组设计 token 数值（唯一来源是共享 Core 的 `DesignTokens`，人类可读规范见 [设计规范](design.md)），由 WPF 与 Avalonia 各自渲染；不引入共享 UI 框架，允许各平台用自己的机制实现同样的时长、曲线与色板。
+
 ## 主要责任
 
 - `Core/Models/` 与 Windows `Models/`：分别存放共享板模型，以及 Windows 剪贴板快照/外部拖入载荷。

@@ -17,6 +17,7 @@
 | 连续范围选择 | [Issue #17](https://github.com/Oiawlm/floating-transfer-station/issues/17) | [设计、计划与验证](superpowers/plans/2026-09-07-range-selection.md) | `5d01510` / 1.5.0 |
 | macOS 同步与统一发行 | 已批准的实施范围 | [实施记录](superpowers/plans/2026-09-08-macos.md) | `c6d2be1` / 1.6.0 |
 | 每日复盘标签 | [设计](superpowers/specs/2026-09-14-daily-review-tab-design.md) | [计划](superpowers/plans/2026-09-14-daily-review-tab.md) | `33fc51d` / 未发布 |
+| 界面与动效升级 | [设计](superpowers/specs/2026-09-22-ui-motion-upgrade-design.md) | [计划](superpowers/plans/2026-09-22-ui-motion-upgrade.md) | 未发布 |
 
 批量置顶早期设计中的“恢复最初选择”，后来受到 Esc 设计中“用户已取消选择则不恢复”的修订；隐藏状态下 Ctrl+P 的约束由 1.4.1 守卫设计补充。理解当前行为时需要连同后续修订一起阅读。
 
