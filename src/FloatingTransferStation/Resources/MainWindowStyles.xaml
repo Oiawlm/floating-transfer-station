@@ -20,9 +20,12 @@
   <SolidColorBrush x:Key="DropTargetBrush" Color="#EAE7FF" />
   <SolidColorBrush x:Key="ScrollThumbBrush" Color="#B8BDC7" />
   <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#969CA7" />
+  <SolidColorBrush x:Key="StatusSurfaceBrush" Color="#FCFCFD" />
+  <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
 
   <FontFamily x:Key="InterfaceFontFamily">Segoe UI Variable, Segoe UI</FontFamily>
   <GridLength x:Key="CardOperationColumnWidth">30</GridLength>
+  <CornerRadius x:Key="ShellCornerRadius">12,0,0,12</CornerRadius>
   <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="HeaderActionCornerRadius">7</CornerRadius>
   <CornerRadius x:Key="PinButtonCornerRadius">6</CornerRadius>
@@ -35,14 +38,14 @@
 
   <Style x:Key="WindowShellStyle" TargetType="Border">
     <Setter Property="Background" Value="{StaticResource WindowShellBrush}" />
-    <Setter Property="CornerRadius" Value="12,0,0,12" />
+    <Setter Property="CornerRadius" Value="{StaticResource ShellCornerRadius}" />
   </Style>
 
   <Style x:Key="WindowShellOutlineStyle" TargetType="Border">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1,1,0,1" />
-    <Setter Property="CornerRadius" Value="12,0,0,12" />
+    <Setter Property="CornerRadius" Value="{StaticResource ShellCornerRadius}" />
     <Setter Property="IsHitTestVisible" Value="False" />
   </Style>
 
@@ -319,7 +322,7 @@
                   HorizontalAlignment="Center"
                   VerticalAlignment="Center"
                   Data="M1,3.5 L3.5,6 L8,1"
-                  Stroke="White"
+                  Stroke="{StaticResource OnAccentBrush}"
                   StrokeThickness="1.7"
                   StrokeStartLineCap="Round"
                   StrokeEndLineCap="Round"
@@ -423,7 +426,7 @@
     <Setter Property="Margin" Value="12" />
     <Setter Property="Padding" Value="9,7" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Background" Value="#FCFCFD" />
+    <Setter Property="Background" Value="{StaticResource StatusSurfaceBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="7" />

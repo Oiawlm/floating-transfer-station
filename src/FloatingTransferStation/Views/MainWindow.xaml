@@ -195,7 +195,7 @@
                                Stretch="Uniform"
                                StretchDirection="DownOnly">
                         <TextBlock x:Name="SelectedCountText"
-                                   Foreground="White"
+                                   Foreground="{StaticResource OnAccentBrush}"
                                    FontSize="9"
                                    FontWeight="SemiBold"
                                    TextAlignment="Center" />
@@ -294,7 +294,7 @@
                      Padding="12"
                      FontSize="14"
                      BorderBrush="{StaticResource BorderBrush}"
-                     Background="White"
+                     Background="{StaticResource CardBrush}"
                      TextChanged="ReviewEditor_TextChanged"
                      AutomationProperties.Name="每日复盘编辑器" />
             <TextBlock x:Name="ReviewStatus"

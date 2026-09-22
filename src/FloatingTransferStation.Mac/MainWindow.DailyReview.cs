@@ -15,19 +15,19 @@ public sealed partial class MainWindow
     private readonly Button _reviewPrevious = new() { Content = "‹", Width = 32, Height = 28 };
     private readonly Button _reviewNext = new() { Content = "›", Width = 32, Height = 28 };
     private readonly ComboBox _reviewDates = new() { MinWidth = 132, HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly TextBlock _reviewDateState = new() { Foreground = Brushes.Gray, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _reviewDateState = new() { Foreground = SecondaryText, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox _reviewEditor = new()
     {
         AcceptsReturn = true,
         TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-        Background = Brushes.White,
-        BorderBrush = Brush.Parse("#D8DEDA"),
+        Background = CardSurface,
+        BorderBrush = BorderLine,
         BorderThickness = new Thickness(1),
         Padding = new Thickness(12),
         FontSize = 14,
         Watermark = "写下今天的复盘……"
     };
-    private readonly TextBlock _reviewStatus = new() { FontSize = 12, Foreground = Brushes.Gray };
+    private readonly TextBlock _reviewStatus = new() { FontSize = 12, Foreground = SecondaryText };
     private readonly DispatcherTimer _reviewSaveTimer = new() { Interval = TimeSpan.FromMilliseconds(700) };
     private readonly SemaphoreSlim _reviewSaveGate = new(1, 1);
     private DateOnly _reviewDate = DateOnly.FromDateTime(DateTime.Now);

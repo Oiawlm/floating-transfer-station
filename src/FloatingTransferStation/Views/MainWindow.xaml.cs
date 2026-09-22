@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -24,14 +25,14 @@ public partial class MainWindow : Window
             new FrameworkPropertyMetadata(true, OnClientAreaAnimationsEnabledChanged));
 
     private static readonly TimeSpan ExpandContentAnimationDuration =
-        TimeSpan.FromMilliseconds(167);
+        TimeSpan.FromMilliseconds(DesignTokens.PanelExpandContentMs);
     private static readonly TimeSpan SwitchContentAnimationDuration =
-        TimeSpan.FromMilliseconds(140);
+        TimeSpan.FromMilliseconds(DesignTokens.PanelSwitchContentMs);
     private static readonly TimeSpan ReducedMotionContentAnimationDuration =
-        TimeSpan.FromMilliseconds(83);
+        TimeSpan.FromMilliseconds(DesignTokens.ReducedMotionFadeMs);
     private static readonly TimeSpan CategoryRevealAnimationDuration =
-        TimeSpan.FromMilliseconds(120);
-    private const double CategoryRevealOffset = 6d;
+        TimeSpan.FromMilliseconds(DesignTokens.CategoryRevealMs);
+    private const double CategoryRevealOffset = DesignTokens.ContentEntranceOffsetPx;
     private static readonly HandoffBehavior CategoryRevealAnimationHandoffBehavior =
         HandoffBehavior.SnapshotAndReplace;
 

@@ -7,6 +7,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Mac.Services;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
@@ -15,8 +16,12 @@ namespace FloatingTransferStation.Mac;
 
 public sealed partial class MainWindow : Window
 {
-    private static readonly IBrush Ink = Brush.Parse("#243447");
-    private static readonly IBrush Accent = Brush.Parse("#327A72");
+    private static readonly IBrush Ink = Brush.Parse(DesignTokens.PrimaryTextHex);
+    private static readonly IBrush SecondaryText = Brush.Parse(DesignTokens.SecondaryTextHex);
+    private static readonly IBrush Accent = Brush.Parse(DesignTokens.AccentHex);
+    private static readonly IBrush CardSurface = Brush.Parse(DesignTokens.CardHex);
+    private static readonly IBrush OnAccent = Brush.Parse(DesignTokens.OnAccentHex);
+    private static readonly IBrush BorderLine = Brush.Parse(DesignTokens.BorderHex);
     private readonly BoardService _board = new();
     private readonly SelectionState _selection = new();
     private readonly BoardOperationGate _gate = new();
@@ -33,7 +38,7 @@ public sealed partial class MainWindow : Window
     private readonly Grid _panel = new() { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto") };
     private readonly StackPanel _rail = new() { Spacing = 6, Margin = new Thickness(4, 12) };
     private readonly TextBlock _title = new() { FontSize = 21, FontWeight = FontWeight.SemiBold, Foreground = Ink };
-    private readonly TextBlock _count = new() { Foreground = Brushes.Gray, FontSize = 12 };
+    private readonly TextBlock _count = new() { Foreground = SecondaryText, FontSize = 12 };
     private readonly TextBlock _status = new() { FontSize = 12, Foreground = Accent, TextWrapping = TextWrapping.Wrap };
     private readonly TextBox _rename = new() { IsVisible = false, Watermark = "分类名称（最多6字）" };
     private readonly ListBox _list = new() { Background = Brushes.Transparent, BorderThickness = new Thickness(0), SelectionMode = SelectionMode.Multiple };
@@ -70,7 +75,7 @@ public sealed partial class MainWindow : Window
         Topmost = true;
         ShowInTaskbar = true;
         SystemDecorations = SystemDecorations.None;
-        Background = Brush.Parse("#F3F5F2");
+        Background = Brush.Parse(DesignTokens.WindowShellHex);
         Content = BuildContent();
         InitializeDailyReviewEditing();
         _shell.IsEnabled = false;
@@ -148,7 +153,7 @@ public sealed partial class MainWindow : Window
         {
             Spacing = 5,
             Margin = new Thickness(0, 10, 0, 0),
-            Children = { _status, new TextBlock { Text = "拖入收集 · 拖出使用 · 内容仅保存在本机", FontSize = 10, Foreground = Brushes.Gray } }
+            Children = { _status, new TextBlock { Text = "拖入收集 · 拖出使用 · 内容仅保存在本机", FontSize = 10, Foreground = SecondaryText } }
         };
         Grid.SetRow(footer, 3);
         _panel.Children.Add(footer);
@@ -174,12 +179,12 @@ public sealed partial class MainWindow : Window
         }
         Grid.SetColumn(_rail, 1);
         _shell.Children.Add(_rail);
-        return new Border { BorderBrush = Brush.Parse("#D8DEDA"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12, 0, 0, 12), Child = _shell };
+        return new Border { BorderBrush = BorderLine, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(DesignTokens.ShellCornerRadius, 0, 0, DesignTokens.ShellCornerRadius), Child = _shell };
     }
 
     private Control BuildCard(BoardItem item)
     {
-        var card = new Border { Background = Brushes.White, CornerRadius = new CornerRadius(9), Padding = new Thickness(10), Margin = new Thickness(0, 3), HorizontalAlignment = HorizontalAlignment.Stretch };
+        var card = new Border { Background = CardSurface, CornerRadius = new CornerRadius(DesignTokens.CardCornerRadius), Padding = new Thickness(10), Margin = new Thickness(0, 3), HorizontalAlignment = HorizontalAlignment.Stretch };
         var layout = new StackPanel { Spacing = 8 };
         var controls = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var select = new Button { Content = "选择", FontSize = 11, Padding = new Thickness(7, 2), HorizontalAlignment = HorizontalAlignment.Left };
@@ -279,8 +284,8 @@ public sealed partial class MainWindow : Window
         foreach (var (category, tab) in _tabs)
         {
             tab.IsVisible = _expanded || category == _captureCategory;
-            tab.Background = category == _captureCategory ? Accent : Brush.Parse("#E6EBE7");
-            tab.Foreground = category == _captureCategory ? Brushes.White : Ink;
+            tab.Background = category == _captureCategory ? Accent : Brush.Parse(DesignTokens.TabRailHex);
+            tab.Foreground = category == _captureCategory ? OnAccent : Ink;
             if (tab.Content is TextBlock label) label.Text = _settings.CategoryName(category);
         }
     }
