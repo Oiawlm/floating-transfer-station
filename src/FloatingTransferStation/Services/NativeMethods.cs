@@ -5,6 +5,7 @@ namespace FloatingTransferStation.Services;
 internal static class NativeMethods
 {
     internal const int WmClipboardUpdate = 0x031D;
+    internal const int WmSettingChange = 0x001A;
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

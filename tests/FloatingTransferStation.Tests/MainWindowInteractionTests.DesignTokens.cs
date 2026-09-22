@@ -13,6 +13,7 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
+        DesignThemeManager.Apply(window, DesignTheme.Light);
 
         try
         {

@@ -32,6 +32,7 @@
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="../Resources/MainWindowStyles.xaml" />
+        <ResourceDictionary Source="../Resources/DesignTheme.Light.xaml" />
       </ResourceDictionary.MergedDictionaries>
       <DataTemplate x:Key="CategoryTabTemplate"
                     DataType="{x:Type vm:CategoryViewModel}">
@@ -49,7 +50,7 @@
                 Drop="CategoryTab_Drop">
           <Grid Background="Transparent">
             <Border x:Name="TabHoverLayer"
-                    Background="{StaticResource HoverSurfaceBrush}"
+                    Background="{DynamicResource HoverSurfaceBrush}"
                     CornerRadius="8"
                     Opacity="0"
                     IsHitTestVisible="False"
@@ -157,7 +158,7 @@
                         ToolTip="置顶已选内容"
                         AutomationProperties.Name="置顶已选内容"
                         AutomationProperties.AccessKey="Ctrl+P"
-                        Foreground="{StaticResource AccentBrush}"
+                        Foreground="{DynamicResource AccentBrush}"
                         Visibility="Collapsed"
                         Click="BatchPinButton_Click">
                   <Viewbox Width="16" Height="16">
@@ -170,7 +171,7 @@
                 <Button x:Name="DeleteContentButton"
                         ToolTip="清空当前分类"
                         AutomationProperties.Name="清空当前分类"
-                        Foreground="{StaticResource DangerBrush}"
+                        Foreground="{DynamicResource DangerBrush}"
                         Click="DeleteContentButton_Click">
                   <Button.Style>
                     <Style TargetType="Button"
@@ -197,7 +198,7 @@
                               Height="14"
                               HorizontalAlignment="Right"
                               VerticalAlignment="Bottom"
-                              Background="{StaticResource AccentBrush}"
+                              Background="{DynamicResource AccentBrush}"
                               CornerRadius="{StaticResource SelectedCountBadgeCornerRadius}"
                               IsHitTestVisible="False"
                               Opacity="0"
@@ -206,7 +207,7 @@
                                Stretch="Uniform"
                                StretchDirection="DownOnly">
                         <TextBlock x:Name="SelectedCountText"
-                                   Foreground="{StaticResource OnAccentBrush}"
+                                   Foreground="{DynamicResource OnAccentBrush}"
                                    FontSize="9"
                                    FontWeight="SemiBold"
                                    TextAlignment="Center" />
@@ -292,7 +293,7 @@
                          Grid.Column="3"
                          Margin="8,0,0,0"
                          VerticalAlignment="Center"
-                         Foreground="{StaticResource SecondaryTextBrush}"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
                          Text="今天" />
             </Grid>
             <TextBox x:Name="ReviewEditor"
@@ -304,14 +305,14 @@
                      VerticalContentAlignment="Top"
                      Padding="12"
                      FontSize="14"
-                     BorderBrush="{StaticResource BorderBrush}"
-                     Background="{StaticResource CardBrush}"
+                     BorderBrush="{DynamicResource BorderBrush}"
+                     Background="{DynamicResource CardBrush}"
                      TextChanged="ReviewEditor_TextChanged"
                      AutomationProperties.Name="每日复盘编辑器" />
             <TextBlock x:Name="ReviewStatus"
                        Grid.Row="2"
                        Margin="2,8,2,0"
-                       Foreground="{StaticResource SecondaryTextBrush}"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
                        Text="今天还没有复盘内容。" />
           </Grid>
         </Border>
@@ -324,7 +325,7 @@
                   Canvas.Top="0"
                   Width="{Binding ActualWidth, ElementName=BoardList}"
                   Height="2"
-                  Background="{StaticResource AccentBrush}"
+                  Background="{DynamicResource AccentBrush}"
                   CornerRadius="1"
                   IsHitTestVisible="False"
                   Opacity="0"
@@ -383,7 +384,7 @@
                       Grid.Column="1"
                       Content="{Binding DefaultCapturePanel}"
                       ContentTemplate="{StaticResource CategoryTabTemplate}"
-                      Background="{StaticResource TabRailBrush}"
+                      Background="{DynamicResource TabRailBrush}"
                       HorizontalContentAlignment="Stretch"
                       VerticalContentAlignment="Stretch">
         <ContentControl.Style>

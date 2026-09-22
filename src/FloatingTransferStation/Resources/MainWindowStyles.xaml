@@ -3,28 +3,9 @@
                     xmlns:converters="clr-namespace:FloatingTransferStation.Converters"
                     xmlns:design="clr-namespace:FloatingTransferStation.Design;assembly=FloatingTransferStation.Core"
                     xmlns:models="clr-namespace:FloatingTransferStation.Models;assembly=FloatingTransferStation.Core"
-                    xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
                     xmlns:views="clr-namespace:FloatingTransferStation.Views">
-  <SolidColorBrush x:Key="WindowShellBrush" Color="#F7F8FA" />
-  <SolidColorBrush x:Key="TabRailBrush" Color="#EFF1F4" />
-  <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF" />
-  <SolidColorBrush x:Key="BorderBrush" Color="#E2E5EA" />
-  <SolidColorBrush x:Key="PrimaryTextBrush" Color="#1D1D1F" />
-  <SolidColorBrush x:Key="SecondaryTextBrush" Color="#5F6368" />
-  <SolidColorBrush x:Key="AccentBrush" Color="#6D5DFB" />
-  <SolidColorBrush x:Key="DangerBrush" Color="#D92D20" />
-  <SolidColorBrush x:Key="HeaderBrush" Color="#FBFBFC" />
-  <SolidColorBrush x:Key="HoverSurfaceBrush" Color="#F4F5F7" />
-  <SolidColorBrush x:Key="HoverBorderBrush" Color="#C9CDD5" />
-  <SolidColorBrush x:Key="SelectedCardBrush" Color="#F3F1FF" />
-  <SolidColorBrush x:Key="SelectedCardBorderBrush" Color="#8B7CF6" />
-  <SolidColorBrush x:Key="ActiveCategoryBrush" Color="#E7E4FF" />
-  <SolidColorBrush x:Key="DropTargetBrush" Color="#EAE7FF" />
-  <SolidColorBrush x:Key="ScrollThumbBrush" Color="#B8BDC7" />
-  <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#969CA7" />
-  <SolidColorBrush x:Key="StatusSurfaceBrush" Color="#FCFCFD" />
-  <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
-
+  <!-- 颜色画刷与卡片阴影定义在 Resources/DesignTheme.Light.xaml 与 DesignTheme.Dark.xaml，
+       由 DesignThemeManager 在运行时整体替换；本字典内一律以 DynamicResource 引用。 -->
   <FontFamily x:Key="InterfaceFontFamily">Segoe UI Variable, Segoe UI</FontFamily>
   <GridLength x:Key="CardOperationColumnWidth">30</GridLength>
   <CornerRadius x:Key="ShellCornerRadius">12,0,0,12</CornerRadius>
@@ -35,42 +16,35 @@
   <converters:ImageThumbnailConverter x:Key="ImageThumbnailConverter" />
   <converters:BooleanOrConverter x:Key="BooleanOrConverter" />
   <converters:NonEmptyTextConverter x:Key="NonEmptyTextConverter" />
-  <DropShadowEffect x:Key="CardShadowEffect"
-                    BlurRadius="8"
-                    ShadowDepth="2"
-                    Direction="270"
-                    Opacity="0.12"
-                    Color="#1D1D1F"
-                    po:Freeze="True" />
 
   <ControlTemplate x:Key="TransparentThumbTemplate" TargetType="Thumb">
     <Border Background="{TemplateBinding Background}" />
   </ControlTemplate>
 
   <Style x:Key="WindowShellStyle" TargetType="Border">
-    <Setter Property="Background" Value="{StaticResource WindowShellBrush}" />
+    <Setter Property="Background" Value="{DynamicResource WindowShellBrush}" />
     <Setter Property="CornerRadius" Value="{StaticResource ShellCornerRadius}" />
   </Style>
 
   <Style x:Key="WindowShellOutlineStyle" TargetType="Border">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1,1,0,1" />
     <Setter Property="CornerRadius" Value="{StaticResource ShellCornerRadius}" />
     <Setter Property="IsHitTestVisible" Value="False" />
   </Style>
 
   <Style x:Key="HeaderSurfaceStyle" TargetType="Border">
-    <Setter Property="Background" Value="{StaticResource HeaderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource HeaderBrush}" />
     <Setter Property="CornerRadius" Value="11,0,0,0" />
   </Style>
 
   <Style x:Key="RailSurfaceStyle" TargetType="Border">
-    <Setter Property="Background" Value="{StaticResource TabRailBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TabRailBrush}" />
   </Style>
 
   <Style x:Key="HeaderTitleStyle" TargetType="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
     <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="16" />
     <Setter Property="FontWeight" Value="SemiBold" />
@@ -89,7 +63,7 @@
     <Setter Property="Margin" Value="4,0,0,0" />
     <Setter Property="Padding" Value="7" />
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Focusable" Value="False" />
@@ -104,8 +78,8 @@
                   CornerRadius="{StaticResource HeaderActionCornerRadius}">
             <Grid>
               <Border x:Name="HoverLayer"
-                      Background="{StaticResource HoverSurfaceBrush}"
-                      BorderBrush="{StaticResource HoverBorderBrush}"
+                      Background="{DynamicResource HoverSurfaceBrush}"
+                      BorderBrush="{DynamicResource HoverBorderBrush}"
                       BorderThickness="1"
                       CornerRadius="{StaticResource HeaderActionCornerRadius}"
                       Opacity="0"
@@ -114,7 +88,7 @@
                       views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
                       views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
               <Border x:Name="PressedLayer"
-                      Background="{StaticResource ActiveCategoryBrush}"
+                      Background="{DynamicResource ActiveCategoryBrush}"
                       CornerRadius="{StaticResource HeaderActionCornerRadius}"
                       Opacity="0"
                       IsHitTestVisible="False"
@@ -143,13 +117,13 @@
     <Setter Property="CornerRadius" Value="8" />
     <Style.Triggers>
       <Trigger Property="IsKeyboardFocusWithin" Value="True">
-        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
       </Trigger>
     </Style.Triggers>
   </Style>
 
   <Style x:Key="CategoryActiveLayerStyle" TargetType="Border">
-    <Setter Property="Background" Value="{StaticResource ActiveCategoryBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="Opacity" Value="0" />
     <Setter Property="IsHitTestVisible" Value="False" />
@@ -159,8 +133,8 @@
   </Style>
 
   <Style x:Key="CategoryDropTargetLayerStyle" TargetType="Border">
-    <Setter Property="Background" Value="{StaticResource DropTargetBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource DropTargetBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="Opacity" Value="0" />
@@ -177,7 +151,7 @@
     <Setter Property="Height" Value="22" />
     <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="CornerRadius" Value="0,2,2,0" />
     <Setter Property="Opacity" Value="0" />
     <Setter Property="IsHitTestVisible" Value="False" />
@@ -187,7 +161,7 @@
   </Style>
 
   <Style x:Key="CategoryDefaultMarkerStyle" TargetType="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
     <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="11" />
     <Setter Property="FontWeight" Value="SemiBold" />
@@ -205,7 +179,7 @@
   </Style>
 
   <Style x:Key="CategoryLabelTextStyle" TargetType="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
     <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
     <Setter Property="FontWeight" Value="Normal" />
@@ -219,7 +193,7 @@
         <Setter Property="Visibility" Value="Collapsed" />
       </DataTrigger>
       <DataTrigger Binding="{Binding IsActive}" Value="True">
-        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
         <Setter Property="FontWeight" Value="SemiBold" />
       </DataTrigger>
     </Style.Triggers>
@@ -231,10 +205,10 @@
     <Setter Property="Height" Value="28" />
     <Setter Property="Margin" Value="5" />
     <Setter Property="Padding" Value="1" />
-    <Setter Property="Background" Value="{StaticResource CardBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
     <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -281,10 +255,10 @@
   <Style x:Key="CardContainerStyle" TargetType="Border">
     <Setter Property="Margin" Value="12,4" />
     <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}" />
-    <Setter Property="Background" Value="{StaticResource CardBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Effect" Value="{StaticResource CardShadowEffect}" />
+    <Setter Property="Effect" Value="{DynamicResource CardShadowEffect}" />
     <Setter Property="views:LiftAnimation.IsActive"
             Value="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" />
     <Setter Property="views:LiftAnimation.AnimationsEnabled"
@@ -292,7 +266,7 @@
     <Style.Triggers>
       <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=IsKeyboardFocusWithin}"
                    Value="True">
-        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
       </DataTrigger>
       <DataTrigger Binding="{Binding StartsNormalRegion}" Value="True">
         <Setter Property="Margin" Value="12,10,12,4" />
@@ -333,7 +307,7 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Background="Transparent"
-                    BorderBrush="{StaticResource SecondaryTextBrush}"
+                    BorderBrush="{DynamicResource SecondaryTextBrush}"
                     BorderThickness="1.5"
                     CornerRadius="5" />
             <Border x:Name="SelectionHoverRing"
@@ -341,7 +315,7 @@
                     Height="16"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    BorderBrush="{StaticResource AccentBrush}"
+                    BorderBrush="{DynamicResource AccentBrush}"
                     BorderThickness="1.5"
                     CornerRadius="5"
                     Opacity="0"
@@ -354,7 +328,7 @@
                     Height="16"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Background="{StaticResource AccentBrush}"
+                    Background="{DynamicResource AccentBrush}"
                     CornerRadius="5"
                     Opacity="0"
                     IsHitTestVisible="False"
@@ -367,7 +341,7 @@
                   HorizontalAlignment="Center"
                   VerticalAlignment="Center"
                   Data="M1,3.5 L3.5,6 L8,1"
-                  Stroke="{StaticResource OnAccentBrush}"
+                  Stroke="{DynamicResource OnAccentBrush}"
                   StrokeThickness="1.5"
                   StrokeStartLineCap="Round"
                   StrokeEndLineCap="Round"
@@ -403,7 +377,7 @@
     <Setter Property="IsHitTestVisible" Value="False" />
     <Setter Property="Visibility" Value="Visible" />
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="6" />
@@ -432,7 +406,7 @@
                   CornerRadius="{StaticResource PinButtonCornerRadius}">
             <Grid>
               <Border x:Name="HoverLayer"
-                      Background="{StaticResource HoverSurfaceBrush}"
+                      Background="{DynamicResource HoverSurfaceBrush}"
                       CornerRadius="{StaticResource PinButtonCornerRadius}"
                       Opacity="0"
                       IsHitTestVisible="False"
@@ -440,7 +414,7 @@
                       views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
                       views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
               <Border x:Name="PressedLayer"
-                      Background="{StaticResource ActiveCategoryBrush}"
+                      Background="{DynamicResource ActiveCategoryBrush}"
                       CornerRadius="{StaticResource PinButtonCornerRadius}"
                       Opacity="0"
                       IsHitTestVisible="False"
@@ -453,10 +427,10 @@
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+              <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+              <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -469,7 +443,7 @@
       </DataTrigger>
       <DataTrigger Binding="{Binding IsPinned}" Value="True">
         <Setter Property="IsHitTestVisible" Value="True" />
-        <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         <Setter Property="ToolTip" Value="取消置顶" />
       </DataTrigger>
     </Style.Triggers>
@@ -479,8 +453,8 @@
     <Setter Property="Margin" Value="12" />
     <Setter Property="Padding" Value="9,7" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Background" Value="{StaticResource StatusSurfaceBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource StatusSurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="IsHitTestVisible" Value="False" />
@@ -495,7 +469,7 @@
   </Style>
 
   <Style x:Key="StatusTextStyle" TargetType="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
     <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
     <Setter Property="TextWrapping" Value="Wrap" />
@@ -504,8 +478,8 @@
   <Style x:Key="CompactStatusPopupStyle" TargetType="Border">
     <Setter Property="MaxWidth" Value="260" />
     <Setter Property="Padding" Value="10,8" />
-    <Setter Property="Background" Value="{StaticResource HeaderBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource HeaderBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="IsHitTestVisible" Value="False" />
@@ -557,7 +531,7 @@
     <Setter Property="Width" Value="4" />
     <Setter Property="MinHeight" Value="24" />
     <Setter Property="HorizontalAlignment" Value="Center" />
-    <Setter Property="Background" Value="{StaticResource ScrollThumbBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ScrollThumbBrush}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Thumb">
@@ -568,7 +542,7 @@
             <Border x:Name="ThumbHoverLayer"
                     Width="6"
                     HorizontalAlignment="Center"
-                    Background="{StaticResource ScrollThumbHoverBrush}"
+                    Background="{DynamicResource ScrollThumbHoverBrush}"
                     CornerRadius="3"
                     Opacity="0"
                     IsHitTestVisible="False"
@@ -613,7 +587,7 @@
     <Border Style="{StaticResource CardContainerStyle}">
       <Grid Background="Transparent">
         <Border x:Name="CardHoverFillLayer"
-                Background="{StaticResource HoverSurfaceBrush}"
+                Background="{DynamicResource HoverSurfaceBrush}"
                 CornerRadius="7"
                 Opacity="0"
                 IsHitTestVisible="False"
@@ -621,7 +595,7 @@
                 views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
                 views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
         <Border x:Name="CardHoverRingLayer"
-                BorderBrush="{StaticResource HoverBorderBrush}"
+                BorderBrush="{DynamicResource HoverBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Margin="-1"
@@ -631,7 +605,7 @@
                 views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
                 views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
         <Border x:Name="CardSelectedFillLayer"
-                Background="{StaticResource SelectedCardBrush}"
+                Background="{DynamicResource SelectedCardBrush}"
                 CornerRadius="7"
                 Opacity="0"
                 IsHitTestVisible="False"
@@ -639,7 +613,7 @@
                 views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
                 views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}" />
         <Border x:Name="CardSelectedRingLayer"
-                BorderBrush="{StaticResource SelectedCardBorderBrush}"
+                BorderBrush="{DynamicResource SelectedCardBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Margin="-1"
@@ -677,7 +651,7 @@
                      FontFamily="{StaticResource InterfaceFontFamily}"
                      FontSize="14"
                      FontWeight="Normal"
-                     Foreground="{StaticResource PrimaryTextBrush}"
+                     Foreground="{DynamicResource PrimaryTextBrush}"
                      TextWrapping="Wrap"
                      TextTrimming="CharacterEllipsis"
                      LineHeight="18"

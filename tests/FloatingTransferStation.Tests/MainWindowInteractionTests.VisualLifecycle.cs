@@ -22,15 +22,21 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
+        DesignThemeManager.Apply(window, DesignTheme.Light);
 
         try
         {
-            Assert.AreEqual(1, window.Resources.MergedDictionaries.Count);
+            Assert.AreEqual(2, window.Resources.MergedDictionaries.Count);
             var source = window.Resources.MergedDictionaries[0].Source?.OriginalString;
             Assert.IsNotNull(source);
             StringAssert.EndsWith(
                 source.Replace('\\', '/'),
                 "Resources/MainWindowStyles.xaml");
+            var theme = window.Resources.MergedDictionaries[1].Source?.OriginalString;
+            Assert.IsNotNull(theme);
+            StringAssert.EndsWith(
+                theme.Replace('\\', '/'),
+                "Resources/DesignTheme.Light.xaml");
 
             var shellBrush = (SolidColorBrush)window.FindResource("WindowShellBrush");
             var railBrush = (SolidColorBrush)window.FindResource("TabRailBrush");
@@ -48,6 +54,7 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
+            DesignThemeManager.Apply(window, DesignTheme.Light);
             CloseWindow(window);
         }
     }

@@ -30,7 +30,31 @@
 | StatusSurfaceHex | `#FCFCFD` | 状态浮层背景 |
 | OnAccentHex | `#FFFFFF` | 强调色上的前景（对勾、徽标文字） |
 
-深色主题：跟随系统亮暗切换，按同键位提供第二套字典（引入于界面与动效升级 S5）。
+深色主题：跟随系统亮暗切换（`WM_SETTINGCHANGE` 的 `ImmersiveColorSet` + `AppsUseLightTheme` 注册表），按同键位提供第二套字典（`Resources/DesignTheme.Light.xaml` / `DesignTheme.Dark.xaml`，由 `DesignThemeManager` 整本替换）。
+
+| Token | 浅色 | 深色 |
+|---|---|---|
+| WindowShellHex | `#F7F8FA` | `#202021` |
+| TabRailHex | `#EFF1F4` | `#2B2B2C` |
+| CardHex | `#FFFFFF` | `#2D2D2E` |
+| BorderHex | `#E2E5EA` | `#414143` |
+| PrimaryTextHex | `#1D1D1F` | `#FFFFFF` |
+| SecondaryTextHex | `#5F6368` | `#C8C8CA` |
+| AccentHex | `#6D5DFB` | `#9C8CFF` |
+| DangerHex | `#D92D20` | `#FF8A7A` |
+| HeaderHex | `#FBFBFC` | `#272728` |
+| HoverSurfaceHex | `#F4F5F7` | `#343436` |
+| HoverBorderHex | `#C9CDD5` | `#505053` |
+| SelectedCardHex | `#F3F1FF` | `#343054` |
+| SelectedCardBorderHex | `#8B7CF6` | `#7A6DF2` |
+| ActiveCategoryHex | `#E7E4FF` | `#3A3560` |
+| DropTargetHex | `#EAE7FF` | `#322E52` |
+| ScrollThumbHex | `#B8BDC7` | `#505054` |
+| ScrollThumbHoverHex | `#969CA7` | `#6E6E74` |
+| StatusSurfaceHex | `#FCFCFD` | `#282829` |
+| OnAccentHex | `#FFFFFF` | `#FFFFFF` |
+
+深色主题的卡片阴影为 `#000000`、透明度 0.35（浅色为 `#1D1D1F`、0.12）。
 
 ## 二、动效时长（三档 + 场景映射）
 

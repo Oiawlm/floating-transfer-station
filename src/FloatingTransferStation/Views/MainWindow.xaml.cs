@@ -101,6 +101,7 @@ public partial class MainWindow : Window
         IDailyReviewStore? dailyReviewStore = null)
     {
         InitializeComponent();
+        DesignThemeManager.Apply(this, DesignThemeManager.DetectSystemTheme());
         SetResourceReference(
             ClientAreaAnimationsEnabledProperty,
             SystemParameters.ClientAreaAnimationKey);
@@ -181,6 +182,15 @@ public partial class MainWindow : Window
         if (!_isClosing && message == NativeMethods.WmClipboardUpdate)
         {
             StartClipboardCapture();
+        }
+
+        if (!_isClosing &&
+            message == NativeMethods.WmSettingChange &&
+            System.Runtime.InteropServices.Marshal.PtrToStringUni(lParam) is { Length: > 0 } section &&
+            section.Contains("ImmersiveColorSet", StringComparison.Ordinal))
+        {
+            var detected = DesignThemeManager.DetectSystemTheme();
+            Dispatcher.BeginInvoke(() => DesignThemeManager.Apply(this, detected));
         }
 
         return 0;

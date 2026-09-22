@@ -7,7 +7,7 @@ namespace FloatingTransferStation.Design;
 /// </summary>
 public static class DesignTokens
 {
-    // 颜色（浅色主题，#RRGGBB）。深色主题字典在引入时按同键位补充。
+    // 颜色（浅色主题，#RRGGBB）。深色主题按同键位提供第二套值。
     public const string WindowShellHex = "#F7F8FA";
     public const string TabRailHex = "#EFF1F4";
     public const string CardHex = "#FFFFFF";
@@ -27,6 +27,27 @@ public static class DesignTokens
     public const string ScrollThumbHoverHex = "#969CA7";
     public const string StatusSurfaceHex = "#FCFCFD";
     public const string OnAccentHex = "#FFFFFF";
+
+    // 颜色（深色主题，#RRGGBB）。
+    public const string WindowShellDarkHex = "#202021";
+    public const string TabRailDarkHex = "#2B2B2C";
+    public const string CardDarkHex = "#2D2D2E";
+    public const string BorderDarkHex = "#414143";
+    public const string PrimaryTextDarkHex = "#FFFFFF";
+    public const string SecondaryTextDarkHex = "#C8C8CA";
+    public const string AccentDarkHex = "#9C8CFF";
+    public const string DangerDarkHex = "#FF8A7A";
+    public const string HeaderDarkHex = "#272728";
+    public const string HoverSurfaceDarkHex = "#343436";
+    public const string HoverBorderDarkHex = "#505053";
+    public const string SelectedCardDarkHex = "#343054";
+    public const string SelectedCardBorderDarkHex = "#7A6DF2";
+    public const string ActiveCategoryDarkHex = "#3A3560";
+    public const string DropTargetDarkHex = "#322E52";
+    public const string ScrollThumbDarkHex = "#505054";
+    public const string ScrollThumbHoverDarkHex = "#6E6E74";
+    public const string StatusSurfaceDarkHex = "#282829";
+    public const string OnAccentDarkHex = "#FFFFFF";
 
     // 动效时长三档（微软 Fluent 官方值）。
     public const int FastDurationMs = 83;
