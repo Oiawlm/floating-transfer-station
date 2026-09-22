@@ -6,6 +6,7 @@
     <RootNamespace>FloatingTransferStation.Mac</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="FloatingTransferStation.Mac.Tests" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.21" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.21" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.21" />

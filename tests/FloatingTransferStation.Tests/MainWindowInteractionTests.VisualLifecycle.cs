@@ -22,15 +22,21 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
+        DesignThemeManager.Apply(window, DesignTheme.Light);
 
         try
         {
-            Assert.AreEqual(1, window.Resources.MergedDictionaries.Count);
+            Assert.AreEqual(2, window.Resources.MergedDictionaries.Count);
             var source = window.Resources.MergedDictionaries[0].Source?.OriginalString;
             Assert.IsNotNull(source);
             StringAssert.EndsWith(
                 source.Replace('\\', '/'),
                 "Resources/MainWindowStyles.xaml");
+            var theme = window.Resources.MergedDictionaries[1].Source?.OriginalString;
+            Assert.IsNotNull(theme);
+            StringAssert.EndsWith(
+                theme.Replace('\\', '/'),
+                "Resources/DesignTheme.Light.xaml");
 
             var shellBrush = (SolidColorBrush)window.FindResource("WindowShellBrush");
             var railBrush = (SolidColorBrush)window.FindResource("TabRailBrush");
@@ -38,16 +44,21 @@ public sealed partial class MainWindowInteractionTests
             var shell = window.FindName("WindowShell") as Border;
             var rail = window.FindName("CategoryRail") as Border;
 
-            Assert.AreEqual(Color.FromRgb(0xF7, 0xF8, 0xFA), shellBrush.Color);
+            Assert.AreEqual(Color.FromArgb(0xCC, 0xF7, 0xF8, 0xFA), shellBrush.Color);
             Assert.AreEqual(Color.FromRgb(0xEF, 0xF1, 0xF4), railBrush.Color);
             Assert.AreEqual(Colors.White, cardBrush.Color);
             Assert.IsNotNull(shell);
             Assert.IsNotNull(rail);
-            Assert.AreSame(shellBrush, shell.Background);
+            var shellBackground = (SolidColorBrush)shell.Background;
+            Assert.IsTrue(
+                shellBackground.Color == shellBrush.Color ||
+                shellBackground.Color == ((SolidColorBrush)window.FindResource("WindowShellOpaqueBrush")).Color,
+                "壳背景应为 Mica 表面色或材质不可用时的不透明回退色。");
             Assert.AreSame(railBrush, rail.Background);
         }
         finally
         {
+            DesignThemeManager.Apply(window, DesignTheme.Light);
             CloseWindow(window);
         }
     }
@@ -253,7 +264,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void WindowShell_RendersTransparentLeftCornersAndSquareRightEdge()
+    public void WindowShell_ClipsAllCornersToTheDwmRadiusWithShellTint()
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
@@ -283,9 +294,12 @@ public sealed partial class MainWindowInteractionTests
 
             byte AlphaAt(int x, int y) => pixels[(y * stride) + (x * 4) + 3];
 
-            var topLeftAlpha = AlphaAt(2, 2);
-            var bottomLeftAlpha = AlphaAt(2, height - 3);
-            var topRightAlpha = AlphaAt(width - 3, 2);
+            // 四角统一按 DWM 半径裁剪；角部采样取最外像素避开抗锯齿边缘。
+            // 壳表面为 Mica 半透明色或材质不可用时的不透明回退。
+            var topLeftAlpha = AlphaAt(0, 0);
+            var topRightAlpha = AlphaAt(width - 1, 0);
+            var bottomLeftAlpha = AlphaAt(0, height - 1);
+            var bottomRightAlpha = AlphaAt(width - 1, height - 1);
             Assert.IsTrue(
                 topLeftAlpha <= 16,
                 $"The exposed top-left corner must stay transparent; alpha was {topLeftAlpha}.");
@@ -293,8 +307,41 @@ public sealed partial class MainWindowInteractionTests
                 bottomLeftAlpha <= 16,
                 $"The exposed bottom-left corner must stay transparent; alpha was {bottomLeftAlpha}.");
             Assert.IsTrue(
-                topRightAlpha >= 240,
-                $"The docked right edge must remain square and opaque; alpha was {topRightAlpha}.");
+                topRightAlpha <= 16,
+                $"The exposed top-right corner must stay transparent; alpha was {topRightAlpha}.");
+            Assert.IsTrue(
+                bottomRightAlpha <= 16,
+                $"The exposed bottom-right corner must stay transparent; alpha was {bottomRightAlpha}.");
+            Assert.IsTrue(
+                AlphaAt(width / 2, 2) >= 180,
+                $"The shell surface must paint a visible tint; alpha was {AlphaAt(width / 2, 2)}.");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void WindowShell_UsesGlassChromeWithoutLayeredTransparency()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            var shell = (Border)window.FindName("WindowShell");
+            var chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(window);
+
+            Assert.IsFalse(window.AllowsTransparency, "Mica 壳应弃用分层窗口透明。");
+            Assert.IsNotNull(chrome);
+            Assert.AreEqual(new Thickness(-1), chrome.GlassFrameThickness);
+            Assert.AreEqual(0d, chrome.CaptionHeight);
+            Assert.AreEqual(
+                new CornerRadius(FloatingTransferStation.Design.DesignTokens.DwmCornerRadius),
+                shell.CornerRadius);
         }
         finally
         {
@@ -507,7 +554,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CollapsedHandle_ClipsRailBackgroundToTransparentLeftCornersAndSquareRightEdge()
+    public void CollapsedHandle_ClipsRailBackgroundToDwmRoundedCorners()
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
@@ -532,15 +579,19 @@ public sealed partial class MainWindowInteractionTests
 
             byte AlphaAt(int x, int y) => pixels[(y * stride) + (x * 4) + 3];
 
+            // 收起态同样按 DWM 半径四角裁剪；角部采样取最外像素避开抗锯齿边缘。
             Assert.IsTrue(
-                AlphaAt(2, 2) <= 16,
-                $"Collapsed top-left exterior must be transparent; alpha was {AlphaAt(2, 2)}.");
+                AlphaAt(0, 0) <= 16,
+                $"Collapsed top-left exterior must be transparent; alpha was {AlphaAt(0, 0)}.");
             Assert.IsTrue(
-                AlphaAt(2, height - 3) <= 16,
-                $"Collapsed bottom-left exterior must be transparent; alpha was {AlphaAt(2, height - 3)}.");
+                AlphaAt(0, height - 1) <= 16,
+                $"Collapsed bottom-left exterior must be transparent; alpha was {AlphaAt(0, height - 1)}.");
             Assert.IsTrue(
-                AlphaAt(width - 3, 2) >= 240,
-                $"Collapsed docked right edge must stay square; alpha was {AlphaAt(width - 3, 2)}.");
+                AlphaAt(width - 1, 0) <= 16,
+                $"Collapsed top-right exterior must be transparent; alpha was {AlphaAt(width - 1, 0)}.");
+            Assert.IsTrue(
+                AlphaAt(width / 2, 2) >= 180,
+                $"Collapsed shell surface must paint a visible tint; alpha was {AlphaAt(width / 2, 2)}.");
         }
         finally
         {
@@ -763,9 +814,7 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             var viewModel = (MainWindowViewModel)window.DataContext;
             viewModel.SetDefaultCaptureCategory(BoardCategory.Reference);
-            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
-            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-            CompleteLayout(window);
+            CollapseForSetup(window);
 
             var rowHeight = WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count;
             var expectedTop = SystemParameters.WorkArea.Top + WindowSettings.Default.Top + rowHeight;
@@ -856,6 +905,7 @@ public sealed partial class MainWindowInteractionTests
         var board = new BoardService();
         var item = board.AddText(new string('x', 240));
         var window = CreateWindow(directory, board);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
 
         try
         {
@@ -902,7 +952,12 @@ public sealed partial class MainWindowInteractionTests
 
             item.IsPinned = true;
             CompleteLayout(window);
-            Assert.AreEqual(1d, pinButton.Opacity);
+            Assert.IsTrue(pinButton.HasAnimatedProperties);
+            Assert.AreEqual(
+                1d,
+                pinButton.GetAnimationBaseValue(UIElement.OpacityProperty));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(180));
+            Assert.AreEqual(1d, pinButton.Opacity, 0.001);
             Assert.IsTrue(pinButton.IsHitTestVisible);
             Assert.AreSame(window.FindResource("AccentBrush"), pinButton.Foreground);
         }
@@ -919,6 +974,7 @@ public sealed partial class MainWindowInteractionTests
         var board = new BoardService();
         var item = board.AddText("stable actions");
         var window = CreateWindow(directory, board);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
 
         try
         {
@@ -947,7 +1003,12 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(beforeSelectionWidth, selection.ActualWidth, 0.01);
             Assert.AreEqual(beforeSelectionPosition.X, selection.TranslatePoint(new Point(), contentGrid).X, 0.01);
             Assert.AreEqual(beforeSelectionPosition.Y, selection.TranslatePoint(new Point(), contentGrid).Y, 0.01);
-            Assert.AreEqual(1d, pin.Opacity);
+            Assert.IsTrue(pin.HasAnimatedProperties);
+            Assert.AreEqual(
+                1d,
+                pin.GetAnimationBaseValue(UIElement.OpacityProperty));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(180));
+            Assert.AreEqual(1d, pin.Opacity, 0.001);
             Assert.IsTrue(pin.IsHitTestVisible);
         }
         finally
@@ -1736,6 +1797,7 @@ public sealed partial class MainWindowInteractionTests
             var collapseTimer = GetPrivateField<DispatcherTimer>(window, "_collapseTimer");
             Assert.AreEqual(TimeSpan.FromMilliseconds(250), collapseTimer.Interval);
 
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
             InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
             Assert.IsTrue(collapseTimer.IsEnabled);
             InvokePrivate(window, "Root_MouseEnter", window, NewMouseEventArgs());
@@ -1743,6 +1805,7 @@ public sealed partial class MainWindowInteractionTests
             InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
             Assert.IsTrue(collapseTimer.IsEnabled);
             InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(240));
             CompleteLayout(window);
 
             Assert.AreEqual(WindowSettings.TabWidth, window.Width);
@@ -1765,6 +1828,7 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
 
         try
         {
@@ -1780,13 +1844,14 @@ public sealed partial class MainWindowInteractionTests
             InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
             InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
 
+            // 出场动画期间几何保持展开、壳保持可见；动画完成后才进入几何交接。
             Assert.AreEqual(expandedWidth, window.Width, 0.5);
             Assert.AreEqual(expandedHeight, window.Height, 0.5);
             Assert.AreEqual(expandedTop, window.Top, 0.5);
-            Assert.AreEqual(0d, shell.Opacity);
-            Assert.IsFalse(shell.IsHitTestVisible);
+            Assert.AreEqual(1d, shell.Opacity);
+            Assert.IsTrue(shell.IsHitTestVisible);
             Assert.IsTrue(viewModel.IsPanelExpanded);
-
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(240));
             CompleteLayout(window);
 
             Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);

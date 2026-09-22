@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:design="clr-namespace:FloatingTransferStation.Design;assembly=FloatingTransferStation.Core"
         xmlns:models="clr-namespace:FloatingTransferStation.Models;assembly=FloatingTransferStation.Core"
         xmlns:vm="clr-namespace:FloatingTransferStation.ViewModels;assembly=FloatingTransferStation.Core"
         xmlns:views="clr-namespace:FloatingTransferStation.Views"
@@ -12,13 +13,21 @@
         ShowInTaskbar="False"
         WindowStyle="None"
         ResizeMode="NoResize"
-        AllowsTransparency="True"
+        AllowsTransparency="False"
         Background="Transparent"
         FontFamily="Segoe UI Variable, Segoe UI"
         SizeToContent="Manual"
         PreviewKeyDown="MainWindow_PreviewKeyDown"
         MouseEnter="Root_MouseEnter"
         MouseLeave="Root_MouseLeave">
+  <!-- 玻璃帧铺满整窗承载 DWM 材质（Mica）；圆角由 DWM 裁剪，内容层另有同步自裁剪。 -->
+  <WindowChrome.WindowChrome>
+    <WindowChrome CaptionHeight="0"
+                  GlassFrameThickness="-1"
+                  ResizeBorderThickness="0"
+                  CornerRadius="0"
+                  UseAeroCaptionButtons="False" />
+  </WindowChrome.WindowChrome>
   <Window.CommandBindings>
     <CommandBinding Command="{x:Static views:MainWindow.BatchPinCommand}"
                     CanExecute="BatchPinCommand_CanExecute"
@@ -31,10 +40,12 @@
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="../Resources/MainWindowStyles.xaml" />
+        <ResourceDictionary Source="../Resources/DesignTheme.Light.xaml" />
       </ResourceDictionary.MergedDictionaries>
       <DataTemplate x:Key="CategoryTabTemplate"
                     DataType="{x:Type vm:CategoryViewModel}">
-        <Border Style="{StaticResource CategoryTabContainerStyle}"
+        <Border x:Name="TabSurface"
+                Style="{StaticResource CategoryTabContainerStyle}"
                 Tag="{Binding Category}"
                 AllowDrop="True"
                 MouseEnter="CategoryTab_MouseEnter"
@@ -46,6 +57,14 @@
                 DragOver="CategoryTab_DragOver"
                 Drop="CategoryTab_Drop">
           <Grid Background="Transparent">
+            <Border x:Name="TabHoverLayer"
+                    Background="{DynamicResource HoverSurfaceBrush}"
+                    CornerRadius="8"
+                    Opacity="0"
+                    IsHitTestVisible="False"
+                    views:FadeAnimation.IsActive="{Binding IsMouseOver, ElementName=TabSurface}"
+                    views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                    views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
             <Border Style="{StaticResource CategoryActiveLayerStyle}" />
             <Border Style="{StaticResource CategoryDropTargetLayerStyle}" />
             <Border Style="{StaticResource CategoryActiveMarkerStyle}" />
@@ -135,7 +154,7 @@
                   <Viewbox Width="16" Height="16">
                     <Path Data="M4,9 L4,4 L9,4 M15,9 L15,4 L10,4 M4,10 L4,15 L9,15 M15,10 L15,15 L10,15"
                           Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
-                          StrokeThickness="1.8"
+                          StrokeThickness="1.5"
                           StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round"
                           StrokeLineJoin="Round" />
@@ -147,11 +166,11 @@
                         ToolTip="置顶已选内容"
                         AutomationProperties.Name="置顶已选内容"
                         AutomationProperties.AccessKey="Ctrl+P"
-                        Foreground="{StaticResource AccentBrush}"
+                        Foreground="{DynamicResource AccentBrush}"
                         Visibility="Collapsed"
                         Click="BatchPinButton_Click">
                   <Viewbox Width="16" Height="16">
-                    <Path Data="M8,3 L16,3 L14,8 L17,11 L12,11 L12,18 L10,20 L10,11 L5,11 L8,8 Z"
+                    <Path Data="M10.1221,3.13715 C10.7326,1.91616 12.3599,1.65208 13.3251,2.61737 L17.382,6.67419 C18.3472,7.63947 18.0832,9.26676 16.8622,9.87726 L13.4037,11.6065 C13.0751,11.7708 12.8183,12.0499 12.6818,12.391 L11.2459,15.981 C10.9792,16.6476 10.1179,16.8244 9.61027,16.3167 L7,13.7064 L3.70711,16.9993 L3,17 L3,16.2922 L6.29289,12.9993 L3.68262,10.3891 C3.17498,9.88142 3.35177,9.02011 4.01834,8.75348 L7.60829,7.3175 C7.94939,7.18106 8.22855,6.92419 8.39285,6.5956 L10.1221,3.13715 Z M12.618,3.32447 C12.1354,2.84183 11.3217,2.97387 11.0165,3.58437 L9.28727,7.04282 C9.01345,7.59046 8.54818,8.01858 7.97968,8.24598 L4.38973,9.68196 L10.3174,15.6096 L11.7534,12.0197 C11.9808,11.4512 12.4089,10.9859 12.9565,10.7121 L16.415,8.98283 C17.0255,8.67758 17.1575,7.86394 16.6749,7.3813 L12.618,3.32447 Z"
                           Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
                           Stretch="Uniform" />
                   </Viewbox>
@@ -160,7 +179,7 @@
                 <Button x:Name="DeleteContentButton"
                         ToolTip="清空当前分类"
                         AutomationProperties.Name="清空当前分类"
-                        Foreground="{StaticResource DangerBrush}"
+                        Foreground="{DynamicResource DangerBrush}"
                         Click="DeleteContentButton_Click">
                   <Button.Style>
                     <Style TargetType="Button"
@@ -178,24 +197,25 @@
                              Height="16"
                              HorizontalAlignment="Left"
                              VerticalAlignment="Top">
-                      <Path Data="M6,7 L18,7 L17,20 L7,20 Z M9,4 L15,4 L16,6 L8,6 Z M10,10 L12,10 L12,17 L10,17 Z M14,10 L16,10 L16,17 L14,17 Z"
-                            Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
-                            Stretch="Uniform" />
+                      <Path Data="M8.5,4 L11.5,4 C11.5,3.17157 10.8284,2.5 10,2.5 C9.17157,2.5 8.5,3.17157 8.5,4 Z M7.5,4 C7.5,2.61929 8.61929,1.5 10,1.5 C11.3807,1.5 12.5,2.61929 12.5,4 L17.5,4 C17.7761,4 18,4.22386 18,4.5 C18,4.77614 17.7761,5 17.5,5 L16.4456,5 L15.2521,15.3439 C15.0774,16.8576 13.7957,18 12.2719,18 L7.72813,18 C6.20431,18 4.92256,16.8576 4.7479,15.3439 L3.55437,5 L2.5,5 C2.22386,5 2,4.77614 2,4.5 C2,4.22386 2.22386,4 2.5,4 L7.5,4 Z M5.74131,15.2292 C5.85775,16.2384 6.71225,17 7.72813,17 L12.2719,17 C13.2878,17 14.1422,16.2384 14.2587,15.2292 L15.439,5 L4.56101,5 Z M8.5,7.5 C8.77614,7.5 9,7.72386 9,8 L9,14 C9,14.2761 8.77614,14.5 8.5,14.5 C8.22386,14.5 8,14.2761 8,14 L8,8 C8,7.72386 8.22386,7.5 8.5,7.5 Z M12,8 C12,7.72386 11.7761,7.5 11.5,7.5 C11.2239,7.5 11,7.72386 11,8 L11,14 C11,14.2239 11.2239,14.5 11.5,14.5 C11.7761,14.5 12,14.2761 12,14 L12,8 Z"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                          Stretch="Uniform" />
                     </Viewbox>
-                    <Border x:Name="SelectedCountBadge"
-                            Width="14"
-                            Height="14"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Bottom"
-                            Background="{StaticResource AccentBrush}"
-                            CornerRadius="{StaticResource SelectedCountBadgeCornerRadius}"
-                            IsHitTestVisible="False"
-                            Visibility="Collapsed">
+                      <Border x:Name="SelectedCountBadge"
+                              Width="14"
+                              Height="14"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Bottom"
+                              Background="{DynamicResource AccentBrush}"
+                              CornerRadius="{StaticResource SelectedCountBadgeCornerRadius}"
+                              IsHitTestVisible="False"
+                              Opacity="0"
+                              Visibility="Collapsed">
                       <Viewbox Margin="2"
                                Stretch="Uniform"
                                StretchDirection="DownOnly">
                         <TextBlock x:Name="SelectedCountText"
-                                   Foreground="White"
+                                   Foreground="{DynamicResource OnAccentBrush}"
                                    FontSize="9"
                                    FontWeight="SemiBold"
                                    TextAlignment="Center" />
@@ -281,7 +301,7 @@
                          Grid.Column="3"
                          Margin="8,0,0,0"
                          VerticalAlignment="Center"
-                         Foreground="{StaticResource SecondaryTextBrush}"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
                          Text="今天" />
             </Grid>
             <TextBox x:Name="ReviewEditor"
@@ -293,14 +313,14 @@
                      VerticalContentAlignment="Top"
                      Padding="12"
                      FontSize="14"
-                     BorderBrush="{StaticResource BorderBrush}"
-                     Background="White"
+                     BorderBrush="{DynamicResource BorderBrush}"
+                     Background="{DynamicResource CardBrush}"
                      TextChanged="ReviewEditor_TextChanged"
                      AutomationProperties.Name="每日复盘编辑器" />
             <TextBlock x:Name="ReviewStatus"
                        Grid.Row="2"
                        Margin="2,8,2,0"
-                       Foreground="{StaticResource SecondaryTextBrush}"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
                        Text="今天还没有复盘内容。" />
           </Grid>
         </Border>
@@ -313,11 +333,13 @@
                   Canvas.Top="0"
                   Width="{Binding ActualWidth, ElementName=BoardList}"
                   Height="2"
-                  Background="{StaticResource AccentBrush}"
+                  Background="{DynamicResource AccentBrush}"
                   CornerRadius="1"
                   IsHitTestVisible="False"
                   Opacity="0"
-                  Visibility="Collapsed" />
+                  Visibility="Collapsed"
+                  views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                  views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.PressFeedbackMs}" />
         </Canvas>
 
         <Border x:Name="StatusOverlay"
@@ -370,7 +392,7 @@
                       Grid.Column="1"
                       Content="{Binding DefaultCapturePanel}"
                       ContentTemplate="{StaticResource CategoryTabTemplate}"
-                      Background="{StaticResource TabRailBrush}"
+                      Background="{DynamicResource TabRailBrush}"
                       HorizontalContentAlignment="Stretch"
                       VerticalContentAlignment="Stretch">
         <ContentControl.Style>

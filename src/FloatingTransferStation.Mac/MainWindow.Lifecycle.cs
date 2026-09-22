@@ -29,6 +29,7 @@ public sealed partial class MainWindow
                         _count.Text = $"{_board.Items(_active).Count} 项内容";
                 };
             Expand(_active);
+            ApplyThemeBrushes();
             _shell.IsEnabled = true;
             _initialized.TrySetResult(true);
             if (_smokeDirectory is not null) await RunSmokeTestAsync(_smokeDirectory);
@@ -53,6 +54,7 @@ public sealed partial class MainWindow
 
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        CancelPanelMotion();
         if (_canClose) return;
         e.Cancel = true;
         _ = CloseSafelyAsync();

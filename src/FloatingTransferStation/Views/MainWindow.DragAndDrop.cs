@@ -206,6 +206,7 @@ public partial class MainWindow : Window
         SelectedCountBadge.Visibility = count > 0
             ? Visibility.Visible
             : Visibility.Collapsed;
+        FadeAnimation.SetIsActive(SelectedCountBadge, count > 0);
         var label = count > 0
             ? $"删除已选 {count} 项"
             : "清空当前分类";
@@ -217,7 +218,9 @@ public partial class MainWindow : Window
     private void BeginPanelDrag()
     {
         ClearExternalDragPayload();
+        CancelPanelCollapseExit();
         StopPanelContentAnimation();
+        StopCardEntranceAnimations();
         StopCategoryRevealAnimations();
         _expandIntentTimer.Stop();
         _collapseTimer.Stop();
@@ -646,12 +649,12 @@ public partial class MainWindow : Window
     {
         Canvas.SetTop(InsertionIndicator, ClampIndicatorY(y));
         InsertionIndicator.Visibility = Visibility.Visible;
-        InsertionIndicator.Opacity = 1d;
+        FadeAnimation.SetIsActive(InsertionIndicator, true);
     }
 
     private void HideInsertionIndicator()
     {
-        InsertionIndicator.Opacity = 0d;
+        FadeAnimation.SetIsActive(InsertionIndicator, false);
         InsertionIndicator.Visibility = Visibility.Collapsed;
     }
 

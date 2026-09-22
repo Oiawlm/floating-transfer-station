@@ -22,14 +22,32 @@ public partial class App : Application
         };
         try
         {
+            // FTS_PREVIEW_DATA_DIR / FTS_PREVIEW_THEME 仅供本机预览与截图取证：
+            // 用隔离数据目录启动，并可强制亮/暗主题，绝不触碰已安装应用的数据。
+            var previewDataDirectory = Environment.GetEnvironmentVariable("FTS_PREVIEW_DATA_DIR");
+            var previewTheme = Environment.GetEnvironmentVariable("FTS_PREVIEW_THEME");
+
             _lifecycle = new AppLifecycleService();
-            if (!_lifecycle.TryStart())
+            var lifecycleStarted = string.IsNullOrWhiteSpace(previewDataDirectory)
+                ? _lifecycle.TryStart()
+                : _lifecycle.TryStart(PreviewMutexName(previewDataDirectory));
+            if (!lifecycleStarted)
             {
                 Shutdown();
                 return;
             }
 
-            var paths = AppPaths.CreateDefault(new WindowsDataDirectorySettings());
+            var paths = string.IsNullOrWhiteSpace(previewDataDirectory)
+                ? AppPaths.CreateDefault(new WindowsDataDirectorySettings())
+                : AppPaths.ForTests(previewDataDirectory);
+            if (string.Equals(previewTheme, "dark", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(previewTheme, "light", StringComparison.OrdinalIgnoreCase))
+            {
+                DesignThemeManager.PreviewOverride = previewTheme == "dark"
+                    ? DesignTheme.Dark
+                    : DesignTheme.Light;
+            }
+
             var store = new LocalStore(paths, new AtomicTextWriter());
             var board = new BoardService();
             var snapshot = await store.LoadBoardAsync();
@@ -92,5 +110,14 @@ public partial class App : Application
     {
         _lifecycle?.Dispose();
         base.OnExit(e);
+    }
+
+    private static string PreviewMutexName(string previewDataDirectory)
+    {
+        // 预览实例按数据目录独立加锁，不与已安装应用的单实例互斥争夺。
+        var hash = Convert.ToHexString(
+            System.Security.Cryptography.SHA1.HashData(
+                System.Text.Encoding.UTF8.GetBytes(previewDataDirectory)))[..16];
+        return $"{FloatingTransferStation.Services.SingleInstanceGuard.ApplicationMutexName}.preview.{hash}";
     }
 }

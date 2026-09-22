@@ -252,6 +252,32 @@ public sealed partial class MainWindowInteractionTests
         window.UpdateLayout();
     }
 
+    private static void CollapseForSetup(MainWindow window)
+    {
+        // 作为前置条件的收起走减弱动效路径：同步提交，不等待出场动画。
+        var animations = window.Resources.Contains(SystemParameters.ClientAreaAnimationKey)
+            ? window.Resources[SystemParameters.ClientAreaAnimationKey]
+            : null;
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+        try
+        {
+            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+            CompleteLayout(window);
+        }
+        finally
+        {
+            if (animations is null)
+            {
+                window.Resources.Remove(SystemParameters.ClientAreaAnimationKey);
+            }
+            else
+            {
+                window.Resources[SystemParameters.ClientAreaAnimationKey] = animations;
+            }
+        }
+    }
+
     private static void PumpDispatcherFor(Dispatcher dispatcher, TimeSpan duration)
     {
         var frame = new DispatcherFrame();
@@ -733,6 +759,7 @@ public sealed partial class MainWindowInteractionTests
     {
         public Exception? SaveFailure { get; set; }
         public Exception? SettingsSaveFailure { get; set; }
+        public TimeSpan? SaveDelay { get; set; }
         public TaskCompletionSource ImageDeleted { get; } = new(
             TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource SaveCompleted { get; } = new(
@@ -749,6 +776,27 @@ public sealed partial class MainWindowInteractionTests
             BoardSnapshot snapshot,
             CancellationToken cancellationToken = default)
         {
+            if (SaveDelay is { } delay)
+            {
+                return SaveAfterDelayAsync(snapshot, delay, cancellationToken);
+            }
+
+            SaveCore(snapshot);
+            return Task.CompletedTask;
+        }
+
+        // 仅在显式要求慢保存时走异步路径；失败抛出保持历史同步语义。
+        private async Task SaveAfterDelayAsync(
+            BoardSnapshot snapshot,
+            TimeSpan delay,
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(delay, cancellationToken);
+            SaveCore(snapshot);
+        }
+
+        private void SaveCore(BoardSnapshot snapshot)
+        {
             if (SaveFailure is not null)
             {
                 throw SaveFailure;
@@ -757,7 +805,6 @@ public sealed partial class MainWindowInteractionTests
             LastPersistedSnapshot = snapshot;
             SaveCount++;
             SaveCompleted.TrySetResult();
-            return Task.CompletedTask;
         }
 
         public Task<WindowSettings> LoadSettingsAsync(

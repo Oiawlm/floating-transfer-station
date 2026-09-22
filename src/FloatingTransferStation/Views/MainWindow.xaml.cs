@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -24,14 +25,17 @@ public partial class MainWindow : Window
             new FrameworkPropertyMetadata(true, OnClientAreaAnimationsEnabledChanged));
 
     private static readonly TimeSpan ExpandContentAnimationDuration =
-        TimeSpan.FromMilliseconds(167);
+        TimeSpan.FromMilliseconds(DesignTokens.PanelExpandContentMs);
     private static readonly TimeSpan SwitchContentAnimationDuration =
-        TimeSpan.FromMilliseconds(140);
+        TimeSpan.FromMilliseconds(DesignTokens.PanelSwitchContentMs);
     private static readonly TimeSpan ReducedMotionContentAnimationDuration =
-        TimeSpan.FromMilliseconds(83);
+        TimeSpan.FromMilliseconds(DesignTokens.ReducedMotionFadeMs);
     private static readonly TimeSpan CategoryRevealAnimationDuration =
-        TimeSpan.FromMilliseconds(120);
-    private const double CategoryRevealOffset = 6d;
+        TimeSpan.FromMilliseconds(DesignTokens.CategoryRevealMs);
+    private static readonly TimeSpan PanelCollapseExitAnimationDuration =
+        TimeSpan.FromMilliseconds(DesignTokens.PanelCollapseExitMs);
+    private const double CategoryRevealOffset = DesignTokens.ContentEntranceOffsetPx;
+    private const double PanelCollapseExitOffset = DesignTokens.CollapseExitOffsetPx;
     private static readonly HandoffBehavior CategoryRevealAnimationHandoffBehavior =
         HandoffBehavior.SnapshotAndReplace;
 
@@ -53,6 +57,8 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _settingsSaveGate = new(1, 1);
     private System.Windows.Interop.HwndSource? _windowSource;
     private CancellationTokenSource _windowOperationCancellation = new();
+    private DesignTheme _activeDesignTheme = DesignTheme.Light;
+    private bool _micaApplied;
     private IDataObject? _externalDragData;
     private ExternalDropPayload? _externalDragPayload;
     private Point _dragStart;
@@ -77,8 +83,10 @@ public partial class MainWindow : Window
     {
         if (dependencyObject is MainWindow window && eventArgs.NewValue is false)
         {
+            window.CancelPanelCollapseExit();
             window.StopPanelContentAnimation();
             window.StopCategoryRevealAnimations();
+            window.StopCardEntranceAnimations();
         }
     }
 
@@ -95,6 +103,8 @@ public partial class MainWindow : Window
         IDailyReviewStore? dailyReviewStore = null)
     {
         InitializeComponent();
+        _activeDesignTheme = DesignThemeManager.DetectSystemTheme();
+        DesignThemeManager.Apply(this, _activeDesignTheme);
         SetResourceReference(
             ClientAreaAnimationsEnabledProperty,
             SystemParameters.ClientAreaAnimationKey);
@@ -164,9 +174,24 @@ public partial class MainWindow : Window
         }
 
         _windowSource.AddHook(WndProc);
+        ApplyWindowMaterial();
         if (!NativeMethods.AddClipboardFormatListener(_windowSource.Handle))
         {
             ShowStatus("剪贴板监听未启动，请重新打开悬浮中转站。");
+        }
+    }
+
+    private void ApplyWindowMaterial()
+    {
+        _micaApplied = DwmWindowEffects.TryApplyMaterial(
+            _windowSource?.Handle ?? 0,
+            _activeDesignTheme == DesignTheme.Dark);
+        if (!_micaApplied && WindowShell is not null)
+        {
+            // 材质不可用（旧系统）时回退到不透明壳，避免透明像素露出黑底。
+            WindowShell.Background =
+                TryFindResource("WindowShellOpaqueBrush") as System.Windows.Media.Brush
+                ?? WindowShell.Background;
         }
     }
 
@@ -175,6 +200,22 @@ public partial class MainWindow : Window
         if (!_isClosing && message == NativeMethods.WmClipboardUpdate)
         {
             StartClipboardCapture();
+        }
+
+        if (!_isClosing &&
+            message == NativeMethods.WmSettingChange &&
+            System.Runtime.InteropServices.Marshal.PtrToStringUni(lParam) is { Length: > 0 } section &&
+            section.Contains("ImmersiveColorSet", StringComparison.Ordinal))
+        {
+            var detected = DesignThemeManager.DetectSystemTheme();
+            Dispatcher.BeginInvoke(() =>
+            {
+                _activeDesignTheme = detected;
+                DesignThemeManager.Apply(this, detected);
+                DwmWindowEffects.UpdateImmersiveDarkMode(
+                    _windowSource?.Handle ?? 0,
+                    detected == DesignTheme.Dark);
+            });
         }
 
         return 0;

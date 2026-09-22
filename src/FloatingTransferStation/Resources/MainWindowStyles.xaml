@@ -1,62 +1,50 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:converters="clr-namespace:FloatingTransferStation.Converters"
+                    xmlns:design="clr-namespace:FloatingTransferStation.Design;assembly=FloatingTransferStation.Core"
                     xmlns:models="clr-namespace:FloatingTransferStation.Models;assembly=FloatingTransferStation.Core"
                     xmlns:views="clr-namespace:FloatingTransferStation.Views">
-  <SolidColorBrush x:Key="WindowShellBrush" Color="#F7F8FA" />
-  <SolidColorBrush x:Key="TabRailBrush" Color="#EFF1F4" />
-  <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF" />
-  <SolidColorBrush x:Key="BorderBrush" Color="#E2E5EA" />
-  <SolidColorBrush x:Key="PrimaryTextBrush" Color="#1D1D1F" />
-  <SolidColorBrush x:Key="SecondaryTextBrush" Color="#5F6368" />
-  <SolidColorBrush x:Key="AccentBrush" Color="#6D5DFB" />
-  <SolidColorBrush x:Key="DangerBrush" Color="#D92D20" />
-  <SolidColorBrush x:Key="HeaderBrush" Color="#FBFBFC" />
-  <SolidColorBrush x:Key="HoverSurfaceBrush" Color="#F4F5F7" />
-  <SolidColorBrush x:Key="HoverBorderBrush" Color="#C9CDD5" />
-  <SolidColorBrush x:Key="SelectedCardBrush" Color="#F3F1FF" />
-  <SolidColorBrush x:Key="SelectedCardBorderBrush" Color="#8B7CF6" />
-  <SolidColorBrush x:Key="ActiveCategoryBrush" Color="#E7E4FF" />
-  <SolidColorBrush x:Key="DropTargetBrush" Color="#EAE7FF" />
-  <SolidColorBrush x:Key="ScrollThumbBrush" Color="#B8BDC7" />
-  <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#969CA7" />
-
+  <!-- 颜色画刷与卡片阴影定义在 Resources/DesignTheme.Light.xaml 与 DesignTheme.Dark.xaml，
+       由 DesignThemeManager 在运行时整体替换；本字典内一律以 DynamicResource 引用。 -->
   <FontFamily x:Key="InterfaceFontFamily">Segoe UI Variable, Segoe UI</FontFamily>
   <GridLength x:Key="CardOperationColumnWidth">30</GridLength>
+  <CornerRadius x:Key="ShellCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="HeaderActionCornerRadius">7</CornerRadius>
   <CornerRadius x:Key="PinButtonCornerRadius">6</CornerRadius>
   <CornerRadius x:Key="SelectedCountBadgeCornerRadius">7</CornerRadius>
   <converters:ImageThumbnailConverter x:Key="ImageThumbnailConverter" />
+  <converters:BooleanOrConverter x:Key="BooleanOrConverter" />
+  <converters:NonEmptyTextConverter x:Key="NonEmptyTextConverter" />
 
   <ControlTemplate x:Key="TransparentThumbTemplate" TargetType="Thumb">
     <Border Background="{TemplateBinding Background}" />
   </ControlTemplate>
 
   <Style x:Key="WindowShellStyle" TargetType="Border">
-    <Setter Property="Background" Value="{StaticResource WindowShellBrush}" />
-    <Setter Property="CornerRadius" Value="12,0,0,12" />
+    <Setter Property="Background" Value="{DynamicResource WindowShellBrush}" />
+    <Setter Property="CornerRadius" Value="{StaticResource ShellCornerRadius}" />
   </Style>
 
   <Style x:Key="WindowShellOutlineStyle" TargetType="Border">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1,1,0,1" />
-    <Setter Property="CornerRadius" Value="12,0,0,12" />
+    <Setter Property="CornerRadius" Value="{StaticResource ShellCornerRadius}" />
     <Setter Property="IsHitTestVisible" Value="False" />
   </Style>
 
   <Style x:Key="HeaderSurfaceStyle" TargetType="Border">
-    <Setter Property="Background" Value="{StaticResource HeaderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource HeaderBrush}" />
     <Setter Property="CornerRadius" Value="11,0,0,0" />
   </Style>
 
   <Style x:Key="RailSurfaceStyle" TargetType="Border">
-    <Setter Property="Background" Value="{StaticResource TabRailBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TabRailBrush}" />
   </Style>
 
   <Style x:Key="HeaderTitleStyle" TargetType="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
     <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="16" />
     <Setter Property="FontWeight" Value="SemiBold" />
@@ -75,7 +63,7 @@
     <Setter Property="Margin" Value="4,0,0,0" />
     <Setter Property="Padding" Value="7" />
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Focusable" Value="False" />
@@ -88,23 +76,30 @@
                   BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}"
                   CornerRadius="{StaticResource HeaderActionCornerRadius}">
-            <ContentPresenter HorizontalAlignment="Center"
-                              VerticalAlignment="Center" />
+            <Grid>
+              <Border x:Name="HoverLayer"
+                      Background="{DynamicResource HoverSurfaceBrush}"
+                      BorderBrush="{DynamicResource HoverBorderBrush}"
+                      BorderThickness="1"
+                      CornerRadius="{StaticResource HeaderActionCornerRadius}"
+                      Opacity="0"
+                      IsHitTestVisible="False"
+                      views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}"
+                      views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                      views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+              <Border x:Name="PressedLayer"
+                      Background="{DynamicResource ActiveCategoryBrush}"
+                      CornerRadius="{StaticResource HeaderActionCornerRadius}"
+                      Opacity="0"
+                      IsHitTestVisible="False"
+                      views:FadeAnimation.IsActive="{Binding IsPressed, RelativeSource={RelativeSource TemplatedParent}}"
+                      views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                      views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.PressFeedbackMs}" />
+              <ContentPresenter HorizontalAlignment="Center"
+                                VerticalAlignment="Center" />
+            </Grid>
           </Border>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="ActionSurface"
-                      Property="Background"
-                      Value="{StaticResource HoverSurfaceBrush}" />
-              <Setter TargetName="ActionSurface"
-                      Property="BorderBrush"
-                      Value="{StaticResource HoverBorderBrush}" />
-            </Trigger>
-            <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="ActionSurface"
-                      Property="Background"
-                      Value="{StaticResource ActiveCategoryBrush}" />
-            </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter Property="Opacity" Value="0.35" />
             </Trigger>
@@ -121,17 +116,14 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
     <Style.Triggers>
-      <Trigger Property="IsMouseOver" Value="True">
-        <Setter Property="Background" Value="{StaticResource HoverSurfaceBrush}" />
-      </Trigger>
       <Trigger Property="IsKeyboardFocusWithin" Value="True">
-        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
       </Trigger>
     </Style.Triggers>
   </Style>
 
   <Style x:Key="CategoryActiveLayerStyle" TargetType="Border">
-    <Setter Property="Background" Value="{StaticResource ActiveCategoryBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="Opacity" Value="0" />
     <Setter Property="IsHitTestVisible" Value="False" />
@@ -141,17 +133,17 @@
   </Style>
 
   <Style x:Key="CategoryDropTargetLayerStyle" TargetType="Border">
-    <Setter Property="Background" Value="{StaticResource DropTargetBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource DropTargetBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="Opacity" Value="0" />
     <Setter Property="IsHitTestVisible" Value="False" />
-    <Style.Triggers>
-      <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
-        <Setter Property="Opacity" Value="1" />
-      </DataTrigger>
-    </Style.Triggers>
+    <Setter Property="views:FadeAnimation.IsActive" Value="{Binding IsDropTarget}" />
+    <Setter Property="views:FadeAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
+    <Setter Property="views:FadeAnimation.DurationMs"
+            Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
   </Style>
 
   <Style x:Key="CategoryActiveMarkerStyle" TargetType="Border">
@@ -159,7 +151,7 @@
     <Setter Property="Height" Value="22" />
     <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="CornerRadius" Value="0,2,2,0" />
     <Setter Property="Opacity" Value="0" />
     <Setter Property="IsHitTestVisible" Value="False" />
@@ -169,7 +161,7 @@
   </Style>
 
   <Style x:Key="CategoryDefaultMarkerStyle" TargetType="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
     <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="11" />
     <Setter Property="FontWeight" Value="SemiBold" />
@@ -187,7 +179,7 @@
   </Style>
 
   <Style x:Key="CategoryLabelTextStyle" TargetType="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
     <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
     <Setter Property="FontWeight" Value="Normal" />
@@ -201,7 +193,7 @@
         <Setter Property="Visibility" Value="Collapsed" />
       </DataTrigger>
       <DataTrigger Binding="{Binding IsActive}" Value="True">
-        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
         <Setter Property="FontWeight" Value="SemiBold" />
       </DataTrigger>
     </Style.Triggers>
@@ -213,10 +205,10 @@
     <Setter Property="Height" Value="28" />
     <Setter Property="Margin" Value="5" />
     <Setter Property="Padding" Value="1" />
-    <Setter Property="Background" Value="{StaticResource CardBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
     <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -262,26 +254,19 @@
 
   <Style x:Key="CardContainerStyle" TargetType="Border">
     <Setter Property="Margin" Value="12,4" />
-    <Setter Property="Padding" Value="12" />
     <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}" />
-    <Setter Property="Background" Value="{StaticResource CardBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Effect" Value="{x:Null}" />
+    <Setter Property="Effect" Value="{DynamicResource CardShadowEffect}" />
+    <Setter Property="views:LiftAnimation.IsActive"
+            Value="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" />
+    <Setter Property="views:LiftAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
     <Style.Triggers>
-      <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=IsMouseOver}"
-                   Value="True">
-        <Setter Property="Background" Value="{StaticResource HoverSurfaceBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource HoverBorderBrush}" />
-      </DataTrigger>
       <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=IsKeyboardFocusWithin}"
                    Value="True">
-        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
-      </DataTrigger>
-      <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=IsSelected}"
-                   Value="True">
-        <Setter Property="Background" Value="{StaticResource SelectedCardBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource SelectedCardBorderBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
       </DataTrigger>
       <DataTrigger Binding="{Binding StartsNormalRegion}" Value="True">
         <Setter Property="Margin" Value="12,10,12,4" />
@@ -300,6 +285,18 @@
     <Setter Property="Padding" Value="0" />
     <Setter Property="Focusable" Value="False" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="views:FadeAnimation.IsActive">
+      <Setter.Value>
+        <MultiBinding Converter="{StaticResource BooleanOrConverter}">
+          <Binding Path="IsMouseOver" RelativeSource="{RelativeSource AncestorType={x:Type ListBoxItem}}" />
+          <Binding Path="IsSelected" RelativeSource="{RelativeSource AncestorType={x:Type ListBoxItem}}" />
+        </MultiBinding>
+      </Setter.Value>
+    </Setter>
+    <Setter Property="views:FadeAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
+    <Setter Property="views:FadeAnimation.DurationMs"
+            Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -310,54 +307,64 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Background="Transparent"
-                    BorderBrush="{StaticResource SecondaryTextBrush}"
-                    BorderThickness="1.4"
+                    BorderBrush="{DynamicResource SecondaryTextBrush}"
+                    BorderThickness="1.5"
                     CornerRadius="5" />
+            <Border x:Name="SelectionHoverRing"
+                    Width="16"
+                    Height="16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BorderBrush="{DynamicResource AccentBrush}"
+                    BorderThickness="1.5"
+                    CornerRadius="5"
+                    Opacity="0"
+                    IsHitTestVisible="False"
+                    views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}"
+                    views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                    views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+            <Border x:Name="SelectionSelectedFill"
+                    Width="16"
+                    Height="16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource AccentBrush}"
+                    CornerRadius="5"
+                    Opacity="0"
+                    IsHitTestVisible="False"
+                    views:FadeAnimation.IsActive="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
+                    views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                    views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}" />
             <Path x:Name="SelectionCheck"
                   Width="9"
                   Height="7"
                   HorizontalAlignment="Center"
                   VerticalAlignment="Center"
                   Data="M1,3.5 L3.5,6 L8,1"
-                  Stroke="White"
-                  StrokeThickness="1.7"
+                  Stroke="{DynamicResource OnAccentBrush}"
+                  StrokeThickness="1.5"
                   StrokeStartLineCap="Round"
                   StrokeEndLineCap="Round"
                   StrokeLineJoin="Round"
                   Stretch="Fill"
-                  Visibility="Collapsed" />
+                  Opacity="0"
+                  Visibility="Collapsed"
+                  IsHitTestVisible="False"
+                  views:FadeAnimation.IsActive="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
+                  views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                  views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}"
+                  views:FadeAnimation.ManageVisibility="True" />
           </Grid>
-          <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="SelectionSurface"
-                      Property="BorderBrush"
-                      Value="{StaticResource AccentBrush}" />
-            </Trigger>
-            <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=IsSelected}"
-                         Value="True">
-              <Setter TargetName="SelectionSurface"
-                      Property="Background"
-                      Value="{StaticResource AccentBrush}" />
-              <Setter TargetName="SelectionSurface"
-                      Property="BorderBrush"
-                      Value="{StaticResource AccentBrush}" />
-              <Setter TargetName="SelectionCheck"
-                      Property="Visibility"
-                      Value="Visible" />
-            </DataTrigger>
-          </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
     <Style.Triggers>
       <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=IsMouseOver}"
                    Value="True">
-        <Setter Property="Opacity" Value="1" />
         <Setter Property="IsHitTestVisible" Value="True" />
       </DataTrigger>
       <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=IsSelected}"
                    Value="True">
-        <Setter Property="Opacity" Value="1" />
         <Setter Property="IsHitTestVisible" Value="True" />
       </DataTrigger>
     </Style.Triggers>
@@ -370,13 +377,25 @@
     <Setter Property="IsHitTestVisible" Value="False" />
     <Setter Property="Visibility" Value="Visible" />
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="6" />
     <Setter Property="Focusable" Value="False" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="ToolTip" Value="置顶" />
+    <Setter Property="views:FadeAnimation.IsActive">
+      <Setter.Value>
+        <MultiBinding Converter="{StaticResource BooleanOrConverter}">
+          <Binding Path="IsMouseOver" RelativeSource="{RelativeSource AncestorType={x:Type ListBoxItem}}" />
+          <Binding Path="IsPinned" />
+        </MultiBinding>
+      </Setter.Value>
+    </Setter>
+    <Setter Property="views:FadeAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
+    <Setter Property="views:FadeAnimation.DurationMs"
+            Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -385,20 +404,33 @@
                   BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}"
                   CornerRadius="{StaticResource PinButtonCornerRadius}">
-            <ContentPresenter HorizontalAlignment="Center"
-                              VerticalAlignment="Center" />
+            <Grid>
+              <Border x:Name="HoverLayer"
+                      Background="{DynamicResource HoverSurfaceBrush}"
+                      CornerRadius="{StaticResource PinButtonCornerRadius}"
+                      Opacity="0"
+                      IsHitTestVisible="False"
+                      views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}"
+                      views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                      views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+              <Border x:Name="PressedLayer"
+                      Background="{DynamicResource ActiveCategoryBrush}"
+                      CornerRadius="{StaticResource PinButtonCornerRadius}"
+                      Opacity="0"
+                      IsHitTestVisible="False"
+                      views:FadeAnimation.IsActive="{Binding IsPressed, RelativeSource={RelativeSource TemplatedParent}}"
+                      views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                      views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.PressFeedbackMs}" />
+              <ContentPresenter HorizontalAlignment="Center"
+                                VerticalAlignment="Center" />
+            </Grid>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="PinSurface"
-                      Property="Background"
-                      Value="{StaticResource HoverSurfaceBrush}" />
-              <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+              <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="PinSurface"
-                      Property="Background"
-                      Value="{StaticResource ActiveCategoryBrush}" />
+              <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -407,13 +439,11 @@
     <Style.Triggers>
       <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=IsMouseOver}"
                    Value="True">
-        <Setter Property="Opacity" Value="1" />
         <Setter Property="IsHitTestVisible" Value="True" />
       </DataTrigger>
       <DataTrigger Binding="{Binding IsPinned}" Value="True">
-        <Setter Property="Opacity" Value="1" />
         <Setter Property="IsHitTestVisible" Value="True" />
-        <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         <Setter Property="ToolTip" Value="取消置顶" />
       </DataTrigger>
     </Style.Triggers>
@@ -423,21 +453,23 @@
     <Setter Property="Margin" Value="12" />
     <Setter Property="Padding" Value="9,7" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
-    <Setter Property="Background" Value="#FCFCFD" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource StatusSurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="IsHitTestVisible" Value="False" />
-    <Setter Property="Visibility" Value="Visible" />
-    <Style.Triggers>
-      <DataTrigger Binding="{Binding StatusText}" Value="">
-        <Setter Property="Visibility" Value="Collapsed" />
-      </DataTrigger>
-    </Style.Triggers>
+    <Setter Property="Visibility" Value="Collapsed" />
+    <Setter Property="views:FadeAnimation.IsActive"
+            Value="{Binding StatusText, Converter={StaticResource NonEmptyTextConverter}}" />
+    <Setter Property="views:FadeAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
+    <Setter Property="views:FadeAnimation.DurationMs"
+            Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+    <Setter Property="views:FadeAnimation.ManageVisibility" Value="True" />
   </Style>
 
   <Style x:Key="StatusTextStyle" TargetType="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
     <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
     <Setter Property="TextWrapping" Value="Wrap" />
@@ -446,11 +478,18 @@
   <Style x:Key="CompactStatusPopupStyle" TargetType="Border">
     <Setter Property="MaxWidth" Value="260" />
     <Setter Property="Padding" Value="10,8" />
-    <Setter Property="Background" Value="{StaticResource HeaderBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource HeaderBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="views:FadeAnimation.IsActive"
+            Value="{Binding StatusText, Converter={StaticResource NonEmptyTextConverter}}" />
+    <Setter Property="views:FadeAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
+    <Setter Property="views:FadeAnimation.DurationMs"
+            Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
   </Style>
 
   <Style x:Key="HeaderThumbStyle" TargetType="Thumb">
@@ -492,20 +531,25 @@
     <Setter Property="Width" Value="4" />
     <Setter Property="MinHeight" Value="24" />
     <Setter Property="HorizontalAlignment" Value="Center" />
-    <Setter Property="Background" Value="{StaticResource ScrollThumbBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ScrollThumbBrush}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Thumb">
-          <Border x:Name="ThumbSurface"
-                  Background="{TemplateBinding Background}"
-                  CornerRadius="2" />
-          <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="ThumbSurface"
-                      Property="Background"
-                      Value="{StaticResource ScrollThumbHoverBrush}" />
-            </Trigger>
-          </ControlTemplate.Triggers>
+          <Grid>
+            <Border x:Name="ThumbSurface"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="2" />
+            <Border x:Name="ThumbHoverLayer"
+                    Width="6"
+                    HorizontalAlignment="Center"
+                    Background="{DynamicResource ScrollThumbHoverBrush}"
+                    CornerRadius="3"
+                    Opacity="0"
+                    IsHitTestVisible="False"
+                    views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}"
+                    views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                    views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+          </Grid>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
@@ -542,11 +586,49 @@
   <DataTemplate DataType="{x:Type models:BoardItem}">
     <Border Style="{StaticResource CardContainerStyle}">
       <Grid Background="Transparent">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*" />
-          <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
-          <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
-        </Grid.ColumnDefinitions>
+        <Border x:Name="CardHoverFillLayer"
+                Background="{DynamicResource HoverSurfaceBrush}"
+                CornerRadius="7"
+                Opacity="0"
+                IsHitTestVisible="False"
+                views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
+                views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+        <Border x:Name="CardHoverRingLayer"
+                BorderBrush="{DynamicResource HoverBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Margin="-1"
+                Opacity="0"
+                IsHitTestVisible="False"
+                views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
+                views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+        <Border x:Name="CardSelectedFillLayer"
+                Background="{DynamicResource SelectedCardBrush}"
+                CornerRadius="7"
+                Opacity="0"
+                IsHitTestVisible="False"
+                views:FadeAnimation.IsActive="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
+                views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+        <Border x:Name="CardSelectedRingLayer"
+                BorderBrush="{DynamicResource SelectedCardBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Margin="-1"
+                Opacity="0"
+                IsHitTestVisible="False"
+                views:FadeAnimation.IsActive="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
+                views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+
+        <Grid Margin="12" Background="Transparent">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
+            <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
+          </Grid.ColumnDefinitions>
 
         <Grid Grid.Column="0" Background="Transparent">
           <Image Height="120"
@@ -569,7 +651,7 @@
                      FontFamily="{StaticResource InterfaceFontFamily}"
                      FontSize="14"
                      FontWeight="Normal"
-                     Foreground="{StaticResource PrimaryTextBrush}"
+                     Foreground="{DynamicResource PrimaryTextBrush}"
                      TextWrapping="Wrap"
                      TextTrimming="CharacterEllipsis"
                      LineHeight="18"
@@ -597,7 +679,7 @@
                 HorizontalAlignment="Right"
                 VerticalAlignment="Top">
           <Viewbox Width="16" Height="16">
-            <Path Data="M8,3 L16,3 L14,8 L17,11 L12,11 L12,18 L10,20 L10,11 L5,11 L8,8 Z"
+            <Path Data="M10.1221,3.13715 C10.7326,1.91616 12.3599,1.65208 13.3251,2.61737 L17.382,6.67419 C18.3472,7.63947 18.0832,9.26676 16.8622,9.87726 L13.4037,11.6065 C13.0751,11.7708 12.8183,12.0499 12.6818,12.391 L11.2459,15.981 C10.9792,16.6476 10.1179,16.8244 9.61027,16.3167 L7,13.7064 L3.70711,16.9993 L3,17 L3,16.2922 L6.29289,12.9993 L3.68262,10.3891 C3.17498,9.88142 3.35177,9.02011 4.01834,8.75348 L7.60829,7.3175 C7.94939,7.18106 8.22855,6.92419 8.39285,6.5956 L10.1221,3.13715 Z M12.618,3.32447 C12.1354,2.84183 11.3217,2.97387 11.0165,3.58437 L9.28727,7.04282 C9.01345,7.59046 8.54818,8.01858 7.97968,8.24598 L4.38973,9.68196 L10.3174,15.6096 L11.7534,12.0197 C11.9808,11.4512 12.4089,10.9859 12.9565,10.7121 L16.415,8.98283 C17.0255,8.67758 17.1575,7.86394 16.6749,7.3813 L12.618,3.32447 Z"
                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
                   Stretch="Uniform" />
           </Viewbox>
@@ -611,6 +693,7 @@
                 AutomationProperties.Name="选择"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Top" />
+        </Grid>
       </Grid>
     </Border>
   </DataTemplate>

@@ -12,6 +12,8 @@
 
 Mac 数据与 Windows 数据独立，不提供自动跨设备同步。`board.json`、`settings.json` 与 `reviews/*.md` 格式继续共享；“两端同步”指功能维护和版本构建同步。复盘文件是普通 Markdown，可由 Obsidian 直接打开。
 
+两端视觉层共用同一组设计 token 数值（唯一来源是共享 Core 的 `DesignTokens`，人类可读规范见 [设计规范](design.md)），由 WPF 与 Avalonia 各自渲染；不引入共享 UI 框架，允许各平台用自己的机制实现同样的时长、曲线与色板。
+
 ## 主要责任
 
 - `Core/Models/` 与 Windows `Models/`：分别存放共享板模型，以及 Windows 剪贴板快照/外部拖入载荷。
@@ -31,7 +33,7 @@ Mac 数据与 Windows 数据独立，不提供自动跨设备同步。`board.jso
 3. `BoardService` 和相关变更服务按分类、置顶区和顺序规则生成新快照。
 4. `LocalStore` 使用临时文件和原子替换保存 `board.json`；失败时界面操作恢复到原状态。
 5. 复盘编辑器通过 `IDailyReviewStore` 读取日期文件；输入停止后自动保存，文件监听发现外部变更时按编辑器 dirty 状态刷新或进入冲突合并。
-5. 界面只在保存成功后保留变更，并通过通用 Windows 数据格式对外拖出。
+6. 界面只在保存成功后保留变更，并通过通用 Windows 数据格式对外拖出。
 
 `LocalStore` 先进入各文件独立的保存门，再将 JSON 序列化和原子写入调度到后台，避免线程调度改变保存顺序，同时让界面继续响应。调用方传入 `BoardService.CreateSnapshot()` 生成的独立快照；窗口设置通过新对象替换。快照构建仍在状态所属线程完成。
 
