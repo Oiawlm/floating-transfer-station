@@ -334,7 +334,7 @@
                     VerticalAlignment="Center"
                     Background="Transparent"
                     BorderBrush="{StaticResource SecondaryTextBrush}"
-                    BorderThickness="1.4"
+                    BorderThickness="1.5"
                     CornerRadius="5" />
             <Border x:Name="SelectionHoverRing"
                     Width="16"
@@ -342,7 +342,7 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     BorderBrush="{StaticResource AccentBrush}"
-                    BorderThickness="1.4"
+                    BorderThickness="1.5"
                     CornerRadius="5"
                     Opacity="0"
                     IsHitTestVisible="False"
@@ -368,7 +368,7 @@
                   VerticalAlignment="Center"
                   Data="M1,3.5 L3.5,6 L8,1"
                   Stroke="{StaticResource OnAccentBrush}"
-                  StrokeThickness="1.7"
+                  StrokeThickness="1.5"
                   StrokeStartLineCap="Round"
                   StrokeEndLineCap="Round"
                   StrokeLineJoin="Round"
@@ -705,7 +705,7 @@
                 HorizontalAlignment="Right"
                 VerticalAlignment="Top">
           <Viewbox Width="16" Height="16">
-            <Path Data="M8,3 L16,3 L14,8 L17,11 L12,11 L12,18 L10,20 L10,11 L5,11 L8,8 Z"
+            <Path Data="M10.1221,3.13715 C10.7326,1.91616 12.3599,1.65208 13.3251,2.61737 L17.382,6.67419 C18.3472,7.63947 18.0832,9.26676 16.8622,9.87726 L13.4037,11.6065 C13.0751,11.7708 12.8183,12.0499 12.6818,12.391 L11.2459,15.981 C10.9792,16.6476 10.1179,16.8244 9.61027,16.3167 L7,13.7064 L3.70711,16.9993 L3,17 L3,16.2922 L6.29289,12.9993 L3.68262,10.3891 C3.17498,9.88142 3.35177,9.02011 4.01834,8.75348 L7.60829,7.3175 C7.94939,7.18106 8.22855,6.92419 8.39285,6.5956 L10.1221,3.13715 Z M12.618,3.32447 C12.1354,2.84183 11.3217,2.97387 11.0165,3.58437 L9.28727,7.04282 C9.01345,7.59046 8.54818,8.01858 7.97968,8.24598 L4.38973,9.68196 L10.3174,15.6096 L11.7534,12.0197 C11.9808,11.4512 12.4089,10.9859 12.9565,10.7121 L16.415,8.98283 C17.0255,8.67758 17.1575,7.86394 16.6749,7.3813 L12.618,3.32447 Z"
                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
                   Stretch="Uniform" />
           </Viewbox>

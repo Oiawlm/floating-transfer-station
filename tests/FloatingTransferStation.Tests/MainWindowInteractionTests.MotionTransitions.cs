@@ -559,4 +559,69 @@ public sealed partial class MainWindowInteractionTests
             CloseWindow(window);
         }
     }
+
+    [STATestMethod]
+    public void Icons_UseFluentGeometryWithUniformStrokeWeights()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var pinned = board.AddText("pinned card");
+        board.SetPinnedMany([pinned.Id], true);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(pinned);
+            InvokePrivate(window, "SetHeaderActionsVisible", true);
+            CompleteLayout(window);
+            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(pinned);
+            Assert.IsNotNull(container);
+
+            // Fluent pin_20_regular 几何（20×20 外轮廓 + 内轮廓）。
+            var pinPath = FindDescendant<System.Windows.Shapes.Path>(
+                FindDescendants<Button>(container)
+                    .Single(candidate => Equals(candidate.CommandParameter, "TogglePin")));
+            Assert.IsNotNull(pinPath);
+            StringAssert.StartsWith(pinPath.Data.ToString(), "M10.1221");
+
+            var batchPinPath = FindDescendant<System.Windows.Shapes.Path>(
+                (Button)window.FindName("BatchPinButton"));
+            Assert.IsNotNull(batchPinPath);
+            StringAssert.StartsWith(batchPinPath.Data.ToString(), "M10.1221");
+
+            // Fluent delete_20_regular 几何（盖沿、外圈、桶身与两条竖线）。
+            var trashPath = FindDescendant<System.Windows.Shapes.Path>(
+                (Button)window.FindName("DeleteContentButton"));
+            Assert.IsNotNull(trashPath);
+            StringAssert.StartsWith(trashPath.Data.ToString(), "M8.5,4");
+
+            var resetPath = FindDescendant<System.Windows.Shapes.Path>(
+                (Button)window.FindName("ResetWindowButton"));
+            Assert.IsNotNull(resetPath);
+            Assert.AreEqual(1.5d, resetPath.StrokeThickness);
+
+            var selection = FindDescendants<Button>(container)
+                .Single(candidate => Equals(candidate.CommandParameter, "ToggleSelection"));
+            var checkPath = FindDescendant<System.Windows.Shapes.Path>(selection);
+            Assert.IsNotNull(checkPath);
+            Assert.AreEqual(1.5d, checkPath.StrokeThickness);
+            var surface = FindDescendants<Border>(selection)
+                .Single(candidate => candidate.Name == "SelectionSurface");
+            Assert.AreEqual(new Thickness(1.5), surface.BorderThickness);
+
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "unified-icons.png",
+                "FTS_MOTION_TRANSITIONS_EVIDENCE_DIR");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
 }
