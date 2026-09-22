@@ -5,6 +5,10 @@ namespace FloatingTransferStation.Views;
 
 internal static class WindowShellClip
 {
+    /// <summary>
+    /// 四角统一圆角裁剪，与 DWM（DWMWA_WINDOW_CORNER_PREFERENCE）的窗口圆角对齐；
+    /// 内容层自裁剪保证渲染目标位图（测试证据）与屏幕呈现一致。
+    /// </summary>
     public static Geometry Create(double width, double height, double radius)
     {
         if (!double.IsFinite(width) ||
@@ -21,13 +25,7 @@ internal static class WindowShellClip
             new Rect(0d, 0d, width, height),
             boundedRadius,
             boundedRadius);
-        var squareRightEdge = new RectangleGeometry(
-            new Rect(width - boundedRadius, 0d, boundedRadius, height));
-        var clip = new CombinedGeometry(
-            GeometryCombineMode.Union,
-            roundedShell,
-            squareRightEdge);
-        clip.Freeze();
-        return clip;
+        roundedShell.Freeze();
+        return roundedShell;
     }
 }

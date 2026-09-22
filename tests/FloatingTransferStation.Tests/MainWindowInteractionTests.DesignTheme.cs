@@ -19,12 +19,12 @@ public sealed partial class MainWindowInteractionTests
         try
         {
             DesignThemeManager.Apply(window, DesignTheme.Light);
-            AssertTokenBrush(window, "WindowShellBrush", DesignTokens.WindowShellHex);
+            AssertTokenBrush(window, "WindowShellBrush", DesignTokens.WindowShellTintHex);
             AssertTokenBrush(window, "AccentBrush", DesignTokens.AccentHex);
             AssertTokenBrush(window, "PrimaryTextBrush", DesignTokens.PrimaryTextHex);
 
             DesignThemeManager.Apply(window, DesignTheme.Dark);
-            AssertTokenBrush(window, "WindowShellBrush", DesignTokens.WindowShellDarkHex);
+            AssertTokenBrush(window, "WindowShellBrush", DesignTokens.WindowShellTintDarkHex);
             AssertTokenBrush(window, "TabRailBrush", DesignTokens.TabRailDarkHex);
             AssertTokenBrush(window, "CardBrush", DesignTokens.CardDarkHex);
             AssertTokenBrush(window, "BorderBrush", DesignTokens.BorderDarkHex);
@@ -49,7 +49,7 @@ public sealed partial class MainWindowInteractionTests
                 "Resources/DesignTheme.Dark.xaml");
 
             DesignThemeManager.Apply(window, DesignTheme.Light);
-            AssertTokenBrush(window, "WindowShellBrush", DesignTokens.WindowShellHex);
+            AssertTokenBrush(window, "WindowShellBrush", DesignTokens.WindowShellTintHex);
             StringAssert.EndsWith(
                 (window.Resources.MergedDictionaries[1].Source?.OriginalString ?? string.Empty)
                     .Replace('\\', '/'),
@@ -81,18 +81,22 @@ public sealed partial class MainWindowInteractionTests
 
             DesignThemeManager.Apply(window, DesignTheme.Dark);
             CompleteLayout(window);
-            Assert.AreEqual(
-                ParseTokenColor(DesignTokens.WindowShellDarkHex),
-                ((SolidColorBrush)shell.Background).Color);
+            var darkShell = (SolidColorBrush)shell.Background;
+            Assert.IsTrue(
+                darkShell.Color == ParseTokenColor(DesignTokens.WindowShellTintDarkHex) ||
+                darkShell.Color == ParseTokenColor(DesignTokens.WindowShellDarkHex),
+                "深色壳背景应为 Mica 表面色或材质不可用时的不透明回退色。");
             Assert.AreEqual(
                 ParseTokenColor(DesignTokens.TabRailDarkHex),
                 ((SolidColorBrush)rail.Background).Color);
 
             DesignThemeManager.Apply(window, DesignTheme.Light);
             CompleteLayout(window);
-            Assert.AreEqual(
-                ParseTokenColor(DesignTokens.WindowShellHex),
-                ((SolidColorBrush)shell.Background).Color);
+            var lightShell = (SolidColorBrush)shell.Background;
+            Assert.IsTrue(
+                lightShell.Color == ParseTokenColor(DesignTokens.WindowShellTintHex) ||
+                lightShell.Color == ParseTokenColor(DesignTokens.WindowShellHex),
+                "浅色壳背景应为 Mica 表面色或材质不可用时的不透明回退色。");
         }
         finally
         {

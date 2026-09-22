@@ -8,7 +8,7 @@
        由 DesignThemeManager 在运行时整体替换；本字典内一律以 DynamicResource 引用。 -->
   <FontFamily x:Key="InterfaceFontFamily">Segoe UI Variable, Segoe UI</FontFamily>
   <GridLength x:Key="CardOperationColumnWidth">30</GridLength>
-  <CornerRadius x:Key="ShellCornerRadius">12,0,0,12</CornerRadius>
+  <CornerRadius x:Key="ShellCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="HeaderActionCornerRadius">7</CornerRadius>
   <CornerRadius x:Key="PinButtonCornerRadius">6</CornerRadius>

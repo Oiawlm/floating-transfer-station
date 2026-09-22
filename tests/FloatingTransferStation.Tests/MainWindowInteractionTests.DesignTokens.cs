@@ -17,7 +17,8 @@ public sealed partial class MainWindowInteractionTests
 
         try
         {
-            AssertTokenBrush(window, "WindowShellBrush", DesignTokens.WindowShellHex);
+            AssertTokenBrush(window, "WindowShellBrush", DesignTokens.WindowShellTintHex);
+            AssertTokenBrush(window, "WindowShellOpaqueBrush", DesignTokens.WindowShellHex);
             AssertTokenBrush(window, "TabRailBrush", DesignTokens.TabRailHex);
             AssertTokenBrush(window, "CardBrush", DesignTokens.CardHex);
             AssertTokenBrush(window, "BorderBrush", DesignTokens.BorderHex);
@@ -52,7 +53,7 @@ public sealed partial class MainWindowInteractionTests
         try
         {
             Assert.AreEqual(
-                new CornerRadius(DesignTokens.ShellCornerRadius, 0, 0, DesignTokens.ShellCornerRadius),
+                new CornerRadius(DesignTokens.DwmCornerRadius),
                 (CornerRadius)window.FindResource("ShellCornerRadius"));
             Assert.AreEqual(
                 new CornerRadius(DesignTokens.CardCornerRadius),
@@ -100,6 +101,15 @@ public sealed partial class MainWindowInteractionTests
     private static Color ParseTokenColor(string tokenHex)
     {
         var value = Convert.ToInt32(tokenHex[1..], 16);
+        if (tokenHex.Length == 9)
+        {
+            return Color.FromArgb(
+                (byte)(value >> 24),
+                (byte)(value >> 16),
+                (byte)(value >> 8),
+                (byte)value);
+        }
+
         return Color.FromRgb((byte)(value >> 16), (byte)(value >> 8), (byte)value);
     }
 }

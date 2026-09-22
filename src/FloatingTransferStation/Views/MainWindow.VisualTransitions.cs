@@ -115,10 +115,11 @@ public partial class MainWindow : Window
 
     private void WindowShell_SizeChanged(object sender, SizeChangedEventArgs e)
     {
+        // 与 DWM 系统圆角对齐的四角统一裁剪；半径来自共享 token。
         WindowShell.Clip = WindowShellClip.Create(
             e.NewSize.Width,
             e.NewSize.Height,
-            WindowShell.CornerRadius.TopLeft);
+            FloatingTransferStation.Design.DesignTokens.DwmCornerRadius);
     }
 
     private void CategoryTab_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)

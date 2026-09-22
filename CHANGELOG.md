@@ -4,6 +4,7 @@
 
 ## 未发布
 
+- 窗口壳升级为 Windows 11 Mica 材质（经小样验证后实施）：弃用分层窗口透明，改用 WindowChrome 玻璃帧 + DWM 材质/系统圆角/沉浸式深色联动；圆角语言从「左圆右直角贴边」改为四角统一 8px（与 DWM 对齐），壳表面为半透明 Mica 色调并随深浅主题切换，材质不可用的环境自动回退不透明壳。新增本机预览取证入口 `FTS_PREVIEW_DATA_DIR` / `FTS_PREVIEW_THEME`（隔离数据目录与独立单实例锁，不影响已安装应用）。
 - Mac 端界面与动效同步：配色/深浅主题与 Windows 共用同一组共享 token（含深色主题跟随系统亮暗，预览可用 `--preview-theme=dark|light` 强制指定）；面板展开 167ms 淡入位移、收起 200ms 加速出场（与 Windows 同时长曲线，出场中重入即取消），分类轨道色彩过渡 167ms。headless 测试关闭动效保证确定性；Mac 动效暂无「减弱动效」系统降级（如实标注，Windows 已支持），且无 Mac 实机人工验收，以 Windows 预览与 CI Apple Silicon 验证代替。
 - 界面与动效升级：新增深色主题并跟随系统亮暗自动切换（`ImmersiveColorSet` 通知 + `AppsUseLightTheme` 注册表），颜色与卡片阴影拆分为浅/深两套主题字典在运行时整本替换，所有画刷改为动态引用即时生效；深色强调色调整为高对比紫 `#9C8CFF`。
 - 界面与动效升级：图钉与清空图标改为微软 Fluent System Icons（MIT）官方几何（pin/delete 20px 线性轮廓），恢复尺寸四角括号、选择对勾与选择框线宽统一为 1.5 圆角端点；图标几何来源由测试锁定。

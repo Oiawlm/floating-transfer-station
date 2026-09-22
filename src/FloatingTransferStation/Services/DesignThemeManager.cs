@@ -18,6 +18,9 @@ public static class DesignThemeManager
     private const string PersonalizeKeyPath =
         @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
 
+    /// <summary>仅供本机预览截图取证强制主题；生产路径保持 null（跟随系统）。</summary>
+    public static DesignTheme? PreviewOverride { get; set; }
+
     public static void Apply(Window window, DesignTheme theme)
     {
         // 相对 pack URI（/程序集;component/…）显式指向本程序集内嵌资源，
@@ -50,6 +53,11 @@ public static class DesignThemeManager
 
     public static DesignTheme DetectSystemTheme()
     {
+        if (PreviewOverride is { } preview)
+        {
+            return preview;
+        }
+
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(PersonalizeKeyPath);

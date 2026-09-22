@@ -13,13 +13,21 @@
         ShowInTaskbar="False"
         WindowStyle="None"
         ResizeMode="NoResize"
-        AllowsTransparency="True"
+        AllowsTransparency="False"
         Background="Transparent"
         FontFamily="Segoe UI Variable, Segoe UI"
         SizeToContent="Manual"
         PreviewKeyDown="MainWindow_PreviewKeyDown"
         MouseEnter="Root_MouseEnter"
         MouseLeave="Root_MouseLeave">
+  <!-- 玻璃帧铺满整窗承载 DWM 材质（Mica）；圆角由 DWM 裁剪，内容层另有同步自裁剪。 -->
+  <WindowChrome.WindowChrome>
+    <WindowChrome CaptionHeight="0"
+                  GlassFrameThickness="-1"
+                  ResizeBorderThickness="0"
+                  CornerRadius="0"
+                  UseAeroCaptionButtons="False" />
+  </WindowChrome.WindowChrome>
   <Window.CommandBindings>
     <CommandBinding Command="{x:Static views:MainWindow.BatchPinCommand}"
                     CanExecute="BatchPinCommand_CanExecute"

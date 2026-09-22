@@ -44,12 +44,16 @@ public sealed partial class MainWindowInteractionTests
             var shell = window.FindName("WindowShell") as Border;
             var rail = window.FindName("CategoryRail") as Border;
 
-            Assert.AreEqual(Color.FromRgb(0xF7, 0xF8, 0xFA), shellBrush.Color);
+            Assert.AreEqual(Color.FromArgb(0xCC, 0xF7, 0xF8, 0xFA), shellBrush.Color);
             Assert.AreEqual(Color.FromRgb(0xEF, 0xF1, 0xF4), railBrush.Color);
             Assert.AreEqual(Colors.White, cardBrush.Color);
             Assert.IsNotNull(shell);
             Assert.IsNotNull(rail);
-            Assert.AreSame(shellBrush, shell.Background);
+            var shellBackground = (SolidColorBrush)shell.Background;
+            Assert.IsTrue(
+                shellBackground.Color == shellBrush.Color ||
+                shellBackground.Color == ((SolidColorBrush)window.FindResource("WindowShellOpaqueBrush")).Color,
+                "壳背景应为 Mica 表面色或材质不可用时的不透明回退色。");
             Assert.AreSame(railBrush, rail.Background);
         }
         finally
@@ -260,7 +264,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void WindowShell_RendersTransparentLeftCornersAndSquareRightEdge()
+    public void WindowShell_ClipsAllCornersToTheDwmRadiusWithShellTint()
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
@@ -290,9 +294,12 @@ public sealed partial class MainWindowInteractionTests
 
             byte AlphaAt(int x, int y) => pixels[(y * stride) + (x * 4) + 3];
 
-            var topLeftAlpha = AlphaAt(2, 2);
-            var bottomLeftAlpha = AlphaAt(2, height - 3);
-            var topRightAlpha = AlphaAt(width - 3, 2);
+            // 四角统一按 DWM 半径裁剪；角部采样取最外像素避开抗锯齿边缘。
+            // 壳表面为 Mica 半透明色或材质不可用时的不透明回退。
+            var topLeftAlpha = AlphaAt(0, 0);
+            var topRightAlpha = AlphaAt(width - 1, 0);
+            var bottomLeftAlpha = AlphaAt(0, height - 1);
+            var bottomRightAlpha = AlphaAt(width - 1, height - 1);
             Assert.IsTrue(
                 topLeftAlpha <= 16,
                 $"The exposed top-left corner must stay transparent; alpha was {topLeftAlpha}.");
@@ -300,8 +307,41 @@ public sealed partial class MainWindowInteractionTests
                 bottomLeftAlpha <= 16,
                 $"The exposed bottom-left corner must stay transparent; alpha was {bottomLeftAlpha}.");
             Assert.IsTrue(
-                topRightAlpha >= 240,
-                $"The docked right edge must remain square and opaque; alpha was {topRightAlpha}.");
+                topRightAlpha <= 16,
+                $"The exposed top-right corner must stay transparent; alpha was {topRightAlpha}.");
+            Assert.IsTrue(
+                bottomRightAlpha <= 16,
+                $"The exposed bottom-right corner must stay transparent; alpha was {bottomRightAlpha}.");
+            Assert.IsTrue(
+                AlphaAt(width / 2, 2) >= 180,
+                $"The shell surface must paint a visible tint; alpha was {AlphaAt(width / 2, 2)}.");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void WindowShell_UsesGlassChromeWithoutLayeredTransparency()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            var shell = (Border)window.FindName("WindowShell");
+            var chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(window);
+
+            Assert.IsFalse(window.AllowsTransparency, "Mica 壳应弃用分层窗口透明。");
+            Assert.IsNotNull(chrome);
+            Assert.AreEqual(new Thickness(-1), chrome.GlassFrameThickness);
+            Assert.AreEqual(0d, chrome.CaptionHeight);
+            Assert.AreEqual(
+                new CornerRadius(FloatingTransferStation.Design.DesignTokens.DwmCornerRadius),
+                shell.CornerRadius);
         }
         finally
         {
@@ -514,7 +554,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CollapsedHandle_ClipsRailBackgroundToTransparentLeftCornersAndSquareRightEdge()
+    public void CollapsedHandle_ClipsRailBackgroundToDwmRoundedCorners()
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
@@ -539,15 +579,19 @@ public sealed partial class MainWindowInteractionTests
 
             byte AlphaAt(int x, int y) => pixels[(y * stride) + (x * 4) + 3];
 
+            // 收起态同样按 DWM 半径四角裁剪；角部采样取最外像素避开抗锯齿边缘。
             Assert.IsTrue(
-                AlphaAt(2, 2) <= 16,
-                $"Collapsed top-left exterior must be transparent; alpha was {AlphaAt(2, 2)}.");
+                AlphaAt(0, 0) <= 16,
+                $"Collapsed top-left exterior must be transparent; alpha was {AlphaAt(0, 0)}.");
             Assert.IsTrue(
-                AlphaAt(2, height - 3) <= 16,
-                $"Collapsed bottom-left exterior must be transparent; alpha was {AlphaAt(2, height - 3)}.");
+                AlphaAt(0, height - 1) <= 16,
+                $"Collapsed bottom-left exterior must be transparent; alpha was {AlphaAt(0, height - 1)}.");
             Assert.IsTrue(
-                AlphaAt(width - 3, 2) >= 240,
-                $"Collapsed docked right edge must stay square; alpha was {AlphaAt(width - 3, 2)}.");
+                AlphaAt(width - 1, 0) <= 16,
+                $"Collapsed top-right exterior must be transparent; alpha was {AlphaAt(width - 1, 0)}.");
+            Assert.IsTrue(
+                AlphaAt(width / 2, 2) >= 180,
+                $"Collapsed shell surface must paint a visible tint; alpha was {AlphaAt(width / 2, 2)}.");
         }
         finally
         {

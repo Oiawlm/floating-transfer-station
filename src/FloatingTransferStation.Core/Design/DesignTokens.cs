@@ -28,6 +28,10 @@ public static class DesignTokens
     public const string StatusSurfaceHex = "#FCFCFD";
     public const string OnAccentHex = "#FFFFFF";
 
+    // Windows Mica 窗口壳：半透明表面浮在 DWM 材质之上；不透明值用于材质不可用时的回退。
+    public const string WindowShellTintHex = "#CCF7F8FA";
+    public const string WindowShellTintDarkHex = "#CC202021";
+
     // 颜色（深色主题，#RRGGBB）。
     public const string WindowShellDarkHex = "#202021";
     public const string TabRailDarkHex = "#2B2B2C";
@@ -72,6 +76,7 @@ public static class DesignTokens
 
     // 圆角。
     public const int ShellCornerRadius = 12;
+    public const int DwmCornerRadius = 8;
     public const int HeaderSurfaceCornerRadius = 11;
     public const int CardCornerRadius = 8;
     public const int ControlCornerRadius = 7;

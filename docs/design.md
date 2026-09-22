@@ -107,10 +107,16 @@
 
 ## 五·B、层级（Elevation）
 
-- 卡片统一携带共享冻结的 `CardShadowEffect`（`#1D1D1F`、模糊 8、深度 2、透明度 0.12、方向 270°），不逐卡片实例化以保证虚拟化列表性能。
+- 卡片统一携带共享冻结的 `CardShadowEffect`（浅色 `#1D1D1F`/0.12、深色 `#000000`/0.35，模糊 8、深度 2、方向 270°），不逐卡片实例化以保证虚拟化列表性能。
 - 卡片悬停时以渲染位移上浮 1px（`LiftAnimation.LiftedOffsetPx = -1`，167ms 减速曲线，回落用加速曲线），不参与布局、不影响命中测试。
 - 滚动条滑块悬停时经 6px 宽悬停层交叉淡入表现展宽（基宽 4px）。
-- 悬浮窗壳的外部阴影与窗口材质（Mica）方案绑定：材质小样通过后由系统提供深度；否则保留透明分层窗口并另行评估，结论记录于更新日志。
+
+## 五·C、窗口材质（Mica，Windows 11）
+
+- 窗口壳弃用 `AllowsTransparency` 分层透明，改用 `WindowChrome`（`GlassFrameThickness=-1` 整窗玻璃帧）承载 DWM 材质，经 `DWMWA_SYSTEMBACKDROP_TYPE` 应用 Mica；材质不可用的旧系统回退到不透明壳色。
+- 圆角由 DWM（`DWMWA_WINDOW_CORNER_PREFERENCE=ROUND`）裁剪，内容层以 `DesignTokens.DwmCornerRadius = 8` 四角同步自裁剪，保证渲染位图与屏幕一致；原「左圆右直角贴边」语言改为四角统一圆角。
+- 壳表面为半透明 Mica 色调（浅 `#CCF7F8FA`、深 `#CC202021`，`WindowShellTintHex` / `WindowShellTintDarkHex`），深浅切换时同步 `DWMWA_USE_IMMERSIVE_DARK_MODE`。
+- 本机预览与截图取证：设 `FTS_PREVIEW_DATA_DIR`（隔离数据目录、独立单实例锁）与可选 `FTS_PREVIEW_THEME=dark|light` 启动，不影响已安装应用。
 
 ## 六、动效原则（评审基准）
 

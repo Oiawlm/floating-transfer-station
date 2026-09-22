@@ -57,6 +57,8 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _settingsSaveGate = new(1, 1);
     private System.Windows.Interop.HwndSource? _windowSource;
     private CancellationTokenSource _windowOperationCancellation = new();
+    private DesignTheme _activeDesignTheme = DesignTheme.Light;
+    private bool _micaApplied;
     private IDataObject? _externalDragData;
     private ExternalDropPayload? _externalDragPayload;
     private Point _dragStart;
@@ -101,7 +103,8 @@ public partial class MainWindow : Window
         IDailyReviewStore? dailyReviewStore = null)
     {
         InitializeComponent();
-        DesignThemeManager.Apply(this, DesignThemeManager.DetectSystemTheme());
+        _activeDesignTheme = DesignThemeManager.DetectSystemTheme();
+        DesignThemeManager.Apply(this, _activeDesignTheme);
         SetResourceReference(
             ClientAreaAnimationsEnabledProperty,
             SystemParameters.ClientAreaAnimationKey);
@@ -171,9 +174,24 @@ public partial class MainWindow : Window
         }
 
         _windowSource.AddHook(WndProc);
+        ApplyWindowMaterial();
         if (!NativeMethods.AddClipboardFormatListener(_windowSource.Handle))
         {
             ShowStatus("剪贴板监听未启动，请重新打开悬浮中转站。");
+        }
+    }
+
+    private void ApplyWindowMaterial()
+    {
+        _micaApplied = DwmWindowEffects.TryApplyMaterial(
+            _windowSource?.Handle ?? 0,
+            _activeDesignTheme == DesignTheme.Dark);
+        if (!_micaApplied && WindowShell is not null)
+        {
+            // 材质不可用（旧系统）时回退到不透明壳，避免透明像素露出黑底。
+            WindowShell.Background =
+                TryFindResource("WindowShellOpaqueBrush") as System.Windows.Media.Brush
+                ?? WindowShell.Background;
         }
     }
 
@@ -190,7 +208,14 @@ public partial class MainWindow : Window
             section.Contains("ImmersiveColorSet", StringComparison.Ordinal))
         {
             var detected = DesignThemeManager.DetectSystemTheme();
-            Dispatcher.BeginInvoke(() => DesignThemeManager.Apply(this, detected));
+            Dispatcher.BeginInvoke(() =>
+            {
+                _activeDesignTheme = detected;
+                DesignThemeManager.Apply(this, detected);
+                DwmWindowEffects.UpdateImmersiveDarkMode(
+                    _windowSource?.Handle ?? 0,
+                    detected == DesignTheme.Dark);
+            });
         }
 
         return 0;
