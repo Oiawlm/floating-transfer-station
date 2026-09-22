@@ -212,10 +212,9 @@ public sealed class MainWindowLifecycleTests
                 window.Show();
                 await WaitForInitializationAsync(window);
                 var panel = Field<Avalonia.Controls.Grid>(window, "_panel");
-                var transform = Field<Avalonia.Media.TranslateTransform>(window, "_panelTransform");
                 Assert.IsTrue(panel.IsVisible);
                 Assert.AreEqual(1d, panel.Opacity, 0.001);
-                Assert.AreEqual(0d, transform.X, 0.001);
+                Assert.IsNull(panel.RenderTransform, "动效关闭时不应设置渲染位移。");
 
                 InvokeVoid(window, "Collapse");
 

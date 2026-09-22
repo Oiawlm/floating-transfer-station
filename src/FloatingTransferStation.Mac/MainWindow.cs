@@ -7,7 +7,6 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
-using Avalonia.Media.Transformation;
 using Avalonia.Threading;
 using FloatingTransferStation.Design;
 using FloatingTransferStation.Mac.Services;
@@ -36,7 +35,12 @@ public sealed partial class MainWindow : Window
     private readonly Task? _beforeLoad;
     private readonly Grid _shell = new() { ColumnDefinitions = new ColumnDefinitions("*,58") };
     private readonly Grid _panel = new() { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto") };
-    private readonly TranslateTransform _panelTransform = new();
+    private static readonly Avalonia.Media.ITransform NeutralTransform =
+        Avalonia.Media.Transformation.TransformOperations.Parse("translate(0px, 0px)");
+    private static readonly Avalonia.Media.ITransform EnterTransform =
+        Avalonia.Media.Transformation.TransformOperations.Parse($"translate({DesignTokens.ContentEntranceOffsetPx}px, 0px)");
+    private static readonly Avalonia.Media.ITransform ExitTransform =
+        Avalonia.Media.Transformation.TransformOperations.Parse($"translate({DesignTokens.CollapseExitOffsetPx}px, 0px)");
     private readonly StackPanel _rail = new() { Spacing = 6, Margin = new Thickness(4, 12) };
     private readonly TextBlock _title = new() { FontSize = 21, FontWeight = FontWeight.SemiBold, Foreground = MacThemeBrushes.Light.Ink };
     private readonly TextBlock _count = new() { Foreground = MacThemeBrushes.Light.SecondaryText, FontSize = 12 };
@@ -62,6 +66,12 @@ public sealed partial class MainWindow : Window
         IPasteboardStateReader? pasteboardStateReader = null)
     {
         _smokeDirectory = smokeDirectory;
+        // smoke 运行环境要求收展状态确定（截图与等待都按终态判定），与 headless 一致关闭动效。
+        if (_smokeDirectory is not null)
+        {
+            MotionEnabled = false;
+        }
+
         _beforeLoad = beforeLoad;
         _store = new LocalStore(paths, writer ?? new AtomicTextWriter());
         _dailyReviews = _store;
@@ -78,7 +88,6 @@ public sealed partial class MainWindow : Window
         ShowInTaskbar = true;
         SystemDecorations = SystemDecorations.None;
         Background = _brushes.WindowShell;
-        _panel.RenderTransform = _panelTransform;
         Content = BuildContent();
         InitializeDailyReviewEditing();
         _shell.IsEnabled = false;
@@ -298,7 +307,7 @@ public sealed partial class MainWindow : Window
         if (_rename.IsVisible || _busy || _dragging || _closing) return;
 
         _panel.Opacity = 0d;
-        _panelTransform.X = DesignTokens.CollapseExitOffsetPx;
+        _panel.RenderTransform = ExitTransform;
         var motion = new CancellationTokenSource();
         _panelMotion?.Cancel();
         _panelMotion = motion;
@@ -309,24 +318,29 @@ public sealed partial class MainWindow : Window
             FillMode = Avalonia.Animation.FillMode.Forward,
             Children =
             {
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0d), Setters = { new Avalonia.Styling.Setter(Visual.OpacityProperty, 1d) } },
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1d), Setters = { new Avalonia.Styling.Setter(Visual.OpacityProperty, 0d) } },
-            },
-        };
-        var slide = new Avalonia.Animation.Animation
-        {
-            Duration = TimeSpan.FromMilliseconds(DesignTokens.PanelCollapseExitMs),
-            Easing = new Avalonia.Animation.Easings.CubicEaseIn(),
-            FillMode = Avalonia.Animation.FillMode.Forward,
-            Children =
-            {
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0d), Setters = { new Avalonia.Styling.Setter(TranslateTransform.XProperty, 0d) } },
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1d), Setters = { new Avalonia.Styling.Setter(TranslateTransform.XProperty, DesignTokens.CollapseExitOffsetPx) } },
+                new Avalonia.Animation.KeyFrame
+                {
+                    Cue = new Avalonia.Animation.Cue(0d),
+                    Setters =
+                    {
+                        new Avalonia.Styling.Setter(Visual.OpacityProperty, 1d),
+                        new Avalonia.Styling.Setter(Visual.RenderTransformProperty, EnterTransform),
+                    },
+                },
+                new Avalonia.Animation.KeyFrame
+                {
+                    Cue = new Avalonia.Animation.Cue(1d),
+                    Setters =
+                    {
+                        new Avalonia.Styling.Setter(Visual.OpacityProperty, 0d),
+                        new Avalonia.Styling.Setter(Visual.RenderTransformProperty, ExitTransform),
+                    },
+                },
             },
         };
         try
         {
-            await Task.WhenAll(exit.RunAsync(_panel, motion.Token), slide.RunAsync(_panelTransform, motion.Token));
+            await exit.RunAsync(_panel, motion.Token);
         }
         catch (TaskCanceledException)
         {
@@ -352,33 +366,38 @@ public sealed partial class MainWindow : Window
         if (!MotionEnabled) return;
 
         _panel.Opacity = 1d;
-        _panelTransform.X = 0d;
+        _panel.RenderTransform = EnterTransform;
         var motion = new CancellationTokenSource();
         _panelMotion?.Cancel();
         _panelMotion = motion;
-        var fade = new Avalonia.Animation.Animation
+        var enter = new Avalonia.Animation.Animation
         {
             Duration = TimeSpan.FromMilliseconds(DesignTokens.PanelExpandContentMs),
             Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
             FillMode = Avalonia.Animation.FillMode.Forward,
             Children =
             {
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0d), Setters = { new Avalonia.Styling.Setter(Visual.OpacityProperty, 0d) } },
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1d), Setters = { new Avalonia.Styling.Setter(Visual.OpacityProperty, 1d) } },
+                new Avalonia.Animation.KeyFrame
+                {
+                    Cue = new Avalonia.Animation.Cue(0d),
+                    Setters =
+                    {
+                        new Avalonia.Styling.Setter(Visual.OpacityProperty, 0d),
+                        new Avalonia.Styling.Setter(Visual.RenderTransformProperty, EnterTransform),
+                    },
+                },
+                new Avalonia.Animation.KeyFrame
+                {
+                    Cue = new Avalonia.Animation.Cue(1d),
+                    Setters =
+                    {
+                        new Avalonia.Styling.Setter(Visual.OpacityProperty, 1d),
+                        new Avalonia.Styling.Setter(Visual.RenderTransformProperty, NeutralTransform),
+                    },
+                },
             },
         };
-        var slide = new Avalonia.Animation.Animation
-        {
-            Duration = TimeSpan.FromMilliseconds(DesignTokens.PanelExpandContentMs),
-            Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
-            FillMode = Avalonia.Animation.FillMode.Forward,
-            Children =
-            {
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0d), Setters = { new Avalonia.Styling.Setter(TranslateTransform.XProperty, DesignTokens.ContentEntranceOffsetPx) } },
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1d), Setters = { new Avalonia.Styling.Setter(TranslateTransform.XProperty, 0d) } },
-            },
-        };
-        _ = Task.WhenAll(fade.RunAsync(_panel, motion.Token), slide.RunAsync(_panelTransform, motion.Token))
+        _ = enter.RunAsync(_panel, motion.Token)
             .ContinueWith(_ => { }, TaskScheduler.Default);
     }
 
@@ -387,7 +406,7 @@ public sealed partial class MainWindow : Window
         _panelMotion?.Cancel();
         _panelMotion = null;
         _panel.Opacity = 1d;
-        _panelTransform.X = 0d;
+        _panel.RenderTransform = null;
     }
 
     private void ApplyThemeBrushes()

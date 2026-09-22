@@ -861,6 +861,7 @@ public sealed partial class MainWindowInteractionTests
         var board = new BoardService();
         var item = board.AddText(new string('x', 240));
         var window = CreateWindow(directory, board);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
 
         try
         {
@@ -929,6 +930,7 @@ public sealed partial class MainWindowInteractionTests
         var board = new BoardService();
         var item = board.AddText("stable actions");
         var window = CreateWindow(directory, board);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
 
         try
         {
