@@ -111,7 +111,7 @@ public sealed class PortableLocalStoreTests
     {
         if (OperatingSystem.IsWindows())
         {
-            Assert.Inconclusive("Unix path behavior is verified by the macOS/Linux test jobs.");
+            Assert.Inconclusive("Unix path behavior is verified by the macOS test jobs.");
         }
 
         using var directory = new TestDirectory();
@@ -138,7 +138,7 @@ public sealed class PortableLocalStoreTests
     {
         if (OperatingSystem.IsWindows())
         {
-            Assert.Inconclusive("Unix symbolic links are verified by the macOS/Linux test jobs.");
+            Assert.Inconclusive("Unix symbolic links are verified by the macOS test jobs.");
         }
 
         using var directory = new TestDirectory();
@@ -174,7 +174,7 @@ public sealed class PortableLocalStoreTests
     {
         if (OperatingSystem.IsWindows())
         {
-            Assert.Inconclusive("Unix symbolic links are verified by the macOS/Linux test jobs.");
+            Assert.Inconclusive("Unix symbolic links are verified by the macOS test jobs.");
         }
 
         using var directory = new TestDirectory();
@@ -206,7 +206,7 @@ public sealed class PortableLocalStoreTests
     {
         if (OperatingSystem.IsWindows())
         {
-            Assert.Inconclusive("Unix symbolic links are verified by the macOS/Linux test jobs.");
+            Assert.Inconclusive("Unix symbolic links are verified by the macOS test jobs.");
         }
 
         using var directory = new TestDirectory();
