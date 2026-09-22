@@ -1,6 +1,6 @@
 # 文档索引
 
-当前规则以[架构说明](architecture.md)、[项目指南](../PROJECT_GUIDE.md)和[贡献指南](../CONTRIBUTING.md)为准。版本发布使用[发布指南](releasing.md)，尚未稳定复现的问题见[现场观察](observations.md)。
+当前规则以[架构说明](architecture.md)、[项目指南](../PROJECT_GUIDE.md)和[贡献指南](../CONTRIBUTING.md)为准。版本发布使用[发布指南](releasing.md)，尚未稳定复现的问题见[现场观察](observations.md)。阶段性研究与文档评审材料在 [research/](research/)；跨窗口交接提示词在 [handoff/](handoff/)。
 
 设计和计划是当时的决策记录。下面的提交与发布版本说明落地位置；历史计划中的未勾选步骤保持原样，不表示今天仍需重新执行，也不替代人工验收证据。
 
@@ -15,6 +15,8 @@
 | 仓库维护与边界修复 | 已批准的审查结论写入计划 | [计划与完成记录](superpowers/plans/2026-09-03-repository-maintenance.md) | `03b748b` / 1.4.2 |
 | 剪贴板损坏图片表示回退 | [设计](superpowers/specs/2026-09-06-clipboard-image-fallback-design.md) | [计划](superpowers/plans/2026-09-06-clipboard-image-fallback.md) | [v1.4.3](https://github.com/Oiawlm/floating-transfer-station/tree/v1.4.3) 对应提交 / 1.4.3 |
 | 连续范围选择 | [Issue #17](https://github.com/Oiawlm/floating-transfer-station/issues/17) | [设计、计划与验证](superpowers/plans/2026-09-07-range-selection.md) | `5d01510` / 1.5.0 |
+| macOS 同步与统一发行 | 已批准的实施范围 | [实施记录](superpowers/plans/2026-09-08-macos.md) | `c6d2be1` / 1.6.0 |
+| 每日复盘标签 | [设计](superpowers/specs/2026-09-14-daily-review-tab-design.md) | [计划](superpowers/plans/2026-09-14-daily-review-tab.md) | `33fc51d` / 未发布 |
 
 批量置顶早期设计中的“恢复最初选择”，后来受到 Esc 设计中“用户已取消选择则不恢复”的修订；隐藏状态下 Ctrl+P 的约束由 1.4.1 守卫设计补充。理解当前行为时需要连同后续修订一起阅读。
 
