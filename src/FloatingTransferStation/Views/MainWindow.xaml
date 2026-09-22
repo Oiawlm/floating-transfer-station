@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:design="clr-namespace:FloatingTransferStation.Design;assembly=FloatingTransferStation.Core"
         xmlns:models="clr-namespace:FloatingTransferStation.Models;assembly=FloatingTransferStation.Core"
         xmlns:vm="clr-namespace:FloatingTransferStation.ViewModels;assembly=FloatingTransferStation.Core"
         xmlns:views="clr-namespace:FloatingTransferStation.Views"
@@ -34,7 +35,8 @@
       </ResourceDictionary.MergedDictionaries>
       <DataTemplate x:Key="CategoryTabTemplate"
                     DataType="{x:Type vm:CategoryViewModel}">
-        <Border Style="{StaticResource CategoryTabContainerStyle}"
+        <Border x:Name="TabSurface"
+                Style="{StaticResource CategoryTabContainerStyle}"
                 Tag="{Binding Category}"
                 AllowDrop="True"
                 MouseEnter="CategoryTab_MouseEnter"
@@ -46,6 +48,14 @@
                 DragOver="CategoryTab_DragOver"
                 Drop="CategoryTab_Drop">
           <Grid Background="Transparent">
+            <Border x:Name="TabHoverLayer"
+                    Background="{StaticResource HoverSurfaceBrush}"
+                    CornerRadius="8"
+                    Opacity="0"
+                    IsHitTestVisible="False"
+                    views:FadeAnimation.IsActive="{Binding IsMouseOver, ElementName=TabSurface}"
+                    views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                    views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
             <Border Style="{StaticResource CategoryActiveLayerStyle}" />
             <Border Style="{StaticResource CategoryDropTargetLayerStyle}" />
             <Border Style="{StaticResource CategoryActiveMarkerStyle}" />
@@ -182,15 +192,16 @@
                             Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
                             Stretch="Uniform" />
                     </Viewbox>
-                    <Border x:Name="SelectedCountBadge"
-                            Width="14"
-                            Height="14"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Bottom"
-                            Background="{StaticResource AccentBrush}"
-                            CornerRadius="{StaticResource SelectedCountBadgeCornerRadius}"
-                            IsHitTestVisible="False"
-                            Visibility="Collapsed">
+                      <Border x:Name="SelectedCountBadge"
+                              Width="14"
+                              Height="14"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Bottom"
+                              Background="{StaticResource AccentBrush}"
+                              CornerRadius="{StaticResource SelectedCountBadgeCornerRadius}"
+                              IsHitTestVisible="False"
+                              Opacity="0"
+                              Visibility="Collapsed">
                       <Viewbox Margin="2"
                                Stretch="Uniform"
                                StretchDirection="DownOnly">

@@ -902,7 +902,12 @@ public sealed partial class MainWindowInteractionTests
 
             item.IsPinned = true;
             CompleteLayout(window);
-            Assert.AreEqual(1d, pinButton.Opacity);
+            Assert.IsTrue(pinButton.HasAnimatedProperties);
+            Assert.AreEqual(
+                1d,
+                pinButton.GetAnimationBaseValue(UIElement.OpacityProperty));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(180));
+            Assert.AreEqual(1d, pinButton.Opacity, 0.001);
             Assert.IsTrue(pinButton.IsHitTestVisible);
             Assert.AreSame(window.FindResource("AccentBrush"), pinButton.Foreground);
         }
@@ -947,7 +952,12 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(beforeSelectionWidth, selection.ActualWidth, 0.01);
             Assert.AreEqual(beforeSelectionPosition.X, selection.TranslatePoint(new Point(), contentGrid).X, 0.01);
             Assert.AreEqual(beforeSelectionPosition.Y, selection.TranslatePoint(new Point(), contentGrid).Y, 0.01);
-            Assert.AreEqual(1d, pin.Opacity);
+            Assert.IsTrue(pin.HasAnimatedProperties);
+            Assert.AreEqual(
+                1d,
+                pin.GetAnimationBaseValue(UIElement.OpacityProperty));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(180));
+            Assert.AreEqual(1d, pin.Opacity, 0.001);
             Assert.IsTrue(pin.IsHitTestVisible);
         }
         finally

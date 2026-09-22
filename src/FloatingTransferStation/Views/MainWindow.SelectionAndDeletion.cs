@@ -266,7 +266,7 @@ public partial class MainWindow : Window
 
     private void SetHeaderActionsVisible(bool visible)
     {
-        HeaderActions.Opacity = visible ? 1d : 0d;
+        FadeAnimation.SetIsActive(HeaderActions, visible);
         HeaderActions.IsHitTestVisible = visible;
     }
 

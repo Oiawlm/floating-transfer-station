@@ -1137,18 +1137,26 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.AreEqual(0d, button.Opacity);
             Assert.IsFalse(button.IsHitTestVisible);
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
             CompleteLayout(window);
 
             Assert.IsTrue(container.IsSelected);
-            Assert.AreEqual(1d, button.Opacity);
+            Assert.IsTrue(button.HasAnimatedProperties);
+            var selectedFill = FindDescendants<Border>(container)
+                .Single(candidate => candidate.Name == "CardSelectedFillLayer");
+            Assert.AreEqual(
+                1d,
+                selectedFill.GetAnimationBaseValue(UIElement.OpacityProperty));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(180));
+            Assert.AreEqual(1d, button.Opacity, 0.001);
+            Assert.AreEqual(1d, selectedFill.Opacity, 0.001);
             Assert.IsTrue(button.IsHitTestVisible);
             var card = FindDescendants<Border>(container)
                 .Single(candidate => ReferenceEquals(
                     candidate.Style,
                     window.FindResource("CardContainerStyle")));
-            Assert.AreSame(window.FindResource("SelectedCardBorderBrush"), card.BorderBrush);
-            Assert.AreSame(window.FindResource("SelectedCardBrush"), card.Background);
+            Assert.AreSame(window.FindResource("CardBrush"), card.Background);
 
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
             Assert.IsFalse(container.IsSelected);

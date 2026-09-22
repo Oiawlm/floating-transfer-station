@@ -206,6 +206,7 @@ public partial class MainWindow : Window
         SelectedCountBadge.Visibility = count > 0
             ? Visibility.Visible
             : Visibility.Collapsed;
+        FadeAnimation.SetIsActive(SelectedCountBadge, count > 0);
         var label = count > 0
             ? $"删除已选 {count} 项"
             : "清空当前分类";
