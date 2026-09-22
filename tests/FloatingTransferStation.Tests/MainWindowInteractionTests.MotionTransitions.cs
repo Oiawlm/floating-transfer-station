@@ -1,8 +1,10 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
@@ -159,6 +161,11 @@ public sealed partial class MainWindowInteractionTests
 
             FadeAnimation.SetIsActive(hoverFill, true);
             FadeAnimation.SetIsActive(hoverRing, true);
+            var card = FindDescendants<Border>(container)
+                .Single(candidate => ReferenceEquals(
+                    candidate.Style,
+                    window.FindResource("CardContainerStyle")));
+            LiftAnimation.SetIsActive(card, true);
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
             SaveVisualEvidence(
                 (Border)window.FindName("WindowShell"),
@@ -442,6 +449,113 @@ public sealed partial class MainWindowInteractionTests
         finally
         {
             store.SaveFailure = null;
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Cards_CarrySharedFrozenElevationShadow()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("elevated card");
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var effect = window.FindResource("CardShadowEffect");
+            Assert.IsInstanceOfType(effect, typeof(DropShadowEffect));
+            Assert.IsTrue(((DropShadowEffect)effect).IsFrozen);
+
+            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(
+                board.Items(BoardCategory.Inbox).Single());
+            Assert.IsNotNull(container);
+            var card = FindDescendants<Border>(container)
+                .Single(candidate => ReferenceEquals(
+                    candidate.Style,
+                    window.FindResource("CardContainerStyle")));
+            Assert.AreSame(effect, card.Effect);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardLift_AnimatesOnHoverActivation()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("lifted card");
+        var window = CreateWindow(directory, board);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(
+                board.Items(BoardCategory.Inbox).Single());
+            Assert.IsNotNull(container);
+            var card = FindDescendants<Border>(container)
+                .Single(candidate => ReferenceEquals(
+                    candidate.Style,
+                    window.FindResource("CardContainerStyle")));
+
+            LiftAnimation.SetIsActive(card, true);
+            Assert.IsInstanceOfType(card.RenderTransform, typeof(TranslateTransform));
+            var transform = (TranslateTransform)card.RenderTransform;
+            Assert.IsTrue(transform.HasAnimatedProperties);
+            Assert.AreEqual(
+                LiftAnimation.LiftedOffsetPx,
+                transform.GetAnimationBaseValue(TranslateTransform.YProperty));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            Assert.AreEqual(LiftAnimation.LiftedOffsetPx, transform.Y, 0.001);
+
+            LiftAnimation.SetIsActive(card, false);
+            Assert.AreEqual(
+                0d,
+                transform.GetAnimationBaseValue(TranslateTransform.YProperty));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            Assert.AreEqual(0d, transform.Y, 0.001);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void ScrollThumb_HoverLayerWidensTheThumbVisually()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        AddScrollableItems(board, BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var scrollBar = FindDescendants<ScrollBar>(list)
+                .Single(candidate => candidate.Orientation == Orientation.Vertical &&
+                    candidate.Visibility == Visibility.Visible);
+            var thumb = FindDescendants<Thumb>(scrollBar).Single();
+            var hover = FindDescendants<Border>(thumb)
+                .Single(candidate => candidate.Name == "ThumbHoverLayer");
+            Assert.AreEqual(6d, hover.Width);
+        }
+        finally
+        {
             CloseWindow(window);
         }
     }

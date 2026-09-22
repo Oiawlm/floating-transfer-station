@@ -3,6 +3,7 @@
                     xmlns:converters="clr-namespace:FloatingTransferStation.Converters"
                     xmlns:design="clr-namespace:FloatingTransferStation.Design;assembly=FloatingTransferStation.Core"
                     xmlns:models="clr-namespace:FloatingTransferStation.Models;assembly=FloatingTransferStation.Core"
+                    xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
                     xmlns:views="clr-namespace:FloatingTransferStation.Views">
   <SolidColorBrush x:Key="WindowShellBrush" Color="#F7F8FA" />
   <SolidColorBrush x:Key="TabRailBrush" Color="#EFF1F4" />
@@ -34,6 +35,13 @@
   <converters:ImageThumbnailConverter x:Key="ImageThumbnailConverter" />
   <converters:BooleanOrConverter x:Key="BooleanOrConverter" />
   <converters:NonEmptyTextConverter x:Key="NonEmptyTextConverter" />
+  <DropShadowEffect x:Key="CardShadowEffect"
+                    BlurRadius="8"
+                    ShadowDepth="2"
+                    Direction="270"
+                    Opacity="0.12"
+                    Color="#1D1D1F"
+                    po:Freeze="True" />
 
   <ControlTemplate x:Key="TransparentThumbTemplate" TargetType="Thumb">
     <Border Background="{TemplateBinding Background}" />
@@ -276,7 +284,11 @@
     <Setter Property="Background" Value="{StaticResource CardBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Effect" Value="{x:Null}" />
+    <Setter Property="Effect" Value="{StaticResource CardShadowEffect}" />
+    <Setter Property="views:LiftAnimation.IsActive"
+            Value="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" />
+    <Setter Property="views:LiftAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
     <Style.Triggers>
       <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=IsKeyboardFocusWithin}"
                    Value="True">
@@ -554,8 +566,10 @@
                     Background="{TemplateBinding Background}"
                     CornerRadius="2" />
             <Border x:Name="ThumbHoverLayer"
+                    Width="6"
+                    HorizontalAlignment="Center"
                     Background="{StaticResource ScrollThumbHoverBrush}"
-                    CornerRadius="2"
+                    CornerRadius="3"
                     Opacity="0"
                     IsHitTestVisible="False"
                     views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}"
