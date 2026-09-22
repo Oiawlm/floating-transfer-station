@@ -13,7 +13,7 @@ public sealed class App : Application
     public override void Initialize()
     {
         Name = ProductIdentity.DisplayName;
-        RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light;
+        // 不固定亮色：默认跟随系统亮暗；--preview-theme=dark|light 仅供预览强制指定。
         Styles.Add(new FluentTheme());
     }
 
@@ -31,6 +31,12 @@ public sealed class App : Application
             var smokeIndex = Array.IndexOf(args, "--smoke-test");
             var smokeDirectory = smokeIndex >= 0 && smokeIndex + 1 < args.Length
                 ? Path.GetFullPath(args[smokeIndex + 1]) : null;
+            var themeIndex = Array.IndexOf(args, "--preview-theme");
+            if (themeIndex >= 0 && themeIndex + 1 < args.Length &&
+                string.Equals(args[themeIndex + 1], "dark", StringComparison.OrdinalIgnoreCase))
+            {
+                RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
+            }
             // Preview and smoke runs never touch the installed Windows application's data.
             var dataDirectory = smokeDirectory is not null
                 ? Path.Combine(smokeDirectory, "Data")

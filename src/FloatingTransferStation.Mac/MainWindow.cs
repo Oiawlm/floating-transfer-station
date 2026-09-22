@@ -1,11 +1,13 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Media.Transformation;
 using Avalonia.Threading;
 using FloatingTransferStation.Design;
 using FloatingTransferStation.Mac.Services;
@@ -16,12 +18,10 @@ namespace FloatingTransferStation.Mac;
 
 public sealed partial class MainWindow : Window
 {
-    private static readonly IBrush Ink = Brush.Parse(DesignTokens.PrimaryTextHex);
-    private static readonly IBrush SecondaryText = Brush.Parse(DesignTokens.SecondaryTextHex);
-    private static readonly IBrush Accent = Brush.Parse(DesignTokens.AccentHex);
-    private static readonly IBrush CardSurface = Brush.Parse(DesignTokens.CardHex);
-    private static readonly IBrush OnAccent = Brush.Parse(DesignTokens.OnAccentHex);
-    private static readonly IBrush BorderLine = Brush.Parse(DesignTokens.BorderHex);
+    /// <summary>headless 测试宿主没有连续渲染时钟，动画无法推进；测试将其关闭以保持确定性。</summary>
+    internal static bool MotionEnabled = true;
+
+    private MacThemeBrushes _brushes = MacThemeBrushes.Light;
     private readonly BoardService _board = new();
     private readonly SelectionState _selection = new();
     private readonly BoardOperationGate _gate = new();
@@ -36,10 +36,11 @@ public sealed partial class MainWindow : Window
     private readonly Task? _beforeLoad;
     private readonly Grid _shell = new() { ColumnDefinitions = new ColumnDefinitions("*,58") };
     private readonly Grid _panel = new() { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto") };
+    private readonly TranslateTransform _panelTransform = new();
     private readonly StackPanel _rail = new() { Spacing = 6, Margin = new Thickness(4, 12) };
-    private readonly TextBlock _title = new() { FontSize = 21, FontWeight = FontWeight.SemiBold, Foreground = Ink };
-    private readonly TextBlock _count = new() { Foreground = SecondaryText, FontSize = 12 };
-    private readonly TextBlock _status = new() { FontSize = 12, Foreground = Accent, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _title = new() { FontSize = 21, FontWeight = FontWeight.SemiBold, Foreground = MacThemeBrushes.Light.Ink };
+    private readonly TextBlock _count = new() { Foreground = MacThemeBrushes.Light.SecondaryText, FontSize = 12 };
+    private readonly TextBlock _status = new() { FontSize = 12, Foreground = MacThemeBrushes.Light.Accent, TextWrapping = TextWrapping.Wrap };
     private readonly TextBox _rename = new() { IsVisible = false, Watermark = "分类名称（最多6字）" };
     private readonly ListBox _list = new() { Background = Brushes.Transparent, BorderThickness = new Thickness(0), SelectionMode = SelectionMode.Multiple };
     private readonly Dictionary<BoardCategory, Button> _tabs = [];
@@ -54,6 +55,7 @@ public sealed partial class MainWindow : Window
     private bool _canClose;
     private bool _dragging;
     private bool _positioning;
+    private System.Threading.CancellationTokenSource? _panelMotion;
 
     public MainWindow(AppPaths paths, string? smokeDirectory = null,
         IAtomicTextWriter? writer = null, Task? beforeLoad = null,
@@ -75,11 +77,13 @@ public sealed partial class MainWindow : Window
         Topmost = true;
         ShowInTaskbar = true;
         SystemDecorations = SystemDecorations.None;
-        Background = Brush.Parse(DesignTokens.WindowShellHex);
+        Background = _brushes.WindowShell;
+        _panel.RenderTransform = _panelTransform;
         Content = BuildContent();
         InitializeDailyReviewEditing();
         _shell.IsEnabled = false;
         Opened += OnOpened;
+        ActualThemeVariantChanged += (_, _) => ApplyThemeBrushes();
         Closing += OnClosing;
         PositionChanged += (_, _) =>
         {
@@ -153,7 +157,7 @@ public sealed partial class MainWindow : Window
         {
             Spacing = 5,
             Margin = new Thickness(0, 10, 0, 0),
-            Children = { _status, new TextBlock { Text = "拖入收集 · 拖出使用 · 内容仅保存在本机", FontSize = 10, Foreground = SecondaryText } }
+            Children = { _status, new TextBlock { Text = "拖入收集 · 拖出使用 · 内容仅保存在本机", FontSize = 10, Foreground = _brushes.SecondaryText } }
         };
         Grid.SetRow(footer, 3);
         _panel.Children.Add(footer);
@@ -162,6 +166,14 @@ public sealed partial class MainWindow : Window
         foreach (var category in BoardCategoryCatalog.Ordered)
         {
             var tab = new Button { Width = 50, MinHeight = 72, Padding = new Thickness(3), HorizontalContentAlignment = HorizontalAlignment.Center };
+            tab.Transitions = new Avalonia.Animation.Transitions
+            {
+                new Avalonia.Animation.BrushTransition
+                {
+                    Property = TemplatedControl.BackgroundProperty,
+                    Duration = TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs),
+                },
+            };
             tab.Content = new TextBlock { Text = _settings.CategoryName(category), TextWrapping = TextWrapping.Wrap, MaxWidth = 42, TextAlignment = TextAlignment.Center, FontSize = 13 };
             tab.Click += (_, _) =>
             {
@@ -179,12 +191,12 @@ public sealed partial class MainWindow : Window
         }
         Grid.SetColumn(_rail, 1);
         _shell.Children.Add(_rail);
-        return new Border { BorderBrush = BorderLine, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(DesignTokens.ShellCornerRadius, 0, 0, DesignTokens.ShellCornerRadius), Child = _shell };
+        return new Border { BorderBrush = _brushes.BorderLine, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(DesignTokens.ShellCornerRadius, 0, 0, DesignTokens.ShellCornerRadius), Child = _shell };
     }
 
     private Control BuildCard(BoardItem item)
     {
-        var card = new Border { Background = CardSurface, CornerRadius = new CornerRadius(DesignTokens.CardCornerRadius), Padding = new Thickness(10), Margin = new Thickness(0, 3), HorizontalAlignment = HorizontalAlignment.Stretch };
+        var card = new Border { Background = _brushes.Card, CornerRadius = new CornerRadius(DesignTokens.CardCornerRadius), Padding = new Thickness(10), Margin = new Thickness(0, 3), HorizontalAlignment = HorizontalAlignment.Stretch };
         var layout = new StackPanel { Spacing = 8 };
         var controls = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var select = new Button { Content = "选择", FontSize = 11, Padding = new Thickness(7, 2), HorizontalAlignment = HorizontalAlignment.Left };
@@ -208,7 +220,7 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            layout.Children.Add(new TextBlock { Text = item.Text, TextWrapping = TextWrapping.Wrap, MaxHeight = 230, Foreground = Ink, FontSize = 14 });
+            layout.Children.Add(new TextBlock { Text = item.Text, TextWrapping = TextWrapping.Wrap, MaxHeight = 230, Foreground = _brushes.Ink, FontSize = 14 });
         }
         card.Child = layout;
         WireCardDrag(card, item);
@@ -247,6 +259,7 @@ public sealed partial class MainWindow : Window
     private void Expand(BoardCategory category)
     {
         if (_closing) return;
+        CancelPanelMotion();
         if (_active != category) _selection.Clear();
         if (IsReviewActive() && category != DailyReviewMigration.ReviewCategory)
         {
@@ -266,9 +279,64 @@ public sealed partial class MainWindow : Window
         SyncSelection();
         UpdateReviewSurface();
         DockToRight();
+        PlayPanelEnterMotion();
     }
 
     private void Collapse()
+    {
+        if (!MotionEnabled)
+        {
+            CollapseCore();
+            return;
+        }
+
+        _ = CollapseWithExitMotionAsync();
+    }
+
+    private async Task CollapseWithExitMotionAsync()
+    {
+        if (_rename.IsVisible || _busy || _dragging || _closing) return;
+
+        _panel.Opacity = 0d;
+        _panelTransform.X = DesignTokens.CollapseExitOffsetPx;
+        var motion = new CancellationTokenSource();
+        _panelMotion?.Cancel();
+        _panelMotion = motion;
+        var exit = new Avalonia.Animation.Animation
+        {
+            Duration = TimeSpan.FromMilliseconds(DesignTokens.PanelCollapseExitMs),
+            Easing = new Avalonia.Animation.Easings.CubicEaseIn(),
+            FillMode = Avalonia.Animation.FillMode.Forward,
+            Children =
+            {
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0d), Setters = { new Avalonia.Styling.Setter(Visual.OpacityProperty, 1d) } },
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1d), Setters = { new Avalonia.Styling.Setter(Visual.OpacityProperty, 0d) } },
+            },
+        };
+        var slide = new Avalonia.Animation.Animation
+        {
+            Duration = TimeSpan.FromMilliseconds(DesignTokens.PanelCollapseExitMs),
+            Easing = new Avalonia.Animation.Easings.CubicEaseIn(),
+            FillMode = Avalonia.Animation.FillMode.Forward,
+            Children =
+            {
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0d), Setters = { new Avalonia.Styling.Setter(TranslateTransform.XProperty, 0d) } },
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1d), Setters = { new Avalonia.Styling.Setter(TranslateTransform.XProperty, DesignTokens.CollapseExitOffsetPx) } },
+            },
+        };
+        try
+        {
+            await Task.WhenAll(exit.RunAsync(_panel, motion.Token), slide.RunAsync(_panelTransform, motion.Token));
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        CollapseCore();
+    }
+
+    private void CollapseCore()
     {
         if (_rename.IsVisible || _busy || _dragging || _closing) return;
         _expanded = false;
@@ -279,13 +347,77 @@ public sealed partial class MainWindow : Window
         DockToRight();
     }
 
+    private void PlayPanelEnterMotion()
+    {
+        if (!MotionEnabled) return;
+
+        _panel.Opacity = 1d;
+        _panelTransform.X = 0d;
+        var motion = new CancellationTokenSource();
+        _panelMotion?.Cancel();
+        _panelMotion = motion;
+        var fade = new Avalonia.Animation.Animation
+        {
+            Duration = TimeSpan.FromMilliseconds(DesignTokens.PanelExpandContentMs),
+            Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
+            FillMode = Avalonia.Animation.FillMode.Forward,
+            Children =
+            {
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0d), Setters = { new Avalonia.Styling.Setter(Visual.OpacityProperty, 0d) } },
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1d), Setters = { new Avalonia.Styling.Setter(Visual.OpacityProperty, 1d) } },
+            },
+        };
+        var slide = new Avalonia.Animation.Animation
+        {
+            Duration = TimeSpan.FromMilliseconds(DesignTokens.PanelExpandContentMs),
+            Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
+            FillMode = Avalonia.Animation.FillMode.Forward,
+            Children =
+            {
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0d), Setters = { new Avalonia.Styling.Setter(TranslateTransform.XProperty, DesignTokens.ContentEntranceOffsetPx) } },
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1d), Setters = { new Avalonia.Styling.Setter(TranslateTransform.XProperty, 0d) } },
+            },
+        };
+        _ = Task.WhenAll(fade.RunAsync(_panel, motion.Token), slide.RunAsync(_panelTransform, motion.Token))
+            .ContinueWith(_ => { }, TaskScheduler.Default);
+    }
+
+    private void CancelPanelMotion()
+    {
+        _panelMotion?.Cancel();
+        _panelMotion = null;
+        _panel.Opacity = 1d;
+        _panelTransform.X = 0d;
+    }
+
+    private void ApplyThemeBrushes()
+    {
+        _brushes = ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark
+            ? MacThemeBrushes.Dark
+            : MacThemeBrushes.Light;
+        Background = _brushes.WindowShell;
+        _title.Foreground = _brushes.Ink;
+        _count.Foreground = _brushes.SecondaryText;
+        _status.Foreground = _brushes.Accent;
+        ApplyReviewTheme();
+        RebuildCardsForTheme();
+        UpdateTabs();
+    }
+
+    private void RebuildCardsForTheme()
+    {
+        var items = _list.ItemsSource;
+        _list.ItemsSource = null;
+        _list.ItemsSource = items;
+    }
+
     private void UpdateTabs()
     {
         foreach (var (category, tab) in _tabs)
         {
             tab.IsVisible = _expanded || category == _captureCategory;
-            tab.Background = category == _captureCategory ? Accent : Brush.Parse(DesignTokens.TabRailHex);
-            tab.Foreground = category == _captureCategory ? OnAccent : Ink;
+            tab.Background = category == _captureCategory ? _brushes.Accent : _brushes.TabRail;
+            tab.Foreground = category == _captureCategory ? _brushes.OnAccent : _brushes.Ink;
             if (tab.Content is TextBlock label) label.Text = _settings.CategoryName(category);
         }
     }

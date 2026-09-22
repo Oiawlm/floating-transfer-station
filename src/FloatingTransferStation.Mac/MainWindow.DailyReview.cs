@@ -15,19 +15,19 @@ public sealed partial class MainWindow
     private readonly Button _reviewPrevious = new() { Content = "‹", Width = 32, Height = 28 };
     private readonly Button _reviewNext = new() { Content = "›", Width = 32, Height = 28 };
     private readonly ComboBox _reviewDates = new() { MinWidth = 132, HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly TextBlock _reviewDateState = new() { Foreground = SecondaryText, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _reviewDateState = new() { Foreground = MacThemeBrushes.Light.SecondaryText, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox _reviewEditor = new()
     {
         AcceptsReturn = true,
         TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-        Background = CardSurface,
-        BorderBrush = BorderLine,
+        Background = MacThemeBrushes.Light.Card,
+        BorderBrush = MacThemeBrushes.Light.BorderLine,
         BorderThickness = new Thickness(1),
         Padding = new Thickness(12),
         FontSize = 14,
         Watermark = "写下今天的复盘……"
     };
-    private readonly TextBlock _reviewStatus = new() { FontSize = 12, Foreground = SecondaryText };
+    private readonly TextBlock _reviewStatus = new() { FontSize = 12, Foreground = MacThemeBrushes.Light.SecondaryText };
     private readonly DispatcherTimer _reviewSaveTimer = new() { Interval = TimeSpan.FromMilliseconds(700) };
     private readonly SemaphoreSlim _reviewSaveGate = new(1, 1);
     private DateOnly _reviewDate = DateOnly.FromDateTime(DateTime.Now);
@@ -57,6 +57,14 @@ public sealed partial class MainWindow
         _review.Children.Add(_reviewStatus);
         Grid.SetRow(_review, 2);
         _panel.Children.Add(_review);
+    }
+
+    internal void ApplyReviewTheme()
+    {
+        _reviewEditor.Background = _brushes.Card;
+        _reviewEditor.BorderBrush = _brushes.BorderLine;
+        _reviewDateState.Foreground = _brushes.SecondaryText;
+        _reviewStatus.Foreground = _brushes.SecondaryText;
     }
 
     private void InitializeDailyReviewEditing()

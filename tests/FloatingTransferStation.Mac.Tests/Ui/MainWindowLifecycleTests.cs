@@ -194,6 +194,42 @@ public sealed class MainWindowLifecycleTests
         }, CancellationToken.None);
     }
 
+    // 动效在 headless 中关闭（无渲染时钟）；本测试锁定「动效关闭时收展立即到达终态」，
+    // 动效时长/曲线与 Windows 共用 Core DesignTokens（MacThemeBrushesTests 与
+    // Windows 端 MotionTransitions 回归锁定），视觉行为由 Windows 预览人工核对。
+    [TestMethod]
+    public async Task ExpandAndCollapse_SettleImmediatelyWhenMotionIsDisabled()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(HeadlessTestApplication));
+        await session.Dispatch(async () =>
+        {
+            using var directory = new UiTestDirectory();
+            await SeedAsync(directory.Paths);
+            var window = CreateWindow(directory.Paths, new ControlledAtomicTextWriter());
+            var closed = ObserveClose(window);
+            try
+            {
+                window.Show();
+                await WaitForInitializationAsync(window);
+                var panel = Field<Avalonia.Controls.Grid>(window, "_panel");
+                var transform = Field<Avalonia.Media.TranslateTransform>(window, "_panelTransform");
+                Assert.IsTrue(panel.IsVisible);
+                Assert.AreEqual(1d, panel.Opacity, 0.001);
+                Assert.AreEqual(0d, transform.X, 0.001);
+
+                InvokeVoid(window, "Collapse");
+
+                Assert.IsFalse(Field<Avalonia.Controls.Grid>(window, "_panel").IsVisible);
+                Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);
+                return true;
+            }
+            finally
+            {
+                await CloseWindowAsync(window, closed.Task);
+            }
+        }, CancellationToken.None);
+    }
+
     private static MainWindow CreateWindow(AppPaths paths, IAtomicTextWriter writer, Task? beforeLoad = null) =>
         new(paths, writer: writer, beforeLoad: beforeLoad, pasteboardStateReader: new EmptyPasteboardStateReader());
 
