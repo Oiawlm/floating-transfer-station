@@ -266,6 +266,9 @@ public sealed partial class MainWindowInteractionTests
                 list.SelectedItems.Cast<BoardItem>().ToArray());
             Assert.AreEqual("2", count.Text);
             store.SaveFailure = null;
+            // 第一次删除的收尾回调以 Send 优先级排队（恢复按钮可用 = _isDeletePending 已清），
+            // 慢速 CI 上第二次点击可能与该队列竞态；先等收尾完成再发起第二次删除。
+            WaitForDeleteButtonReenabled(window, delete);
             delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, delete));
             PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
             CompleteLayout(window);

@@ -294,6 +294,17 @@ public sealed partial class MainWindowInteractionTests
         Dispatcher.PushFrame(frame);
     }
 
+    private static void WaitForDeleteButtonReenabled(MainWindow window, Button delete)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!delete.IsEnabled && DateTime.UtcNow < deadline)
+        {
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+        }
+
+        Assert.IsTrue(delete.IsEnabled, "第一次删除的收尾未在超时内完成。");
+    }
+
     private static void CloseWindow(Window window)
     {
         var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
