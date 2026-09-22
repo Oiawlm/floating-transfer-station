@@ -130,7 +130,7 @@ public sealed partial class MainWindowInteractionTests
                     ClickSelectionButton(window, items[0]);
                     break;
                 case "removed":
-                    board.Move(items[0].Id, BoardCategory.Reference, 0);
+                    board.MoveMany([items[0].Id], BoardCategory.Reference, 0);
                     break;
                 case "category-switch":
                     EnterCategory(window, BoardCategory.Reference);

@@ -15,11 +15,6 @@ public interface IImageNormalizer
         Guid? id = null,
         CancellationToken cancellationToken = default);
 
-    Task<StoredImage> NormalizeBitmapAsync(
-        BitmapSource bitmap,
-        Guid? id = null,
-        CancellationToken cancellationToken = default);
-
     Task<StoredImage> NormalizeClipboardAsync(
         IReadOnlyList<ClipboardImageCandidate> candidates,
         Guid? id = null,

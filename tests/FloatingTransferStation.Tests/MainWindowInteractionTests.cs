@@ -131,7 +131,7 @@ public sealed partial class MainWindowInteractionTests
             var item = board.AddText($"{category} {index}: {new string('x', 180)}");
             if (category != BoardCategory.Inbox)
             {
-                board.Move(item.Id, category, board.Items(category).Count);
+                board.MoveMany([item.Id], category, board.Items(category).Count);
             }
         }
     }
@@ -704,12 +704,6 @@ public sealed partial class MainWindowInteractionTests
             Guid? id = null,
             CancellationToken cancellationToken = default) =>
             throw new AssertFailedException("Static file normalization is not expected.");
-
-        public Task<StoredImage> NormalizeBitmapAsync(
-            BitmapSource bitmap,
-            Guid? id = null,
-            CancellationToken cancellationToken = default) =>
-            throw new AssertFailedException("Bitmap normalization is not expected.");
 
         public async Task<StoredImage> NormalizeClipboardAsync(
             IReadOnlyList<ClipboardImageCandidate> candidates,

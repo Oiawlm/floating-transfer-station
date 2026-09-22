@@ -39,8 +39,6 @@ public sealed class ClipboardMonitorService
         };
     }
 
-    public bool AutomaticCaptureAvailable => _stateReader is not null;
-
     public void Start()
     {
         _stopping = false;

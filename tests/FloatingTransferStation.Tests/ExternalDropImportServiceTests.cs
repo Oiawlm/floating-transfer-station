@@ -84,7 +84,6 @@ public sealed class ExternalDropImportServiceTests
 
         Assert.IsTrue(imported);
         Assert.AreEqual(1, normalizer.ClipboardCallCount);
-        Assert.AreEqual(0, normalizer.BitmapCallCount);
         Assert.IsEmpty(normalizer.FileCalls);
         Assert.AreEqual(normalizer.Created.Single().Id, board.Items(BoardCategory.Reference).Single().Id);
         Assert.AreEqual(1, store.SaveCount);
@@ -440,7 +439,6 @@ public sealed class ExternalDropImportServiceTests
     {
         public int? FailFileCall { get; init; }
         public List<string> FileCalls { get; } = [];
-        public int BitmapCallCount { get; private set; }
         public int ClipboardCallCount { get; private set; }
         public List<StoredImage> Created { get; } = [];
         public TaskCompletionSource FileCheckpoint { get; } = new(
@@ -472,16 +470,6 @@ public sealed class ExternalDropImportServiceTests
             Guid? id = null,
             CancellationToken cancellationToken = default) =>
             NormalizeFileAsync(sourcePath, id, cancellationToken);
-
-        public Task<StoredImage> NormalizeBitmapAsync(
-            BitmapSource bitmap,
-            Guid? id = null,
-            CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            BitmapCallCount++;
-            return Task.FromResult(Create(id));
-        }
 
         public Task<StoredImage> NormalizeClipboardAsync(
             IReadOnlyList<ClipboardImageCandidate> candidates,

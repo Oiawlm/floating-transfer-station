@@ -126,8 +126,6 @@ public sealed partial class ClipboardCaptureServiceTests
             ++_calls == 2 ? throw new OperationCanceledException() : _inner.NormalizeFileAsync(sourcePath, id, cancellationToken);
         public Task<StoredImage> NormalizeStaticFileAsync(string sourcePath, Guid? id = null, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
-        public Task<StoredImage> NormalizeBitmapAsync(System.Windows.Media.Imaging.BitmapSource bitmap, Guid? id = null, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
         public Task<StoredImage> NormalizeClipboardAsync(IReadOnlyList<ClipboardImageCandidate> candidates, Guid? id = null, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }

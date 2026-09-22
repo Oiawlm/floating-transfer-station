@@ -191,40 +191,7 @@ public sealed class BoardServiceTests
     }
 
     [TestMethod]
-    public void Move_CrossCategoryChangesOnlyRequestedItemAndCanUndo()
-    {
-        var board = new BoardService();
-        var item = board.AddText("提示词", Guid.Parse("00000000-0000-0000-0000-000000000003"));
-
-        var move = board.Move(item.Id, BoardCategory.Prompt, 0);
-
-        Assert.AreEqual(BoardCategory.Prompt, item.Category);
-        Assert.AreEqual(0, item.Order);
-        Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
-
-        board.Undo(move);
-
-        Assert.AreEqual(BoardCategory.Inbox, item.Category);
-        Assert.AreEqual(0, item.Order);
-    }
-
-    [TestMethod]
-    public void Move_WithinCategoryUsesPreMoveTargetIndex()
-    {
-        var board = new BoardService();
-        var third = board.AddText("三", Guid.Parse("00000000-0000-0000-0000-000000000003"));
-        var second = board.AddText("二", Guid.Parse("00000000-0000-0000-0000-000000000002"));
-        var first = board.AddText("一", Guid.Parse("00000000-0000-0000-0000-000000000001"));
-
-        board.Move(first.Id, BoardCategory.Inbox, 3);
-
-        CollectionAssert.AreEqual(
-            new[] { second.Id, third.Id, first.Id },
-            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
-    }
-
-    [TestMethod]
-    public void Move_ClampsTargetIndexToItemsPinnedRegion()
+    public void MoveMany_CrossCategoryLandsPinnedFirstThenNormalTop()
     {
         var board = new BoardService();
         var normal = board.AddText("normal");
@@ -232,7 +199,7 @@ public sealed class BoardServiceTests
         board.SetPinnedMany([pinned.Id], true);
 
         var movedNormal = board.AddText("moved normal", BoardCategory.Prompt);
-        board.Move(movedNormal.Id, BoardCategory.Inbox, 0);
+        board.MoveMany([movedNormal.Id], BoardCategory.Inbox, 0);
 
         CollectionAssert.AreEqual(
             new[] { pinned.Id, movedNormal.Id, normal.Id },
@@ -240,10 +207,10 @@ public sealed class BoardServiceTests
 
         var movedPinned = board.AddText("moved pinned", BoardCategory.Prompt);
         board.SetPinnedMany([movedPinned.Id], true);
-        board.Move(movedPinned.Id, BoardCategory.Inbox, int.MaxValue);
+        board.MoveMany([movedPinned.Id], BoardCategory.Inbox, int.MaxValue);
 
         CollectionAssert.AreEqual(
-            new[] { pinned.Id, movedPinned.Id, movedNormal.Id, normal.Id },
+            new[] { movedPinned.Id, pinned.Id, movedNormal.Id, normal.Id },
             board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
     }
 
@@ -426,23 +393,6 @@ public sealed class BoardServiceTests
     }
 
     [TestMethod]
-    public void Remove_ReturnsEnoughStateToRestoreExactPosition()
-    {
-        var board = new BoardService();
-        var older = board.AddText("旧", Guid.Parse("00000000-0000-0000-0000-000000000001"));
-        var newer = board.AddText("新", Guid.Parse("00000000-0000-0000-0000-000000000002"));
-
-        var removed = board.Remove(newer.Id);
-        Assert.IsNotNull(removed);
-
-        board.Restore(removed.Value);
-
-        CollectionAssert.AreEqual(
-            new[] { newer.Id, older.Id },
-            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
-    }
-
-    [TestMethod]
     public void RemoveCategory_ReturnsWholeCategoryAndRestoresExactOrder()
     {
         var board = new BoardService();
@@ -484,7 +434,7 @@ public sealed class BoardServiceTests
         item.IsPinned = true;
         var snapshot = board.CreateSnapshot();
 
-        board.Move(item.Id, BoardCategory.Prompt, 0);
+        board.MoveMany([item.Id], BoardCategory.Prompt, 0);
         item.IsPinned = false;
 
         Assert.AreEqual(BoardCategory.Inbox, snapshot.Items.Single().Category);

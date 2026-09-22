@@ -37,34 +37,6 @@ public sealed class BoardMutationService
         _operationGate = operationGate ?? new BoardOperationGate();
     }
 
-    public async Task<bool> MoveAsync(
-        Guid itemId,
-        BoardCategory targetCategory,
-        int targetIndex,
-        CancellationToken cancellationToken = default)
-    {
-        return await _operationGate.RunAsync(async () =>
-        {
-            var move = _board.Move(itemId, targetCategory, targetIndex);
-            try
-            {
-                await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
-                return true;
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                _board.Undo(move);
-                _showStatus("移动未保存，内容已恢复到原位置。");
-                return false;
-            }
-            catch
-            {
-                _board.Undo(move);
-                throw;
-            }
-        }, cancellationToken);
-    }
-
     public Task<BoardBatchMoveResult> MoveManyAsync(
         IReadOnlyCollection<Guid> itemIds,
         BoardCategory targetCategory,

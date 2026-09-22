@@ -3,13 +3,6 @@ using FloatingTransferStation.Models;
 
 namespace FloatingTransferStation.Services;
 
-public readonly record struct BoardMove(
-    Guid ItemId,
-    BoardCategory OriginalCategory,
-    int OriginalIndex,
-    BoardCategory NewCategory,
-    int NewIndex);
-
 public enum BoardMoveDisposition
 {
     Invalid,
@@ -33,8 +26,6 @@ public sealed record BoardPinChange(
     BoardCategory Category,
     IReadOnlyList<BoardItem> OriginalItems,
     IReadOnlyList<bool> OriginalPinStates);
-
-public readonly record struct RemovedBoardItem(BoardItem Item, BoardCategory Category, int Index);
 
 public sealed record RemovedBoardItems(
     IReadOnlyDictionary<BoardCategory, IReadOnlyList<BoardItem>> OriginalCategories,
@@ -141,52 +132,6 @@ public sealed class BoardService
         }
 
         ReorderCategory(change.Category, change.OriginalItems);
-    }
-
-    public BoardMove Move(Guid itemId, BoardCategory targetCategory, int targetIndex)
-    {
-        if (!BoardCategoryCatalog.IsDefined(targetCategory))
-        {
-            throw new ArgumentOutOfRangeException(nameof(targetCategory));
-        }
-
-        var (item, sourceCategory, sourceIndex) = Find(itemId);
-        var source = _items[sourceCategory];
-        source.RemoveAt(sourceIndex);
-
-        if (sourceCategory == targetCategory && targetIndex > sourceIndex)
-        {
-            targetIndex--;
-        }
-
-        var target = _items[targetCategory];
-        var pinnedCount = target.Count(candidate => candidate.IsPinned);
-        var insertionIndex = item.IsPinned
-            ? Math.Clamp(targetIndex, 0, pinnedCount)
-            : Math.Clamp(targetIndex, pinnedCount, target.Count);
-        item.Category = targetCategory;
-        target.Insert(insertionIndex, item);
-        Reindex(sourceCategory);
-        if (sourceCategory != targetCategory)
-        {
-            Reindex(targetCategory);
-        }
-
-        return new BoardMove(itemId, sourceCategory, sourceIndex, targetCategory, insertionIndex);
-    }
-
-    public void Undo(BoardMove move)
-    {
-        var (item, currentCategory, currentIndex) = Find(move.ItemId);
-        _items[currentCategory].RemoveAt(currentIndex);
-        var original = _items[move.OriginalCategory];
-        item.Category = move.OriginalCategory;
-        original.Insert(Math.Clamp(move.OriginalIndex, 0, original.Count), item);
-        Reindex(currentCategory);
-        if (currentCategory != move.OriginalCategory)
-        {
-            Reindex(move.OriginalCategory);
-        }
     }
 
     public BoardBatchMove MoveMany(
@@ -364,7 +309,7 @@ public sealed class BoardService
         }
     }
 
-    public RemovedBoardItem? Remove(Guid itemId)
+    public void Remove(Guid itemId)
     {
         foreach (var category in BoardCategoryCatalog.Ordered)
         {
@@ -375,21 +320,10 @@ public sealed class BoardService
                 continue;
             }
 
-            var item = collection[index];
             collection.RemoveAt(index);
             Reindex(category);
-            return new RemovedBoardItem(item, category, index);
+            return;
         }
-
-        return null;
-    }
-
-    public void Restore(RemovedBoardItem removed)
-    {
-        var collection = _items[removed.Category];
-        removed.Item.Category = removed.Category;
-        collection.Insert(Math.Clamp(removed.Index, 0, collection.Count), removed.Item);
-        Reindex(removed.Category);
     }
 
     public RemovedBoardItems? RemoveMany(IReadOnlyCollection<Guid> itemIds)
@@ -560,21 +494,6 @@ public sealed class BoardService
         return context.OrderedItems[0].IsPinned
             ? clamped <= pinnedCount
             : clamped >= pinnedCount;
-    }
-
-    private (BoardItem Item, BoardCategory Category, int Index) Find(Guid itemId)
-    {
-        foreach (var category in BoardCategoryCatalog.Ordered)
-        {
-            var collection = _items[category];
-            var index = IndexOf(collection, itemId);
-            if (index >= 0)
-            {
-                return (collection[index], category, index);
-            }
-        }
-
-        throw new KeyNotFoundException($"Board item {itemId} was not found.");
     }
 
     private static int IndexOf(IList<BoardItem> collection, Guid itemId)

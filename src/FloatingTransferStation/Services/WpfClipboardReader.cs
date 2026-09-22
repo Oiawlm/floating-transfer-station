@@ -7,11 +7,6 @@ public sealed class WpfClipboardReader : IClipboardReader
 {
     private readonly ClipboardPayloadReader _payloadReader;
 
-    public WpfClipboardReader()
-        : this(new WindowsDataImageReader())
-    {
-    }
-
     internal WpfClipboardReader(WindowsDataImageReader imageReader)
     {
         _payloadReader = new ClipboardPayloadReader(imageReader);

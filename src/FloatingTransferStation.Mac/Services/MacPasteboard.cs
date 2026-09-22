@@ -44,7 +44,7 @@ public sealed class MacPasteboard : IPasteboardStateReader
 
     // Avalonia maps public.png to a decoded Bitmap. Read original NSData here so limits are
     // applied before decoding, preserving EXIF and all alternative representations.
-    public TransferPayload? ReadImages(PasteboardState state, ImageInputLimits? limits = null)
+    public TransferPayload? ReadImages(PasteboardState state)
     {
         EnsureMacOS();
         if (state.IsPrivate || state.HasFiles || !state.Types.Any(AvaloniaTransferReader.IsEncodedImageFormat))
@@ -52,7 +52,7 @@ public sealed class MacPasteboard : IPasteboardStateReader
             return null;
         }
 
-        var budget = limits ?? ImageInputLimits.Default;
+        var budget = ImageInputLimits.Default;
         using var pool = new AutoreleasePool();
         var board = GeneralPasteboard();
         EnsureCurrent(board, state.ChangeCount);

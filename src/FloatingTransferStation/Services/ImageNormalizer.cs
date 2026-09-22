@@ -82,20 +82,6 @@ public sealed class ImageNormalizer : IImageNormalizer
         }
     }
 
-    public Task<StoredImage> NormalizeBitmapAsync(
-        BitmapSource bitmap,
-        Guid? id = null,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(bitmap);
-        cancellationToken.ThrowIfCancellationRequested();
-        _limits.ValidateDimensions(bitmap.PixelWidth, bitmap.PixelHeight);
-        var frozenBitmap = FreezeForBackgroundUse(bitmap);
-        return Task.Run(
-            () => NormalizeBitmapCore(frozenBitmap, id, cancellationToken),
-            cancellationToken);
-    }
-
     public Task<StoredImage> NormalizeClipboardAsync(
         IReadOnlyList<ClipboardImageCandidate> candidates,
         Guid? id = null,
@@ -164,12 +150,6 @@ public sealed class ImageNormalizer : IImageNormalizer
             DeleteManagedTemporaryFile(temporaryMarker);
         }
     }
-
-    private StoredImage NormalizeBitmapCore(
-        BitmapSource bitmap,
-        Guid? id,
-        CancellationToken cancellationToken)
-        => SaveBitmap(PrepareBitmap(bitmap).Bitmap, id, cancellationToken);
 
     private StoredImage NormalizeClipboardCore(
         IReadOnlyList<ClipboardImageCandidate> candidates,
@@ -385,23 +365,6 @@ public sealed class ImageNormalizer : IImageNormalizer
         {
             DeleteManagedTemporaryFile(temporaryPath);
         }
-    }
-
-    private static BitmapSource FreezeForBackgroundUse(BitmapSource bitmap)
-    {
-        if (bitmap.IsFrozen)
-        {
-            return bitmap;
-        }
-
-        if (!bitmap.CanFreeze)
-        {
-            throw new InvalidOperationException("Clipboard bitmap cannot be frozen for background processing.");
-        }
-
-        var clone = bitmap.CloneCurrentValue();
-        clone.Freeze();
-        return clone;
     }
 
     private PreparedBitmap PrepareBitmap(BitmapSource bitmap)

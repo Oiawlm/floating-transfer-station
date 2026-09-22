@@ -22,7 +22,7 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.UnicodeText, "external text");
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsFalse(reader.CanRead(data));
+        Assert.IsNull(reader.Read(data));
         Assert.IsNull(reader.Read(data));
     }
 
@@ -56,7 +56,7 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.UnicodeText, "ignored text");
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsTrue(reader.CanRead(data));
+        Assert.IsNotNull(reader.Read(data));
         var payload = reader.Read(data);
 
         Assert.IsInstanceOfType<ExternalDropPayload.ImageFiles>(payload);
@@ -114,7 +114,7 @@ public sealed class ExternalDropPayloadReaderTests
         var data = new DataObject(DataFormats.FileDrop, new[] { path });
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsTrue(reader.CanRead(data));
+        Assert.IsNotNull(reader.Read(data));
         Assert.IsInstanceOfType<ExternalDropPayload.ImageFiles>(reader.Read(data));
     }
 
@@ -127,7 +127,7 @@ public sealed class ExternalDropPayloadReaderTests
         var data = new DataObject(DataFormats.FileDrop, new[] { path });
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsTrue(reader.CanRead(data));
+        Assert.IsNotNull(reader.Read(data));
         var payload = reader.Read(data);
 
         Assert.IsInstanceOfType<ExternalDropPayload.ImageFiles>(payload);
@@ -168,12 +168,7 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.UnicodeText, "must not fall back");
         var reader = new ExternalDropPayloadReader();
 
-        var canRead = reader.CanRead(data);
-        var payload = reader.Read(data);
-
-        Assert.AreEqual(
-            (CanRead: false, PayloadIsNull: true),
-            (CanRead: canRead, PayloadIsNull: payload is null));
+        Assert.IsNull(reader.Read(data));
     }
 
     [STATestMethod]
@@ -187,12 +182,7 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.UnicodeText, "must not fall back");
         var reader = new ExternalDropPayloadReader();
 
-        var canRead = reader.CanRead(data);
-        var payload = reader.Read(data);
-
-        Assert.AreEqual(
-            (CanRead: false, PayloadIsNull: true),
-            (CanRead: canRead, PayloadIsNull: payload is null));
+        Assert.IsNull(reader.Read(data));
     }
 
     [STATestMethod]
@@ -202,7 +192,7 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.FileDrop, Array.Empty<string>());
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsFalse(reader.CanRead(data));
+        Assert.IsNull(reader.Read(data));
         Assert.IsNull(reader.Read(data));
     }
 
@@ -220,7 +210,7 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.UnicodeText, image);
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsFalse(reader.CanRead(data));
+        Assert.IsNull(reader.Read(data));
         Assert.IsNull(reader.Read(data));
     }
 
@@ -236,7 +226,7 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.UnicodeText, folder);
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsFalse(reader.CanRead(data));
+        Assert.IsNull(reader.Read(data));
         Assert.IsNull(reader.Read(data));
     }
 
@@ -251,7 +241,7 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.UnicodeText, missing);
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsFalse(reader.CanRead(data));
+        Assert.IsNull(reader.Read(data));
         Assert.IsNull(reader.Read(data));
     }
 
@@ -261,7 +251,7 @@ public sealed class ExternalDropPayloadReaderTests
         var reader = new ExternalDropPayloadReader();
         var data = new ThrowingDataObject();
 
-        Assert.IsFalse(reader.CanRead(data));
+        Assert.IsNull(reader.Read(data));
         Assert.IsNull(reader.Read(data));
     }
 
@@ -277,7 +267,7 @@ public sealed class ExternalDropPayloadReaderTests
 
         foreach (var data in dataObjects)
         {
-            Assert.IsFalse(reader.CanRead(data));
+            Assert.IsNull(reader.Read(data));
             Assert.IsNull(reader.Read(data));
         }
     }
@@ -288,7 +278,7 @@ public sealed class ExternalDropPayloadReaderTests
         var data = new FileDropPresenceThrowingDataObject();
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsFalse(reader.CanRead(data));
+        Assert.IsNull(reader.Read(data));
         Assert.IsNull(reader.Read(data));
     }
 
@@ -300,7 +290,7 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.UnicodeText, "ignored text");
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsTrue(reader.CanRead(data));
+        Assert.IsNotNull(reader.Read(data));
         var payload = reader.Read(data);
 
         Assert.IsInstanceOfType<ExternalDropPayload.ImageCandidates>(payload);
@@ -310,15 +300,12 @@ public sealed class ExternalDropPayloadReaderTests
     }
 
     [STATestMethod]
-    public void CanReadDoesNotConsumeOneShotEncodedDataAndReadSnapshotsOnce()
+    public void ReadSnapshotsOneShotEncodedDataWithoutMovingTheStream()
     {
         using var stream = new MemoryStream([10, 20, 30, 40]);
         stream.Position = 2;
         var data = new OneShotEncodedImageDataObject(stream);
         var reader = new ExternalDropPayloadReader();
-
-        Assert.IsTrue(reader.CanRead(data));
-        Assert.AreEqual(2, stream.Position);
 
         var payload = reader.Read(data);
 
@@ -336,7 +323,7 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.Text, "ANSI value");
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsTrue(reader.CanRead(data));
+        Assert.IsNotNull(reader.Read(data));
         var payload = reader.Read(data);
 
         Assert.IsInstanceOfType<ExternalDropPayload.Text>(payload);
@@ -351,7 +338,7 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.Text, "   ");
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsFalse(reader.CanRead(data));
+        Assert.IsNull(reader.Read(data));
         Assert.IsNull(reader.Read(data));
     }
 
@@ -363,7 +350,7 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.Text, "fallback value");
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsTrue(reader.CanRead(data));
+        Assert.IsNotNull(reader.Read(data));
         var payload = reader.Read(data);
 
         Assert.IsInstanceOfType<ExternalDropPayload.Text>(payload);
@@ -376,7 +363,7 @@ public sealed class ExternalDropPayloadReaderTests
         var data = new ThrowingSelectedTextDataObject();
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsFalse(reader.CanRead(data));
+        Assert.IsNull(reader.Read(data));
         Assert.IsNull(reader.Read(data));
     }
 
@@ -386,7 +373,7 @@ public sealed class ExternalDropPayloadReaderTests
         var data = new FailingOptionalImageDataObject();
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsTrue(reader.CanRead(data));
+        Assert.IsNotNull(reader.Read(data));
         var payload = reader.Read(data);
 
         Assert.IsInstanceOfType<ExternalDropPayload.Text>(payload);
