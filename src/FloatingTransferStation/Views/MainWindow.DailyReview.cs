@@ -85,7 +85,15 @@ public partial class MainWindow
             var document = await _dailyReviews.LoadAsync(date);
             _reviewDate = date;
             _reviewBaseContent = document.Content;
-            _reviewDirty = false;
+            if (_reviewDirty)
+            {
+                // Switching back (or a stale load) must not discard unsaved editor input.
+                ReviewStatus.Text = "有未保存的修改";
+                await RefreshReviewDatesAsync();
+                UpdateReviewDateControls();
+                return;
+            }
+
             _reviewLoading = true;
             ReviewEditor.Text = document.Content;
             _reviewLoading = false;
@@ -134,6 +142,12 @@ public partial class MainWindow
                     _reviewBaseContent = saved.Content;
                     _reviewDirty = false;
                     ReviewStatus.Text = $"已保存 {DateTime.Now:HH:mm:ss}";
+                }
+                else
+                {
+                    // Typing during the save left newer text in the editor; keep saving it.
+                    ReviewStatus.Text = "未保存";
+                    _reviewSaveTimer.Start();
                 }
 
                 await RefreshReviewDatesAsync();

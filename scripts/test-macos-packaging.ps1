@@ -7,6 +7,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $fixtureRoot = Join-Path $repoRoot ('TestResults/macos-packaging-' + [guid]::NewGuid().ToString('N'))
 $bundle = Join-Path $fixtureRoot 'FloatingTransferStation.app'
 $zipPath = Join-Path $fixtureRoot 'candidate.zip'
+$passed = $false
 try {
     $version = (Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'version.txt')).Trim()
     Initialize-MacAppBundle $bundle $version
@@ -89,10 +90,13 @@ try {
             $stream.Position = $offset + 46 + $nameLength + $extraLength + $commentLength
         }
     } finally { $reader.Dispose(); $stream.Dispose() }
+    $passed = $true
     Write-Host 'macOS packaging contract passed: native-only code directory, nested-first signing/JIT entitlement, version, plist executable, Unix ZIP creator/permissions, Unicode paths and readable entries.'
 } finally {
+    # A failed run keeps its fixture under TestResults for diagnosis, matching test-installer-cleanup.ps1.
+    if (-not $passed) { Write-Warning "Keeping failed packaging fixture for diagnosis: $fixtureRoot" }
     $resolvedFixture = [System.IO.Path]::GetFullPath($fixtureRoot)
     $allowedRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'TestResults')).TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
     if (-not $resolvedFixture.StartsWith($allowedRoot, [System.StringComparison]::Ordinal)) { throw 'Refusing to clean a fixture outside TestResults.' }
-    if (Test-Path -LiteralPath $resolvedFixture) { Remove-Item -LiteralPath $resolvedFixture -Recurse -Force }
+    if ($passed -and (Test-Path -LiteralPath $resolvedFixture)) { Remove-Item -LiteralPath $resolvedFixture -Recurse -Force }
 }

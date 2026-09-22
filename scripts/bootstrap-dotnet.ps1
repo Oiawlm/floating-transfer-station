@@ -37,7 +37,7 @@ if (-not (Test-Path -LiteralPath $dotnetExe -PathType Leaf)) {
         throw 'The repository-local .NET SDK is missing; verification will not download or install it.'
     }
     New-Item -ItemType Directory -Force -Path $toolsRoot | Out-Null
-    Invoke-WebRequest -Uri 'https://dot.net/v1/dotnet-install.ps1' -OutFile $installScript
+    Invoke-WebRequest -Uri 'https://dot.net/v1/dotnet-install.ps1' -OutFile $installScript -UseBasicParsing
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installScript `
         -Channel '10.0' `
         -Architecture 'x64' `

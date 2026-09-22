@@ -24,7 +24,10 @@ public sealed partial class MainWindow
             _settings = await new DailyReviewMigration(_store).EnsureAsync(_board, _settings);
             foreach (var category in BoardCategoryCatalog.Ordered)
                 _board.Items(category).CollectionChanged += (_, _) =>
-                    _count.Text = $"{_board.Items(_active).Count} 项内容";
+                {
+                    if (!IsReviewActive())
+                        _count.Text = $"{_board.Items(_active).Count} 项内容";
+                };
             Expand(_active);
             _shell.IsEnabled = true;
             _initialized.TrySetResult(true);
