@@ -172,9 +172,7 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             ClickSelectionButton(window, items[1]);
             var target = RealizeCard(window, items[3]);
-            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
-            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-            CompleteLayout(window);
+            CollapseForSetup(window);
             var list = (ListBox)window.FindName("BoardList");
             Assert.IsFalse(((MainWindowViewModel)window.DataContext).IsPanelExpanded);
             WithThreadKeyboardModifiers(ModifierKeys.Shift, () => RaiseCardClick(target));

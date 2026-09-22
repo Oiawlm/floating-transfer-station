@@ -74,6 +74,7 @@
 | Token | 值 | 用途 |
 |---|---|---|
 | ContentEntranceOffsetPx | 6 | 内容入场位移 |
+| CollapseExitOffsetPx | 24 | 面板收起出场向轨道方向的位移 |
 | CardInsetPx | 12 | 卡片水平内缩 |
 | CardGutterPx | 4 | 卡片纵向间距 |
 | CardPaddingPx | 12 | 卡片内边距 |

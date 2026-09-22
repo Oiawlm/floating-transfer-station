@@ -632,9 +632,7 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
             list.SelectedItems.Add(selected);
-            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
-            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-            CompleteLayout(window);
+            CollapseForSetup(window);
             var shortcut = NewKeyEventArgs(window, key);
 
             window.RaiseEvent(shortcut);
@@ -982,9 +980,7 @@ public sealed partial class MainWindowInteractionTests
                 new[] { selected },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
 
-            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
-            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-            CompleteLayout(window);
+            CollapseForSetup(window);
 
             Assert.IsFalse(viewModel.IsPanelExpanded);
             CollectionAssert.AreEqual(
@@ -1316,9 +1312,7 @@ public sealed partial class MainWindowInteractionTests
                 shell,
                 "before-collapse.png",
                 "FTS_BATCH_PIN_GUARD_EVIDENCE_DIR");
-            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
-            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-            CompleteLayout(window);
+            CollapseForSetup(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
 
             Assert.IsFalse(viewModel.IsPanelExpanded);
@@ -1427,9 +1421,7 @@ public sealed partial class MainWindowInteractionTests
             }
             else
             {
-                InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
-                InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-                CompleteLayout(window);
+                CollapseForSetup(window);
                 Assert.IsFalse(viewModel.IsPanelExpanded);
             }
 

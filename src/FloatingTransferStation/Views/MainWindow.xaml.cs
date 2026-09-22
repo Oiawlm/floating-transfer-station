@@ -32,7 +32,10 @@ public partial class MainWindow : Window
         TimeSpan.FromMilliseconds(DesignTokens.ReducedMotionFadeMs);
     private static readonly TimeSpan CategoryRevealAnimationDuration =
         TimeSpan.FromMilliseconds(DesignTokens.CategoryRevealMs);
+    private static readonly TimeSpan PanelCollapseExitAnimationDuration =
+        TimeSpan.FromMilliseconds(DesignTokens.PanelCollapseExitMs);
     private const double CategoryRevealOffset = DesignTokens.ContentEntranceOffsetPx;
+    private const double PanelCollapseExitOffset = DesignTokens.CollapseExitOffsetPx;
     private static readonly HandoffBehavior CategoryRevealAnimationHandoffBehavior =
         HandoffBehavior.SnapshotAndReplace;
 
@@ -78,6 +81,7 @@ public partial class MainWindow : Window
     {
         if (dependencyObject is MainWindow window && eventArgs.NewValue is false)
         {
+            window.CancelPanelCollapseExit();
             window.StopPanelContentAnimation();
             window.StopCategoryRevealAnimations();
         }

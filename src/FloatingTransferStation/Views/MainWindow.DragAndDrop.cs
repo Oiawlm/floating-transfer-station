@@ -218,6 +218,7 @@ public partial class MainWindow : Window
     private void BeginPanelDrag()
     {
         ClearExternalDragPayload();
+        CancelPanelCollapseExit();
         StopPanelContentAnimation();
         StopCategoryRevealAnimations();
         _expandIntentTimer.Stop();

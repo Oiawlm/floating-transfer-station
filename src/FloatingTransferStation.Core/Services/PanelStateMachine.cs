@@ -81,6 +81,9 @@ public sealed class PanelStateMachine
         return true;
     }
 
+    /// <summary>只读探针：当前条件若调用 TryCollapse 是否会提交收起，不改变状态。</summary>
+    public bool WouldCollapse => !_pointerInside && !_dragInProgress && IsExpanded;
+
     private static void Validate(BoardCategory category)
     {
         if (!BoardCategoryCatalog.IsDefined(category))

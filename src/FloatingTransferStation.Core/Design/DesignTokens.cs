@@ -60,6 +60,7 @@ public static class DesignTokens
 
     // 间距与位移（像素）。
     public const double ContentEntranceOffsetPx = 6;
+    public const double CollapseExitOffsetPx = 24;
     public const int CardInsetPx = 12;
     public const int CardGutterPx = 4;
     public const int CardPaddingPx = 12;

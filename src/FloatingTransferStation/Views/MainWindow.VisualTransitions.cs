@@ -17,6 +17,7 @@ namespace FloatingTransferStation.Views;
 public partial class MainWindow : Window
 {
     private DispatcherOperation? _pendingCollapsedVisualHandoff;
+    private bool _panelCollapseExitPending;
 
     private void SaveCurrentScrollOffset()
     {
@@ -63,6 +64,7 @@ public partial class MainWindow : Window
         {
             _expandIntentTimer.Stop();
             _collapseTimer.Stop();
+            CancelPanelCollapseExit();
             return;
         }
 
@@ -70,6 +72,7 @@ public partial class MainWindow : Window
         {
             _expandIntentTimer.Stop();
             _collapseTimer.Stop();
+            CancelPanelCollapseExit();
             return;
         }
 
@@ -289,6 +292,7 @@ public partial class MainWindow : Window
 
     private void Root_MouseEnter(object sender, MouseEventArgs e)
     {
+        CancelPanelCollapseExit();
         StopPanelContentAnimation();
         _collapseTimer.Stop();
         _panelState.EnterSurface();
@@ -313,17 +317,73 @@ public partial class MainWindow : Window
     private void CollapseTimer_Tick(object? sender, EventArgs e)
     {
         _collapseTimer.Stop();
-        if (IsCategoryNameEditActive() || !_panelState.TryCollapse())
+        if (IsCategoryNameEditActive() || !_panelState.WouldCollapse)
         {
             return;
         }
 
         SaveCurrentScrollOffset();
+        if (!ClientAreaAnimationsEnabled)
+        {
+            CommitPanelCollapse();
+            return;
+        }
+
         StopCategoryRevealAnimations();
+        _panelCollapseExitPending = true;
+        BeginPanelCollapseExitAnimation();
+    }
+
+    private void BeginPanelCollapseExitAnimation()
+    {
+        // 内容向贴边轨道方向加速淡出；提交收起与几何交接在动画完成后进行，
+        // 期间任何再进入/拖拽/展开都会取消待提交的收起（见 CancelPanelCollapseExit）。
+        var opacityExit = new DoubleAnimation(1d, 0d, PanelCollapseExitAnimationDuration)
+        {
+            EasingFunction = FadeAnimation.ExitEasing,
+            FillBehavior = FillBehavior.Stop,
+        };
+        opacityExit.Completed += (_, _) => CommitPanelCollapse();
+        PanelContentHost.BeginAnimation(UIElement.OpacityProperty, null);
+        PanelContentHost.SetValue(UIElement.OpacityProperty, 0d);
+        PanelContentHost.BeginAnimation(UIElement.OpacityProperty, opacityExit);
+
+        var offsetExit = new DoubleAnimation(0d, PanelCollapseExitOffset, PanelCollapseExitAnimationDuration)
+        {
+            EasingFunction = FadeAnimation.ExitEasing,
+            FillBehavior = FillBehavior.Stop,
+        };
+        PanelContentTransform.BeginAnimation(TranslateTransform.XProperty, null);
+        PanelContentTransform.SetValue(TranslateTransform.XProperty, PanelCollapseExitOffset);
+        PanelContentTransform.BeginAnimation(TranslateTransform.XProperty, offsetExit);
+    }
+
+    private void CommitPanelCollapse()
+    {
+        _panelCollapseExitPending = false;
+        StopCategoryRevealAnimations();
+        if (!_panelState.TryCollapse())
+        {
+            // 出场动画期间条件变化（指针回到表面或开始拖拽），放弃本次收起并恢复内容。
+            StopPanelContentAnimation();
+            return;
+        }
+
         BeginCollapsedVisualHandoff(WindowController.Collapsed(
             CurrentWorkArea(),
             _settings,
             _viewModel.DefaultCapturePanel.Category));
+    }
+
+    private void CancelPanelCollapseExit()
+    {
+        if (!_panelCollapseExitPending)
+        {
+            return;
+        }
+
+        _panelCollapseExitPending = false;
+        StopPanelContentAnimation();
     }
 
     private void BeginCollapsedVisualHandoff(WindowPlacement placement)

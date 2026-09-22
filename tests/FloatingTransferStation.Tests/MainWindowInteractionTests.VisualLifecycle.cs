@@ -763,9 +763,7 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             var viewModel = (MainWindowViewModel)window.DataContext;
             viewModel.SetDefaultCaptureCategory(BoardCategory.Reference);
-            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
-            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-            CompleteLayout(window);
+            CollapseForSetup(window);
 
             var rowHeight = WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count;
             var expectedTop = SystemParameters.WorkArea.Top + WindowSettings.Default.Top + rowHeight;
@@ -1746,6 +1744,7 @@ public sealed partial class MainWindowInteractionTests
             var collapseTimer = GetPrivateField<DispatcherTimer>(window, "_collapseTimer");
             Assert.AreEqual(TimeSpan.FromMilliseconds(250), collapseTimer.Interval);
 
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
             InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
             Assert.IsTrue(collapseTimer.IsEnabled);
             InvokePrivate(window, "Root_MouseEnter", window, NewMouseEventArgs());
@@ -1753,6 +1752,7 @@ public sealed partial class MainWindowInteractionTests
             InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
             Assert.IsTrue(collapseTimer.IsEnabled);
             InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(240));
             CompleteLayout(window);
 
             Assert.AreEqual(WindowSettings.TabWidth, window.Width);
@@ -1775,6 +1775,7 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
 
         try
         {
@@ -1790,13 +1791,14 @@ public sealed partial class MainWindowInteractionTests
             InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
             InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
 
+            // 出场动画期间几何保持展开、壳保持可见；动画完成后才进入几何交接。
             Assert.AreEqual(expandedWidth, window.Width, 0.5);
             Assert.AreEqual(expandedHeight, window.Height, 0.5);
             Assert.AreEqual(expandedTop, window.Top, 0.5);
-            Assert.AreEqual(0d, shell.Opacity);
-            Assert.IsFalse(shell.IsHitTestVisible);
+            Assert.AreEqual(1d, shell.Opacity);
+            Assert.IsTrue(shell.IsHitTestVisible);
             Assert.IsTrue(viewModel.IsPanelExpanded);
-
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(240));
             CompleteLayout(window);
 
             Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);
