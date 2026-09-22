@@ -14,7 +14,6 @@ public partial class MainWindow
     private readonly SemaphoreSlim _reviewSaveGate = new(1, 1);
     private DateOnly _reviewDate = DateOnly.FromDateTime(DateTime.Now);
     private string _reviewBaseContent = string.Empty;
-    private string _reviewBaseHash = string.Empty;
     private bool _reviewDirty;
     private bool _reviewLoading;
     private bool _reviewDateSelectionUpdating;
@@ -86,7 +85,6 @@ public partial class MainWindow
             var document = await _dailyReviews.LoadAsync(date);
             _reviewDate = date;
             _reviewBaseContent = document.Content;
-            _reviewBaseHash = document.ContentHash;
             _reviewDirty = false;
             _reviewLoading = true;
             ReviewEditor.Text = document.Content;
@@ -134,7 +132,6 @@ public partial class MainWindow
                 {
                     var saved = await _dailyReviews.LoadAsync(date);
                     _reviewBaseContent = saved.Content;
-                    _reviewBaseHash = saved.ContentHash;
                     _reviewDirty = false;
                     ReviewStatus.Text = $"已保存 {DateTime.Now:HH:mm:ss}";
                 }
@@ -293,7 +290,6 @@ public partial class MainWindow
                 ReviewEditor.Text = remote.Content;
                 _reviewLoading = false;
                 _reviewBaseContent = remote.Content;
-                _reviewBaseHash = remote.ContentHash;
                 ReviewStatus.Text = remote.Exists ? "已从文件刷新" : "文件已删除。";
                 return;
             }
@@ -309,7 +305,6 @@ public partial class MainWindow
                 ReviewEditor.Text = remote.Content;
                 _reviewLoading = false;
                 _reviewBaseContent = remote.Content;
-                _reviewBaseHash = remote.ContentHash;
                 _reviewDirty = false;
                 ReviewStatus.Text = "已载入文件版本";
                 return;
@@ -322,7 +317,6 @@ public partial class MainWindow
                 ReviewEditor.Text = merged.Content;
                 _reviewLoading = false;
                 _reviewBaseContent = remote.Content;
-                _reviewBaseHash = remote.ContentHash;
                 _reviewDirty = merged.Content != remote.Content || merged.HasConflicts;
                 ReviewStatus.Text = merged.HasConflicts ? "已合并，请整理冲突后保存" : "已合并，等待保存";
             }

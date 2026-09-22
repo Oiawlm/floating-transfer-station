@@ -7,24 +7,6 @@ namespace FloatingTransferStation.Tests;
 public sealed class BoardMutationServiceTests
 {
     [TestMethod]
-    [TestCategory("Adversarial")]
-    public async Task Move_SaveFailureRestoresOriginalCategoryAndOrder()
-    {
-        using var directory = new TestDirectory();
-        var board = new BoardService();
-        var item = board.AddText("内容");
-        var store = new MutationStore(directory.Root) { FailSave = true };
-        var messages = new List<string>();
-        var service = new BoardMutationService(board, store, messages.Add);
-
-        var success = await service.MoveAsync(item.Id, BoardCategory.Prompt, 0);
-
-        Assert.IsFalse(success);
-        Assert.AreEqual(BoardCategory.Inbox, item.Category);
-        Assert.AreEqual("移动未保存，内容已恢复到原位置。", messages.Single());
-    }
-
-    [TestMethod]
     public async Task MoveMany_ChangedBatchSavesExactlyOnce()
     {
         using var directory = new TestDirectory();
@@ -349,9 +331,9 @@ public sealed class BoardMutationServiceTests
         await File.WriteAllBytesAsync(path, [0x89, 0x50, 0x4E, 0x47]);
         var middle = board.AddImage(Guid.NewGuid(), "images/image.png", path);
         var first = board.AddText("较新内容");
-        board.Move(first.Id, BoardCategory.Prompt, 0);
-        board.Move(middle.Id, BoardCategory.Prompt, 1);
-        board.Move(last.Id, BoardCategory.Prompt, 2);
+        board.MoveMany([first.Id], BoardCategory.Prompt, 0);
+        board.MoveMany([middle.Id], BoardCategory.Prompt, 1);
+        board.MoveMany([last.Id], BoardCategory.Prompt, 2);
         var originalIds = board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray();
         var store = new MutationStore(directory.Root) { FailSave = true };
         var messages = new List<string>();
@@ -530,11 +512,11 @@ public sealed class BoardMutationServiceTests
         var clear = service.ClearCategoryAsync(BoardCategory.Prompt);
         await store.FirstSaveStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        var move = service.MoveAsync(inbox.Id, BoardCategory.CustomerOriginal, 0);
+        var move = service.MoveManyAsync([inbox.Id], BoardCategory.CustomerOriginal, 0);
         store.FailFirstSave();
 
         Assert.IsFalse(await clear);
-        Assert.IsTrue(await move);
+        Assert.AreEqual(BoardBatchMoveResult.Moved, await move);
         Assert.AreSame(prompt, board.Items(BoardCategory.Prompt).Single());
         CollectionAssert.AreEqual(
             board.CreateSnapshot().Items
@@ -583,7 +565,9 @@ public sealed class BoardMutationServiceTests
             () => service.SaveForShutdownAsync(() => Task.CompletedTask));
 
         store.FailSave = false;
-        Assert.IsTrue(await service.MoveAsync(item.Id, BoardCategory.Prompt, 0));
+        Assert.AreEqual(
+            BoardBatchMoveResult.Moved,
+            await service.MoveManyAsync([item.Id], BoardCategory.Prompt, 0));
         Assert.AreEqual(BoardCategory.Prompt, item.Category);
         Assert.AreEqual(1, store.SaveCount);
         Assert.AreEqual(

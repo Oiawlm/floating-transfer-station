@@ -115,22 +115,7 @@ public sealed class ImageNormalizerTests
     }
 
     [STATestMethod]
-    public async Task NormalizeBitmap_WpfBitmapBecomesManagedPng()
-    {
-        Assert.AreEqual(ApartmentState.STA, Thread.CurrentThread.GetApartmentState());
-        using var directory = new TestDirectory();
-        var pixels = new byte[] { 0, 0, 255, 255 };
-        var bitmap = BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, pixels, 4);
-        bitmap.Freeze();
-        var normalizer = new ImageNormalizer(AppPaths.ForTests(directory.Root).ImagesDirectory);
-
-        var stored = await normalizer.NormalizeBitmapAsync(bitmap);
-
-        Assert.IsTrue(File.Exists(stored.AbsolutePath));
-    }
-
-    [STATestMethod]
-    public async Task NormalizeBitmap_AllZeroAlphaWithRgbRepairsToOpaque()
+    public async Task NormalizeClipboard_AllZeroAlphaWithRgbRepairsToOpaque()
     {
         using var directory = new TestDirectory();
         var bitmap = BitmapSource.Create(
@@ -145,14 +130,14 @@ public sealed class ImageNormalizerTests
         bitmap.Freeze();
         var normalizer = new ImageNormalizer(AppPaths.ForTests(directory.Root).ImagesDirectory);
 
-        var stored = await normalizer.NormalizeBitmapAsync(bitmap);
+        var stored = await normalizer.NormalizeClipboardAsync([ClipboardImageCandidate.FromBitmap(bitmap)]);
 
         using var loaded = await Image.LoadAsync<Rgba32>(stored.AbsolutePath);
         Assert.AreEqual(new Rgba32(10, 20, 30, 255), loaded[0, 0]);
     }
 
     [STATestMethod]
-    public async Task NormalizeBitmap_AnyVisibleAlphaPreservesTransparency()
+    public async Task NormalizeClipboard_AnyVisibleAlphaPreservesTransparency()
     {
         using var directory = new TestDirectory();
         var bitmap = BitmapSource.Create(
@@ -171,7 +156,7 @@ public sealed class ImageNormalizerTests
         bitmap.Freeze();
         var normalizer = new ImageNormalizer(AppPaths.ForTests(directory.Root).ImagesDirectory);
 
-        var stored = await normalizer.NormalizeBitmapAsync(bitmap);
+        var stored = await normalizer.NormalizeClipboardAsync([ClipboardImageCandidate.FromBitmap(bitmap)]);
 
         using var loaded = await Image.LoadAsync<Rgba32>(stored.AbsolutePath);
         Assert.AreEqual(new Rgba32(10, 20, 30, 0), loaded[0, 0]);

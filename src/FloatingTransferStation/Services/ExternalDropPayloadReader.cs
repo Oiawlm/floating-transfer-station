@@ -13,27 +13,6 @@ public sealed class ExternalDropPayloadReader
         _imageReader = imageReader ?? new WindowsDataImageReader();
     }
 
-    public bool CanRead(IDataObject data)
-    {
-        ArgumentNullException.ThrowIfNull(data);
-        if (!HasNoInternalIdentity(data))
-        {
-            return false;
-        }
-
-        if (!TryGetDataPresent(data, DataFormats.FileDrop, autoConvert: true, out var hasFileDrop))
-        {
-            return false;
-        }
-
-        if (hasFileDrop)
-        {
-            return TryReadImageFiles(data, out _);
-        }
-
-        return _imageReader.CanRead(data) || CanReadText(data);
-    }
-
     public ExternalDropPayload? Read(IDataObject data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -122,19 +101,6 @@ public sealed class ExternalDropPayloadReader
         catch
         {
             paths = [];
-            return false;
-        }
-    }
-
-    private static bool CanReadText(IDataObject data)
-    {
-        try
-        {
-            return TryReadText(data, DataFormats.UnicodeText, out _) ||
-                TryReadText(data, DataFormats.Text, out _);
-        }
-        catch
-        {
             return false;
         }
     }

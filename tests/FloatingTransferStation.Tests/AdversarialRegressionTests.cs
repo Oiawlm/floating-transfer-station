@@ -27,7 +27,7 @@ public sealed class AdversarialRegressionTests
         board.Restore(snapshot);
         var moved = board.Items(BoardCategory.Inbox)[2500];
 
-        board.Move(moved.Id, BoardCategory.Reference, 0);
+        board.MoveMany([moved.Id], BoardCategory.Reference, 0);
 
         Assert.AreEqual(4999, board.Items(BoardCategory.Inbox).Count);
         Assert.AreEqual(1, board.Items(BoardCategory.Reference).Count);
@@ -97,12 +97,6 @@ public sealed class AdversarialRegressionTests
 
         public Task<StoredImage> NormalizeStaticFileAsync(
             string sourcePath,
-            Guid? id = null,
-            CancellationToken cancellationToken = default) =>
-            throw new AssertFailedException("Image normalizer should not be called for text snapshots.");
-
-        public Task<StoredImage> NormalizeBitmapAsync(
-            System.Windows.Media.Imaging.BitmapSource bitmap,
             Guid? id = null,
             CancellationToken cancellationToken = default) =>
             throw new AssertFailedException("Image normalizer should not be called for text snapshots.");

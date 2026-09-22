@@ -899,11 +899,6 @@ public sealed partial class ClipboardCaptureServiceTests
             Guid? id = null,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Task<StoredImage> NormalizeBitmapAsync(
-            BitmapSource bitmap,
-            Guid? id = null,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
         public void Release()
         {
             var id = Guid.NewGuid();
@@ -929,11 +924,6 @@ public sealed partial class ClipboardCaptureServiceTests
 
         public Task<StoredImage> NormalizeStaticFileAsync(
             string sourcePath,
-            Guid? id = null,
-            CancellationToken cancellationToken = default) => Create(id);
-
-        public Task<StoredImage> NormalizeBitmapAsync(
-            BitmapSource bitmap,
             Guid? id = null,
             CancellationToken cancellationToken = default) => Create(id);
 

@@ -179,14 +179,16 @@ public sealed class ImageInputLimitsTests
     }
 
     [STATestMethod]
-    public async Task NormalizeBitmap_RejectsPixelBudgetBeforeWriting()
+    public async Task NormalizeClipboard_RejectsPixelBudgetBeforeWriting()
     {
         using var directory = new TestDirectory();
         var bitmap = BitmapSource.Create(2, 2, 96, 96, PixelFormats.Bgra32, null, new byte[16], 8);
+        bitmap.Freeze();
         var paths = AppPaths.ForTests(directory.Root);
         var normalizer = new ImageNormalizer(paths.ImagesDirectory, new ImageInputLimits(MaxPixels: 3));
 
-        await Assert.ThrowsExactlyAsync<ImageInputLimitException>(() => normalizer.NormalizeBitmapAsync(bitmap));
+        await Assert.ThrowsExactlyAsync<ImageInputLimitException>(
+            () => normalizer.NormalizeClipboardAsync([ClipboardImageCandidate.FromBitmap(bitmap)]));
 
         AssertNoImages(paths.ImagesDirectory);
     }

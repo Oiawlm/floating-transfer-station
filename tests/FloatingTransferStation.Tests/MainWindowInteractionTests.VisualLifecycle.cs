@@ -1170,14 +1170,14 @@ public sealed partial class MainWindowInteractionTests
         var inputRestored = window.IsEnabled;
         var compactStatus = (Popup)window.FindName("CompactStatusPopup");
 
-        var move = mutations.MoveAsync(item.Id, BoardCategory.Prompt, 0);
+        var move = mutations.MoveManyAsync([item.Id], BoardCategory.Prompt, 0);
         PumpDispatcherUntil(window.Dispatcher, move);
         CloseWindow(window);
 
         Assert.IsTrue(inputRestored);
         Assert.AreEqual(0, clipboardReadsDuringClose);
         Assert.IsTrue(compactStatus.IsOpen);
-        Assert.IsTrue(move.GetAwaiter().GetResult());
+        Assert.AreEqual(BoardBatchMoveResult.Moved, move.GetAwaiter().GetResult());
         Assert.AreEqual(BoardCategory.Prompt, item.Category);
         Assert.AreEqual("退出前保存失败，悬浮中转站暂未关闭。", viewModel.StatusText);
         CollectionAssert.AreEqual(
