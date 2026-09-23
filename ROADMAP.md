@@ -4,11 +4,11 @@
 
 ## 后续平台范围
 
-- 1.6.0 之后，Windows 以 Windows 11 为开发与验证目标，不再为 Windows 10 单独做兼容适配、维护或测试，也不以 Windows 10 兼容性作为发布门槛。下一次准备版本时同步更新公开支持说明。
-- 1.6.0 之后，Mac 仅维护 Apple Silicon（M 系列芯片，`osx-arm64`），不再适配、验证或发布 Intel Mac 新包。下一次开发或准备版本时同步调整 CI、默认构建目标与下载说明。
-- 已发布的 1.6.0 保持原样，包含现有 Windows 安装包、Intel Mac 包、校验文件及下载入口。本次范围决定不触发重新打包或发布。
+- 上述平台范围约定已在 1.7.0 落地：公开支持说明、CI 阵容与默认打包目标均已收敛（Windows 11 + Apple Silicon）。已发布的 1.6.0（含 Intel Mac 包）保持原样，校验文件与下载入口保留。
 
 ## 最近完成
+
+- 1.7.0 界面与动效升级：共享设计 token、Fluent 动效（悬停/显隐/交错入场/收起出场）、层级阴影与统一图标、深浅双主题跟随系统、Windows 11 Mica 窗口壳，以及 Mac 端主题与动效同步；平台范围收敛为 Windows 11 + Apple Silicon。
 
 - Windows 与 Mac 统一在 main 维护，1.6.0 同一个 Release 并列提供 Windows、Apple Silicon 和 Intel Mac 下载。Mac 已通过双架构原生测试、窗口启动和剪贴板验证，当前仍为未经 Apple 公证的测试版；第三方软件间拖放人工验收及 Developer ID 签名、公证继续保留为后续工作。
 

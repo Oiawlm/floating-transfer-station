@@ -6,17 +6,18 @@
 
 [鹈鹕骑自行车（单 HTML，可调动画）](pelican_bicycle.html) 是一个无需构建步骤即可打开的交互示例，支持播放/暂停、速度、车轮大小、身体摆动、翅膀幅度和配色调整。
 
-> 支持 Windows 10/11 64 位与 macOS 14+（Apple Silicon / Intel）。两端代码统一在 main 维护，下载包统一放在同一个 Release。Mac 包已通过原生自动验证，当前仍为未经 Apple 公证的测试版。
+> 支持 Windows 11 64 位与 macOS 14+（Apple Silicon）。1.7.0 起 Windows 以 Windows 11 为开发与验证目标，Mac 仅维护 Apple Silicon（Intel Mac 的最后可用版本为 1.6.0）。两端代码统一在 main 维护，下载包统一放在同一个 Release。Mac 包已通过原生自动验证，当前仍为未经 Apple 公证的测试版。
 
 ## 下载与安装
 
-在 [1.6.0 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.6.0) 选择你的平台：
+在 [1.7.0 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.7.0) 选择你的平台：
 
 | 平台 | 下载 | 状态 |
 |---|---|---|
-| Windows 10/11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.6.0/FloatingTransferStation-Setup-1.6.0.exe) | 正式版 |
-| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.6.0/FloatingTransferStation-1.6.0-osx-arm64.zip) | 测试版，未 Apple 公证 |
-| Mac · Intel | [Mac Intel ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.6.0/FloatingTransferStation-1.6.0-osx-x64.zip) | 测试版，未 Apple 公证 |
+| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.7.0/FloatingTransferStation-Setup-1.7.0.exe) | 正式版 |
+| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.7.0/FloatingTransferStation-1.7.0-osx-arm64.zip) | 测试版，未 Apple 公证 |
+
+仍在使用 Intel Mac 的读者可以从 [1.6.0 历史发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.6.0) 获取最后的 Intel 包；该版本保留不撤回，但不再获得更新。
 
 发行页同时提供 `SHA256SUMS.txt`。Windows 和 Mac 都无需另装 .NET。
 
@@ -30,9 +31,9 @@
 
 ### Mac 安装
 
-解压对应芯片的 ZIP，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
+解压 `FloatingTransferStation-1.7.0-osx-arm64.zip`，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
 
-Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自动生成的源码包；Mac 应用包的文件名包含 `osx-arm64` 或 `osx-x64`。
+Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自动生成的源码包；Mac 应用包的文件名包含 `osx-arm64`。
 
 ## 它能做什么
 
@@ -80,13 +81,13 @@ Mac 测试版使用 Avalonia 界面，复用 Windows 的分类、排序、置顶
 
 Mac 使用 `⌘` 替代上述快捷键中的 `Ctrl`；双击分类或 `F2` 改名，编辑时按 `Enter` 保存、`Esc` 取消。`⌘ + V` 或“粘贴”按钮手动收集，`⌘ + C` 复制选中的一段文字或一组图片，`⌘ + Q` 或窗口右上角 × 保存后退出。
 
-- **安装**：`FloatingTransferStation-<版本>-osx-arm64.zip` 用于 Apple Silicon，`osx-x64.zip` 用于 Intel。解压后将 `FloatingTransferStation.app` 拖入“应用程序”，无需另装 .NET。
+- **安装**：`FloatingTransferStation-<版本>-osx-arm64.zip` 用于 Apple Silicon。解压后将 `FloatingTransferStation.app` 拖入“应用程序”，无需另装 .NET。Intel Mac 请使用 1.6.0 历史包，不再获得更新。
 - **数据**：保存在 `~/Library/Application Support/FloatingTransferStation/Data/`。删除应用本身保留数据；需要彻底删除时，先退出并备份，再由用户手动删除这个精确目录。Mac 不读取 Windows 安装登记。
 - **采集边界**：每 500 ms 检查一次剪贴板，规范化/保存期间只处理一个采集，极快连续复制可能无法逐条记录；手动粘贴或重新复制可补收。尊重 NSPasteboard 的隐私/临时内容标记。暂不自动登记登录启动，可在 macOS 系统设置的登录项中添加应用。
-- **验证状态**：本机可交叉编译两个 Mac 包，并运行跨平台测试和 Windows 上的 Avalonia 窗口验证。两种 Mac 架构的 CI 验证原生启动、窗口截图，以及合成文字、隐私标记、编码图片和文件剪贴板传输；具体结果以对应提交的 CI 和附件为准。第三方软件间拖放仍需 Mac 人工验收；Windows 截图不作为 Mac 实机证据。
+- **验证状态**：本机可交叉编译 Apple Silicon Mac 包，并运行跨平台测试和 Windows 上的 Avalonia 窗口验证。Apple Silicon 的 CI 验证原生启动、窗口截图，以及合成文字、隐私标记、编码图片和文件剪贴板传输；具体结果以对应提交的 CI 和附件为准。第三方软件间拖放仍需 Mac 人工验收；Windows 截图不作为 Mac 实机证据。
 - **签名状态**：统一发行页中的 Mac 测试包来自已通过原生 CI 的临时签名产物，尚无 Developer ID 签名和 Apple 公证，首次打开可能被 Gatekeeper 阻止。下载入口与 Windows 放在一起不代表 Mac 已通过 Apple 公证。
 
-单独生成两个 Mac 候选包：
+单独生成 Apple Silicon Mac 候选包：
 
 ```powershell
 & ./scripts/build-macos.ps1
@@ -98,7 +99,7 @@ Mac 使用 `⌘` 替代上述快捷键中的 `Ctrl`；双击分类或 `F2` 改�
 
 以下限制适用于 Windows 正式版。
 
-- 动态分类增删、设置界面、快捷启动和常驻模式仍在路线图中，不属于 1.6.0 承诺。
+- 动态分类增删、设置界面、快捷启动和常驻模式仍在路线图中，不属于 1.7.0 承诺。
 - 每个编码图片表示或源文件最多 64 MiB、6,400 万像素；超限不会静默缩小原图。连续大量复制达到待处理容量上限时，会提示稍后重新复制。
 - 外部拖放基于 Windows 通用格式；不同软件实际提供的格式不同，因此不是所有来源都能接收。
 - B-005 图片分类反馈稍晚、B-006 微信复制图片偶发生成两份目前属于低优先级[现场观察](docs/observations.md)，自动测试环境未能稳定复现。
@@ -117,7 +118,7 @@ Mac 使用 `⌘` 替代上述快捷键中的 `Ctrl`；双击分类或 `F2` 改�
 & .\.tools\dotnet\dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore
 ```
 
-同步生成 Windows 安装包和两种 Mac 候选包：
+同步生成 Windows 安装包和 Apple Silicon Mac 候选包：
 
 ```powershell
 & .\scripts\build-release.ps1

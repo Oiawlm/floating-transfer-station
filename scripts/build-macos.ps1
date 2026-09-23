@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('osx-arm64', 'osx-x64')]
-    [string[]]$RuntimeIdentifier = @('osx-arm64', 'osx-x64'),
+    [ValidateSet('osx-arm64')]
+    [string[]]$RuntimeIdentifier = @('osx-arm64'),
     [string]$DotnetPath,
     [switch]$ForRelease,
     [switch]$SmokeTest,
