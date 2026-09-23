@@ -22,7 +22,7 @@ public partial class MainWindow : Window
         var work = CurrentWorkArea();
         _settings = (_settings with { PanelWidth = _settings.PanelWidth - e.HorizontalChange })
             .Normalize(work.Width, work.Height);
-        Width = _settings.PanelWidth + WindowSettings.TabWidth;
+        Width = _settings.PanelWidth + WindowSettings.TabWidth + _rightEdgeBleed;
         DockRight();
     }
 
@@ -58,7 +58,31 @@ public partial class MainWindow : Window
     private void DockRight()
     {
         var work = CurrentWorkArea();
-        Left = work.Right - ActualWidth;
+        Left = work.Right - (ActualWidth - _rightEdgeBleed);
+    }
+
+    /// <summary>重估右缘裁切量（显示器/任务栏/邻接屏可能已变化）并按当前面板状态重新贴齐。</summary>
+    private void RefreshEdgeBleed()
+    {
+        if (_rightEdgeBleedProvider is null)
+        {
+            return;
+        }
+
+        _rightEdgeBleed = _rightEdgeBleedProvider.Invoke(this);
+        ReapplyCurrentPlacement();
+    }
+
+    private void ReapplyCurrentPlacement()
+    {
+        var work = CurrentWorkArea();
+        ApplyPlacement(_viewModel.IsPanelExpanded
+            ? WindowController.Expanded(work, _settings, _rightEdgeBleed)
+            : WindowController.Collapsed(
+                work,
+                _settings,
+                _viewModel.DefaultCapturePanel.Category,
+                _rightEdgeBleed));
     }
 
     private static WorkArea CurrentWorkArea()

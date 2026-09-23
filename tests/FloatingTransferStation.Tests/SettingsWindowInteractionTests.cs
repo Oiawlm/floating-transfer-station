@@ -1,0 +1,508 @@
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+using FloatingTransferStation.Models;
+using FloatingTransferStation.Services;
+using FloatingTransferStation.ViewModels;
+using FloatingTransferStation.Views;
+
+namespace FloatingTransferStation.Tests;
+
+[TestClass]
+public sealed class SettingsWindowInteractionTests
+{
+    private static MainWindow CreateWindow(
+        TestDirectory directory,
+        RecordingPreferencesStore preferencesStore,
+        FakeStartupManager startupManager,
+        AppPreferences? preferences = null,
+        RecordingSettingsBoardStore? store = null)
+    {
+        store ??= new RecordingSettingsBoardStore(directory.Root);
+        var board = new BoardService();
+        var normalizer = new ImageNormalizer(store.ImagesDirectory);
+        var operationGate = new BoardOperationGate();
+        MainWindow? window = null;
+        void ShowStatus(string message) => window?.ShowStatus(message);
+        var clipboard = new ClipboardCaptureService(
+            new IdleClipboardReader(),
+            normalizer,
+            board,
+            store,
+            ShowStatus,
+            operationGate: operationGate);
+        window = new MainWindow(
+            board,
+            store,
+            WindowSettings.Default,
+            clipboard,
+            new BoardMutationService(board, store, ShowStatus, operationGate),
+            new DragPayloadService(),
+            new ExternalDropPayloadReader(new WindowsDataImageReader()),
+            new ExternalDropImportService(
+                normalizer,
+                board,
+                store,
+                ShowStatus,
+                operationGate),
+            preferences: preferences,
+            preferencesStore: preferencesStore,
+            startupManager: startupManager,
+            dataDirectory: directory.Root);
+        return window;
+    }
+
+    private static SettingsWindow OpenSettings(MainWindow window)
+    {
+        window.Show();
+        var gear = window.FindName("SettingsButton") as Button;
+        Assert.IsNotNull(gear);
+        gear.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        var settings = GetPrivateField<SettingsWindow>(window, "_settingsWindow");
+        Assert.IsNotNull(settings);
+        return settings;
+    }
+
+    private static void CloseLeftoverSettingsWindow(MainWindow window)
+    {
+        if (GetPrivateField<SettingsWindow?>(window, "_settingsWindow") is { } leftover)
+        {
+            leftover.Close();
+        }
+    }
+
+    private static void CompleteLayout(Window window)
+    {
+        window.UpdateLayout();
+        var frame = new DispatcherFrame();
+        window.Dispatcher.BeginInvoke(
+            DispatcherPriority.ApplicationIdle,
+            new Action(() => frame.Continue = false));
+        Dispatcher.PushFrame(frame);
+        window.UpdateLayout();
+    }
+
+    private static void CloseWindow(Window window)
+    {
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        EventHandler closedHandler = (_, _) => closed.TrySetResult();
+        window.Closed += closedHandler;
+        try
+        {
+            window.Close();
+            PumpDispatcherUntil(window.Dispatcher, closed.Task);
+        }
+        finally
+        {
+            window.Closed -= closedHandler;
+        }
+    }
+
+    private static void PumpDispatcherUntil(Dispatcher dispatcher, Task task)
+    {
+        if (!task.IsCompleted)
+        {
+            var frame = new DispatcherFrame();
+            var timedOut = false;
+            var timeout = new DispatcherTimer(DispatcherPriority.Send, dispatcher)
+            {
+                Interval = TimeSpan.FromSeconds(5)
+            };
+            timeout.Tick += (_, _) =>
+            {
+                timedOut = true;
+                timeout.Stop();
+                frame.Continue = false;
+            };
+            _ = task.ContinueWith(
+                _ => dispatcher.BeginInvoke(
+                    DispatcherPriority.Send,
+                    new Action(() => frame.Continue = false)),
+                CancellationToken.None,
+                TaskContinuationOptions.None,
+                TaskScheduler.Default);
+            timeout.Start();
+            Dispatcher.PushFrame(frame);
+            timeout.Stop();
+            if (timedOut && !task.IsCompleted)
+            {
+                throw new TimeoutException("The dispatcher operation did not complete within five seconds.");
+            }
+        }
+
+        task.GetAwaiter().GetResult();
+    }
+
+    private static void InvokePrivate(MainWindow window, string methodName, params object?[] arguments)
+    {
+        var method = typeof(MainWindow).GetMethod(
+            methodName,
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.IsNotNull(method);
+        method.Invoke(window, arguments);
+    }
+
+    private static T GetPrivateField<T>(MainWindow window, string fieldName)
+    {
+        var field = typeof(MainWindow).GetField(
+            fieldName,
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.IsNotNull(field);
+        return (T)field.GetValue(window)!;
+    }
+
+    private static void SaveVisualEvidence(FrameworkElement visual, string fileName)
+    {
+        var directory = Environment.GetEnvironmentVariable("FTS_SETTINGS_EVIDENCE_DIR");
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(directory);
+        var bitmap = new RenderTargetBitmap(
+            (int)Math.Ceiling(visual.ActualWidth),
+            (int)Math.Ceiling(visual.ActualHeight),
+            96,
+            96,
+            System.Windows.Media.PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(Path.Combine(directory, fileName));
+        encoder.Save(stream);
+    }
+
+    [STATestMethod]
+    public void SettingsGearButton_IsTheLeftmostHeaderActionAndOpensTheSettingsWindow()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(
+            directory,
+            new RecordingPreferencesStore(),
+            new FakeStartupManager());
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            var gear = window.FindName("SettingsButton") as Button;
+            Assert.IsNotNull(gear);
+            Assert.AreEqual("设置", gear.ToolTip);
+            Assert.AreEqual("设置", System.Windows.Automation.AutomationProperties.GetName(gear));
+            var actions = (StackPanel)window.FindName("HeaderActions");
+            var buttons = actions.Children.OfType<Button>().ToArray();
+            Assert.AreEqual("SettingsButton", buttons[0].Name, "齿轮应位于操作区最左，与红色清空按钮保持距离。");
+            Assert.AreEqual("DeleteContentButton", buttons[^1].Name);
+
+            gear.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            CompleteLayout(window);
+
+            var settings = GetPrivateField<SettingsWindow>(window, "_settingsWindow");
+            Assert.IsNotNull(settings);
+            Assert.AreEqual("设置", settings.Title);
+            Assert.AreSame(window, settings.Owner);
+
+            // 再次点击置前而不是开第二扇窗。
+            gear.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert.AreSame(settings, GetPrivateField<SettingsWindow>(window, "_settingsWindow"));
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void ThemePreference_AppliesImmediatelyAndIgnoresSystemChangesWhenForced()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            new FakeStartupManager(),
+            preferences: new AppPreferences(ThemePreference.Light, AnimationsEnabled: true));
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            Assert.AreEqual(
+                DesignTheme.Light,
+                GetPrivateField<DesignTheme>(window, "_activeDesignTheme"));
+            StringAssert.EndsWith(
+                (window.Resources.MergedDictionaries[1].Source?.OriginalString ?? string.Empty)
+                    .Replace('\\', '/'),
+                "Resources/DesignTheme.Light.xaml");
+
+            var settings = OpenSettings(window);
+            window.ApplyPreferences(new AppPreferences(ThemePreference.Dark, AnimationsEnabled: true));
+            CompleteLayout(window);
+
+            Assert.AreEqual(DesignTheme.Dark, GetPrivateField<DesignTheme>(window, "_activeDesignTheme"));
+            StringAssert.EndsWith(
+                (window.Resources.MergedDictionaries[1].Source?.OriginalString ?? string.Empty)
+                    .Replace('\\', '/'),
+                "Resources/DesignTheme.Dark.xaml");
+            StringAssert.EndsWith(
+                (settings.Resources.MergedDictionaries[1].Source?.OriginalString ?? string.Empty)
+                    .Replace('\\', '/'),
+                "Resources/DesignTheme.Dark.xaml",
+                "设置窗应跟随主窗主题同步切换。");
+
+            // 强制深色后，系统主题变化广播不得再改动主题。
+            var lParam = Marshal.StringToHGlobalUni("ImmersiveColorSet");
+            try
+            {
+                InvokePrivate(window, "WndProc", nint.Zero, 0x001A, nint.Zero, lParam, false);
+                CompleteLayout(window);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(lParam);
+            }
+
+            Assert.AreEqual(DesignTheme.Dark, GetPrivateField<DesignTheme>(window, "_activeDesignTheme"));
+            Assert.AreEqual(
+                new AppPreferences(ThemePreference.Dark, AnimationsEnabled: true),
+                preferencesStore.LastSaved);
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void ThemePreference_FollowSystemStillRespondsToSystemChanges()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(
+            directory,
+            new RecordingPreferencesStore(),
+            new FakeStartupManager(),
+            preferences: new AppPreferences(ThemePreference.FollowSystem, AnimationsEnabled: true));
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+
+            // 预览覆盖使 DetectSystemTheme 的结果确定化，不依赖测试机的系统亮暗。
+            DesignThemeManager.PreviewOverride = DesignTheme.Dark;
+            var lParam = Marshal.StringToHGlobalUni("ImmersiveColorSet");
+            try
+            {
+                InvokePrivate(window, "WndProc", nint.Zero, 0x001A, nint.Zero, lParam, false);
+                CompleteLayout(window);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(lParam);
+                DesignThemeManager.PreviewOverride = null;
+            }
+
+            Assert.AreEqual(DesignTheme.Dark, GetPrivateField<DesignTheme>(window, "_activeDesignTheme"));
+            StringAssert.EndsWith(
+                (window.Resources.MergedDictionaries[1].Source?.OriginalString ?? string.Empty)
+                    .Replace('\\', '/'),
+                "Resources/DesignTheme.Dark.xaml");
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void AnimationsPreference_TogglesTheClientAreaAnimationOverride()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            new FakeStartupManager());
+
+        try
+        {
+            window.Show();
+            Assert.IsFalse(window.Resources.Contains(SystemParameters.ClientAreaAnimationKey));
+
+            window.ApplyPreferences(new AppPreferences(ThemePreference.FollowSystem, AnimationsEnabled: false));
+            Assert.AreEqual(false, window.Resources[SystemParameters.ClientAreaAnimationKey]);
+            Assert.IsFalse(window.ClientAreaAnimationsEnabled);
+
+            window.ApplyPreferences(new AppPreferences(ThemePreference.FollowSystem, AnimationsEnabled: true));
+            Assert.IsFalse(window.Resources.Contains(SystemParameters.ClientAreaAnimationKey));
+            Assert.AreEqual(
+                new AppPreferences(ThemePreference.FollowSystem, AnimationsEnabled: true),
+                preferencesStore.LastSaved);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void StartupToggle_ReadsAndWritesThroughTheStartupManager()
+    {
+        using var directory = new TestDirectory();
+        var startup = new FakeStartupManager();
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), startup);
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var toggle = settings.FindName("StartupToggle") as CheckBox;
+            Assert.IsNotNull(toggle);
+            Assert.IsFalse(toggle.IsChecked!.Value, "未注册自启时开关应显示关闭。");
+
+            toggle.IsChecked = true;
+            Assert.AreEqual(1, startup.EnableCount);
+            Assert.IsTrue(toggle.IsChecked.Value);
+
+            toggle.IsChecked = false;
+            Assert.AreEqual(1, startup.DisableCount);
+            Assert.IsFalse(toggle.IsChecked.Value);
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void ExitButton_TriggersTheMainWindowFlushAndClosePath()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingSettingsBoardStore(directory.Root);
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeStartupManager(), store: store);
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        window.Closed += (_, _) => closed.TrySetResult();
+
+        var settings = OpenSettings(window);
+        var exit = settings.FindName("ExitButton") as Button;
+        Assert.IsNotNull(exit);
+
+        exit.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        PumpDispatcherUntil(window.Dispatcher, closed.Task);
+
+        Assert.IsTrue(store.SettingsSaveCount >= 1, "退出必须经过主窗既有冲刷序列保存窗口设置。");
+        Assert.IsFalse(window.IsVisible);
+    }
+
+    [STATestMethod]
+    public void SettingsWindow_RendersInBothThemes()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            DesignThemeManager.Apply(settings, DesignTheme.Light);
+            settings.UpdateLayout();
+            SaveVisualEvidence((Border)settings.FindName("WindowShell"), "settings-light.png");
+
+            DesignThemeManager.Apply(settings, DesignTheme.Dark);
+            settings.UpdateLayout();
+            SaveVisualEvidence((Border)settings.FindName("WindowShell"), "settings-dark.png");
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    private sealed class IdleClipboardReader : IClipboardReader
+    {
+        public Task<ClipboardSnapshot> ReadAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ClipboardSnapshot(0, null, [], null));
+    }
+
+    private sealed class RecordingPreferencesStore : IPreferencesStore
+    {
+        public AppPreferences? LastSaved { get; private set; }
+        public AppPreferences Seeded { get; set; } = AppPreferences.Default;
+
+        public Task<AppPreferences> LoadPreferencesAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Seeded);
+
+        public Task SavePreferencesAsync(
+            AppPreferences preferences,
+            CancellationToken cancellationToken = default)
+        {
+            LastSaved = preferences;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeStartupManager : IStartupManager
+    {
+        public int EnableCount { get; private set; }
+        public int DisableCount { get; private set; }
+        public bool Enabled { get; set; }
+
+        public bool IsEnabled() => Enabled;
+
+        public void Enable()
+        {
+            EnableCount++;
+            Enabled = true;
+        }
+
+        public void Disable()
+        {
+            DisableCount++;
+            Enabled = false;
+        }
+    }
+
+    private sealed class RecordingSettingsBoardStore(string root) : IBoardStore
+    {
+        public int SettingsSaveCount { get; private set; }
+        public string ImagesDirectory { get; } = Path.Combine(root, "images");
+
+        public Task<BoardSnapshot> LoadBoardAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new BoardSnapshot());
+
+        public Task SaveBoardAsync(BoardSnapshot snapshot, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task<WindowSettings> LoadSettingsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(WindowSettings.Default);
+
+        public Task SaveSettingsAsync(WindowSettings settings, CancellationToken cancellationToken = default)
+        {
+            SettingsSaveCount++;
+            return Task.CompletedTask;
+        }
+
+        public bool TryDeleteImage(string? absolutePath) => true;
+    }
+}

@@ -342,7 +342,7 @@ public partial class MainWindow : Window
         _panelState.CollapseForExternalDrop();
         _viewModel.SetExternalDropRailVisible(true);
         _viewModel.SetPanelExpanded(false);
-        ApplyPlacement(WindowController.CategoryRail(CurrentWorkArea(), _settings));
+        ApplyPlacement(WindowController.CategoryRail(CurrentWorkArea(), _settings, _rightEdgeBleed));
         UpdateStatusPresentation();
     }
 
@@ -357,7 +357,8 @@ public partial class MainWindow : Window
         ApplyPlacement(WindowController.Collapsed(
             CurrentWorkArea(),
             _settings,
-            _viewModel.DefaultCapturePanel.Category));
+            _viewModel.DefaultCapturePanel.Category,
+            _rightEdgeBleed));
         _viewModel.SetExternalDropRailVisible(false);
         _viewModel.SetPanelExpanded(false);
         UpdateStatusPresentation();

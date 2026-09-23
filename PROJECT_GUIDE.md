@@ -2,7 +2,7 @@
 
 ## 项目状态
 
-悬浮中转站是一个活跃维护的 .NET 10 桌面应用，Windows 11 64 位正式版使用 WPF 和 Inno Setup，macOS 14+（Apple Silicon）测试版使用 Avalonia 11.3.21；两端使用 MSTest 和同一共享核心。公开仓库为 `Oiawlm/floating-transfer-station`，当前源码版本为 1.7.0；Windows 安装包与 Apple Silicon Mac 包统一放在 [同一个 Release](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.7.0)，源码统一在 main 维护。1.7.0 起 Windows 仅以 Windows 11 为目标、Mac 仅维护 Apple Silicon（Intel 最后版本 1.6.0）。Apple Silicon Mac 已通过原生自动验证，第三方软件间拖放人工验收与 Apple 签名公证尚未完成。
+悬浮中转站是一个活跃维护的 .NET 10 桌面应用，Windows 11 64 位正式版使用 WPF 和 Inno Setup，macOS 14+（Apple Silicon）测试版使用 Avalonia 11.3.21；两端使用 MSTest 和同一共享核心。公开仓库为 `Oiawlm/floating-transfer-station`，当前源码版本为 1.8.0；Windows 安装包与 Apple Silicon Mac 包统一放在 [同一个 Release](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.8.0)，源码统一在 main 维护。1.7.0 起 Windows 仅以 Windows 11 为目标、Mac 仅维护 Apple Silicon（Intel 最后版本 1.6.0）。Apple Silicon Mac 已通过原生自动验证，第三方软件间拖放人工验收与 Apple 签名公证尚未完成。
 
 当前直接引用 `SixLabors.ImageSharp 3.1.12`。ImageSharp 4.x 的直接引用要求有效构建许可证；升级前须先解决许可，不自行申请或绕过密钥校验。依据见 [Six Labors 官方说明](https://sixlabors.com/posts/licence-enforcement-changes/)。
 
@@ -62,7 +62,7 @@ WPF 交互测试使用 STA 和真实 Dispatcher。若全量运行中仅有布局
 - 内部批量拖放保持源数据、选择作用域和跨分类分区语义。
 - 卸载只删除应用登记并管理的数据目录，不扩大到用户选择的父目录。
 - 数据清理递归目标仅为已验证的 `Data`；上层目录仅在空目录时移除，同级文件必须保留。
-- 应用只读取安装器登记的设置；开机自启由安装器写入，开发启动不改写注册表。
+- 应用只读取安装器登记的安装/数据设置；开机自启的 Run 值仅在用户于设置界面显式切换时写入（`WindowsStartupManager`），启动路径与开发启动不写注册表。
 - 异步保存后的选择恢复只能作用于操作发起时的分类；用户已取消选择时不得重新选中。
 - UI 或交互变化必须补充自动回归，并提供真实运行截图或录屏。
 

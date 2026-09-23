@@ -5,13 +5,14 @@ using FloatingTransferStation.Models;
 
 namespace FloatingTransferStation.Services;
 
-public sealed partial class LocalStore : IBoardStore, IDailyReviewStore
+public sealed partial class LocalStore : IBoardStore, IDailyReviewStore, IPreferencesStore
 {
     private readonly AppPaths _paths;
     private readonly IAtomicTextWriter _writer;
     private readonly TimeProvider _timeProvider;
     private readonly SemaphoreSlim _boardWriteGate = new(1, 1);
     private readonly SemaphoreSlim _settingsWriteGate = new(1, 1);
+    private readonly SemaphoreSlim _preferencesWriteGate = new(1, 1);
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -112,6 +113,29 @@ public sealed partial class LocalStore : IBoardStore, IDailyReviewStore
 
     public Task<WindowSettings> LoadSettingsAsync(CancellationToken cancellationToken = default) =>
         LoadWithBackupAsync(_paths.SettingsFile, () => WindowSettings.Default, cancellationToken);
+
+    public Task<AppPreferences> LoadPreferencesAsync(CancellationToken cancellationToken = default) =>
+        LoadWithBackupAsync(_paths.PreferencesFile, () => AppPreferences.Default, cancellationToken);
+
+    public async Task SavePreferencesAsync(
+        AppPreferences preferences,
+        CancellationToken cancellationToken = default)
+    {
+        await _preferencesWriteGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await Task.Run(
+                () => _writer.WriteAsync(
+                    _paths.PreferencesFile,
+                    JsonSerializer.Serialize(preferences, _jsonOptions),
+                    cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _preferencesWriteGate.Release();
+        }
+    }
 
     public async Task SaveSettingsAsync(
         WindowSettings settings,
