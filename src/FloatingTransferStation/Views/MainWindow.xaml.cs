@@ -55,6 +55,8 @@ public partial class MainWindow : Window
     private readonly object _pendingOperationsLock = new();
     private readonly HashSet<Task> _pendingOperations = [];
     private readonly SemaphoreSlim _settingsSaveGate = new(1, 1);
+    private readonly Func<Window, double>? _rightEdgeBleedProvider;
+    private double _rightEdgeBleed;
     private System.Windows.Interop.HwndSource? _windowSource;
     private CancellationTokenSource _windowOperationCancellation = new();
     private DesignTheme _activeDesignTheme = DesignTheme.Light;
@@ -100,7 +102,8 @@ public partial class MainWindow : Window
         ExternalDropPayloadReader externalDropPayloadReader,
         ExternalDropImportService externalDropImportService,
         DefaultCaptureCategoryState? defaultCaptureCategory = null,
-        IDailyReviewStore? dailyReviewStore = null)
+        IDailyReviewStore? dailyReviewStore = null,
+        Func<Window, double>? rightEdgeBleedProvider = null)
     {
         InitializeComponent();
         _activeDesignTheme = DesignThemeManager.DetectSystemTheme();
@@ -115,6 +118,8 @@ public partial class MainWindow : Window
         _dragPayload = dragPayload;
         _externalDropPayloadReader = externalDropPayloadReader;
         _externalDropImportService = externalDropImportService;
+        _rightEdgeBleedProvider = rightEdgeBleedProvider;
+        _rightEdgeBleed = rightEdgeBleedProvider?.Invoke(this) ?? 0d;
         _dailyReviews = dailyReviewStore ?? store as IDailyReviewStore;
         var work = CurrentWorkArea();
         _settings = settings.Normalize(work.Width, work.Height);
@@ -133,7 +138,8 @@ public partial class MainWindow : Window
         ApplyPlacement(WindowController.Collapsed(
             work,
             _settings,
-            _viewModel.DefaultCapturePanel.Category));
+            _viewModel.DefaultCapturePanel.Category,
+            _rightEdgeBleed));
         Closing += MainWindow_Closing;
         Closed += (_, _) =>
         {
@@ -174,6 +180,7 @@ public partial class MainWindow : Window
         }
 
         _windowSource.AddHook(WndProc);
+        RefreshEdgeBleed();
         ApplyWindowMaterial();
         if (!NativeMethods.AddClipboardFormatListener(_windowSource.Handle))
         {
@@ -216,6 +223,11 @@ public partial class MainWindow : Window
                     _windowSource?.Handle ?? 0,
                     detected == DesignTheme.Dark);
             });
+        }
+
+        if (!_isClosing && message == NativeMethods.WmDisplayChange)
+        {
+            Dispatcher.BeginInvoke(RefreshEdgeBleed);
         }
 
         return 0;
@@ -323,7 +335,7 @@ public partial class MainWindow : Window
         _panelState.Switch(category);
         ActivatePanel(category);
         _viewModel.SetPanelExpanded(true);
-        ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings));
+        ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings, _rightEdgeBleed));
         UpdateStatusPresentation();
         ScrollItemToTop(category, scrollTargetId);
         AnimatePanelContent(isCategorySwitch: true);

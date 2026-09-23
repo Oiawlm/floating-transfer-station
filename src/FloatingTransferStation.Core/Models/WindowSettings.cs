@@ -12,6 +12,13 @@ public sealed record WindowSettings(
     public const double MaxPanelWidth = 640;
     public const double MinWindowHeight = 360;
 
+    /// <summary>
+    /// 贴右缘时的窗口越屏裁切量：窗口右缘越出屏幕一个裁切量，
+    /// 使 DWM 圆角整体落在屏外（可见右缘平直、左缘保留圆角）。
+    /// 数值与 DWM 系统圆角半径（DesignTokens.DwmCornerRadius）一致，由几何服务按显示器判定是否启用。
+    /// </summary>
+    public const double EdgeBleed = Design.DesignTokens.DwmCornerRadius;
+
     public static WindowSettings Default { get; } = new(360, 640, 80);
 
     public string CategoryName(BoardCategory category)

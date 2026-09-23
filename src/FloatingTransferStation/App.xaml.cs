@@ -91,7 +91,8 @@ public partial class App : Application
                 new DragPayloadService(),
                 externalDropPayloadReader,
                 externalDropImport,
-                defaultCaptureCategory);
+                defaultCaptureCategory,
+                rightEdgeBleedProvider: ScreenEdgeGeometry.GetRightEdgeBleed);
             MainWindow = window;
             window.Show();
         }
