@@ -871,6 +871,157 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void ExpandedPlacement_ChangesTheObservedWindowRectangleOnlyBetweenStableStates()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            AssertPlacementMigrationIsAtomic(window, () => ExpandCategory(window, BoardCategory.Inbox));
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CollapsedPlacement_ChangesTheObservedWindowRectangleOnlyBetweenStableStates()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            AssertPlacementMigrationIsAtomic(window, () => CollapseForSetup(window));
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void ExternalRailPlacement_ChangesTheObservedWindowRectangleOnlyBetweenStableStates()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            var data = new DataObject(DataFormats.UnicodeText, "轨道揭示的合成拖入内容");
+            var collapsedTab = FindCollapsedCategoryTab(window);
+
+            AssertPlacementMigrationIsAtomic(window, () =>
+                collapsedTab.RaiseEvent(NewDragEventArgs(data, DragDrop.DragEnterEvent, collapsedTab)));
+
+            Assert.IsTrue(((MainWindowViewModel)window.DataContext).IsExternalDropRailVisible);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    private const int WmWindowPosChanged = 0x0047;
+
+    /// <summary>
+    /// 迁移原子性契约：一次面板状态迁移中，系统实际应用的每一个窗口矩形都必须等于初始或
+    /// 终态矩形（四边各 ≤1px）。观察点同时挂 LocationChanged/SizeChanged 与测试侧
+    /// WM_WINDOWPOSCHANGED 钩子：后者覆盖纯尺寸中间态（不触发 LocationChanged）的矩形。
+    /// </summary>
+    private static void AssertPlacementMigrationIsAtomic(MainWindow window, Action migrate)
+    {
+        var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+        Assert.IsTrue(GetWindowRect(handle, out var initialBounds));
+        var observedBounds = new List<NativeRect>();
+
+        void RecordBounds(object? sender, EventArgs eventArgs)
+        {
+            Assert.IsTrue(GetWindowRect(handle, out var bounds));
+            observedBounds.Add(bounds);
+        }
+
+        nint RecordAppliedRectangle(nint hwnd, int message, nint wParam, nint lParam, ref bool handled)
+        {
+            if (message == WmWindowPosChanged)
+            {
+                RecordBounds(null, EventArgs.Empty);
+            }
+
+            return 0;
+        }
+
+        var source = System.Windows.Interop.HwndSource.FromHwnd(handle);
+        Assert.IsNotNull(source);
+        source.AddHook(RecordAppliedRectangle);
+        window.LocationChanged += RecordBounds;
+        window.SizeChanged += RecordBounds;
+        try
+        {
+            migrate();
+            CompleteLayout(window);
+        }
+        finally
+        {
+            window.LocationChanged -= RecordBounds;
+            window.SizeChanged -= RecordBounds;
+            source.RemoveHook(RecordAppliedRectangle);
+        }
+
+        Assert.IsTrue(GetWindowRect(handle, out var finalBounds));
+        Assert.IsNotEmpty(observedBounds, "The migration must apply at least one window rectangle change.");
+        var unexpected = observedBounds
+            .Where(bounds =>
+                !MatchesStableRectangle(bounds, initialBounds) &&
+                !MatchesStableRectangle(bounds, finalBounds))
+            .ToList();
+        Assert.IsEmpty(
+            unexpected,
+            $"Every applied window rectangle must be the initial {initialBounds} or the terminal {finalBounds}; " +
+            $"unexpected intermediates: [{string.Join("; ", unexpected)}]; " +
+            $"all observed: [{string.Join("; ", observedBounds)}].");
+
+        // 终态物理边缘必须与 DIP 账本换算一致：迁移取整不产生锚定边（含右缘裁切）漂移。
+        var compositionTarget = source.CompositionTarget;
+        Assert.IsNotNull(compositionTarget);
+        var transform = compositionTarget.TransformToDevice;
+        Assert.AreEqual(
+            (int)Math.Round(window.Left * transform.M11),
+            finalBounds.Left,
+            "The applied left edge must match the DIP ledger without rounding drift.");
+        Assert.AreEqual(
+            (int)Math.Round(window.Top * transform.M22),
+            finalBounds.Top,
+            "The applied top edge must match the DIP ledger without rounding drift.");
+        Assert.AreEqual(
+            (int)Math.Round((window.Left + window.Width) * transform.M11),
+            finalBounds.Right,
+            "The applied right edge must match the DIP ledger without rounding drift.");
+        Assert.AreEqual(
+            (int)Math.Round((window.Top + window.Height) * transform.M22),
+            finalBounds.Bottom,
+            "The applied bottom edge must match the DIP ledger without rounding drift.");
+    }
+
+    private static bool MatchesStableRectangle(NativeRect observed, NativeRect stable) =>
+        Math.Abs(observed.Left - stable.Left) <= 1 &&
+        Math.Abs(observed.Top - stable.Top) <= 1 &&
+        Math.Abs(observed.Right - stable.Right) <= 1 &&
+        Math.Abs(observed.Bottom - stable.Bottom) <= 1;
+
+    [STATestMethod]
     public void BoardList_HasOneRecycledListAndNonLayoutInsertionIndicator()
     {
         using var directory = new TestDirectory();

@@ -19,6 +19,7 @@
 | 每日复盘标签 | [设计](superpowers/specs/2026-09-14-daily-review-tab-design.md) | [计划](superpowers/plans/2026-09-14-daily-review-tab.md) | `33fc51d` / 未发布 |
 | 界面与动效升级 | [设计](superpowers/specs/2026-09-22-ui-motion-upgrade-design.md) | [计划](superpowers/plans/2026-09-22-ui-motion-upgrade.md) | 未发布 |
 | 右缘边缘裁切与设置首版 | [设计](superpowers/specs/2026-09-23-edge-bleed-and-settings-design.md) | [计划](superpowers/plans/2026-09-23-edge-bleed-and-settings.md) | 未发布 |
+| 展开闪现修复（窗口几何原子化） | [设计](superpowers/specs/2026-09-23-placement-atomicity-design.md) | [计划](superpowers/plans/2026-09-23-placement-atomicity.md) | 未发布 |
 
 批量置顶早期设计中的“恢复最初选择”，后来受到 Esc 设计中“用户已取消选择则不恢复”的修订；隐藏状态下 Ctrl+P 的约束由 1.4.1 守卫设计补充。理解当前行为时需要连同后续修订一起阅读。
 

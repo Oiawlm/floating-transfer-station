@@ -95,6 +95,63 @@ public partial class MainWindow : Window
     {
         CancelPanelCollapseExit();
         CancelCollapsedVisualHandoff();
+        if (TryApplyPlacementAtomically(placement))
+        {
+            return;
+        }
+
+        ApplyPlacementThroughWindowProperties(placement);
+    }
+
+    /// <summary>
+    /// 迁移原子性：一次面板状态迁移只允许一次窗口矩形变更。对已创建 HWND 的窗口，
+    /// 先用一次 Win32 SetWindowPos 直接应用终态矩形（物理像素），再在守卫下对齐 WPF
+    /// 尺寸/位置账本；守卫把对齐期间任何 WM_WINDOWPOSCHANGING 的中间矩形改写回终态
+    /// （矩形相等时为 no-op），避免陈旧 DP 混合值重推出可见的中间矩形。
+    /// </summary>
+    private bool TryApplyPlacementAtomically(WindowPlacement placement)
+    {
+        var source = _windowSource;
+        var handle = source?.Handle ?? 0;
+        if (source is null || handle == 0 || source.CompositionTarget is null)
+        {
+            return false;
+        }
+
+        // DIP 数值为权威，仅在调用边界换算一次；两条锚定边各自取整后相减得到跨度，
+        // 保证右缘（含边缘裁切）与底缘换算后不因取整漂移。
+        var transform = source.CompositionTarget.TransformToDevice;
+        var left = (int)Math.Round(placement.Left * transform.M11);
+        var top = (int)Math.Round(placement.Top * transform.M22);
+        var width = (int)Math.Round((placement.Left + placement.Width) * transform.M11) - left;
+        var height = (int)Math.Round((placement.Top + placement.Height) * transform.M22) - top;
+        _placementTargetRectangle = (left, top, width, height);
+        try
+        {
+            NativeMethods.SetWindowPos(
+                handle,
+                0,
+                left,
+                top,
+                width,
+                height,
+                NativeMethods.SwpNoZOrder | NativeMethods.SwpNoActivate);
+            Width = placement.Width;
+            Height = placement.Height;
+            Left = placement.Left;
+            Top = placement.Top;
+        }
+        finally
+        {
+            _placementTargetRectangle = null;
+        }
+
+        return true;
+    }
+
+    /// <summary>构造期（HWND 未创建）的纯属性路径：Show 之前无闪现风险，保持原顺序。</summary>
+    private void ApplyPlacementThroughWindowProperties(WindowPlacement placement)
+    {
         var expandsHorizontally = placement.Width > ActualWidth;
         var expandsVertically = placement.Height > ActualHeight;
         if (expandsHorizontally)

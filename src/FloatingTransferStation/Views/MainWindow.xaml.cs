@@ -64,6 +64,7 @@ public partial class MainWindow : Window
     private SettingsWindow? _settingsWindow;
     private double _rightEdgeBleed;
     private System.Windows.Interop.HwndSource? _windowSource;
+    private (int Left, int Top, int Width, int Height)? _placementTargetRectangle;
     private CancellationTokenSource _windowOperationCancellation = new();
     private DesignTheme _activeDesignTheme = DesignTheme.Light;
     private bool _micaApplied;
@@ -219,6 +220,11 @@ public partial class MainWindow : Window
 
     private nint WndProc(nint hwnd, int message, nint wParam, nint lParam, ref bool handled)
     {
+        if (_placementTargetRectangle is { } target && message == NativeMethods.WmWindowPosChanging)
+        {
+            ClampWindowPosChangingToPlacement(lParam, target);
+        }
+
         if (!_isClosing && message == NativeMethods.WmClipboardUpdate)
         {
             StartClipboardCapture();
@@ -253,6 +259,24 @@ public partial class MainWindow : Window
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// 迁移守卫：把系统即将应用的中间矩形改写为终态矩形。矩形已等于终态时改写为幂等
+    /// no-op；清掉 NOMOVE/NOSIZE 后 x/y/cx/cy 才会被系统采纳。
+    /// </summary>
+    private static void ClampWindowPosChangingToPlacement(
+        nint lParam,
+        (int Left, int Top, int Width, int Height) target)
+    {
+        var position = System.Runtime.InteropServices.Marshal
+            .PtrToStructure<NativeMethods.WindowPosition>(lParam);
+        position.X = target.Left;
+        position.Y = target.Top;
+        position.Width = target.Width;
+        position.Height = target.Height;
+        position.Flags &= ~(NativeMethods.SwpNoMove | NativeMethods.SwpNoSize);
+        System.Runtime.InteropServices.Marshal.StructureToPtr(position, lParam, false);
     }
 
     private void StartClipboardCapture()

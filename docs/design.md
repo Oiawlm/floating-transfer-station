@@ -117,6 +117,7 @@
 - 窗口壳弃用 `AllowsTransparency` 分层透明，改用 `WindowChrome`（`GlassFrameThickness=-1` 整窗玻璃帧）承载 DWM 材质，经 `DWMWA_SYSTEMBACKDROP_TYPE` 应用 Mica；材质不可用的旧系统回退到不透明壳色。
 - 圆角由 DWM（`DWMWA_WINDOW_CORNER_PREFERENCE=ROUND`）裁剪，内容层以 `DesignTokens.DwmCornerRadius = 8` 四角同步自裁剪，保证渲染位图与屏幕一致。贴右缘时窗口整体越出工作区一个 `WindowSettings.EdgeBleed`（右缘屏幕裁切），可见右缘平直、左缘保留圆角；右贴任务栏或右邻显示器时回退贴齐，`WM_DISPLAYCHANGE` 后重估。
 - 壳表面为半透明 Mica 色调（浅 `#CCF7F8FA`、深 `#CC202021`，`WindowShellTintHex` / `WindowShellTintDarkHex`），深浅切换时同步 `DWMWA_USE_IMMERSIVE_DARK_MODE`。
+- **迁移原子性（1.8.1 起）**：一次面板状态迁移（展开/收起/拖放轨道揭示）只允许一次窗口矩形变更。已创建 HWND 的窗口经单次 Win32 `SetWindowPos` 应用终态矩形（物理像素；两条锚定边各自取整后相减，右缘含裁切量不因取整漂移），随后在 `WM_WINDOWPOSCHANGING` 守卫下对齐 WPF 尺寸/位置账本——守卫把对齐期间任何中间矩形改写回终态，陈旧 DP 混合值不会重推出可见中间态。构造期（HWND 未创建）保留纯属性路径。STA 契约：观察到的每个窗口矩形 ∈ {初始, 终态}（`*ChangesTheObservedWindowRectangleOnlyBetweenStableStates` 系列锁定）。禁止用 `SetWindowRgn` 或动效/延迟/隐藏窗口装饰性掩盖。
 - 本机预览与截图取证：设 `FTS_PREVIEW_DATA_DIR`（隔离数据目录、独立单实例锁）与可选 `FTS_PREVIEW_THEME=dark|light` 启动，不影响已安装应用。
 
 ## 六、动效原则（评审基准）
