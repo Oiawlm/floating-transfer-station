@@ -39,4 +39,5 @@
 - 2026-09-23 执行窗口：
   - 轨道一红灯输出存 `TestResults/placement-atomicity/track1-pre-fix-failures.txt`（不入库）：三个迁移各观察到 2–6 个中间矩形；轨道揭示迁移的纯尺寸中间态只有测试侧 `WM_WINDOWPOSCHANGED` 钩子能观察到，`LocationChanged` 不可见。
   - 轨道二实现要点：守卫常设（矩形相等时幂等 no-op），DP 对齐期间任何 `WM_WINDOWPOSCHANGING` 一律改写为终态并清除 `SWP_NOMOVE|SWP_NOSIZE`；一次迁移只产生一次 `WM_SIZE`，圆角裁剪恰好触发一次。
+  - 收尾：PR #42 CI 三项全绿（Windows、Apple Silicon、汇总「格式、测试与构建」）合入 main（`68c47a5`）；`build-release.ps1 -ForRelease` 本地通过；v1.8.1 统一 Release 资产取自 main 提交对应成功运行（run 35822815284）：`FloatingTransferStation-Setup-1.8.1.exe`（SHA256 `f9795eeb…ec6e`）、`FloatingTransferStation-1.8.1-osx-arm64.zip`（`a66d7f0f…5273`，未公证测试版）、验证元数据与 `SHA256SUMS.txt`；本机已优雅关闭旧实例、静默原地更新并重启，验证 `D:\App\悬浮中转站\悬浮中转站.exe` 版本 1.8.1+68c47a5、HKCU Run 自启值与右缘贴边窗口均正常。
   - 取证方法：暗色壳 + `FTS_PREVIEW_DATA_DIR` 隔离启动，gdigrab 抓右缘 900×1600 条带，CFR 60fps；检测器取「从条带右缘向左的连续暗后缀 ≥30px 的行」为窗口矩形，双峰模式为稳定态，任一边相差 >25px 判违例（AA/Mica 微光与外来暗块抖动不算）。基线 24 违例帧 / 复验 0 违例帧。
