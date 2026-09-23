@@ -146,6 +146,18 @@
                           VerticalAlignment="Center"
                           Margin="0,0,8,0"
                           Style="{StaticResource HeaderActionsHostStyle}">
+                <Button x:Name="SettingsButton"
+                        Style="{StaticResource HeaderActionButtonStyle}"
+                        ToolTip="设置"
+                        AutomationProperties.Name="设置"
+                        Click="SettingsButton_Click">
+                  <Viewbox Width="16" Height="16">
+                    <Path Data="M19.14,12.94 C19.18,12.64 19.2,12.32 19.2,12 C19.2,11.68 19.18,11.36 19.13,11.06 L21.16,9.48 C21.34,9.34 21.39,9.07 21.28,8.87 L19.36,5.55 C19.24,5.33 18.99,5.26 18.77,5.33 L16.38,6.29 C15.88,5.91 15.35,5.59 14.76,5.35 L14.4,2.81 C14.36,2.57 14.16,2.4 13.92,2.4 L10.08,2.4 C9.84,2.4 9.65,2.57 9.61,2.81 L9.25,5.35 C8.66,5.59 8.12,5.92 7.63,6.29 L5.24,5.33 C5.02,5.25 4.77,5.33 4.65,5.55 L2.74,8.87 C2.62,9.08 2.66,9.34 2.86,9.48 L4.89,11.06 C4.84,11.36 4.8,11.68 4.8,12 C4.8,12.32 4.82,12.64 4.87,12.94 L2.84,14.52 C2.66,14.66 2.61,14.93 2.72,15.13 L4.64,18.45 C4.76,18.67 5.01,18.74 5.23,18.67 L7.62,17.71 C8.12,18.09 8.65,18.41 9.24,18.65 L9.6,21.19 C9.64,21.43 9.84,21.6 10.08,21.6 L13.92,21.6 C14.16,21.6 14.36,21.43 14.39,21.19 L14.75,18.65 C15.34,18.41 15.88,18.09 16.37,17.71 L18.76,18.67 C18.98,18.75 19.23,18.67 19.35,18.45 L21.27,15.13 C21.39,14.91 21.34,14.66 21.15,14.52 L19.14,12.94 Z M12,15.6 C10.02,15.6 8.4,13.98 8.4,12 C8.4,10.02 10.02,8.4 12,8.4 C13.98,8.4 15.6,10.02 15.6,12 C15.6,13.98 13.98,15.6 12,15.6 Z"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                          Stretch="Uniform" />
+                  </Viewbox>
+                </Button>
+
                 <Button x:Name="ResetWindowButton"
                         Style="{StaticResource HeaderActionButtonStyle}"
                         ToolTip="恢复默认尺寸和位置"

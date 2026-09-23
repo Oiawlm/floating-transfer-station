@@ -4,6 +4,7 @@ public sealed record AppPaths(
     string DataDirectory,
     string BoardFile,
     string SettingsFile,
+    string PreferencesFile,
     string ImagesDirectory,
     string ReviewsDirectory)
 {
@@ -27,6 +28,7 @@ public sealed record AppPaths(
         dataDirectory,
         Path.Combine(dataDirectory, "board.json"),
         Path.Combine(dataDirectory, "settings.json"),
+        Path.Combine(dataDirectory, "preferences.json"),
         Path.Combine(dataDirectory, "images"),
         Path.Combine(dataDirectory, "reviews"));
 }

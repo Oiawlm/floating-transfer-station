@@ -60,6 +60,7 @@ public partial class App : Application
             board.Restore(snapshot);
             var settings = await store.LoadSettingsAsync();
             settings = await new DailyReviewMigration(store).EnsureAsync(board, settings);
+            var preferences = await store.LoadPreferencesAsync();
             MainWindow? window = null;
             void ShowStatus(string message) => window?.ShowStatus(message);
             var boardOperationGate = new BoardOperationGate();
@@ -92,6 +93,10 @@ public partial class App : Application
                 externalDropPayloadReader,
                 externalDropImport,
                 defaultCaptureCategory,
+                preferences: preferences,
+                preferencesStore: store,
+                startupManager: new WindowsStartupManager(),
+                dataDirectory: paths.DataDirectory,
                 rightEdgeBleedProvider: ScreenEdgeGeometry.GetRightEdgeBleed);
             MainWindow = window;
             window.Show();

@@ -55,7 +55,13 @@ public partial class MainWindow : Window
     private readonly object _pendingOperationsLock = new();
     private readonly HashSet<Task> _pendingOperations = [];
     private readonly SemaphoreSlim _settingsSaveGate = new(1, 1);
+    private readonly SemaphoreSlim _preferencesSaveGate = new(1, 1);
+    private readonly IPreferencesStore? _preferencesStore;
+    private readonly IStartupManager _startupManager;
+    private readonly string _dataDirectory;
     private readonly Func<Window, double>? _rightEdgeBleedProvider;
+    private AppPreferences _preferences = AppPreferences.Default;
+    private SettingsWindow? _settingsWindow;
     private double _rightEdgeBleed;
     private System.Windows.Interop.HwndSource? _windowSource;
     private CancellationTokenSource _windowOperationCancellation = new();
@@ -103,11 +109,20 @@ public partial class MainWindow : Window
         ExternalDropImportService externalDropImportService,
         DefaultCaptureCategoryState? defaultCaptureCategory = null,
         IDailyReviewStore? dailyReviewStore = null,
+        AppPreferences? preferences = null,
+        IPreferencesStore? preferencesStore = null,
+        IStartupManager? startupManager = null,
+        string? dataDirectory = null,
         Func<Window, double>? rightEdgeBleedProvider = null)
     {
         InitializeComponent();
-        _activeDesignTheme = DesignThemeManager.DetectSystemTheme();
+        _preferences = preferences ?? AppPreferences.Default;
+        _preferencesStore = preferencesStore;
+        _startupManager = startupManager ?? new WindowsStartupManager();
+        _dataDirectory = dataDirectory ?? string.Empty;
+        _activeDesignTheme = ResolveTheme(_preferences.ThemeMode);
         DesignThemeManager.Apply(this, _activeDesignTheme);
+        ApplyAnimationsPreference(_preferences.AnimationsEnabled);
         SetResourceReference(
             ClientAreaAnimationsEnabledProperty,
             SystemParameters.ClientAreaAnimationKey);
@@ -217,11 +232,18 @@ public partial class MainWindow : Window
             var detected = DesignThemeManager.DetectSystemTheme();
             Dispatcher.BeginInvoke(() =>
             {
+                // 用户强制浅色/深色时不再跟随系统变化；跟随系统模式（含预览覆盖）保持原行为。
+                if (_preferences.ThemeMode != ThemePreference.FollowSystem)
+                {
+                    return;
+                }
+
                 _activeDesignTheme = detected;
                 DesignThemeManager.Apply(this, detected);
                 DwmWindowEffects.UpdateImmersiveDarkMode(
                     _windowSource?.Handle ?? 0,
                     detected == DesignTheme.Dark);
+                _settingsWindow?.ApplyTheme(detected);
             });
         }
 

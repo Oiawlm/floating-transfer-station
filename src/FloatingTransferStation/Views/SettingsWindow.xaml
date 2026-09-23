@@ -1,0 +1,397 @@
+<Window x:Class="FloatingTransferStation.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="设置"
+        Topmost="True"
+        ShowInTaskbar="False"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="False"
+        Background="Transparent"
+        Width="380"
+        SizeToContent="Height"
+        WindowStartupLocation="Manual"
+        FontFamily="Segoe UI Variable, Segoe UI"
+        PreviewKeyDown="SettingsWindow_PreviewKeyDown">
+  <!-- 复用主窗 Mica 壳技术：整窗玻璃帧承载 DWM 材质，圆角由 DWM 裁剪。 -->
+  <WindowChrome.WindowChrome>
+    <WindowChrome CaptionHeight="0"
+                  GlassFrameThickness="-1"
+                  ResizeBorderThickness="0"
+                  CornerRadius="0"
+                  UseAeroCaptionButtons="False" />
+  </WindowChrome.WindowChrome>
+  <Window.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="../Resources/MainWindowStyles.xaml" />
+        <ResourceDictionary Source="../Resources/DesignTheme.Light.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+
+      <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Margin" Value="0,0,0,6" />
+      </Style>
+
+      <Style x:Key="RowCaptionStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+      </Style>
+
+      <Style x:Key="NoteCaptionStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Margin" Value="0,6,0,0" />
+      </Style>
+
+      <Style x:Key="ToggleSwitchStyle" TargetType="CheckBox">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="AutomationProperties.Name" Value="开关" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="CheckBox">
+              <Grid Width="40" Height="20" Background="Transparent">
+                <Border x:Name="Track"
+                        Width="40"
+                        Height="20"
+                        CornerRadius="10"
+                        Background="{DynamicResource BorderBrush}"
+                        IsHitTestVisible="False" />
+                <Border x:Name="Thumb"
+                        Width="14"
+                        Height="14"
+                        CornerRadius="7"
+                        HorizontalAlignment="Left"
+                        Margin="3,0"
+                        Background="{DynamicResource SecondaryTextBrush}"
+                        IsHitTestVisible="False" />
+              </Grid>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                  <Setter TargetName="Track" Property="Background" Value="{DynamicResource AccentBrush}" />
+                  <Setter TargetName="Thumb" Property="Background" Value="{DynamicResource OnAccentBrush}" />
+                  <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter Property="Opacity" Value="0.45" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <Style x:Key="ThemedComboBoxStyle" TargetType="ComboBox">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="ItemContainerStyle">
+          <Setter.Value>
+            <Style TargetType="ComboBoxItem">
+              <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+              <Setter Property="FontSize" Value="13" />
+              <Setter Property="Cursor" Value="Hand" />
+              <Setter Property="Template">
+                <Setter.Value>
+                  <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="ItemSurface"
+                            Background="Transparent"
+                            Padding="10,7"
+                            CornerRadius="4"
+                            Margin="4,2">
+                      <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                      <Trigger Property="IsHighlighted" Value="True">
+                        <Setter TargetName="ItemSurface" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
+                      </Trigger>
+                      <Trigger Property="IsSelected" Value="True">
+                        <Setter TargetName="ItemSurface" Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
+                      </Trigger>
+                    </ControlTemplate.Triggers>
+                  </ControlTemplate>
+                </Setter.Value>
+              </Setter>
+            </Style>
+          </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ComboBox">
+              <Grid>
+                <ToggleButton Focusable="False"
+                              ClickMode="Press"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                  <ToggleButton.Template>
+                    <ControlTemplate TargetType="ToggleButton">
+                      <Border Background="{TemplateBinding Background}" />
+                    </ControlTemplate>
+                  </ToggleButton.Template>
+                </ToggleButton>
+                <Border x:Name="Surface"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="6">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="22" />
+                    </Grid.ColumnDefinitions>
+                    <ContentPresenter Grid.Column="0"
+                                      Content="{TemplateBinding SelectionBoxItem}"
+                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                      Margin="10,0,0,0"
+                                      HorizontalAlignment="Left"
+                                      VerticalAlignment="Center" />
+                    <Path Grid.Column="1"
+                          Data="M 0 0 L 4 4 L 8 0"
+                          Stroke="{DynamicResource SecondaryTextBrush}"
+                          StrokeThickness="1.5"
+                          StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          IsHitTestVisible="False" />
+                  </Grid>
+                </Border>
+                <Popup IsOpen="{TemplateBinding IsDropDownOpen}"
+                       Placement="Bottom"
+                       AllowsTransparency="True"
+                       PopupAnimation="Fade"
+                       StaysOpen="False">
+                  <Border Background="{DynamicResource HeaderBrush}"
+                          BorderBrush="{DynamicResource BorderBrush}"
+                          BorderThickness="1"
+                          CornerRadius="6"
+                          Margin="0,3,0,0"
+                          MinWidth="{TemplateBinding ActualWidth}">
+                    <ScrollViewer MaxHeight="150">
+                      <ItemsPresenter Margin="2" />
+                    </ScrollViewer>
+                  </Border>
+                </Popup>
+              </Grid>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource HoverBorderBrush}" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <Style x:Key="ReadOnlyPathBoxStyle" TargetType="TextBox">
+        <Setter Property="IsReadOnly" Value="True" />
+        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="TextBox">
+              <Border x:Name="Surface"
+                      Background="{TemplateBinding Background}"
+                      BorderBrush="{TemplateBinding BorderBrush}"
+                      BorderThickness="{TemplateBinding BorderThickness}"
+                      CornerRadius="6">
+                <ScrollViewer x:Name="PART_ContentHost"
+                              Margin="{TemplateBinding Padding}"
+                              VerticalAlignment="Center" />
+              </Border>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <Style x:Key="SettingsActionButtonStyle" TargetType="Button">
+        <Setter Property="Height" Value="30" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="Button">
+              <Border x:Name="Surface"
+                      Background="{TemplateBinding Background}"
+                      BorderBrush="{TemplateBinding BorderBrush}"
+                      BorderThickness="{TemplateBinding BorderThickness}"
+                      CornerRadius="6">
+                <ContentPresenter HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Margin="{TemplateBinding Padding}" />
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="Surface" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
+                  <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource HoverBorderBrush}" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                  <Setter TargetName="Surface" Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <Style x:Key="ExitButtonStyle" TargetType="Button" BasedOn="{StaticResource SettingsActionButtonStyle}">
+        <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
+        <Setter Property="Height" Value="34" />
+      </Style>
+    </ResourceDictionary>
+  </Window.Resources>
+
+  <Border x:Name="WindowShell"
+          Style="{StaticResource WindowShellStyle}"
+          SizeChanged="WindowShell_SizeChanged">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="46" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <Border Grid.Row="0" Background="{DynamicResource HeaderBrush}" CornerRadius="11,0,0,0">
+        <Grid Background="Transparent">
+          <TextBlock Text="设置"
+                     Margin="16,0"
+                     FontSize="15"
+                     FontWeight="SemiBold"
+                     Foreground="{DynamicResource PrimaryTextBrush}"
+                     VerticalAlignment="Center"
+                     IsHitTestVisible="False" />
+          <Button x:Name="CloseButton"
+                  Style="{StaticResource HeaderActionButtonStyle}"
+                  HorizontalAlignment="Right"
+                  Margin="0,0,8,0"
+                  ToolTip="关闭设置"
+                  AutomationProperties.Name="关闭设置"
+                  Click="CloseButton_Click">
+            <Viewbox Width="14" Height="14">
+              <Path Data="M0.7071068,0 L7,6.2928932 L13.292893,0 L14,0.7071068 L7.7071068,7 L14,13.292893 L13.292893,14 L7,7.7071068 L0.7071068,14 L0,13.292893 L6.2928932,7 L0,0.7071068 Z"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                        Stretch="Uniform" />
+            </Viewbox>
+          </Button>
+        </Grid>
+      </Border>
+
+      <StackPanel Grid.Row="1" Margin="16,14,16,16">
+        <TextBlock Text="主题" Style="{StaticResource SectionTitleStyle}" />
+        <ComboBox x:Name="ThemeComboBox"
+                  Style="{StaticResource ThemedComboBoxStyle}"
+                  AutomationProperties.Name="主题"
+                  SelectionChanged="ThemeComboBox_SelectionChanged" />
+
+        <TextBlock Text="动效" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+        <Grid Background="Transparent">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Grid.Column="0"
+                     Text="启用界面过渡动画"
+                     Style="{StaticResource RowCaptionStyle}" />
+          <CheckBox x:Name="AnimationsToggle"
+                    Grid.Column="1"
+                    Style="{StaticResource ToggleSwitchStyle}"
+                    AutomationProperties.Name="启用界面过渡动画"
+                    Checked="AnimationsToggle_Checked"
+                    Unchecked="AnimationsToggle_Unchecked" />
+        </Grid>
+
+        <TextBlock Text="开机自启" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+        <Grid Background="Transparent">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Grid.Column="0"
+                     Text="登录 Windows 时自动运行"
+                     Style="{StaticResource RowCaptionStyle}" />
+          <CheckBox x:Name="StartupToggle"
+                    Grid.Column="1"
+                    Style="{StaticResource ToggleSwitchStyle}"
+                    AutomationProperties.Name="登录 Windows 时自动运行"
+                    Checked="StartupToggle_Checked"
+                    Unchecked="StartupToggle_Unchecked" />
+        </Grid>
+        <TextBlock x:Name="StartupNoteText"
+                   Style="{StaticResource NoteCaptionStyle}"
+                   Text="运行安装程序更新版本后，自启会重新开启，可在本设置中再次关闭。" />
+        <TextBlock x:Name="StartupStatusText"
+                   Style="{StaticResource NoteCaptionStyle}"
+                   Foreground="{DynamicResource DangerBrush}"
+                   Text=""
+                   Visibility="Collapsed" />
+
+        <TextBlock Text="数据目录" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+        <Grid Background="Transparent">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBox x:Name="DataDirectoryText"
+                   Grid.Column="0"
+                   Style="{StaticResource ReadOnlyPathBoxStyle}"
+                   Margin="0,0,8,0"
+                   VerticalAlignment="Center"
+                   AutomationProperties.Name="数据目录" />
+          <Button x:Name="OpenDataDirectoryButton"
+                  Grid.Column="1"
+                  Style="{StaticResource SettingsActionButtonStyle}"
+                  Content="打开"
+                  ToolTip="在资源管理器中打开数据目录"
+                  AutomationProperties.Name="在资源管理器中打开数据目录"
+                  Click="OpenDataDirectoryButton_Click" />
+        </Grid>
+
+        <TextBlock Text="关于" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+        <TextBlock Foreground="{DynamicResource PrimaryTextBrush}" FontSize="13">
+          <Run x:Name="AppNameRun" FontWeight="SemiBold" /><Run Text="  " /><Run x:Name="VersionRun" Foreground="{DynamicResource SecondaryTextBrush}" />
+        </TextBlock>
+        <TextBlock FontSize="12" Margin="0,4,0,0">
+          <Hyperlink x:Name="RepoLink"
+                     NavigateUri="https://github.com/Oiawlm/floating-transfer-station"
+                     Foreground="{DynamicResource AccentBrush}"
+                     RequestNavigate="RepoLink_RequestNavigate">GitHub 仓库与更新记录</Hyperlink>
+        </TextBlock>
+
+        <Button x:Name="ExitButton"
+                Style="{StaticResource ExitButtonStyle}"
+                Content="退出悬浮中转站"
+                Margin="0,20,0,0"
+                ToolTip="保存全部内容后退出"
+                AutomationProperties.Name="退出悬浮中转站"
+                Click="ExitButton_Click" />
+      </StackPanel>
+
+      <Border Grid.RowSpan="2"
+              Panel.ZIndex="10"
+              Style="{StaticResource WindowShellOutlineStyle}" />
+    </Grid>
+  </Border>
+</Window>

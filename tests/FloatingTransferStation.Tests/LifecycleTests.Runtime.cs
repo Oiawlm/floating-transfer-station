@@ -8,7 +8,7 @@ public sealed partial class LifecycleTests
 {
     [TestMethod]
     [TestCategory("Adversarial")]
-    public void Application_LeavesRegistryWritesToInstaller()
+    public void Application_ConfinesRegistryWritesToTheUserTriggeredStartupToggle()
     {
         using var assembly = File.OpenRead(typeof(AppLifecycleService).Assembly.Location);
         using var executable = new PEReader(assembly);
@@ -26,9 +26,12 @@ public sealed partial class LifecycleTests
             .Select(member => metadata.GetString(member.Name))
             .ToArray();
 
-        Assert.IsEmpty(
+        // 1.8.0 起唯一的例外是设置界面的开机自启开关（WindowsStartupManager，仅用户显式切换时写）；
+        // 启动路径、剪贴板采集与安装登记仍然不得触碰注册表写入。新增任何写入 API 都会让这里失败。
+        CollectionAssert.AreEquivalent(
+            new[] { "CreateSubKey", "SetValue", "DeleteValue" },
             registryWrites,
-            "The application only reads installer settings; installation and startup registry writes belong to the installer.");
+            "Registry writes must stay confined to the user-triggered startup toggle (WindowsStartupManager).");
     }
 
     [TestMethod]
