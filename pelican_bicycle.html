@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
+  <title>鹈鹕骑自行车 · 可调动画</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #dff1f5; color: #18324a; display: grid; place-items: center; }
+    .app { width: min(1100px, 96vw); padding: 20px; }
+    .stage { border: 3px solid #18324a; border-radius: 24px; overflow: hidden; box-shadow: 0 18px 40px #18324a22; background: #bfe7ef; }
+    svg { display: block; width: 100%; height: auto; min-height: 390px; }
+    .controls { margin-top: 16px; padding: 16px 18px; border: 2px solid #18324a; border-radius: 18px; background: #fffdf8; display: grid; gap: 14px; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+    button { border: 2px solid #18324a; border-radius: 999px; background: #f5a623; color: #18324a; padding: 9px 16px; font-weight: 800; cursor: pointer; }
+    button.secondary { background: #eef7fb; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 20px; }
+    label { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; font-size: 14px; font-weight: 700; }
+    input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: #ef6f61; }
+    input[type=color] { width: 42px; height: 28px; padding: 0; border: 2px solid #18324a; border-radius: 7px; background: transparent; }
+    output { min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
+    .hint { font-size: 12px; opacity: .72; margin: 0; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="stage">
+      <svg id="scene" viewBox="0 0 800 600" role="img" aria-labelledby="title desc">
+        <title id="title">一只会动的鹈鹕骑自行车</title>
+        <desc id="desc">可调节速度、摆动、车轮大小和颜色的 SVG 动画。</desc>
+        <rect id="sky" width="800" height="600" fill="#bfe7ef"/>
+        <circle cx="690" cy="90" r="46" fill="#fff3b0" opacity=".85"/>
+        <path d="M0 420 Q180 360 360 420 T800 410 V600 H0Z" fill="#9bd1bb" opacity=".8"/>
+        <ellipse id="shadow" cx="405" cy="526" rx="280" ry="18" fill="#18324a" opacity=".12"/>
+        <g id="ride" transform-origin="400px 410px">
+          <g id="bike" stroke="#18324a" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none">
+            <g id="wheelL"><circle cx="205" cy="448" r="76" fill="#eef7fb"/><circle cx="205" cy="448" r="8" fill="#18324a"/></g>
+            <g id="wheelR"><circle cx="585" cy="448" r="76" fill="#eef7fb"/><circle cx="585" cy="448" r="8" fill="#18324a"/></g>
+            <path d="M205 448 L320 448 L405 332 L585 448 L465 448 L405 332 L320 448 L275 362"/>
+            <path d="M405 332 L444 291 M425 286 L474 286 M320 448 L292 401 M272 400 L313 400"/>
+            <circle cx="320" cy="448" r="14" fill="#f5a623"/><circle cx="405" cy="332" r="12" fill="#f5a623"/>
+            <path d="M320 448 L286 473 M320 448 L352 473 M276 473 L296 473 M342 473 L362 473"/>
+          </g>
+          <g id="pelican" stroke="#18324a" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M270 300 Q228 286 214 249 Q260 260 297 285 Z" fill="#f5a623"/>
+            <path id="body" d="M284 176 Q342 137 416 174 Q467 199 457 281 Q450 342 388 363 Q313 379 270 322 Q239 278 284 176 Z" fill="#f8fbfc"/>
+            <path d="M373 170 Q435 188 449 242 Q457 287 422 320 Q399 337 371 334 Q397 282 374 170 Z" fill="#f5a623" stroke="none"/>
+            <g id="wing"><path d="M318 207 Q362 190 397 222 Q412 237 401 269 Q385 305 337 318 Q313 324 295 302 Q282 286 295 255 Z" fill="#dcecf2"/><path d="M326 238 Q351 256 370 282 M312 260 Q337 279 353 299" fill="none" stroke="#8bb4c4" stroke-width="7"/></g>
+            <path d="M348 190 Q325 147 343 105 Q357 73 394 77 Q427 82 430 119 Q432 156 408 188 Z" fill="#f8fbfc"/>
+            <ellipse cx="393" cy="82" rx="58" ry="52" fill="#f8fbfc"/>
+            <path d="M356 71 Q389 48 427 65 Q411 35 375 39 Q346 43 336 70 Z" fill="#f5a623" stroke="none"/>
+            <path d="M430 91 Q516 87 576 119 Q588 127 573 138 Q511 162 431 128 Z" fill="#f5a623"/>
+            <path d="M439 127 Q501 136 573 138" fill="none" stroke="#d67e19" stroke-width="6"/>
+            <circle cx="414" cy="79" r="9" fill="#18324a" stroke="none"/><circle cx="417" cy="75" r="3" fill="#fff" stroke="none"/>
+            <g id="legA"><path d="M343 329 Q327 368 319 420" fill="none"/><path d="M319 420 L302 449" fill="none"/><path d="M292 451 Q310 458 328 451" fill="none"/></g>
+            <g id="legB"><path d="M403 330 Q414 364 404 408" fill="none"/><path d="M404 408 L421 447" fill="none"/><path d="M410 449 Q428 457 443 449" fill="none"/></g>
+          </g>
+        </g>
+        <g id="marks" fill="none" stroke="#f5a623" stroke-width="8" stroke-linecap="round"><path d="M486 265 q18 -16 36 0"/><path d="M147 366 l-24 -20"/><path d="M157 347 l-14 -28"/></g>
+        <path d="M616 311 C603 296 578 307 584 328 Q590 343 616 359 Q642 343 648 328 C654 307 629 296 616 311Z" fill="#ef6f61" stroke="#18324a" stroke-width="7"/>
+      </svg>
+    </section>
+    <section class="controls" aria-label="动画控制器">
+      <div class="buttons"><button id="toggle">暂停</button><button id="reset" class="secondary">重置</button></div>
+      <div class="grid">
+        <label>骑行速度 <output id="speedOut">1.0×</output><input id="speed" type="range" min="0.2" max="2.5" step="0.1" value="1"></label>
+        <label>车轮大小 <output id="wheelOut">1.0×</output><input id="wheel" type="range" min="0.75" max="1.3" step="0.05" value="1"></label>
+        <label>身体摆动 <output id="bounceOut">10px</output><input id="bounce" type="range" min="0" max="24" step="1" value="10"></label>
+        <label>翅膀幅度 <output id="flapOut">14°</output><input id="flap" type="range" min="0" max="28" step="1" value="14"></label>
+        <label>身体颜色 <input id="bodyColor" type="color" value="#f8fbfc"></label>
+        <label>天空颜色 <input id="skyColor" type="color" value="#bfe7ef"></label>
+      </div>
+      <p class="hint">提示：直接双击此文件即可打开；所有动画和控件都内嵌在这一个 HTML 文件中。</p>
+    </section>
+  </main>
+  <script>
+    const $ = id => document.getElementById(id);
+    const els = { ride: $('ride'), bike: $('bike'), wheelL: $('wheelL'), wheelR: $('wheelR'), wing: $('wing'), legA: $('legA'), legB: $('legB'), body: $('body'), sky: $('sky'), shadow: $('shadow') };
+    const inputs = { speed: $('speed'), wheel: $('wheel'), bounce: $('bounce'), flap: $('flap'), bodyColor: $('bodyColor'), skyColor: $('skyColor') };
+    const outputs = { speed: $('speedOut'), wheel: $('wheelOut'), bounce: $('bounceOut'), flap: $('flapOut') };
+    let running = true, t = 0, last = performance.now();
+    function sync() {
+      outputs.speed.value = Number(inputs.speed.value).toFixed(1) + '×';
+      outputs.wheel.value = Number(inputs.wheel.value).toFixed(2) + '×';
+      outputs.bounce.value = inputs.bounce.value + 'px'; outputs.flap.value = inputs.flap.value + '°';
+      els.body.setAttribute('fill', inputs.bodyColor.value); els.sky.setAttribute('fill', inputs.skyColor.value);
+    }
+    Object.values(inputs).forEach(i => i.addEventListener('input', sync));
+    $('toggle').onclick = () => { running = !running; $('toggle').textContent = running ? '暂停' : '播放'; };
+    $('reset').onclick = () => { inputs.speed.value=1; inputs.wheel.value=1; inputs.bounce.value=10; inputs.flap.value=14; inputs.bodyColor.value='#f8fbfc'; inputs.skyColor.value='#bfe7ef'; t=0; sync(); };
+    function frame(now) {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      if (running) t += dt * Number(inputs.speed.value);
+      const phase = t * Math.PI * 2;
+      const bob = Math.sin(phase * 2) * Number(inputs.bounce.value);
+      const tilt = Math.sin(phase * 2 + .4) * 2.6;
+      const spin = t * 360;
+      const flap = Math.sin(phase * 2 + .7) * Number(inputs.flap.value);
+      const step = Math.sin(phase * 2);
+      els.ride.setAttribute('transform', `translate(0 ${bob.toFixed(2)}) rotate(${tilt.toFixed(2)} 400 410)`);
+      const s = Number(inputs.wheel.value); els.bike.setAttribute('transform', `translate(${205*(1-s)} ${448*(1-s)}) scale(${s})`);
+      els.wheelL.setAttribute('transform', `rotate(${spin} 205 448)`); els.wheelR.setAttribute('transform', `rotate(${spin} 585 448)`);
+      els.wing.setAttribute('transform', `rotate(${flap.toFixed(2)} 348 250)`);
+      els.legA.setAttribute('transform', `rotate(${(step*12).toFixed(2)} 343 329)`); els.legB.setAttribute('transform', `rotate(${(-step*12).toFixed(2)} 403 330)`);
+      els.shadow.setAttribute('rx', (280 - Math.abs(bob)*2).toFixed(1));
+      requestAnimationFrame(frame);
+    }
+    sync(); requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

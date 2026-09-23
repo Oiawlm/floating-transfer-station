@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-labelledby="title desc">
+  <title id="title">鹈鹕骑自行车</title>
+  <desc id="desc">一只橙白相间的鹈鹕骑着蓝色自行车的卡通矢量插画。</desc>
+
+  <!-- ground shadow -->
+  <ellipse cx="405" cy="526" rx="280" ry="18" fill="#18324a" opacity=".12"/>
+
+  <!-- bicycle -->
+  <g stroke="#18324a" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <circle cx="205" cy="448" r="76" fill="#eef7fb"/>
+    <circle cx="585" cy="448" r="76" fill="#eef7fb"/>
+    <path d="M205 448 L320 448 L405 332 L585 448 L465 448 L405 332 L320 448 L275 362" fill="none"/>
+    <path d="M405 332 L444 291"/>
+    <path d="M425 286 L474 286"/>
+    <path d="M320 448 L292 401"/>
+    <path d="M272 400 L313 400"/>
+    <circle cx="320" cy="448" r="14" fill="#f5a623"/>
+    <circle cx="405" cy="332" r="12" fill="#f5a623"/>
+    <circle cx="205" cy="448" r="8" fill="#18324a"/>
+    <circle cx="585" cy="448" r="8" fill="#18324a"/>
+    <path d="M320 448 L286 473"/>
+    <path d="M320 448 L352 473"/>
+    <path d="M276 473 L296 473 M342 473 L362 473"/>
+  </g>
+
+  <!-- pelican body -->
+  <g stroke="#18324a" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <!-- tail -->
+    <path d="M270 300 Q228 286 214 249 Q260 260 297 285 Z" fill="#f5a623"/>
+    <!-- torso -->
+    <path d="M284 176 Q342 137 416 174 Q467 199 457 281 Q450 342 388 363 Q313 379 270 322 Q239 278 284 176 Z" fill="#f8fbfc"/>
+    <!-- orange chest -->
+    <path d="M373 170 Q435 188 449 242 Q457 287 422 320 Q399 337 371 334 Q397 282 374 170 Z" fill="#f5a623" stroke="none"/>
+    <!-- wing -->
+    <path d="M318 207 Q362 190 397 222 Q412 237 401 269 Q385 305 337 318 Q313 324 295 302 Q282 286 295 255 Z" fill="#dcecf2"/>
+    <path d="M326 238 Q351 256 370 282 M312 260 Q337 279 353 299" fill="none" stroke="#8bb4c4" stroke-width="7"/>
+
+    <!-- neck -->
+    <path d="M348 190 Q325 147 343 105 Q357 73 394 77 Q427 82 430 119 Q432 156 408 188 Z" fill="#f8fbfc"/>
+    <!-- head -->
+    <ellipse cx="393" cy="82" rx="58" ry="52" fill="#f8fbfc"/>
+    <path d="M356 71 Q389 48 427 65 Q411 35 375 39 Q346 43 336 70 Z" fill="#f5a623" stroke="none"/>
+    <!-- beak -->
+    <path d="M430 91 Q516 87 576 119 Q588 127 573 138 Q511 162 431 128 Z" fill="#f5a623"/>
+    <path d="M439 127 Q501 136 573 138" fill="none" stroke="#d67e19" stroke-width="6"/>
+    <!-- eye -->
+    <circle cx="414" cy="79" r="9" fill="#18324a" stroke="none"/>
+    <circle cx="417" cy="75" r="3" fill="#fff" stroke="none"/>
+
+    <!-- legs -->
+    <path d="M343 329 Q327 368 319 420" fill="none"/>
+    <path d="M403 330 Q414 364 404 408" fill="none"/>
+    <path d="M319 420 L302 449" fill="none"/>
+    <path d="M404 408 L421 447" fill="none"/>
+    <path d="M292 451 Q310 458 328 451" fill="none"/>
+    <path d="M410 449 Q428 457 443 449" fill="none"/>
+  </g>
+
+  <!-- handlebar grip and little motion marks -->
+  <g fill="none" stroke="#f5a623" stroke-width="8" stroke-linecap="round">
+    <path d="M486 265 q18 -16 36 0"/>
+    <path d="M147 366 l-24 -20"/>
+    <path d="M157 347 l-14 -28"/>
+  </g>
+
+  <!-- small decorative heart -->
+  <path d="M616 311 C603 296 578 307 584 328 Q590 343 616 359 Q642 343 648 328 C654 307 629 296 616 311Z" fill="#ef6f61" stroke="#18324a" stroke-width="7"/>
+</svg>
