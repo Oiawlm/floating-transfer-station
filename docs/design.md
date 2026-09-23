@@ -30,7 +30,7 @@
 | StatusSurfaceHex | `#FCFCFD` | 状态浮层背景 |
 | OnAccentHex | `#FFFFFF` | 强调色上的前景（对勾、徽标文字） |
 
-深色主题：跟随系统亮暗切换（`WM_SETTINGCHANGE` 的 `ImmersiveColorSet` + `AppsUseLightTheme` 注册表），按同键位提供第二套字典（`Resources/DesignTheme.Light.xaml` / `DesignTheme.Dark.xaml`，由 `DesignThemeManager` 整本替换）。
+深色主题：跟随系统亮暗切换（`WM_SETTINGCHANGE` 的 `ImmersiveColorSet` + `AppsUseLightTheme` 注册表），按同键位提供第二套字典（`Resources/DesignTheme.Light.xaml` / `DesignTheme.Dark.xaml`，由 `DesignThemeManager` 整本替换）。1.8.0 起用户可在设置中强制浅色/深色（`AppPreferences.ThemeMode`）：强制模式不再响应系统亮暗广播；`FTS_PREVIEW_THEME` 预览覆盖仍为最高优先。
 
 | Token | 浅色 | 深色 |
 |---|---|---|
@@ -81,11 +81,12 @@
 | 出场（加速） | `1,0,1,1` | CubicEaseIn |
 | 减弱动效 | Linear | Linear |
 
-## 四、圆角
+## 四、圆角（按平台分裂）
 
 | Token | 值 | 用途 |
 |---|---|---|
-| ShellCornerRadius | 12（左上/左下，右贴边直角） | 窗壳与描边 |
+| DwmCornerRadius（Windows） | 8 | Windows 窗壳：DWM 四角圆角与内容层自裁剪；贴右缘时窗口经 `WindowSettings.EdgeBleed`（= 本 token）越出屏幕，可见右缘平直、左缘保留圆角（1.8.0 起；右贴任务栏或右邻显示器时由 `ScreenEdgeGeometry` 自动回退贴齐） |
+| ShellCornerRadius（Mac） | 12（左上/左下，右贴边直角） | Mac 窗壳与描边（维持现状） |
 | HeaderSurfaceCornerRadius | 11（左上） | 头部表面 |
 | CardCornerRadius | 8 | 卡片、分类 Tab |
 | ControlCornerRadius | 7 | 头部按钮、状态弹层、活动层、徽标 |
@@ -103,7 +104,7 @@
 | CardGutterPx | 4 | 卡片纵向间距 |
 | CardPaddingPx | 12 | 卡片内边距 |
 
-结构性尺寸（轨道宽 58、面板宽 280–640、最小窗高 360 等）不属于设计 token，权威来源是 Core 的 `WindowSettings`。
+结构性尺寸（轨道宽 58、面板宽 280–640、最小窗高 360、右缘裁切量 `WindowSettings.EdgeBleed` 等）不属于设计 token，权威来源是 Core 的 `WindowSettings`。
 
 ## 五·B、层级（Elevation）
 
@@ -114,7 +115,7 @@
 ## 五·C、窗口材质（Mica，Windows 11）
 
 - 窗口壳弃用 `AllowsTransparency` 分层透明，改用 `WindowChrome`（`GlassFrameThickness=-1` 整窗玻璃帧）承载 DWM 材质，经 `DWMWA_SYSTEMBACKDROP_TYPE` 应用 Mica；材质不可用的旧系统回退到不透明壳色。
-- 圆角由 DWM（`DWMWA_WINDOW_CORNER_PREFERENCE=ROUND`）裁剪，内容层以 `DesignTokens.DwmCornerRadius = 8` 四角同步自裁剪，保证渲染位图与屏幕一致；原「左圆右直角贴边」语言改为四角统一圆角。
+- 圆角由 DWM（`DWMWA_WINDOW_CORNER_PREFERENCE=ROUND`）裁剪，内容层以 `DesignTokens.DwmCornerRadius = 8` 四角同步自裁剪，保证渲染位图与屏幕一致。贴右缘时窗口整体越出工作区一个 `WindowSettings.EdgeBleed`（右缘屏幕裁切），可见右缘平直、左缘保留圆角；右贴任务栏或右邻显示器时回退贴齐，`WM_DISPLAYCHANGE` 后重估。
 - 壳表面为半透明 Mica 色调（浅 `#CCF7F8FA`、深 `#CC202021`，`WindowShellTintHex` / `WindowShellTintDarkHex`），深浅切换时同步 `DWMWA_USE_IMMERSIVE_DARK_MODE`。
 - 本机预览与截图取证：设 `FTS_PREVIEW_DATA_DIR`（隔离数据目录、独立单实例锁）与可选 `FTS_PREVIEW_THEME=dark|light` 启动，不影响已安装应用。
 
@@ -123,6 +124,6 @@
 1. 进入减速、出场加速，退出比进入快；面板展开 167ms / 收起 200ms 不对称。
 2. 动效可中断、可重定向：新动画或停止必须先复位终值；不得让用户等动画播完。
 3. 动效不阻断命中测试；不作为传达信息的唯一方式。
-4. 系统开启「减弱动效」时全部退化为 83ms 纯淡入或立即定格终值（Windows 走 `SystemParameters.ClientAreaAnimationKey` 既有路径）。
+4. 系统开启「减弱动效」或用户在设置中关闭动效（`AppPreferences.AnimationsEnabled=false`，本地覆盖同一系统键）时，全部退化为 83ms 纯淡入或立即定格终值；恢复开启即移除覆盖、重新跟随系统。
 5. 收起动画不得破坏「收起视觉交接」防闪烁机制与面板状态机语义。
 6. 图标取自 fluentui-system-icons（MIT）几何重绘，不随应用分发字体文件。
