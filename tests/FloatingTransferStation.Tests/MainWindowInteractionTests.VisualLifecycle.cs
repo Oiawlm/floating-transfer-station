@@ -992,6 +992,27 @@ public sealed partial class MainWindowInteractionTests
             $"Every applied window rectangle must be the initial {initialBounds} or the terminal {finalBounds}; " +
             $"unexpected intermediates: [{string.Join("; ", unexpected)}]; " +
             $"all observed: [{string.Join("; ", observedBounds)}].");
+
+        // 终态物理边缘必须与 DIP 账本换算一致：迁移取整不产生锚定边（含右缘裁切）漂移。
+        var compositionTarget = source.CompositionTarget;
+        Assert.IsNotNull(compositionTarget);
+        var transform = compositionTarget.TransformToDevice;
+        Assert.AreEqual(
+            (int)Math.Round(window.Left * transform.M11),
+            finalBounds.Left,
+            "The applied left edge must match the DIP ledger without rounding drift.");
+        Assert.AreEqual(
+            (int)Math.Round(window.Top * transform.M22),
+            finalBounds.Top,
+            "The applied top edge must match the DIP ledger without rounding drift.");
+        Assert.AreEqual(
+            (int)Math.Round((window.Left + window.Width) * transform.M11),
+            finalBounds.Right,
+            "The applied right edge must match the DIP ledger without rounding drift.");
+        Assert.AreEqual(
+            (int)Math.Round((window.Top + window.Height) * transform.M22),
+            finalBounds.Bottom,
+            "The applied bottom edge must match the DIP ledger without rounding drift.");
     }
 
     private static bool MatchesStableRectangle(NativeRect observed, NativeRect stable) =>

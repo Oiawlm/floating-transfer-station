@@ -7,6 +7,7 @@ internal static class NativeMethods
     internal const int WmClipboardUpdate = 0x031D;
     internal const int WmSettingChange = 0x001A;
     internal const int WmDisplayChange = 0x007E;
+    internal const int WmWindowPosChanging = 0x0046;
 
     // DWM 窗口效果（Windows 11）。
     internal const int DwmwaUseImmersiveDarkMode = 20;
@@ -16,6 +17,23 @@ internal static class NativeMethods
     internal const int DwmbtMica = 2;
 
     internal const uint MonitorDefaultToNearest = 2;
+
+    // SetWindowPos 标志：迁移只用无 Z 序、无激活的矩形应用；守卫需清除忽略位置/尺寸的标志。
+    internal const uint SwpNoSize = 0x0001;
+    internal const uint SwpNoMove = 0x0002;
+    internal const uint SwpNoZOrder = 0x0004;
+    internal const uint SwpNoActivate = 0x0010;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetWindowPos(
+        nint hwnd,
+        nint insertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -64,5 +82,17 @@ internal static class NativeMethods
         public NativeRect Monitor;
         public NativeRect Work;
         public int Flags;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct WindowPosition
+    {
+        public nint Hwnd;
+        public nint InsertAfter;
+        public int X;
+        public int Y;
+        public int Width;
+        public int Height;
+        public uint Flags;
     }
 }
