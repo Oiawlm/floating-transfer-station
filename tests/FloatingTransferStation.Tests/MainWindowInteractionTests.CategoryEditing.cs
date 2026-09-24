@@ -49,6 +49,37 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void CategoryTabLabelAndEditor_LockDisplayTextFormattingForCrispSmallText()
+    {
+        using var directory = new TestDirectory();
+        var state = new DefaultCaptureCategoryState();
+        var window = CreateWindow(directory, new BoardService(), state);
+
+        try
+        {
+            foreach (var styleKey in new[] { "CategoryLabelTextStyle", "CategoryNameEditorStyle" })
+            {
+                var style = (Style)window.FindResource(styleKey);
+                var formatting = style.Setters.OfType<Setter>().SingleOrDefault(
+                    setter => setter.Property == System.Windows.Media.TextOptions.TextFormattingModeProperty);
+                Assert.IsNotNull(formatting, $"{styleKey} 必须显式设置文本格式化模式。");
+                Assert.AreEqual(
+                    System.Windows.Media.TextFormattingMode.Display,
+                    formatting.Value,
+                    $"{styleKey} 的小字号文本必须按像素对齐(Display)保持清晰。");
+                var rendering = style.Setters.OfType<Setter>().SingleOrDefault(
+                    setter => setter.Property == System.Windows.Media.TextOptions.TextRenderingModeProperty);
+                Assert.IsNotNull(rendering, $"{styleKey} 必须显式设置文本渲染模式。");
+                Assert.AreEqual(System.Windows.Media.TextRenderingMode.ClearType, rendering.Value);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void CategoryNameSave_UpdatesOnlySettingsAndTheSharedDisplayName()
     {
         using var directory = new TestDirectory();
