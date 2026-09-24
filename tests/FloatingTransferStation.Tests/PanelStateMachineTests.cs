@@ -99,6 +99,39 @@ public sealed class PanelStateMachineTests
 
     [TestMethod]
     [TestCategory("Adversarial")]
+    public void TextEditing_KeepsPanelOpenAcrossPointerLeaveUntilEditingEnds()
+    {
+        var state = new PanelStateMachine();
+        state.Switch(BoardCategory.Inbox);
+        state.BeginTextEditing();
+        state.LeaveSurface();
+
+        Assert.IsFalse(state.WouldCollapse);
+        Assert.IsFalse(state.TryCollapse());
+        state.EndTextEditing();
+        Assert.IsTrue(state.WouldCollapse);
+        Assert.IsTrue(state.TryCollapse());
+        Assert.IsFalse(state.IsExpanded);
+        Assert.AreEqual(BoardCategory.Inbox, state.ActiveCategory);
+    }
+
+    [TestMethod]
+    public void TextEditingState_IsObservableWithoutAllowingExternalMutation()
+    {
+        var state = new PanelStateMachine();
+
+        Assert.IsFalse(state.IsTextEditingActive);
+        state.BeginTextEditing();
+        Assert.IsTrue(state.IsTextEditingActive);
+        state.EndTextEditing();
+        Assert.IsFalse(state.IsTextEditingActive);
+        Assert.IsFalse(typeof(PanelStateMachine)
+            .GetProperty(nameof(PanelStateMachine.IsTextEditingActive))!
+            .CanWrite);
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
     public void RapidEnterAfterLeaveCancelsPendingCollapseCondition()
     {
         var state = new PanelStateMachine();

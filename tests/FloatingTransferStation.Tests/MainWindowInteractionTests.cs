@@ -252,18 +252,15 @@ public sealed partial class MainWindowInteractionTests
         window.UpdateLayout();
     }
 
-    private static void CollapseForSetup(MainWindow window)
+    private static void WithClientAreaAnimationsDisabled(MainWindow window, Action action)
     {
-        // 作为前置条件的收起走减弱动效路径：同步提交，不等待出场动画。
         var animations = window.Resources.Contains(SystemParameters.ClientAreaAnimationKey)
             ? window.Resources[SystemParameters.ClientAreaAnimationKey]
             : null;
         window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
         try
         {
-            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
-            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-            CompleteLayout(window);
+            action();
         }
         finally
         {
@@ -276,6 +273,19 @@ public sealed partial class MainWindowInteractionTests
                 window.Resources[SystemParameters.ClientAreaAnimationKey] = animations;
             }
         }
+    }
+
+    private static void CollapseForSetup(MainWindow window)
+    {
+        // 作为前置条件的收起走减弱动效路径：同步提交，不等待出场动画。
+        WithClientAreaAnimationsDisabled(
+            window,
+            () =>
+            {
+                InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+                InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                CompleteLayout(window);
+            });
     }
 
     private static void PumpDispatcherFor(Dispatcher dispatcher, TimeSpan duration)

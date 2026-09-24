@@ -126,7 +126,7 @@ public partial class MainWindow : Window
             e.Handled = true;
             _activeCategoryNameCompositions.Remove(editor);
             _viewModel.CancelCategoryNameEdit(category);
-            ReconcileSurfaceAfterCategoryNameEdit();
+            ReconcileSurfaceAfterEditing();
         }
     }
 
@@ -149,7 +149,7 @@ public partial class MainWindow : Window
         }
 
         var name = _viewModel.EndCategoryNameEdit(category, draftName);
-        ReconcileSurfaceAfterCategoryNameEdit();
+        ReconcileSurfaceAfterEditing();
         if (name == category.DisplayName)
         {
             return;
@@ -184,19 +184,4 @@ public partial class MainWindow : Window
 
     private bool IsCategoryNameEditActive() =>
         _viewModel.Categories.Any(category => category.IsEditingName);
-
-    private void ReconcileSurfaceAfterCategoryNameEdit()
-    {
-        if (IsMouseOver)
-        {
-            _panelState.EnterSurface();
-            return;
-        }
-
-        _panelState.LeaveSurface();
-        if (_panelState.IsExpanded)
-        {
-            _collapseTimer.Start();
-        }
-    }
 }
