@@ -37,6 +37,7 @@ public partial class SettingsWindow : Window
         ThemeComboBox.SelectedIndex = (int)host.CurrentPreferences.ThemeMode;
         AnimationsToggle.IsChecked = host.CurrentPreferences.AnimationsEnabled;
         StartupToggle.IsChecked = host.StartupManager.IsEnabled();
+        GlobalHotkeyToggle.IsChecked = host.CurrentPreferences.GlobalHotkeyEnabled;
         _isSynchronizingControls = false;
 
         DataDirectoryText.Text = host.DataDirectory;
@@ -158,6 +159,36 @@ public partial class SettingsWindow : Window
             StartupToggle.IsChecked = _host.StartupManager.IsEnabled();
             _isSynchronizingControls = false;
         }
+    }
+
+    private void GlobalHotkeyToggle_Checked(object sender, RoutedEventArgs e) =>
+        ApplyGlobalHotkeyFromToggle(enable: true);
+
+    private void GlobalHotkeyToggle_Unchecked(object sender, RoutedEventArgs e) =>
+        ApplyGlobalHotkeyFromToggle(enable: false);
+
+    private void ApplyGlobalHotkeyFromToggle(bool enable)
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        if (!_host.TryApplyGlobalHotkeyPreference(enable))
+        {
+            GlobalHotkeyStatusText.Text = "全局快捷键注册失败，可能被其他软件占用。";
+            GlobalHotkeyStatusText.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            GlobalHotkeyStatusText.Text = string.Empty;
+            GlobalHotkeyStatusText.Visibility = Visibility.Collapsed;
+        }
+
+        // 回显实际状态：注册失败的开启请求不落偏好，开关退回关闭。
+        _isSynchronizingControls = true;
+        GlobalHotkeyToggle.IsChecked = _host.CurrentPreferences.GlobalHotkeyEnabled;
+        _isSynchronizingControls = false;
     }
 
     private void OpenDataDirectoryButton_Click(object sender, RoutedEventArgs e)

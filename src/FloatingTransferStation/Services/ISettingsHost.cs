@@ -17,5 +17,6 @@ public interface ISettingsHost
     PluginCatalog? PluginCatalog { get; }
     void ApplyPreferences(AppPreferences preferences);
     Task ApplyPluginEnabledAsync(string pluginId, bool enabled);
+    bool TryApplyGlobalHotkeyPreference(bool enabled);
     void RequestApplicationExit();
 }

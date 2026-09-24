@@ -59,6 +59,7 @@ public partial class MainWindow : Window
     private readonly IPreferencesStore? _preferencesStore;
     private readonly IStartupManager _startupManager;
     private readonly PluginCatalog? _pluginCatalog;
+    private readonly IGlobalHotkeySource _globalHotkeySource;
     private readonly string _dataDirectory;
     private readonly Func<Window, double>? _rightEdgeBleedProvider;
     private AppPreferences _preferences = AppPreferences.Default;
@@ -80,6 +81,7 @@ public partial class MainWindow : Window
     private int _scrollRestoreVersion;
     private bool _isClosing;
     private bool _allowClose;
+    private bool _globalHotkeyRegistered;
 
     public bool ClientAreaAnimationsEnabled
     {
@@ -116,13 +118,15 @@ public partial class MainWindow : Window
         IStartupManager? startupManager = null,
         string? dataDirectory = null,
         Func<Window, double>? rightEdgeBleedProvider = null,
-        PluginCatalog? pluginCatalog = null)
+        PluginCatalog? pluginCatalog = null,
+        IGlobalHotkeySource? globalHotkeySource = null)
     {
         InitializeComponent();
         _preferences = preferences ?? AppPreferences.Default;
         _preferencesStore = preferencesStore;
         _startupManager = startupManager ?? new WindowsStartupManager();
         _pluginCatalog = pluginCatalog;
+        _globalHotkeySource = globalHotkeySource ?? new Win32GlobalHotkeySource();
         _dataDirectory = dataDirectory ?? string.Empty;
         _activeDesignTheme = ResolveTheme(_preferences.ThemeMode);
         DesignThemeManager.Apply(this, _activeDesignTheme);
@@ -190,6 +194,66 @@ public partial class MainWindow : Window
             !string.IsNullOrWhiteSpace(_viewModel.StatusText);
     }
 
+    /// <summary>
+    /// 全局快捷键唤起：展开面板并定位到当前默认接收分类；已展开或拖放轨道
+    /// 可见时保持现状，避免打断正在进行的交互。
+    /// </summary>
+    internal void OnGlobalHotkeyPressed()
+    {
+        if (_isClosing ||
+            _viewModel.IsPanelExpanded ||
+            _viewModel.IsExternalDropRailVisible)
+        {
+            return;
+        }
+
+        var category = _viewModel.DefaultCapturePanel.Category;
+        _panelState.Switch(category);
+        ActivatePanel(category);
+        ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings, _rightEdgeBleed));
+        _viewModel.SetPanelExpanded(true);
+        UpdateStatusPresentation();
+        CategoryRail.UpdateLayout();
+        RestoreScrollOffset(category);
+        AnimatePanelContent(isCategorySwitch: false);
+    }
+
+    /// <summary>
+    /// 注册/注销全局热键。开启时窗口句柄未就绪或组合键被占用返回 false；
+    /// 关闭总是成功（注销已注册的热键并清理标记）。
+    /// </summary>
+    internal bool TrySetGlobalHotkey(bool enable)
+    {
+        if (!enable)
+        {
+            if (_globalHotkeyRegistered && _windowSource?.Handle is { } handle)
+            {
+                _globalHotkeySource.Unregister(handle, Win32GlobalHotkeySource.HotkeyId);
+            }
+
+            _globalHotkeyRegistered = false;
+            return true;
+        }
+
+        if (_globalHotkeyRegistered)
+        {
+            return true;
+        }
+
+        if (_windowSource?.Handle is not { } readyHandle || readyHandle == 0)
+        {
+            return false;
+        }
+
+        if (!_globalHotkeySource.TryRegister(readyHandle, Win32GlobalHotkeySource.HotkeyId))
+        {
+            return false;
+        }
+
+        _globalHotkeyRegistered = true;
+        return true;
+    }
+
     private void MainWindow_SourceInitialized(object? sender, EventArgs e)
     {
         _windowSource = PresentationSource.FromVisual(this) as System.Windows.Interop.HwndSource;
@@ -205,6 +269,12 @@ public partial class MainWindow : Window
         if (!NativeMethods.AddClipboardFormatListener(_windowSource.Handle))
         {
             ShowStatus("剪贴板监听未启动，请重新打开悬浮中转站。");
+        }
+
+        // 偏好开启但注册失败时不改写偏好：状态条提示，下次启动自动重试。
+        if (_preferences.GlobalHotkeyEnabled && !TrySetGlobalHotkey(enable: true))
+        {
+            ShowStatus("全局快捷键注册失败，可能被其他软件占用。");
         }
     }
 
@@ -232,6 +302,14 @@ public partial class MainWindow : Window
         if (!_isClosing && message == NativeMethods.WmClipboardUpdate)
         {
             StartClipboardCapture();
+        }
+
+        if (!_isClosing &&
+            message == NativeMethods.WmHotKey &&
+            wParam == Win32GlobalHotkeySource.HotkeyId)
+        {
+            Dispatcher.BeginInvoke(OnGlobalHotkeyPressed);
+            handled = true;
         }
 
         if (!_isClosing &&

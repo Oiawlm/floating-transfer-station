@@ -8,6 +8,19 @@ internal static class NativeMethods
     internal const int WmSettingChange = 0x001A;
     internal const int WmDisplayChange = 0x007E;
     internal const int WmWindowPosChanging = 0x0046;
+    internal const int WmHotKey = 0x0312;
+
+    // RegisterHotKey 修饰键：Ctrl + Alt。
+    internal const uint ModControl = 0x0002;
+    internal const uint ModAlt = 0x0001;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool RegisterHotKey(nint hwnd, int id, uint modifiers, uint virtualKey);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool UnregisterHotKey(nint hwnd, int id);
 
     // DWM 窗口效果（Windows 11）。
     internal const int DwmwaUseImmersiveDarkMode = 20;
