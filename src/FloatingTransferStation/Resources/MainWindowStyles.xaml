@@ -183,6 +183,8 @@
     <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
     <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+    <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
     <Setter Property="HorizontalAlignment" Value="Center" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextAlignment" Value="Center" />
@@ -211,6 +213,8 @@
     <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
     <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
+    <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+    <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="TextAlignment" Value="Center" />
