@@ -61,7 +61,7 @@ public partial class MainWindow : Window
         Left = work.Right - (ActualWidth - _rightEdgeBleed);
     }
 
-    /// <summary>重估右缘裁切量（显示器/任务栏/邻接屏可能已变化）并按当前面板状态重新贴齐。</summary>
+    /// <summary>重估右缘裁切量（显示器/任务栏/邻接屏可能已变化），同步内缩内容层并按当前面板状态重新贴齐。</summary>
     private void RefreshEdgeBleed()
     {
         if (_rightEdgeBleedProvider is null)
@@ -70,7 +70,21 @@ public partial class MainWindow : Window
         }
 
         _rightEdgeBleed = _rightEdgeBleedProvider.Invoke(this);
+        ApplyRightEdgeBleedInset();
         ReapplyCurrentPlacement();
+    }
+
+    /// <summary>
+    /// 边缘裁切时窗口右缘越出屏幕；内容层按裁切量右内缩，使轨道与面板完整落在屏幕内。
+    /// </summary>
+    private void ApplyRightEdgeBleedInset()
+    {
+        if (LayoutRoot is null)
+        {
+            return;
+        }
+
+        LayoutRoot.Margin = new Thickness(0, 0, _rightEdgeBleed, 0);
     }
 
     private void ReapplyCurrentPlacement()

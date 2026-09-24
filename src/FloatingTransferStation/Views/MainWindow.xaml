@@ -83,10 +83,12 @@
     </ResourceDictionary>
   </Window.Resources>
 
+  <!-- 内容层由 LayoutRoot 承载：边缘裁切启用时按裁切量右内缩，
+       使可见内容完整落在屏幕内；WindowShell 仍铺满整窗承载 Mica 与四角裁剪。 -->
   <Border x:Name="WindowShell"
           Style="{StaticResource WindowShellStyle}"
           SizeChanged="WindowShell_SizeChanged">
-    <Grid Background="Transparent">
+    <Grid x:Name="LayoutRoot" Background="Transparent">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="58" />
