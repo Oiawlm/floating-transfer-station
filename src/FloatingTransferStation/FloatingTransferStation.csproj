@@ -10,4 +10,8 @@
   <ItemGroup>
     <ProjectReference Include="..\FloatingTransferStation.Core\FloatingTransferStation.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- 内建插件随构建进入输出目录 plugins/，安装包按发布目录整体打包。 -->
+    <Content Include="Plugins\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

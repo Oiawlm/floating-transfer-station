@@ -14,6 +14,8 @@ public interface ISettingsHost
     AppPreferences CurrentPreferences { get; }
     IStartupManager StartupManager { get; }
     string DataDirectory { get; }
+    PluginCatalog? PluginCatalog { get; }
     void ApplyPreferences(AppPreferences preferences);
+    Task ApplyPluginEnabledAsync(string pluginId, bool enabled);
     void RequestApplicationExit();
 }

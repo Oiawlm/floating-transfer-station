@@ -42,6 +42,7 @@ public partial class SettingsWindow : Window
         DataDirectoryText.Text = host.DataDirectory;
         AppNameRun.Text = ProductIdentity.DisplayName;
         VersionRun.Text = $"版本 {ProductIdentity.Version}";
+        PopulatePluginSection();
         Owner = host.HostWindow;
         SourceInitialized += SettingsWindow_SourceInitialized;
     }
@@ -179,6 +180,139 @@ public partial class SettingsWindow : Window
         {
             StartupStatusText.Text = "无法打开数据目录。";
             StartupStatusText.Visibility = Visibility.Visible;
+        }
+    }
+
+    /// <summary>
+    /// 填充插件区块：每个插件一行（名称/版本 + 描述或加载错误 + 启用开关）。
+    /// 清单非法的插件保留在列表中并显示原因，开关禁用。
+    /// </summary>
+    private void PopulatePluginSection()
+    {
+        var catalog = _host.PluginCatalog;
+        if (catalog is null)
+        {
+            PluginDirectoryText.Text = string.Empty;
+            OpenPluginDirectoryButton.Visibility = Visibility.Collapsed;
+            PluginHelpText.Text = "插件系统在本次运行中不可用。";
+            return;
+        }
+
+        PluginDirectoryText.Text = catalog.UserPluginsDirectory;
+        foreach (var entry in catalog.Entries)
+        {
+            PluginListPanel.Children.Add(CreatePluginRow(entry));
+        }
+
+        if (catalog.Entries.Count == 0)
+        {
+            PluginHelpText.Text = "未发现插件。把插件文件夹放入下面的目录后重启应用即可出现。";
+            return;
+        }
+
+        PluginHelpText.Text = "插件默认关闭；启用后立即生效并自动保存。放入用户目录的同名插件会覆盖内建版本。";
+    }
+
+    private Grid CreatePluginRow(PluginEntry entry)
+    {
+        var row = new Grid { Background = System.Windows.Media.Brushes.Transparent };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var title = entry.Manifest is { } manifest
+            ? $"{manifest.Name}  {manifest.Version}"
+            : $"{System.IO.Path.GetFileName(entry.Directory)}（无法加载）";
+        var detail = entry.Manifest is { } valid
+            ? (valid.Description ?? (valid.Kind == PluginKind.TextCleaner ? "文本整理插件" : string.Empty))
+            : entry.LoadError ?? "清单无效。";
+
+        var textPanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 6) };
+        var titleBlock = new TextBlock
+        {
+            Text = title,
+            Foreground = TryFindResource("PrimaryTextBrush") as System.Windows.Media.Brush,
+            FontSize = 13,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        var detailBrush = entry.Manifest is null
+            ? TryFindResource("DangerBrush") as System.Windows.Media.Brush
+            : TryFindResource("SecondaryTextBrush") as System.Windows.Media.Brush;
+        var detailBlock = new TextBlock
+        {
+            Text = detail,
+            Foreground = detailBrush,
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap
+        };
+        textPanel.Children.Add(titleBlock);
+        textPanel.Children.Add(detailBlock);
+        Grid.SetColumn(textPanel, 0);
+        row.Children.Add(textPanel);
+
+        var toggle = new CheckBox
+        {
+            Style = TryFindResource("ToggleSwitchStyle") as Style,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsChecked = entry.Enabled,
+            IsEnabled = entry.Manifest is not null,
+            Tag = entry.Id
+        };
+        System.Windows.Automation.AutomationProperties.SetName(
+            toggle,
+            $"{title}插件开关");
+        toggle.Checked += PluginToggle_StateChanged;
+        toggle.Unchecked += PluginToggle_StateChanged;
+        Grid.SetColumn(toggle, 1);
+        row.Children.Add(toggle);
+
+        return row;
+    }
+
+    private async void PluginToggle_StateChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isSynchronizingControls ||
+            sender is not CheckBox { Tag: string pluginId } toggle)
+        {
+            return;
+        }
+
+        // await 前读取开关状态，续延不再依赖控件访问。
+        var enabled = toggle.IsChecked == true;
+        try
+        {
+            await _host.ApplyPluginEnabledAsync(pluginId, enabled);
+            PluginStatusText.Text = string.Empty;
+            PluginStatusText.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            PluginStatusText.Text = "插件设置暂未保存，请稍后重试。";
+            PluginStatusText.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void OpenPluginDirectoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        var directory = _host.PluginCatalog?.UserPluginsDirectory;
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            using var _ = Process.Start(new ProcessStartInfo(directory)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            PluginStatusText.Text = "无法打开插件目录。";
+            PluginStatusText.Visibility = Visibility.Visible;
         }
     }
 

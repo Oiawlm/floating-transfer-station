@@ -16,6 +16,42 @@ public partial class MainWindow : Window, ISettingsHost
 
     public string DataDirectory => _dataDirectory;
 
+    public PluginCatalog? PluginCatalog => _pluginCatalog;
+
+    /// <summary>
+    /// 启用/禁用插件：立即重建采集管线并异步原子持久化；
+    /// 持久化失败经状态条提示，界面开关状态保持本次选择。
+    /// </summary>
+    public async Task ApplyPluginEnabledAsync(string pluginId, bool enabled)
+    {
+        if (_pluginCatalog is null)
+        {
+            return;
+        }
+
+        var operation = ApplyPluginEnabledCoreAsync(pluginId, enabled);
+        TrackPendingOperation(operation);
+        await operation;
+    }
+
+    private async Task ApplyPluginEnabledCoreAsync(string pluginId, bool enabled)
+    {
+        var catalog = _pluginCatalog;
+        if (catalog is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await catalog.SetEnabledAsync(pluginId, enabled);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            ShowStatus("插件设置暂未保存。");
+        }
+    }
+
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;

@@ -58,6 +58,7 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _preferencesSaveGate = new(1, 1);
     private readonly IPreferencesStore? _preferencesStore;
     private readonly IStartupManager _startupManager;
+    private readonly PluginCatalog? _pluginCatalog;
     private readonly string _dataDirectory;
     private readonly Func<Window, double>? _rightEdgeBleedProvider;
     private AppPreferences _preferences = AppPreferences.Default;
@@ -114,12 +115,14 @@ public partial class MainWindow : Window
         IPreferencesStore? preferencesStore = null,
         IStartupManager? startupManager = null,
         string? dataDirectory = null,
-        Func<Window, double>? rightEdgeBleedProvider = null)
+        Func<Window, double>? rightEdgeBleedProvider = null,
+        PluginCatalog? pluginCatalog = null)
     {
         InitializeComponent();
         _preferences = preferences ?? AppPreferences.Default;
         _preferencesStore = preferencesStore;
         _startupManager = startupManager ?? new WindowsStartupManager();
+        _pluginCatalog = pluginCatalog;
         _dataDirectory = dataDirectory ?? string.Empty;
         _activeDesignTheme = ResolveTheme(_preferences.ThemeMode);
         DesignThemeManager.Apply(this, _activeDesignTheme);

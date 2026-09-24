@@ -369,6 +369,34 @@
                   Click="OpenDataDirectoryButton_Click" />
         </Grid>
 
+        <TextBlock Text="插件" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+        <StackPanel x:Name="PluginListPanel" />
+        <TextBlock x:Name="PluginHelpText" Style="{StaticResource NoteCaptionStyle}" />
+        <TextBlock x:Name="PluginStatusText"
+                   Style="{StaticResource NoteCaptionStyle}"
+                   Foreground="{DynamicResource DangerBrush}"
+                   Text=""
+                   Visibility="Collapsed" />
+        <Grid Background="Transparent" Margin="0,6,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBox x:Name="PluginDirectoryText"
+                   Grid.Column="0"
+                   Style="{StaticResource ReadOnlyPathBoxStyle}"
+                   Margin="0,0,8,0"
+                   VerticalAlignment="Center"
+                   AutomationProperties.Name="插件目录" />
+          <Button x:Name="OpenPluginDirectoryButton"
+                  Grid.Column="1"
+                  Style="{StaticResource SettingsActionButtonStyle}"
+                  Content="打开"
+                  ToolTip="在资源管理器中打开插件目录"
+                  AutomationProperties.Name="在资源管理器中打开插件目录"
+                  Click="OpenPluginDirectoryButton_Click" />
+        </Grid>
+
         <TextBlock Text="关于" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
         <TextBlock Foreground="{DynamicResource PrimaryTextBrush}" FontSize="13">
           <Run x:Name="AppNameRun" FontWeight="SemiBold" /><Run Text="  " /><Run x:Name="VersionRun" Foreground="{DynamicResource SecondaryTextBrush}" />
