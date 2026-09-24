@@ -1,0 +1,24 @@
+{
+  "id": "whitespace-tidy",
+  "name": "整理空白",
+  "version": "1.0.0",
+  "description": "统一换行为 CRLF、去除每行行尾空白、把连续 3 个以上空行压缩为 2 个。",
+  "kind": "text-cleaner",
+  "textRules": [
+    {
+      "pattern": "\\r\\n|\\r|\\n",
+      "replacement": "\r\n",
+      "description": "统一换行"
+    },
+    {
+      "pattern": "[ \\t]+(?=\\r?\\n|$)",
+      "replacement": "",
+      "description": "去除行尾空白"
+    },
+    {
+      "pattern": "(?:\\r\\n){4,}",
+      "replacement": "\r\n\r\n\r\n",
+      "description": "压缩过多空行"
+    }
+  ]
+}

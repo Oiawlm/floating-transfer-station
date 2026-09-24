@@ -6,7 +6,9 @@ public sealed record AppPaths(
     string SettingsFile,
     string PreferencesFile,
     string ImagesDirectory,
-    string ReviewsDirectory)
+    string ReviewsDirectory,
+    string PluginsDirectory,
+    string PluginStateFile)
 {
     public static AppPaths CreateDefault(IDataDirectorySettings? settings = null)
     {
@@ -30,5 +32,7 @@ public sealed record AppPaths(
         Path.Combine(dataDirectory, "settings.json"),
         Path.Combine(dataDirectory, "preferences.json"),
         Path.Combine(dataDirectory, "images"),
-        Path.Combine(dataDirectory, "reviews"));
+        Path.Combine(dataDirectory, "reviews"),
+        Path.Combine(dataDirectory, "plugins"),
+        Path.Combine(dataDirectory, "plugins-state.json"));
 }

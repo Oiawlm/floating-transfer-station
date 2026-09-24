@@ -9,19 +9,22 @@ public sealed class ExternalDropImportService
     private readonly IBoardStore _store;
     private readonly Action<string> _showStatus;
     private readonly BoardOperationGate _operationGate;
+    private readonly PluginCatalog? _pluginCatalog;
 
     public ExternalDropImportService(
         IImageNormalizer normalizer,
         BoardService board,
         IBoardStore store,
         Action<string> showStatus,
-        BoardOperationGate? operationGate = null)
+        BoardOperationGate? operationGate = null,
+        PluginCatalog? pluginCatalog = null)
     {
         _normalizer = normalizer;
         _board = board;
         _store = store;
         _showStatus = showStatus;
         _operationGate = operationGate ?? new BoardOperationGate();
+        _pluginCatalog = pluginCatalog;
     }
 
     public async Task<bool> ImportAsync(
@@ -33,6 +36,20 @@ public sealed class ExternalDropImportService
         if (!BoardCategoryCatalog.IsDefined(targetCategory))
         {
             throw new ArgumentOutOfRangeException(nameof(targetCategory));
+        }
+
+        // 启用的文本整理插件在入库前应用（取最新管线快照，切换插件立即生效）；
+        // 被清成空白的拖入文本按无效内容拒绝。
+        if (payload is ExternalDropPayload.Text droppedText)
+        {
+            var cleaned = _pluginCatalog?.TextCleaner.Apply(droppedText.Value) ?? droppedText.Value;
+            if (string.IsNullOrWhiteSpace(cleaned))
+            {
+                _showStatus("拖入的文本被启用插件清空，本次未保存。");
+                return false;
+            }
+
+            payload = droppedText with { Value = cleaned };
         }
 
         var storedImages = new List<StoredImage>();

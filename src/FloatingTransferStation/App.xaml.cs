@@ -61,6 +61,11 @@ public partial class App : Application
             var settings = await store.LoadSettingsAsync();
             settings = await new DailyReviewMigration(store).EnsureAsync(board, settings);
             var preferences = await store.LoadPreferencesAsync();
+            var pluginCatalog = new PluginCatalog(
+                paths,
+                Path.Combine(AppContext.BaseDirectory, "plugins"),
+                new AtomicTextWriter());
+            await pluginCatalog.LoadAsync();
             MainWindow? window = null;
             void ShowStatus(string message) => window?.ShowStatus(message);
             var boardOperationGate = new BoardOperationGate();
@@ -75,14 +80,16 @@ public partial class App : Application
                 store,
                 ShowStatus,
                 operationGate: boardOperationGate,
-                defaultCaptureCategory: defaultCaptureCategory);
+                defaultCaptureCategory: defaultCaptureCategory,
+                pluginCatalog: pluginCatalog);
             var mutations = new BoardMutationService(board, store, ShowStatus, boardOperationGate);
             var externalDropImport = new ExternalDropImportService(
                 normalizer,
                 board,
                 store,
                 ShowStatus,
-                boardOperationGate);
+                boardOperationGate,
+                pluginCatalog);
             window = new MainWindow(
                 board,
                 store,
@@ -97,7 +104,8 @@ public partial class App : Application
                 preferencesStore: store,
                 startupManager: new WindowsStartupManager(),
                 dataDirectory: paths.DataDirectory,
-                rightEdgeBleedProvider: ScreenEdgeGeometry.GetRightEdgeBleed);
+                rightEdgeBleedProvider: ScreenEdgeGeometry.GetRightEdgeBleed,
+                pluginCatalog: pluginCatalog);
             MainWindow = window;
             window.Show();
         }

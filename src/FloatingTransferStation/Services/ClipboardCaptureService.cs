@@ -13,6 +13,7 @@ public sealed class ClipboardCaptureService
     private readonly IReadOnlyList<TimeSpan> _retryDelays;
     private readonly BoardOperationGate _operationGate;
     private readonly DefaultCaptureCategoryState _defaultCaptureCategory;
+    private readonly PluginCatalog? _pluginCatalog;
     private readonly object _queueLock = new();
     private readonly HashSet<uint> _pendingSequences = [];
     private readonly int _maximumPendingCaptures;
@@ -32,6 +33,7 @@ public sealed class ClipboardCaptureService
         IReadOnlyList<TimeSpan>? retryDelays = null,
         BoardOperationGate? operationGate = null,
         DefaultCaptureCategoryState? defaultCaptureCategory = null,
+        PluginCatalog? pluginCatalog = null,
         int maximumPendingCaptures = 16,
         long maximumPendingBytes = 256L * 1024 * 1024)
     {
@@ -46,6 +48,7 @@ public sealed class ClipboardCaptureService
             new[] { TimeSpan.FromMilliseconds(25), TimeSpan.FromMilliseconds(75), TimeSpan.FromMilliseconds(150) };
         _operationGate = operationGate ?? new BoardOperationGate();
         _defaultCaptureCategory = defaultCaptureCategory ?? new DefaultCaptureCategoryState();
+        _pluginCatalog = pluginCatalog;
         _maximumPendingCaptures = maximumPendingCaptures;
         _maximumPendingBytes = maximumPendingBytes;
     }
@@ -278,9 +281,17 @@ public sealed class ClipboardCaptureService
         BoardCategory targetCategory,
         CancellationToken cancellationToken)
     {
+        // 启用的文本整理插件在入库前应用；每次采集取最新管线快照，
+        // 设置中切换插件立即生效。插件绝不允许把内容清成空白。
+        var cleaned = _pluginCatalog?.TextCleaner.Apply(text) ?? text;
+        if (string.IsNullOrWhiteSpace(cleaned))
+        {
+            return;
+        }
+
         await _operationGate.RunAsync(async () =>
         {
-            var item = _board.AddText(text, targetCategory);
+            var item = _board.AddText(cleaned, targetCategory);
             try
             {
                 await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
