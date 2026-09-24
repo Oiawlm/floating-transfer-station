@@ -303,7 +303,7 @@ public partial class MainWindow : Window
     {
         _expandIntentTimer.Stop();
         _collapseTimer.Stop();
-        if (IsCategoryNameEditActive())
+        if (IsPanelEditHoldActive())
         {
             return;
         }
@@ -318,7 +318,7 @@ public partial class MainWindow : Window
     private void CollapseTimer_Tick(object? sender, EventArgs e)
     {
         _collapseTimer.Stop();
-        if (IsCategoryNameEditActive() || !_panelState.WouldCollapse)
+        if (IsPanelEditHoldActive() || !_panelState.WouldCollapse)
         {
             return;
         }

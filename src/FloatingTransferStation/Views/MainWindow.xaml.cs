@@ -149,6 +149,7 @@ public partial class MainWindow : Window
         _statusTimer.Tick += StatusTimer_Tick;
         InitializeDailyReviewEditing();
         InitializeCategoryNameEditing();
+        InitializePanelTextEditing();
         SourceInitialized += MainWindow_SourceInitialized;
 
         ApplyPlacement(WindowController.Collapsed(
