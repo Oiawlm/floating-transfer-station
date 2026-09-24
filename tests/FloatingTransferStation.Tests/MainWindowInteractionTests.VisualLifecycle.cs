@@ -1191,6 +1191,13 @@ public sealed partial class MainWindowInteractionTests
             var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(item);
             Assert.IsNotNull(container);
             image = FindDescendants<Image>(container).Single();
+            // 1.10.1 起缩略图为异步解码:泵调度器直到后台解码结果回到 UI 线程。
+            var decodeDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+            while (image.Source is not BitmapSource && DateTime.UtcNow < decodeDeadline)
+            {
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(50));
+            }
+
             var source = image.Source as BitmapSource;
 
             Assert.IsNotNull(source);
