@@ -70,6 +70,7 @@ public partial class App : Application
             void ShowStatus(string message) => window?.ShowStatus(message);
             var boardOperationGate = new BoardOperationGate();
             var defaultCaptureCategory = new DefaultCaptureCategoryState();
+            var captureDeduplicationGate = new CaptureDeduplicationGate();
             var windowsDataImageReader = new WindowsDataImageReader();
             var externalDropPayloadReader = new ExternalDropPayloadReader(
                 windowsDataImageReader);
@@ -81,7 +82,8 @@ public partial class App : Application
                 ShowStatus,
                 operationGate: boardOperationGate,
                 defaultCaptureCategory: defaultCaptureCategory,
-                pluginCatalog: pluginCatalog);
+                pluginCatalog: pluginCatalog,
+                deduplicationGate: captureDeduplicationGate);
             var mutations = new BoardMutationService(board, store, ShowStatus, boardOperationGate);
             var externalDropImport = new ExternalDropImportService(
                 normalizer,

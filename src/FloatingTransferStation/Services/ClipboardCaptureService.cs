@@ -14,6 +14,7 @@ public sealed class ClipboardCaptureService
     private readonly BoardOperationGate _operationGate;
     private readonly DefaultCaptureCategoryState _defaultCaptureCategory;
     private readonly PluginCatalog? _pluginCatalog;
+    private readonly CaptureDeduplicationGate? _deduplicationGate;
     private readonly object _queueLock = new();
     private readonly HashSet<uint> _pendingSequences = [];
     private readonly int _maximumPendingCaptures;
@@ -34,6 +35,7 @@ public sealed class ClipboardCaptureService
         BoardOperationGate? operationGate = null,
         DefaultCaptureCategoryState? defaultCaptureCategory = null,
         PluginCatalog? pluginCatalog = null,
+        CaptureDeduplicationGate? deduplicationGate = null,
         int maximumPendingCaptures = 16,
         long maximumPendingBytes = 256L * 1024 * 1024)
     {
@@ -49,6 +51,7 @@ public sealed class ClipboardCaptureService
         _operationGate = operationGate ?? new BoardOperationGate();
         _defaultCaptureCategory = defaultCaptureCategory ?? new DefaultCaptureCategoryState();
         _pluginCatalog = pluginCatalog;
+        _deduplicationGate = deduplicationGate;
         _maximumPendingCaptures = maximumPendingCaptures;
         _maximumPendingBytes = maximumPendingBytes;
     }
@@ -289,12 +292,20 @@ public sealed class ClipboardCaptureService
             return;
         }
 
+        var fingerprint = CapturedContentFingerprint.ForText(cleaned);
         await _operationGate.RunAsync(async () =>
         {
+            if (_deduplicationGate is { } gate && gate.IsRecentDuplicate(fingerprint))
+            {
+                _showStatus("与最近收集的内容相同，未重复收集。");
+                return true;
+            }
+
             var item = _board.AddText(cleaned, targetCategory);
             try
             {
                 await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
+                _deduplicationGate?.RecordAccepted(fingerprint);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
@@ -319,7 +330,8 @@ public sealed class ClipboardCaptureService
         try
         {
             var stored = await _normalizer.NormalizeClipboardAsync(candidates, cancellationToken: cancellationToken);
-            await CommitImageAsync(stored, targetCategory, cancellationToken);
+            var fingerprint = CapturedContentFingerprint.ForImageFile(stored.AbsolutePath);
+            await CommitImageAsync(stored, targetCategory, fingerprint, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -365,7 +377,13 @@ public sealed class ClipboardCaptureService
         {
             if (storedImages.Count > 0)
             {
-                await CommitImagesAsync(storedImages, targetCategory, cancellationToken);
+                CapturedContentFingerprint? fingerprint = null;
+                if (storedImages.Count == 1)
+                {
+                    fingerprint = CapturedContentFingerprint.ForImageFile(storedImages[0].AbsolutePath);
+                }
+
+                await CommitImagesAsync(storedImages, targetCategory, fingerprint, cancellationToken);
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -382,18 +400,30 @@ public sealed class ClipboardCaptureService
     private Task CommitImageAsync(
         StoredImage stored,
         BoardCategory targetCategory,
+        CapturedContentFingerprint? fingerprint,
         CancellationToken cancellationToken) =>
-        CommitImagesAsync([stored], targetCategory, cancellationToken);
+        CommitImagesAsync([stored], targetCategory, fingerprint, cancellationToken);
 
     private async Task CommitImagesAsync(
         IReadOnlyList<StoredImage> storedImages,
         BoardCategory targetCategory,
+        CapturedContentFingerprint? fingerprint,
         CancellationToken cancellationToken)
     {
+        var suppressed = false;
         try
         {
             await _operationGate.RunAsync(async () =>
             {
+                if (_deduplicationGate is { } gate &&
+                    fingerprint is { } candidate &&
+                    storedImages.Count == 1 &&
+                    gate.IsRecentDuplicate(candidate))
+                {
+                    suppressed = true;
+                    return false;
+                }
+
                 var addedItemIds = new List<Guid>();
                 try
                 {
@@ -405,6 +435,10 @@ public sealed class ClipboardCaptureService
                     }
 
                     await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
+                    if (_deduplicationGate is { } recordingGate && fingerprint is { } accepted)
+                    {
+                        recordingGate.RecordAccepted(accepted);
+                    }
                 }
                 catch
                 {
@@ -427,6 +461,16 @@ public sealed class ClipboardCaptureService
             }
 
             throw;
+        }
+
+        if (suppressed)
+        {
+            foreach (var stored in storedImages)
+            {
+                _store.TryDeleteImage(stored.AbsolutePath);
+            }
+
+            _showStatus("与最近收集的内容相同，未重复收集。");
         }
     }
 }
