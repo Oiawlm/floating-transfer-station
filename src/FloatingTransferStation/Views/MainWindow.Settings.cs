@@ -73,13 +73,29 @@ public partial class MainWindow : Window, ISettingsHost
         settings.Show();
     }
 
-    /// <summary>立即应用偏好（主题/动效）并异步原子持久化；持久化失败经状态条提示。</summary>
+    /// <summary>立即应用偏好（主题/动效/全局快捷键）并异步原子持久化；持久化失败经状态条提示。</summary>
     public void ApplyPreferences(AppPreferences preferences)
     {
         _preferences = preferences;
         ApplyThemePreference(preferences.ThemeMode);
         ApplyAnimationsPreference(preferences.AnimationsEnabled);
+        TrySetGlobalHotkey(preferences.GlobalHotkeyEnabled);
         TrackPendingOperation(PersistPreferencesAsync(preferences));
+    }
+
+    /// <summary>
+    /// 设置窗口的全局快捷键开关：开启时先注册系统热键，成功才落偏好并持久化；
+    /// 关闭总是成功并立即注销。失败返回 false，由设置窗口提示并回显实际状态。
+    /// </summary>
+    public bool TryApplyGlobalHotkeyPreference(bool enabled)
+    {
+        if (!TrySetGlobalHotkey(enabled))
+        {
+            return false;
+        }
+
+        ApplyPreferences(_preferences with { GlobalHotkeyEnabled = enabled });
+        return true;
     }
 
     /// <summary>触发主窗既有 Closing 冲刷序列（复盘冲刷、看板与窗口设置保存），不得绕过。</summary>

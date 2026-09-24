@@ -206,6 +206,7 @@ public partial class MainWindow : Window
 
         _isClosing = true;
         IsEnabled = false;
+        _ = TrySetGlobalHotkey(false);
         var operationCancellation = _windowOperationCancellation;
         try
         {

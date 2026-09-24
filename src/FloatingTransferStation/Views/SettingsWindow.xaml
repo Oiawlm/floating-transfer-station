@@ -348,6 +348,31 @@
                    Text=""
                    Visibility="Collapsed" />
 
+        <TextBlock Text="全局快捷键" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+        <Grid Background="Transparent">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Grid.Column="0"
+                     Text="Ctrl + Alt + V 唤起面板"
+                     Style="{StaticResource RowCaptionStyle}" />
+          <CheckBox x:Name="GlobalHotkeyToggle"
+                    Grid.Column="1"
+                    Style="{StaticResource ToggleSwitchStyle}"
+                    AutomationProperties.Name="Ctrl + Alt + V 唤起面板"
+                    Checked="GlobalHotkeyToggle_Checked"
+                    Unchecked="GlobalHotkeyToggle_Unchecked" />
+        </Grid>
+        <TextBlock x:Name="GlobalHotkeyNoteText"
+                   Style="{StaticResource NoteCaptionStyle}"
+                   Text="开启后任何界面按组合键展开面板到默认接收分类；默认关闭，组合键被其他软件占用时开启会提示失败。" />
+        <TextBlock x:Name="GlobalHotkeyStatusText"
+                   Style="{StaticResource NoteCaptionStyle}"
+                   Foreground="{DynamicResource DangerBrush}"
+                   Text=""
+                   Visibility="Collapsed" />
+
         <TextBlock Text="数据目录" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
         <Grid Background="Transparent">
           <Grid.ColumnDefinitions>
