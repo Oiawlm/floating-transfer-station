@@ -82,6 +82,8 @@ public sealed partial class MainWindow
             _dailyReviews.StopWatching();
             RememberTop();
             await _mutations.SaveForShutdownAsync(() => _store.SaveSettingsAsync(_settings));
+            // 与 Windows 端一致:退出保存成功后丢弃可撤销删除并清理其保留的图片文件。
+            _mutations.DiscardUndoableDeletes();
             _canClose = true;
             Close();
         }
