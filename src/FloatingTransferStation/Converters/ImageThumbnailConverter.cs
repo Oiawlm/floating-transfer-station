@@ -27,6 +27,64 @@ public sealed class ImageThumbnailConverter : IValueConverter
 
         var decodeWidth = GetDecodeWidth(parameter);
 
+        return ConvertPath(path, decodeWidth);
+    }
+
+    /// <summary>
+    /// 只查缓存不解码：命中且文件未变化时返回已解码缩略图（调用方可同步显示，
+    /// 无 UI 线程解码开销）；未命中、文件缺失或已变化返回 false，由调用方决定
+    /// 是否走后台解码。缓存条目语义与 <see cref="Convert"/> 完全一致。
+    /// </summary>
+    public bool TryGetCachedThumbnail(string path, int decodeWidth, out BitmapSource? image)
+    {
+        image = null;
+        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            lock (_cacheLock)
+            {
+                var key = (Path: Path.GetFullPath(path), Width: Math.Clamp(decodeWidth, 1, MaxDecodeWidth));
+                var file = new FileInfo(key.Path);
+                _cache.TryGetValue(key, out var cached);
+                if (!file.Exists)
+                {
+                    if (cached is not null)
+                    {
+                        RemoveCachedThumbnail(cached);
+                    }
+
+                    return false;
+                }
+
+                if (cached is not null &&
+                    cached.Value.FileLength == file.Length &&
+                    cached.Value.LastWriteTimeUtc == file.LastWriteTimeUtc)
+                {
+                    _recency.Remove(cached);
+                    _recency.AddLast(cached);
+                    image = cached.Value.Image;
+                    return true;
+                }
+
+                return false;
+            }
+        }
+        catch (Exception exception) when (
+            exception is IOException or
+            NotSupportedException or
+            UnauthorizedAccessException or
+            ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private BitmapSource? ConvertPath(string path, int decodeWidth)
+    {
         try
         {
             lock (_cacheLock)

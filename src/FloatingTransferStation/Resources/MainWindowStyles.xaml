@@ -3,7 +3,8 @@
                     xmlns:converters="clr-namespace:FloatingTransferStation.Converters"
                     xmlns:design="clr-namespace:FloatingTransferStation.Design;assembly=FloatingTransferStation.Core"
                     xmlns:models="clr-namespace:FloatingTransferStation.Models;assembly=FloatingTransferStation.Core"
-                    xmlns:views="clr-namespace:FloatingTransferStation.Views">
+                    xmlns:views="clr-namespace:FloatingTransferStation.Views"
+                    xmlns:controls="clr-namespace:FloatingTransferStation.Controls">
   <!-- 颜色画刷与卡片阴影定义在 Resources/DesignTheme.Light.xaml 与 DesignTheme.Dark.xaml，
        由 DesignThemeManager 在运行时整体替换；本字典内一律以 DynamicResource 引用。 -->
   <FontFamily x:Key="InterfaceFontFamily">Segoe UI Variable, Segoe UI</FontFamily>
@@ -13,7 +14,6 @@
   <CornerRadius x:Key="HeaderActionCornerRadius">7</CornerRadius>
   <CornerRadius x:Key="PinButtonCornerRadius">6</CornerRadius>
   <CornerRadius x:Key="SelectedCountBadgeCornerRadius">7</CornerRadius>
-  <converters:ImageThumbnailConverter x:Key="ImageThumbnailConverter" />
   <converters:BooleanOrConverter x:Key="BooleanOrConverter" />
   <converters:NonEmptyTextConverter x:Key="NonEmptyTextConverter" />
 
@@ -631,8 +631,9 @@
           </Grid.ColumnDefinitions>
 
         <Grid Grid.Column="0" Background="Transparent">
-          <Image Height="120"
-                 Source="{Binding ImageAbsolutePath, Converter={StaticResource ImageThumbnailConverter}, ConverterParameter=512}"
+          <controls:AsyncThumbnailImage Height="120"
+                 SourcePath="{Binding ImageAbsolutePath}"
+                 DecodeWidth="512"
                  Stretch="Uniform">
             <Image.Style>
               <Style TargetType="Image">
@@ -645,7 +646,7 @@
                 </Style.Triggers>
               </Style>
             </Image.Style>
-          </Image>
+          </controls:AsyncThumbnailImage>
 
           <TextBlock Text="{Binding Text}"
                      FontFamily="{StaticResource InterfaceFontFamily}"
