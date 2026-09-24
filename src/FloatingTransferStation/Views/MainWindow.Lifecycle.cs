@@ -216,6 +216,8 @@ public partial class MainWindow : Window
             await DrainPendingOperationsAsync();
             _dailyReviews?.StopWatching();
             await _mutations.SaveForShutdownAsync(() => _store.SaveSettingsAsync(_settings));
+            // 关闭序列保存成功后,可撤销删除不再恢复,清理其保留的图片文件。
+            _mutations.DiscardUndoableDeletes();
             operationCancellation.Dispose();
             _allowClose = true;
             _ = Dispatcher.BeginInvoke(DispatcherPriority.Send, new Action(Close));

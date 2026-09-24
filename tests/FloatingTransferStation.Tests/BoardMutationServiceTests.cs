@@ -210,7 +210,7 @@ public sealed class BoardMutationServiceTests
     }
 
     [TestMethod]
-    public async Task DeleteMany_RemovesMixedItemsWithOneSaveAndCleansImages()
+    public async Task DeleteMany_RemovesMixedItemsWithOneSaveAndKeepsImagesForUndo()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -230,8 +230,14 @@ public sealed class BoardMutationServiceTests
             new[] { keep.Id },
             board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
         Assert.AreEqual(1, store.SaveCount);
-        Assert.AreEqual(1, store.DeleteCount);
+        Assert.AreEqual(1, service.PendingUndoDeleteCount);
+        Assert.IsTrue(File.Exists(imagePath), "删除入撤销栈期间图片文件必须保留,保证撤销后缩略图可用。");
+
+        service.DiscardUndoableDeletes();
+
         Assert.IsFalse(File.Exists(imagePath));
+        Assert.AreEqual(1, store.DeleteCount);
+        Assert.AreEqual(0, service.PendingUndoDeleteCount);
     }
 
     [TestMethod]
@@ -358,7 +364,7 @@ public sealed class BoardMutationServiceTests
     }
 
     [TestMethod]
-    public async Task Delete_SaveSuccessRemovesRecordAndImageWithoutConfirmation()
+    public async Task Delete_SaveSuccessRemovesRecordAndImageAfterUndoDiscard()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -373,6 +379,10 @@ public sealed class BoardMutationServiceTests
         Assert.IsTrue(success);
         Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
         Assert.AreEqual(1, store.SaveCount);
+        Assert.IsTrue(File.Exists(path), "撤销栈持有期间文件保留。");
+
+        service.DiscardUndoableDeletes();
+
         Assert.IsFalse(File.Exists(path));
         Assert.AreEqual(1, store.DeleteCount);
     }
@@ -413,7 +423,7 @@ public sealed class BoardMutationServiceTests
     }
 
     [TestMethod]
-    public async Task ClearCategory_SaveSuccessRemovesOnlyTargetAndDeletesImageCopies()
+    public async Task ClearCategory_SaveSuccessRemovesOnlyTargetAndKeepsImagesForUndo()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -438,9 +448,14 @@ public sealed class BoardMutationServiceTests
         Assert.AreEqual(1, store.SaveCount);
         Assert.IsFalse(store.LastPersistedSnapshot!.Items.Any(
             item => item.Category == BoardCategory.Prompt));
-        Assert.AreEqual(1, store.DeleteCount);
-        Assert.IsFalse(File.Exists(imagePath));
+        Assert.AreEqual(1, service.PendingUndoDeleteCount);
+        Assert.IsTrue(File.Exists(imagePath), "清空入撤销栈期间图片文件保留。");
         Assert.IsEmpty(messages);
+
+        service.DiscardUndoableDeletes();
+
+        Assert.IsFalse(File.Exists(imagePath));
+        Assert.AreEqual(1, store.DeleteCount);
     }
 
     [TestMethod]
@@ -478,7 +493,7 @@ public sealed class BoardMutationServiceTests
     }
 
     [TestMethod]
-    public async Task ClearCategory_ImageCleanupFailureReportsOnceWithoutRestoringRecords()
+    public async Task ClearCategory_ImageCleanupFailureReportsOnceAtDiscardWithoutRestoringRecords()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -492,9 +507,14 @@ public sealed class BoardMutationServiceTests
 
         Assert.IsTrue(success);
         Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
+        Assert.AreEqual(0, store.DeleteCount, "清空即时不再触碰文件,清理延迟到丢弃撤销栈。");
+        Assert.IsEmpty(messages);
+
+        service.DiscardUndoableDeletes();
+
         Assert.AreEqual(2, store.DeleteCount);
         CollectionAssert.AreEqual(
-            new[] { "分类已清空，但部分图片副本暂时无法删除。" },
+            new[] { "部分已删除的图片副本暂时无法清理。" },
             messages);
     }
 

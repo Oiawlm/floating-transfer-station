@@ -20,10 +20,13 @@ public enum BoardPinResult
 
 public sealed class BoardMutationService
 {
+    private const int MaxUndoableDeletes = 20;
+
     private readonly BoardService _board;
     private readonly IBoardStore _store;
     private readonly Action<string> _showStatus;
     private readonly BoardOperationGate _operationGate;
+    private readonly Queue<RemovedBoardItems> _undoableDeletes = new();
 
     public BoardMutationService(
         BoardService board,
@@ -36,6 +39,9 @@ public sealed class BoardMutationService
         _showStatus = showStatus;
         _operationGate = operationGate ?? new BoardOperationGate();
     }
+
+    /// <summary>当前可撤销的删除批次数(会话内,用于界面提示与测试)。</summary>
+    public int PendingUndoDeleteCount => _undoableDeletes.Count;
 
     public Task<BoardBatchMoveResult> MoveManyAsync(
         IReadOnlyCollection<Guid> itemIds,
@@ -168,20 +174,81 @@ public sealed class BoardMutationService
                 throw;
             }
 
-            var imageCleanupFailed = false;
-            foreach (var item in removed.RemovedItems.Where(
-                         item => item.Kind == BoardItemKind.Image))
-            {
-                imageCleanupFailed |= !_store.TryDeleteImage(item.ImageAbsolutePath);
-            }
-
-            if (imageCleanupFailed)
-            {
-                _showStatus("内容已删除，但部分图片副本暂时无法删除。");
-            }
-
+            EnqueueUndoableDelete(removed);
             return true;
         }, cancellationToken);
+
+    /// <summary>
+    /// 撤销最近一次成功删除(单条、批量或清空):按锚点插回原分类(不回退删除后的
+    /// 其他改动)并持久化;保存失败时回到删除状态。空栈返回 false 并提示。
+    /// </summary>
+    public Task<bool> UndoLastDeleteAsync(CancellationToken cancellationToken = default) =>
+        _operationGate.RunAsync(async () =>
+        {
+            if (_undoableDeletes.Count == 0)
+            {
+                _showStatus("没有可撤销的删除。");
+                return false;
+            }
+
+            var removed = _undoableDeletes.Dequeue();
+            try
+            {
+                _board.RestoreInsert(removed);
+                await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
+                _showStatus("已恢复最近删除的内容。");
+                return true;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _ = _board.RemoveMany(removed.RemovedItems.Select(item => item.Id).ToArray());
+                _showStatus("撤销未保存，内容保持删除状态。");
+                return false;
+            }
+            catch
+            {
+                _ = _board.RemoveMany(removed.RemovedItems.Select(item => item.Id).ToArray());
+                throw;
+            }
+        }, cancellationToken);
+
+    /// <summary>
+    /// 退出时丢弃全部可撤销删除并清理对应图片文件;调用后删除不再可恢复。
+    /// </summary>
+    public void DiscardUndoableDeletes()
+    {
+        while (_undoableDeletes.Count > 0)
+        {
+            DeleteImagesBestEffort(_undoableDeletes.Dequeue());
+        }
+    }
+
+    /// <summary>
+    /// 删除成功后进入会话级撤销栈:图片文件保留到条目被驱逐、显式丢弃或进程退出,
+    /// 保证撤销时缩略图可用。驱逐最旧批次时同步清理其图片文件。
+    /// </summary>
+    private void EnqueueUndoableDelete(RemovedBoardItems removed)
+    {
+        _undoableDeletes.Enqueue(removed);
+        while (_undoableDeletes.Count > MaxUndoableDeletes)
+        {
+            DeleteImagesBestEffort(_undoableDeletes.Dequeue());
+        }
+    }
+
+    private void DeleteImagesBestEffort(RemovedBoardItems removed)
+    {
+        var imageCleanupFailed = false;
+        foreach (var item in removed.RemovedItems.Where(item => item.Kind == BoardItemKind.Image))
+        {
+            imageCleanupFailed |= !_store.TryDeleteImage(item.ImageAbsolutePath);
+        }
+
+        if (imageCleanupFailed)
+        {
+            _showStatus("部分已删除的图片副本暂时无法清理。");
+        }
+    }
 
     public async Task<bool> ClearCategoryAsync(
         BoardCategory category,
@@ -211,17 +278,13 @@ public sealed class BoardMutationService
                 throw;
             }
 
-            var imageCleanupFailed = false;
-            foreach (var item in removed.Items.Where(item => item.Kind == BoardItemKind.Image))
-            {
-                imageCleanupFailed |= !_store.TryDeleteImage(item.ImageAbsolutePath);
-            }
-
-            if (imageCleanupFailed)
-            {
-                _showStatus("分类已清空，但部分图片副本暂时无法删除。");
-            }
-
+            // 清空等同于批量移入撤销栈:可整体撤销,图片文件按栈生命周期清理。
+            EnqueueUndoableDelete(new RemovedBoardItems(
+                new Dictionary<BoardCategory, IReadOnlyList<BoardItem>>
+                {
+                    [removed.Category] = removed.Items
+                },
+                removed.Items.ToArray()));
             return true;
         }, cancellationToken);
     }
