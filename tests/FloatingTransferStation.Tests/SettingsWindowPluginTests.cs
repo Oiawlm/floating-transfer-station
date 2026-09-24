@@ -260,15 +260,33 @@ public sealed class SettingsWindowPluginTests
             Assert.AreEqual("好的", catalog.TextCleaner.Apply("ok"));
             SaveVisualEvidence(settings, "plugin-section-enabled.png");
 
+            // 应用立即生效、异步持久化:重载断言前必须等到状态文件可重读为启用,
+            // 否则慢盘上会读到尚未落盘的旧状态(间歇性失败两次,据此修复)。
             var paths = AppPaths.FromDataDirectory(directory.Root);
-            var reloaded = new PluginCatalog(paths, null, new AtomicTextWriter());
-            reloaded.LoadAsync().GetAwaiter().GetResult();
-            Assert.IsTrue(reloaded.Entries.Single(entry => entry.Id == "demo-tidy").Enabled);
+            PluginCatalog? persisted = null;
+            PumpDispatcherUntil(
+                settings.Dispatcher,
+                () =>
+                {
+                    persisted = new PluginCatalog(paths, null, new AtomicTextWriter());
+                    persisted.LoadAsync().GetAwaiter().GetResult();
+                    return persisted.Entries.Single(entry => entry.Id == "demo-tidy").Enabled;
+                });
+            Assert.IsNotNull(persisted);
 
             toggle.IsChecked = false;
             PumpDispatcherUntil(
                 settings.Dispatcher,
                 () => catalog.TextCleaner.RuleCount == 0);
+            // 等待禁用状态同样落盘:避免 TestDirectory 清理与原子写临时文件并发。
+            PumpDispatcherUntil(
+                settings.Dispatcher,
+                () =>
+                {
+                    var probe = new PluginCatalog(paths, null, new AtomicTextWriter());
+                    probe.LoadAsync().GetAwaiter().GetResult();
+                    return !probe.Entries.Single(entry => entry.Id == "demo-tidy").Enabled;
+                });
         }
         finally
         {
