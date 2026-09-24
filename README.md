@@ -10,12 +10,12 @@
 
 ## 下载与安装
 
-在 [1.10.2 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.10.2) 选择你的平台：
+在 [1.11.0 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.11.0) 选择你的平台：
 
 | 平台 | 下载 | 状态 |
 |---|---|---|
-| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.10.2/FloatingTransferStation-Setup-1.10.2.exe) | 正式版 |
-| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.10.2/FloatingTransferStation-1.10.2-osx-arm64.zip) | 测试版，未 Apple 公证 |
+| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.11.0/FloatingTransferStation-Setup-1.11.0.exe) | 正式版 |
+| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.11.0/FloatingTransferStation-1.11.0-osx-arm64.zip) | 测试版，未 Apple 公证 |
 
 仍在使用 Intel Mac 的读者可以从 [1.6.0 历史发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.6.0) 获取最后的 Intel 包；该版本保留不撤回，但不再获得更新。
 
@@ -31,7 +31,7 @@
 
 ### Mac 安装
 
-解压 `FloatingTransferStation-1.10.2-osx-arm64.zip`，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
+解压 `FloatingTransferStation-1.11.0-osx-arm64.zip`，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
 
 Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自动生成的源码包；Mac 应用包的文件名包含 `osx-arm64`。
 
@@ -63,6 +63,7 @@ Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自
 - `Shift + 单击`：从最近一次用选择框或 `Ctrl + 单击` 选中的卡片开始，选择到当前卡片的连续区间；`Ctrl + Shift + 单击` 将区间追加到现有选择。连续调整终点会保持起点；没有有效起点时只选择当前卡片。
 - `Ctrl + A`：选择当前分类全部内容；正在编辑分类名称时仍然只会全选文字。
 - `Esc`：取消当前分类的全部选择；正在编辑分类名称时仍然取消本次改名。
+- `Ctrl + Z`：撤销最近一次删除（单条、批量或清空），恢复到删除前的位置；本次运行内最多保留 20 批，正在编辑文字时不触发。
 - 点击卡片图钉：置顶或取消置顶。
 - 多选后点击顶部图钉或按 `Ctrl + P`：批量置顶或取消置顶；只要所选内容中有未置顶项就会统一置顶，全都已置顶时则统一取消置顶；`Ctrl + P` 只在面板展开且不在编辑分类名称时生效。
 - 拖动卡片：分类内排序、移动到其他分类，或拖到外部软件。

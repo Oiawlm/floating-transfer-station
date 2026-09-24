@@ -368,6 +368,74 @@ public sealed class BoardService
         }
     }
 
+    /// <summary>
+    /// 把删除的条目插回当前面板:优先插到删除前同区(置顶/普通)的前驱邻居之后,
+    /// 前驱缺失或已变区时回退到该区顶部;同一批删除保持原始相对顺序。与
+    /// <see cref="Restore(RemovedBoardItems)"/> 的整类替换不同,本方法不回退
+    /// 删除之后发生的其他改动(新增、移动、重新置顶),适合延迟恢复(撤销)。
+    /// </summary>
+    public void RestoreInsert(RemovedBoardItems removed)
+    {
+        ArgumentNullException.ThrowIfNull(removed);
+        var removedIds = removed.RemovedItems.Select(item => item.Id).ToHashSet();
+        foreach (var (category, originalItems) in removed.OriginalCategories)
+        {
+            var collection = _items[category];
+            BoardItem? chainedAnchor = null;
+            foreach (var item in originalItems.Where(item => removedIds.Contains(item.Id)))
+            {
+                // 链式锚点只在同区(置顶/普通)内生效,避免普通内容跟在置顶链后落入置顶区。
+                var anchor = FindSurvivingAnchor(originalItems, item, removedIds, collection)
+                    ?? (chainedAnchor is { } chain && chain.IsPinned == item.IsPinned ? chain : null);
+                var index = anchor is null
+                    ? (item.IsPinned ? 0 : FirstNormalIndex(collection))
+                    : IndexOf(collection, anchor.Id) + 1;
+                collection.Insert(Math.Clamp(index, 0, collection.Count), item);
+                chainedAnchor = item;
+            }
+
+            Reindex(category);
+        }
+    }
+
+    private BoardItem? FindSurvivingAnchor(
+        IReadOnlyList<BoardItem> originalItems,
+        BoardItem removedItem,
+        HashSet<Guid> removedIds,
+        ObservableCollection<BoardItem> current)
+    {
+        BoardItem? anchor = null;
+        foreach (var candidate in originalItems)
+        {
+            if (candidate.Id == removedItem.Id)
+            {
+                break;
+            }
+
+            if (!removedIds.Contains(candidate.Id) &&
+                candidate.IsPinned == removedItem.IsPinned &&
+                IndexOf(current, candidate.Id) >= 0)
+            {
+                anchor = candidate;
+            }
+        }
+
+        return anchor;
+    }
+
+    private static int FirstNormalIndex(ObservableCollection<BoardItem> collection)
+    {
+        for (var index = 0; index < collection.Count; index++)
+        {
+            if (!collection[index].IsPinned)
+            {
+                return index;
+            }
+        }
+
+        return collection.Count;
+    }
+
     public RemovedBoardCategory RemoveCategory(BoardCategory category)
     {
         if (!BoardCategoryCatalog.IsDefined(category))

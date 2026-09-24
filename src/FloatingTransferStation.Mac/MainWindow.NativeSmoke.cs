@@ -130,6 +130,8 @@ public sealed partial class MainWindow
                 {
                     Require(await _mutations.DeleteManyAsync(addedItems.Select(item => item.Id).ToArray()),
                         "Native clipboard smoke could not remove its synthetic board items.");
+                    // 1.11.0 起删除进入会话级撤销栈、图片文件延迟清理;冒烟按退出语义立即丢弃。
+                    _mutations.DiscardUndoableDeletes();
                     Require(addedItems.Where(item => item.Kind == BoardItemKind.Image)
                         .All(item => !File.Exists(item.ImageAbsolutePath)),
                         "Native clipboard smoke left a generated image copy behind.");

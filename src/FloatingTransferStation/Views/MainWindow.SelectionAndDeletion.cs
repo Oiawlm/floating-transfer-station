@@ -306,6 +306,12 @@ public partial class MainWindow : Window
             clearWhenNoSelection: true);
     }
 
+    /// <summary>
+    /// 面板持有键盘焦点时 Ctrl+Z 的撤销入口(内部方法供 STA 测试直达);
+    /// 状态提示由 BoardMutationService 统一负责。
+    /// </summary>
+    internal Task<bool> UndoLastDeleteFromPanelAsync() => _mutations.UndoLastDeleteAsync();
+
     private async Task DeleteContentAsync(
         Guid[] selectedBefore,
         BoardCategory targetCategory,
@@ -422,6 +428,17 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
+        }
+
+        if (e.Key == Key.Z &&
+            e.KeyboardDevice.Modifiers == ModifierKeys.Control &&
+            !_isClosing &&
+            Keyboard.FocusedElement is not TextBoxBase &&
+            _viewModel.IsPanelExpanded)
+        {
+            e.Handled = true;
+            await UndoLastDeleteFromPanelAsync();
+            return;
         }
 
         if (e.Key == Key.Escape &&
