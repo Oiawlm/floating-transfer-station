@@ -143,6 +143,7 @@ public partial class MainWindow : Window
         _externalDropImportService = externalDropImportService;
         _rightEdgeBleedProvider = rightEdgeBleedProvider;
         _rightEdgeBleed = rightEdgeBleedProvider?.Invoke(this) ?? 0d;
+        ApplyRightEdgeBleedInset();
         _dailyReviews = dailyReviewStore ?? store as IDailyReviewStore;
         var work = CurrentWorkArea();
         _settings = settings.Normalize(work.Width, work.Height);

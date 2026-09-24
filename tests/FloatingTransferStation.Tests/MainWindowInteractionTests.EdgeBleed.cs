@@ -73,7 +73,15 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsNotNull(rail);
             Assert.AreEqual(WindowSettings.TabWidth, rail.ActualWidth, 0.5);
             var railLeftInWindow = rail.TranslatePoint(new Point(), window).X;
-            Assert.AreEqual(window.Width - WindowSettings.TabWidth, railLeftInWindow, 0.5);
+            Assert.AreEqual(
+                window.Width - WindowSettings.EdgeBleed - WindowSettings.TabWidth,
+                railLeftInWindow,
+                0.5);
+            Assert.AreEqual(
+                work.Right,
+                window.Left + railLeftInWindow + WindowSettings.TabWidth,
+                0.5,
+                "The rail must end at the work-area right edge; only the bleed region stays offscreen.");
             Assert.IsTrue(
                 window.Left + railLeftInWindow >= work.Left - 0.5,
                 "The full 58px rail must stay visible inside the work area.");
@@ -209,6 +217,123 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(visibleWidth + WindowSettings.EdgeBleed, window.Width, 0.5);
             Assert.AreEqual(work.Right, window.Left + window.Width - WindowSettings.EdgeBleed, 0.5);
             Assert.AreEqual(expected.WindowHeight, window.Height, 0.5);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CollapsedContent_EndsAtTheWorkAreaRightEdge_WhenBleedIsActive()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindowWithRightEdgeBleed(
+            directory,
+            _ => WindowSettings.EdgeBleed);
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            var work = SystemParameters.WorkArea;
+
+            var handle = window.FindName("CollapsedCategoryHandle") as ContentControl;
+            Assert.IsNotNull(handle);
+            Assert.AreEqual(WindowSettings.TabWidth, handle.ActualWidth, 0.5);
+            var handleLeftInWindow = handle.TranslatePoint(new Point(), window).X;
+            var handleRightInWindow =
+                handle.TranslatePoint(new Point(handle.ActualWidth, 0), window).X;
+            Assert.AreEqual(
+                work.Right,
+                window.Left + handleRightInWindow,
+                0.5,
+                "The collapsed handle must end at the work-area right edge; the bleed region stays offscreen.");
+            Assert.AreEqual(
+                window.Width - WindowSettings.EdgeBleed,
+                handleRightInWindow,
+                0.5,
+                "The content layer must be inset by the bleed so the visible window part carries the layout.");
+            Assert.IsTrue(
+                window.Left + handleLeftInWindow >= work.Left - 0.5,
+                "The full 58px handle must stay visible inside the work area.");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void ExpandedContent_EndsAtTheWorkAreaRightEdgeAndKeepsPanelWidth_WhenBleedIsActive()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindowWithRightEdgeBleed(
+            directory,
+            _ => WindowSettings.EdgeBleed);
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var work = SystemParameters.WorkArea;
+
+            var rail = (Border)window.FindName("CategoryRail");
+            Assert.IsNotNull(rail);
+            var railRightInWindow = rail.TranslatePoint(new Point(rail.ActualWidth, 0), window).X;
+            Assert.AreEqual(
+                work.Right,
+                window.Left + railRightInWindow,
+                0.5,
+                "The expanded rail must end at the work-area right edge; the bleed region stays offscreen.");
+
+            var panel = window.FindName("PanelContentHost") as Grid;
+            Assert.IsNotNull(panel);
+            Assert.AreEqual(
+                WindowSettings.Default.PanelWidth,
+                panel.ActualWidth,
+                0.5,
+                "The bleed must be carried by the shell, not by widening the panel column.");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void ContentLayout_WithoutBleedMatchesTheWindowAndWorkAreaEdges()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindowWithRightEdgeBleed(directory, _ => 0d);
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            var work = SystemParameters.WorkArea;
+
+            var handle = window.FindName("CollapsedCategoryHandle") as ContentControl;
+            Assert.IsNotNull(handle);
+            var handleRightInWindow =
+                handle.TranslatePoint(new Point(handle.ActualWidth, 0), window).X;
+            Assert.AreEqual(window.Width, handleRightInWindow, 0.5);
+            Assert.AreEqual(work.Right, window.Left + handleRightInWindow, 0.5);
+
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            var rail = (Border)window.FindName("CategoryRail");
+            Assert.IsNotNull(rail);
+            var railRightInWindow = rail.TranslatePoint(new Point(rail.ActualWidth, 0), window).X;
+            Assert.AreEqual(window.Width, railRightInWindow, 0.5);
+            Assert.AreEqual(work.Right, window.Left + railRightInWindow, 0.5);
+
+            var panel = window.FindName("PanelContentHost") as Grid;
+            Assert.IsNotNull(panel);
+            Assert.AreEqual(WindowSettings.Default.PanelWidth, panel.ActualWidth, 0.5);
         }
         finally
         {
