@@ -142,6 +142,7 @@
                     Cursor="Arrow"
                     MouseEnter="HeaderActionRegion_MouseEnter"
                     MouseLeave="HeaderActionRegion_MouseLeave">
+              <Grid>
               <StackPanel x:Name="HeaderActions"
                           Orientation="Horizontal"
                           HorizontalAlignment="Right"
@@ -156,6 +157,26 @@
                   <!-- 暂停符直译「暂停自动收起」，与条目/批量置顶的图钉形图标区分；
                        描边图标显式 14.5×14.5 + 1.5 描边（光学足印约 16 DIP），与恢复默认按钮同一规范。 -->
                   <Path Data="M5,2.75 L5,11.75 M9.5,2.75 L9.5,11.75"
+                        Width="14.5"
+                        Height="14.5"
+                        Stretch="Uniform"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                        StrokeThickness="1.5"
+                        StrokeStartLineCap="Round"
+                        StrokeEndLineCap="Round"
+                        StrokeLineJoin="Round" />
+                </Button>
+
+                <Button x:Name="SearchButton"
+                        Style="{StaticResource HeaderActionButtonStyle}"
+                        ToolTip="搜索当前分类"
+                        AutomationProperties.Name="搜索当前分类"
+                        AutomationProperties.AccessKey="Ctrl+F"
+                        Click="SearchButton_Click">
+                  <!-- 放大镜描边图标:与暂停符/恢复按钮同一 14.5×14.5 + 1.5 描边规范。 -->
+                  <Path Data="M10.25,3.25 C6.38,3.25 3.25,6.38 3.25,10.25 C3.25,14.12 6.38,17.25 10.25,17.25 C14.12,17.25 17.25,14.12 17.25,10.25 C17.25,6.38 14.12,3.25 10.25,3.25 Z M15,15 L20.75,20.75"
                         Width="14.5"
                         Height="14.5"
                         Stretch="Uniform"
@@ -267,6 +288,97 @@
                   </Grid>
                 </Button>
               </StackPanel>
+
+              <!-- 搜索态头部：与 HeaderActions 同区互斥显示（代码后置切换可见性）。
+                   输入框 + 类型 chip（都不选或都选 = 全部）+ 清空 + 关闭。 -->
+              <Grid x:Name="SearchBar"
+                    Visibility="Collapsed"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Center"
+                    Margin="6,0,8,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" MinWidth="110" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid Grid.Column="0" Margin="0,0,6,0">
+                  <TextBox x:Name="SearchInput"
+                           Height="24"
+                           VerticalContentAlignment="Center"
+                           Padding="6,0"
+                           FontSize="12"
+                           Background="{DynamicResource CardBrush}"
+                           Foreground="{DynamicResource PrimaryTextBrush}"
+                           BorderBrush="{DynamicResource SecondaryTextBrush}"
+                           BorderThickness="1"
+                           TextChanged="SearchInput_TextChanged"
+                           PreviewKeyDown="SearchInput_PreviewKeyDown" />
+                  <TextBlock x:Name="SearchInputHint"
+                             Text="搜索当前分类"
+                             FontSize="12"
+                             Foreground="{DynamicResource SecondaryTextBrush}"
+                             Margin="8,0,0,0"
+                             VerticalAlignment="Center"
+                             IsHitTestVisible="False"
+                             Visibility="Collapsed" />
+                </Grid>
+                <ToggleButton x:Name="SearchImageChip"
+                              Grid.Column="1"
+                              Content="图片"
+                              FontSize="11"
+                              Padding="6,1"
+                              Margin="0,0,4,0"
+                              Background="{DynamicResource CardBrush}"
+                              Foreground="{DynamicResource PrimaryTextBrush}"
+                              Click="SearchChip_Click" />
+                <ToggleButton x:Name="SearchTextChip"
+                              Grid.Column="2"
+                              Content="文本"
+                              FontSize="11"
+                              Padding="6,1"
+                              Margin="0,0,6,0"
+                              Background="{DynamicResource CardBrush}"
+                              Foreground="{DynamicResource PrimaryTextBrush}"
+                              Click="SearchChip_Click" />
+                <Button x:Name="SearchClearButton"
+                        Grid.Column="3"
+                        Style="{StaticResource HeaderActionButtonStyle}"
+                        ToolTip="清空条件"
+                        AutomationProperties.Name="清空条件"
+                        Margin="0,0,2,0"
+                        Click="SearchClearButton_Click">
+                  <Path Data="M4,4 L12,12 M12,4 L4,12"
+                        Width="9.5"
+                        Height="9.5"
+                        Stretch="Uniform"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                        StrokeThickness="1.5"
+                        StrokeStartLineCap="Round"
+                        StrokeEndLineCap="Round" />
+                </Button>
+                <Button x:Name="SearchCloseButton"
+                        Grid.Column="4"
+                        Style="{StaticResource HeaderActionButtonStyle}"
+                        ToolTip="退出搜索"
+                        AutomationProperties.Name="退出搜索"
+                        Click="SearchCloseButton_Click">
+                  <Path Data="M5,5 L15,15 M15,5 L5,15"
+                        Width="12"
+                        Height="12"
+                        Stretch="Uniform"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                        StrokeThickness="1.5"
+                        StrokeStartLineCap="Round"
+                        StrokeEndLineCap="Round" />
+                </Button>
+              </Grid>
+              </Grid>
             </Border>
           </Grid>
         </Border>
@@ -298,6 +410,32 @@
             </ItemsPanelTemplate>
           </ListBox.ItemsPanel>
         </ListBox>
+
+        <!-- 搜索空态：无匹配时居中提示 + 一键清空（代码后置切换可见性）。 -->
+        <Border x:Name="SearchEmptyHint"
+                Grid.Row="1"
+                Visibility="Collapsed"
+                Background="Transparent"
+                IsHitTestVisible="True">
+          <StackPanel Orientation="Vertical"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center">
+            <TextBlock Text="无匹配结果"
+                       FontSize="13"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,8" />
+            <Button x:Name="SearchClearFilterButton"
+                    Content="清空筛选"
+                    FontSize="12"
+                    Padding="10,3"
+                    HorizontalAlignment="Center"
+                    Background="{DynamicResource CardBrush}"
+                    Foreground="{DynamicResource PrimaryTextBrush}"
+                    BorderBrush="{DynamicResource AccentBrush}"
+                    Click="SearchClearFilterButton_Click" />
+          </StackPanel>
+        </Border>
 
         <Border x:Name="ReviewContentHost"
                 Grid.Row="1"

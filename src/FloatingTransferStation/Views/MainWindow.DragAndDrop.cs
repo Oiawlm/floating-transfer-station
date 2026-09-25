@@ -76,7 +76,9 @@ public partial class MainWindow : Window
 
     private void BoardList_PreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed || _dragItem is null)
+        // 搜索过滤期间禁用拖拽：内部排序的落点按可见(已过滤)视图计算会得到错误的源索引，
+        // 拖出语义也随视图收窄产生歧义（设计草案切片 1 明确禁用）。
+        if (_viewModel.IsSearchActive || e.LeftButton != MouseButtonState.Pressed || _dragItem is null)
         {
             return;
         }
@@ -247,8 +249,9 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 搜索态进行中不启动收起（与 Root_MouseLeave 的保持语义一致）。
         _panelState.LeaveSurface();
-        if (_panelState.IsExpanded)
+        if (_panelState.IsExpanded && !_viewModel.IsSearchActive)
         {
             _collapseTimer.Start();
         }
