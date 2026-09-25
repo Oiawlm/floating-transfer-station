@@ -511,30 +511,60 @@ public partial class MainWindow : Window
 
     private (int InsertionIndex, double IndicatorY) GetBoardDropLocation(
         DragEventArgs e,
-        CategoryViewModel panel)
+        CategoryViewModel panel,
+        IReadOnlyCollection<Guid> dragItemIds)
     {
-        var targetContainer = FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
-        if (targetContainer?.DataContext is BoardItem target)
+        var spans = BuildRealizedItemSpans(panel);
+        var slot = InsertionSlotResolver.Resolve(spans, e.GetPosition(BoardList).Y);
+        var pinnedCount = panel.Items.TakeWhile(item => item.IsPinned).Count();
+        var dragBatch = panel.Items
+            .Where(item => dragItemIds.Contains(item.Id))
+            .ToArray();
+        var pinStates = dragBatch.Select(item => item.IsPinned).Distinct().ToArray();
+        if (pinStates.Length != 1)
         {
-            var targetIndex = panel.Items.IndexOf(target);
-            if (targetIndex >= 0)
-            {
-                var pointerY = e.GetPosition(targetContainer).Y;
-                var insertionIndex = DropInsertionCalculator.ForTarget(
-                    targetIndex,
-                    pointerY,
-                    targetContainer.ActualHeight);
-                var edgeY = insertionIndex == targetIndex
-                    ? 0d
-                    : targetContainer.ActualHeight;
-                var listY = targetContainer.TranslatePoint(new Point(0, edgeY), BoardList).Y;
-                return (insertionIndex, ClampIndicatorY(listY));
-            }
+            // 混合置顶批量（或负载与本面板脱节）不参与钳制，由 CanMoveMany 决定隐藏。
+            return (slot.InsertionIndex, ClampIndicatorY(slot.IndicatorEdgeY));
         }
 
-        return (
-            DropInsertionCalculator.ForEmptySpace(panel.Items.Count),
-            ClampIndicatorY(GetVisibleListEndY()));
+        var insertionIndex = InsertionSlotResolver.ClampInsertionIndex(
+            slot.InsertionIndex,
+            pinnedCount,
+            pinStates[0]);
+        var indicatorEdgeY = InsertionSlotResolver.IndicatorEdgeY(spans, insertionIndex);
+        return (insertionIndex, ClampIndicatorY(indicatorEdgeY));
+    }
+
+    /// <summary>
+    /// 枚举当前已实现的列表条目在 BoardList 坐标系的边缘矩形。每次拖动事件重新
+    /// 计算（DragOver 为 Input 优先级，滚动后布局可能陈旧；回收容器身份会变），
+    /// 条目索引取 Items 的真实索引，不假设首个/末个已实现条目对应 0/总数。
+    /// </summary>
+    private List<InsertionItemSpan> BuildRealizedItemSpans(CategoryViewModel panel)
+    {
+        var spans = new List<InsertionItemSpan>();
+        if (FindDescendant<VirtualizingStackPanel>(BoardList) is not { } itemsHost)
+        {
+            return spans;
+        }
+
+        for (var index = 0; index < itemsHost.Children.Count; index++)
+        {
+            if (itemsHost.Children[index] is not ListBoxItem container ||
+                container.DataContext is not BoardItem item ||
+                !container.IsVisible)
+            {
+                continue;
+            }
+
+            var topEdge = container.TranslatePoint(new Point(), BoardList).Y;
+            spans.Add(new InsertionItemSpan(
+                panel.Items.IndexOf(item),
+                topEdge,
+                topEdge + container.ActualHeight));
+        }
+
+        return spans;
     }
 
 
