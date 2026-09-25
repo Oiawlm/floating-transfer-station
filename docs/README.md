@@ -23,6 +23,7 @@
 | 内容搜索与筛选（草案） | [设计草案](superpowers/specs/2026-09-25-content-search-design.md) | 未排期，在候选池 | 未实施 |
 | 撤销与回收站（草案） | [设计草案](superpowers/specs/2026-09-25-undo-recycle-bin-design.md) | 切片 1 已随 1.11.0 落地；回收站未排期 | 1.11.0（部分） |
 | 键盘直达（草案） | [设计草案](superpowers/specs/2026-09-25-keyboard-direct-access-design.md) | 未排期，在候选池 | 未实施 |
+| 插入指示条闪烁 + 卡片文字清晰度 | [设计](superpowers/specs/2026-09-25-indicator-flicker-text-clarity-design.md) | [计划](superpowers/plans/2026-09-25-indicator-flicker-text-clarity.md) | 1.11.3 |
 
 批量置顶早期设计中的“恢复最初选择”，后来受到 Esc 设计中“用户已取消选择则不恢复”的修订；隐藏状态下 Ctrl+P 的约束由 1.4.1 守卫设计补充。理解当前行为时需要连同后续修订一起阅读。
 
