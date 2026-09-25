@@ -313,27 +313,33 @@ public partial class MainWindow : Window
             handled = true;
         }
 
-        if (!_isClosing &&
-            message == NativeMethods.WmSettingChange &&
-            System.Runtime.InteropServices.Marshal.PtrToStringUni(lParam) is { Length: > 0 } section &&
-            section.Contains("ImmersiveColorSet", StringComparison.Ordinal))
+        if (!_isClosing && message == NativeMethods.WmSettingChange)
         {
-            var detected = DesignThemeManager.DetectSystemTheme();
-            Dispatcher.BeginInvoke(() =>
-            {
-                // 用户强制浅色/深色时不再跟随系统变化；跟随系统模式（含预览覆盖）保持原行为。
-                if (_preferences.ThemeMode != ThemePreference.FollowSystem)
-                {
-                    return;
-                }
+            // 任务栏停靠侧等改变工作区的系统设置只广播 WM_SETTINGCHANGE（不伴随
+            // WM_DISPLAYCHANGE），右缘裁切判定会停在旧值；任何系统参数变化都重估。
+            Dispatcher.BeginInvoke(RefreshEdgeBleed);
 
-                _activeDesignTheme = detected;
-                DesignThemeManager.Apply(this, detected);
-                DwmWindowEffects.UpdateImmersiveDarkMode(
-                    _windowSource?.Handle ?? 0,
-                    detected == DesignTheme.Dark);
-                _settingsWindow?.ApplyTheme(detected);
-            });
+            if (System.Runtime.InteropServices.Marshal.PtrToStringUni(lParam)
+                    is { Length: > 0 } section &&
+                section.Contains("ImmersiveColorSet", StringComparison.Ordinal))
+            {
+                var detected = DesignThemeManager.DetectSystemTheme();
+                Dispatcher.BeginInvoke(() =>
+                {
+                    // 用户强制浅色/深色时不再跟随系统变化；跟随系统模式（含预览覆盖）保持原行为。
+                    if (_preferences.ThemeMode != ThemePreference.FollowSystem)
+                    {
+                        return;
+                    }
+
+                    _activeDesignTheme = detected;
+                    DesignThemeManager.Apply(this, detected);
+                    DwmWindowEffects.UpdateImmersiveDarkMode(
+                        _windowSource?.Handle ?? 0,
+                        detected == DesignTheme.Dark);
+                    _settingsWindow?.ApplyTheme(detected);
+                });
+            }
         }
 
         if (!_isClosing && message == NativeMethods.WmDisplayChange)

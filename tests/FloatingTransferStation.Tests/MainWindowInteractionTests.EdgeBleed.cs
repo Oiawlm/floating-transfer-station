@@ -340,4 +340,49 @@ public sealed partial class MainWindowInteractionTests
             CloseWindow(window);
         }
     }
+
+    [STATestMethod]
+    public void SettingChange_WithAnySection_RecalculatesRightEdgeBleed()
+    {
+        using var directory = new TestDirectory();
+        // 提供者第一次返回 0(不裁切),之后返回 8:模拟任务栏改道后工作区变化。
+        var reads = 0;
+        var window = CreateWindowWithRightEdgeBleed(
+            directory,
+            _ =>
+            {
+                reads++;
+                return reads <= 2 ? 0d : 8d;
+            });
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var widthBefore = window.Width;
+
+            var lParam = System.Runtime.InteropServices.Marshal.StringToHGlobalUni(string.Empty);
+            try
+            {
+                InvokePrivate(window, "WndProc", nint.Zero, 0x001A, nint.Zero, lParam, false);
+            }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.FreeHGlobal(lParam);
+            }
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            CompleteLayout(window);
+
+            Assert.AreEqual(
+                widthBefore + 8d,
+                window.Width,
+                0.5,
+                "WM_SETTINGCHANGE(工作区变化不伴随显示变更广播)必须触发右缘裁切重估。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
 }
