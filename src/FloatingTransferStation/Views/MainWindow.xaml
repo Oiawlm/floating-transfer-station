@@ -240,6 +240,7 @@
                                    Foreground="{DynamicResource OnAccentBrush}"
                                    FontSize="9"
                                    FontWeight="SemiBold"
+                                   TextOptions.TextFormattingMode="Display"
                                    TextAlignment="Center" />
                       </Viewbox>
                     </Border>
@@ -335,6 +336,7 @@
                      VerticalContentAlignment="Top"
                      Padding="12"
                      FontSize="14"
+                     TextOptions.TextFormattingMode="Display"
                      BorderBrush="{DynamicResource BorderBrush}"
                      Background="{DynamicResource CardBrush}"
                      TextChanged="ReviewEditor_TextChanged"

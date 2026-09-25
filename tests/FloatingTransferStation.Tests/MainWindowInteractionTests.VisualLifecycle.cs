@@ -1097,8 +1097,8 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[1].Width);
             Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[2].Width);
             Assert.AreEqual(14d, text.FontSize);
-            Assert.AreEqual(18d, text.LineHeight);
-            Assert.AreEqual(90d, text.MaxHeight);
+            Assert.AreEqual(20d, text.LineHeight);
+            Assert.AreEqual(100d, text.MaxHeight);
             Assert.AreEqual(TextTrimming.CharacterEllipsis, text.TextTrimming);
 
             item.IsPinned = true;
@@ -2080,10 +2080,10 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
-            var cardStyle = window.FindResource("CardContainerStyle");
-            Border Card(BoardItem item) => FindDescendants<Border>(
+            var rootStyle = window.FindResource("CardRootStyle");
+            Grid Card(BoardItem item) => FindDescendants<Grid>(
                     (ListBoxItem)list.ItemContainerGenerator.ContainerFromItem(item))
-                .Single(candidate => ReferenceEquals(candidate.Style, cardStyle));
+                .Single(candidate => ReferenceEquals(candidate.Style, rootStyle));
 
             Assert.AreEqual(new Thickness(12, 4, 12, 4), Card(pinned).Margin);
             Assert.AreEqual(new Thickness(12, 10, 12, 4), Card(normalTop).Margin);

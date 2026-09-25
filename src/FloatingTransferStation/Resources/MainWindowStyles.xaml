@@ -256,24 +256,40 @@
     </Setter>
   </Style>
 
-  <Style x:Key="CardContainerStyle" TargetType="Border">
+  <!-- 卡片根容器：承载外距、分区起始于普通区的额外上距与悬停上浮（渲染位移），
+       自身不携带 Effect，避免整棵子树进入 Effect 中间位图。 -->
+  <Style x:Key="CardRootStyle" TargetType="Grid">
     <Setter Property="Margin" Value="12,4" />
-    <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}" />
-    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Effect" Value="{DynamicResource CardShadowEffect}" />
     <Setter Property="views:LiftAnimation.IsActive"
             Value="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" />
     <Setter Property="views:LiftAnimation.AnimationsEnabled"
             Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
     <Style.Triggers>
+      <DataTrigger Binding="{Binding StartsNormalRegion}" Value="True">
+        <Setter Property="Margin" Value="12,10,12,4" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+
+  <!-- 阴影层：不承载内容、不参与命中，仅以与卡片同形状的不透明底把投影绘制在
+       文字子树之外——带 Effect 的元素会把整个子树渲染进中间位图并强制关闭
+       ClearType（卡片正文发糊主因）。 -->
+  <Style x:Key="CardShadowLayerStyle" TargetType="Border">
+    <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="Effect" Value="{DynamicResource CardShadowEffect}" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
+  <Style x:Key="CardContainerStyle" TargetType="Border">
+    <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Style.Triggers>
       <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=IsKeyboardFocusWithin}"
                    Value="True">
         <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-      </DataTrigger>
-      <DataTrigger Binding="{Binding StartsNormalRegion}" Value="True">
-        <Setter Property="Margin" Value="12,10,12,4" />
       </DataTrigger>
     </Style.Triggers>
   </Style>
@@ -476,6 +492,7 @@
     <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
     <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
+    <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
@@ -588,118 +605,122 @@
   </Style>
 
   <DataTemplate DataType="{x:Type models:BoardItem}">
-    <Border Style="{StaticResource CardContainerStyle}">
-      <Grid Background="Transparent">
-        <Border x:Name="CardHoverFillLayer"
-                Background="{DynamicResource HoverSurfaceBrush}"
-                CornerRadius="7"
-                Opacity="0"
-                IsHitTestVisible="False"
-                views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
-                views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
-                views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
-        <Border x:Name="CardHoverRingLayer"
-                BorderBrush="{DynamicResource HoverBorderBrush}"
-                BorderThickness="1"
-                CornerRadius="8"
-                Margin="-1"
-                Opacity="0"
-                IsHitTestVisible="False"
-                views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
-                views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
-                views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
-        <Border x:Name="CardSelectedFillLayer"
-                Background="{DynamicResource SelectedCardBrush}"
-                CornerRadius="7"
-                Opacity="0"
-                IsHitTestVisible="False"
-                views:FadeAnimation.IsActive="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
-                views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
-                views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}" />
-        <Border x:Name="CardSelectedRingLayer"
-                BorderBrush="{DynamicResource SelectedCardBorderBrush}"
-                BorderThickness="1"
-                CornerRadius="8"
-                Margin="-1"
-                Opacity="0"
-                IsHitTestVisible="False"
-                views:FadeAnimation.IsActive="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
-                views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
-                views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+    <Grid Style="{StaticResource CardRootStyle}">
+      <Border Style="{StaticResource CardShadowLayerStyle}" />
+      <Border Style="{StaticResource CardContainerStyle}">
+        <Grid Background="Transparent">
+          <Border x:Name="CardHoverFillLayer"
+                  Background="{DynamicResource HoverSurfaceBrush}"
+                  CornerRadius="7"
+                  Opacity="0"
+                  IsHitTestVisible="False"
+                  views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
+                  views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                  views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+          <Border x:Name="CardHoverRingLayer"
+                  BorderBrush="{DynamicResource HoverBorderBrush}"
+                  BorderThickness="1"
+                  CornerRadius="8"
+                  Margin="-1"
+                  Opacity="0"
+                  IsHitTestVisible="False"
+                  views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
+                  views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                  views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+          <Border x:Name="CardSelectedFillLayer"
+                  Background="{DynamicResource SelectedCardBrush}"
+                  CornerRadius="7"
+                  Opacity="0"
+                  IsHitTestVisible="False"
+                  views:FadeAnimation.IsActive="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
+                  views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                  views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+          <Border x:Name="CardSelectedRingLayer"
+                  BorderBrush="{DynamicResource SelectedCardBorderBrush}"
+                  BorderThickness="1"
+                  CornerRadius="8"
+                  Margin="-1"
+                  Opacity="0"
+                  IsHitTestVisible="False"
+                  views:FadeAnimation.IsActive="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
+                  views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                  views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}" />
 
-        <Grid Margin="12" Background="Transparent">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
-            <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
-          </Grid.ColumnDefinitions>
+          <Grid Margin="12" Background="Transparent">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
+              <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
+            </Grid.ColumnDefinitions>
 
-        <Grid Grid.Column="0" Background="Transparent">
-          <controls:AsyncThumbnailImage Height="120"
-                 SourcePath="{Binding ImageAbsolutePath}"
-                 DecodeWidth="512"
-                 Stretch="Uniform">
-            <Image.Style>
-              <Style TargetType="Image">
-                <Setter Property="Visibility" Value="Collapsed" />
-                <Style.Triggers>
-                  <DataTrigger Binding="{Binding Kind}"
-                               Value="{x:Static models:BoardItemKind.Image}">
-                    <Setter Property="Visibility" Value="Visible" />
-                  </DataTrigger>
-                </Style.Triggers>
-              </Style>
-            </Image.Style>
-          </controls:AsyncThumbnailImage>
+          <Grid Grid.Column="0" Background="Transparent">
+            <controls:AsyncThumbnailImage Height="120"
+                   SourcePath="{Binding ImageAbsolutePath}"
+                   DecodeWidth="512"
+                   Stretch="Uniform">
+              <Image.Style>
+                <Style TargetType="Image">
+                  <Setter Property="Visibility" Value="Collapsed" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Kind}"
+                                 Value="{x:Static models:BoardItemKind.Image}">
+                      <Setter Property="Visibility" Value="Visible" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Image.Style>
+            </controls:AsyncThumbnailImage>
 
-          <TextBlock Text="{Binding Text}"
-                     FontFamily="{StaticResource InterfaceFontFamily}"
-                     FontSize="14"
-                     FontWeight="Normal"
-                     Foreground="{DynamicResource PrimaryTextBrush}"
-                     TextWrapping="Wrap"
-                     TextTrimming="CharacterEllipsis"
-                     LineHeight="18"
-                     LineStackingStrategy="BlockLineHeight"
-                     MaxHeight="90">
-            <TextBlock.Style>
-              <Style TargetType="TextBlock">
-                <Setter Property="Visibility" Value="Collapsed" />
-                <Style.Triggers>
-                  <DataTrigger Binding="{Binding Kind}"
-                               Value="{x:Static models:BoardItemKind.Text}">
-                    <Setter Property="Visibility" Value="Visible" />
-                  </DataTrigger>
-                </Style.Triggers>
-              </Style>
-            </TextBlock.Style>
-          </TextBlock>
+            <TextBlock Text="{Binding Text}"
+                       FontFamily="{StaticResource InterfaceFontFamily}"
+                       FontSize="14"
+                       FontWeight="Normal"
+                       Foreground="{DynamicResource PrimaryTextBrush}"
+                       TextOptions.TextFormattingMode="Display"
+                       TextWrapping="Wrap"
+                       TextTrimming="CharacterEllipsis"
+                       LineHeight="20"
+                       LineStackingStrategy="BlockLineHeight"
+                       MaxHeight="100">
+              <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                  <Setter Property="Visibility" Value="Collapsed" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Kind}"
+                                 Value="{x:Static models:BoardItemKind.Text}">
+                      <Setter Property="Visibility" Value="Visible" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </TextBlock.Style>
+            </TextBlock>
+          </Grid>
+
+          <Button Grid.Column="1"
+                  Style="{StaticResource PinButtonStyle}"
+                  Tag="{Binding}"
+                  CommandParameter="TogglePin"
+                  AutomationProperties.Name="置顶或取消置顶"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Top">
+            <Viewbox Width="16" Height="16">
+              <Path Data="M10.1221,3.13715 C10.7326,1.91616 12.3599,1.65208 13.3251,2.61737 L17.382,6.67419 C18.3472,7.63947 18.0832,9.26676 16.8622,9.87726 L13.4037,11.6065 C13.0751,11.7708 12.8183,12.0499 12.6818,12.391 L11.2459,15.981 C10.9792,16.6476 10.1179,16.8244 9.61027,16.3167 L7,13.7064 L3.70711,16.9993 L3,17 L3,16.2922 L6.29289,12.9993 L3.68262,10.3891 C3.17498,9.88142 3.35177,9.02011 4.01834,8.75348 L7.60829,7.3175 C7.94939,7.18106 8.22855,6.92419 8.39285,6.5956 L10.1221,3.13715 Z M12.618,3.32447 C12.1354,2.84183 11.3217,2.97387 11.0165,3.58437 L9.28727,7.04282 C9.01345,7.59046 8.54818,8.01858 7.97968,8.24598 L4.38973,9.68196 L10.3174,15.6096 L11.7534,12.0197 C11.9808,11.4512 12.4089,10.9859 12.9565,10.7121 L16.415,8.98283 C17.0255,8.67758 17.1575,7.86394 16.6749,7.3813 L12.618,3.32447 Z"
+                    Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                    Stretch="Uniform" />
+            </Viewbox>
+          </Button>
+
+          <Button Grid.Column="2"
+                  Style="{StaticResource SelectionButtonStyle}"
+                  Tag="{Binding}"
+                  CommandParameter="ToggleSelection"
+                  ToolTip="选择"
+                  AutomationProperties.Name="选择"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Top" />
+          </Grid>
         </Grid>
-
-        <Button Grid.Column="1"
-                Style="{StaticResource PinButtonStyle}"
-                Tag="{Binding}"
-                CommandParameter="TogglePin"
-                AutomationProperties.Name="置顶或取消置顶"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Top">
-          <Viewbox Width="16" Height="16">
-            <Path Data="M10.1221,3.13715 C10.7326,1.91616 12.3599,1.65208 13.3251,2.61737 L17.382,6.67419 C18.3472,7.63947 18.0832,9.26676 16.8622,9.87726 L13.4037,11.6065 C13.0751,11.7708 12.8183,12.0499 12.6818,12.391 L11.2459,15.981 C10.9792,16.6476 10.1179,16.8244 9.61027,16.3167 L7,13.7064 L3.70711,16.9993 L3,17 L3,16.2922 L6.29289,12.9993 L3.68262,10.3891 C3.17498,9.88142 3.35177,9.02011 4.01834,8.75348 L7.60829,7.3175 C7.94939,7.18106 8.22855,6.92419 8.39285,6.5956 L10.1221,3.13715 Z M12.618,3.32447 C12.1354,2.84183 11.3217,2.97387 11.0165,3.58437 L9.28727,7.04282 C9.01345,7.59046 8.54818,8.01858 7.97968,8.24598 L4.38973,9.68196 L10.3174,15.6096 L11.7534,12.0197 C11.9808,11.4512 12.4089,10.9859 12.9565,10.7121 L16.415,8.98283 C17.0255,8.67758 17.1575,7.86394 16.6749,7.3813 L12.618,3.32447 Z"
-                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
-                  Stretch="Uniform" />
-          </Viewbox>
-        </Button>
-
-        <Button Grid.Column="2"
-                Style="{StaticResource SelectionButtonStyle}"
-                Tag="{Binding}"
-                CommandParameter="ToggleSelection"
-                ToolTip="选择"
-                AutomationProperties.Name="选择"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Top" />
-        </Grid>
-      </Grid>
-    </Border>
+      </Border>
+    </Grid>
   </DataTemplate>
 </ResourceDictionary>
