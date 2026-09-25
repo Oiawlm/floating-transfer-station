@@ -520,7 +520,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var location = GetBoardDropLocation(e, panel);
+        var location = GetBoardDropLocation(e, panel, itemIds);
         if (!_board.CanMoveMany(itemIds, panel.Category, location.InsertionIndex))
         {
             HideInsertionIndicator();
@@ -551,7 +551,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var location = GetBoardDropLocation(e, panel);
+        var location = GetBoardDropLocation(e, panel, itemIds);
         if (!_board.CanMoveMany(itemIds, panel.Category, location.InsertionIndex))
         {
             e.Effects = DragDropEffects.None;
@@ -616,28 +616,6 @@ public partial class MainWindow : Window
         {
             ClearUserSelection();
         }
-    }
-
-    private double GetVisibleListEndY()
-    {
-        if (FindDescendant<VirtualizingStackPanel>(BoardList) is not { } itemsHost)
-        {
-            return 0d;
-        }
-
-        var endY = 0d;
-        for (var index = 0; index < itemsHost.Children.Count; index++)
-        {
-            if (itemsHost.Children[index] is not ListBoxItem item || !item.IsVisible)
-            {
-                continue;
-            }
-
-            var itemBottom = item.TranslatePoint(new Point(0, item.ActualHeight), BoardList).Y;
-            endY = Math.Max(endY, itemBottom);
-        }
-
-        return endY;
     }
 
     private double ClampIndicatorY(double value)
