@@ -254,4 +254,33 @@ public sealed class BoardMutationServiceUndoTests
             return true;
         }
     }
+
+    [TestMethod]
+    public async Task UpdateItemText_PersistsAtomicallyAndRevertsOnSaveFailure()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("旧文本");
+        var store = new MutationStore(directory.Root);
+        var messages = new List<string>();
+        var service = new BoardMutationService(board, store, messages.Add);
+
+        Assert.IsFalse(await service.UpdateItemTextAsync(Guid.NewGuid(), "无此条目"));
+        Assert.IsTrue(await service.UpdateItemTextAsync(item.Id, "旧文本"), "同文本不应触发保存。");
+        Assert.AreEqual(0, store.SaveCount);
+
+        Assert.IsTrue(await service.UpdateItemTextAsync(item.Id, "新文本"));
+        Assert.AreEqual("新文本", board.FindItem(item.Id)!.Text);
+        Assert.AreEqual(1, store.SaveCount);
+
+        store.FailSave = true;
+        Assert.IsFalse(await service.UpdateItemTextAsync(item.Id, "不会被保存的文本"));
+        Assert.AreEqual("新文本", board.FindItem(item.Id)!.Text, "保存失败必须还原原文本。");
+        CollectionAssert.AreEqual(new[] { "内容未保存，已还原原文本。" }, messages);
+
+        var imagePath = Path.Combine(directory.Root, "no-text-edit.png");
+        await File.WriteAllBytesAsync(imagePath, [0x89, 0x50, 0x4E, 0x47]);
+        var image = board.AddImage(Guid.NewGuid(), "images/no-text-edit.png", imagePath);
+        Assert.IsFalse(await service.UpdateItemTextAsync(image.Id, "图片卡不可文本编辑"));
+    }
 }
