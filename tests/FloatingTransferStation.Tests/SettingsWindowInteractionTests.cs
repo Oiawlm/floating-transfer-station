@@ -214,7 +214,8 @@ public sealed class SettingsWindowInteractionTests
             Assert.AreEqual("设置", System.Windows.Automation.AutomationProperties.GetName(gear));
             var actions = (StackPanel)window.FindName("HeaderActions");
             var buttons = actions.Children.OfType<Button>().ToArray();
-            Assert.AreEqual("SettingsButton", buttons[0].Name, "齿轮应位于操作区最左，与红色清空按钮保持距离。");
+            Assert.AreEqual("PanelHoldButton", buttons[0].Name, "保持展开开关位于操作区最左。");
+            Assert.AreEqual("SettingsButton", buttons[1].Name, "齿轮紧随保持展开开关，与红色清空按钮保持距离。");
             Assert.AreEqual("DeleteContentButton", buttons[^1].Name);
 
             gear.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
