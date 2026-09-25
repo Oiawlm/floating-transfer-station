@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Navigation;
@@ -82,6 +83,14 @@ public partial class SettingsWindow : Window
             e.Handled = true;
             Close();
         }
+    }
+
+    /// <summary>头部拖拽移动窗口；与主窗一致限制在工作区内。</summary>
+    private void HeaderDragRegion_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        var work = SystemParameters.WorkArea;
+        Left = Math.Clamp(Left + e.HorizontalChange, work.Left, Math.Max(work.Left, work.Right - Width));
+        Top = Math.Clamp(Top + e.VerticalChange, work.Top, Math.Max(work.Top, work.Bottom - Height));
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)

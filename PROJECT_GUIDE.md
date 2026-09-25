@@ -35,9 +35,12 @@
 ```powershell
 & .\.tools\dotnet\dotnet.exe build src/FloatingTransferStation.Core/FloatingTransferStation.Core.csproj -c Debug --no-restore -warnaserror
 & .\.tools\dotnet\dotnet.exe format FloatingTransferStation.slnx --verify-no-changes --no-restore
+& .\scripts\check-repo-hygiene.ps1
 & .\.tools\dotnet\dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore
 & .\.tools\dotnet\dotnet.exe build FloatingTransferStation.slnx -c Release --no-restore -warnaserror
 ```
+
+`check-repo-hygiene.ps1` 同时在 CI 的 Windows 质量门中运行，校验仓库根目录条目白名单与 README 本地链接可达性，防止无关文件再次混入仓库。
 
 同步生成 Windows 安装包和两个 Mac 候选 ZIP：
 
