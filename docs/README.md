@@ -1,6 +1,6 @@
 # 文档索引
 
-当前规则以[架构说明](architecture.md)、[项目指南](../PROJECT_GUIDE.md)和[贡献指南](../CONTRIBUTING.md)为准。版本发布使用[发布指南](releasing.md)，尚未稳定复现的问题见[现场观察](observations.md)。界面颜色、圆角与动效规范见[设计规范](design.md)。夜间持续改进循环（提案、决策框架、设计冻结清单与候选池）见[持续改进循环](improvement-loop.md)。阶段性研究与文档评审材料在 [research/](research/)；跨窗口交接提示词在 [handoff/](handoff/)。
+当前规则以[架构说明](architecture.md)、[项目指南](../PROJECT_GUIDE.md)和[贡献指南](../CONTRIBUTING.md)为准。版本发布使用[发布指南](releasing.md)，尚未稳定复现的问题见[现场观察](observations.md)。界面颜色、圆角与动效规范见[设计规范](design.md)。夜间持续改进循环（提案、决策框架、设计冻结清单与候选池）见[持续改进循环](improvement-loop.md)。阶段性研究与文档评审材料在 [research/](research/)；跨窗口交接提示词在 [handoff/](handoff/)。README 视觉化的资产规划、录制管线选型与执行交接见 [research/2026-09-25-readme-visual-plan.md](research/2026-09-25-readme-visual-plan.md) 等三份材料与 [handoff/2026-09-25-readme-visuals-execution-prompt.md](handoff/2026-09-25-readme-visuals-execution-prompt.md)。
 
 设计和计划是当时的决策记录。下面的提交与发布版本说明落地位置；历史计划中的未勾选步骤保持原样，不表示今天仍需重新执行，也不替代人工验收证据。
 
