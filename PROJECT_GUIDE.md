@@ -2,7 +2,7 @@
 
 ## 项目状态
 
-悬浮中转站是一个活跃维护的 .NET 10 桌面应用，Windows 11 64 位正式版使用 WPF 和 Inno Setup，macOS 14+（Apple Silicon）测试版使用 Avalonia 11.3.21；两端使用 MSTest 和同一共享核心。公开仓库为 `Oiawlm/floating-transfer-station`，当前源码版本为 1.11.1；Windows 安装包与 Apple Silicon Mac 包统一放在 [同一个 Release](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.11.1)，源码统一在 main 维护。1.7.0 起 Windows 仅以 Windows 11 为目标、Mac 仅维护 Apple Silicon（Intel 最后版本 1.6.0）。Apple Silicon Mac 已通过原生自动验证，第三方软件间拖放人工验收与 Apple 签名公证尚未完成。
+悬浮中转站是一个活跃维护的 .NET 10 桌面应用，Windows 11 64 位正式版使用 WPF 和 Inno Setup，macOS 14+（Apple Silicon）测试版使用 Avalonia 11.3.21；两端使用 MSTest 和同一共享核心。公开仓库为 `Oiawlm/floating-transfer-station`，当前源码版本为 1.11.2；Windows 安装包与 Apple Silicon Mac 包统一放在 [同一个 Release](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.11.2)，源码统一在 main 维护。1.7.0 起 Windows 仅以 Windows 11 为目标、Mac 仅维护 Apple Silicon（Intel 最后版本 1.6.0）。Apple Silicon Mac 已通过原生自动验证，第三方软件间拖放人工验收与 Apple 签名公证尚未完成。
 
 当前直接引用 `SixLabors.ImageSharp 3.1.12`。ImageSharp 4.x 的直接引用要求有效构建许可证；升级前须先解决许可，不自行申请或绕过密钥校验。依据见 [Six Labors 官方说明](https://sixlabors.com/posts/licence-enforcement-changes/)。
 
@@ -35,9 +35,12 @@
 ```powershell
 & .\.tools\dotnet\dotnet.exe build src/FloatingTransferStation.Core/FloatingTransferStation.Core.csproj -c Debug --no-restore -warnaserror
 & .\.tools\dotnet\dotnet.exe format FloatingTransferStation.slnx --verify-no-changes --no-restore
+& .\scripts\check-repo-hygiene.ps1
 & .\.tools\dotnet\dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore
 & .\.tools\dotnet\dotnet.exe build FloatingTransferStation.slnx -c Release --no-restore -warnaserror
 ```
+
+`check-repo-hygiene.ps1` 同时在 CI 的 Windows 质量门中运行，校验仓库根目录条目白名单与 README 本地链接可达性，防止无关文件再次混入仓库。
 
 同步生成 Windows 安装包和两个 Mac 候选 ZIP：
 

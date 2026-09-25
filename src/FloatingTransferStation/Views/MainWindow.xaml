@@ -165,14 +165,20 @@
                         ToolTip="恢复默认尺寸和位置"
                         AutomationProperties.Name="恢复默认尺寸和位置"
                         Click="ResetWindowButton_Click">
-                  <Viewbox Width="16" Height="16">
-                    <Path Data="M4,9 L4,4 L9,4 M15,9 L15,4 L10,4 M4,10 L4,15 L9,15 M15,10 L15,15 L10,15"
-                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
-                          StrokeThickness="1.5"
-                          StrokeStartLineCap="Round"
-                          StrokeEndLineCap="Round"
-                          StrokeLineJoin="Round" />
-                  </Viewbox>
+                  <!-- 描边图标不走 Viewbox：Viewbox 会把几何放大到满 16×16 并同步放大描边，
+                       光学足印与描边粗细失控；显式 14.5×14.5 + 1.5 描边使墨迹约 16 DIP，
+                       与齿轮等填充图标的光学尺寸一致。 -->
+                  <Path Data="M4,9 L4,4 L9,4 M15,9 L15,4 L10,4 M4,10 L4,15 L9,15 M15,10 L15,15 L10,15"
+                        Width="14.5"
+                        Height="14.5"
+                        Stretch="Uniform"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                        StrokeThickness="1.5"
+                        StrokeStartLineCap="Round"
+                        StrokeEndLineCap="Round"
+                        StrokeLineJoin="Round" />
                 </Button>
 
                 <Button x:Name="BatchPinButton"
@@ -206,11 +212,13 @@
                       </Style.Triggers>
                     </Style>
                   </Button.Style>
+                  <!-- 图标始终居中（与其他头部按钮同一 16×16 网格规范）；
+                       计数徽章仍锚定内容格右下角，出现时覆盖图标右下象限，图标位置不随徽章显隐跳动。 -->
                   <Grid Width="20" Height="20">
                     <Viewbox Width="16"
                              Height="16"
-                             HorizontalAlignment="Left"
-                             VerticalAlignment="Top">
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center">
                       <Path Data="M8.5,4 L11.5,4 C11.5,3.17157 10.8284,2.5 10,2.5 C9.17157,2.5 8.5,3.17157 8.5,4 Z M7.5,4 C7.5,2.61929 8.61929,1.5 10,1.5 C11.3807,1.5 12.5,2.61929 12.5,4 L17.5,4 C17.7761,4 18,4.22386 18,4.5 C18,4.77614 17.7761,5 17.5,5 L16.4456,5 L15.2521,15.3439 C15.0774,16.8576 13.7957,18 12.2719,18 L7.72813,18 C6.20431,18 4.92256,16.8576 4.7479,15.3439 L3.55437,5 L2.5,5 C2.22386,5 2,4.77614 2,4.5 C2,4.22386 2.22386,4 2.5,4 L7.5,4 Z M5.74131,15.2292 C5.85775,16.2384 6.71225,17 7.72813,17 L12.2719,17 C13.2878,17 14.1422,16.2384 14.2587,15.2292 L15.439,5 L4.56101,5 Z M8.5,7.5 C8.77614,7.5 9,7.72386 9,8 L9,14 C9,14.2761 8.77614,14.5 8.5,14.5 C8.22386,14.5 8,14.2761 8,14 L8,8 C8,7.72386 8.22386,7.5 8.5,7.5 Z M12,8 C12,7.72386 11.7761,7.5 11.5,7.5 C11.2239,7.5 11,7.72386 11,8 L11,14 C11,14.2239 11.2239,14.5 11.5,14.5 C11.7761,14.5 12,14.2761 12,14 L12,8 Z"
                           Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
                           Stretch="Uniform" />

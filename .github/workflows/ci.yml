@@ -27,6 +27,8 @@ jobs:
         run: dotnet build src/FloatingTransferStation.Core/FloatingTransferStation.Core.csproj -c Debug --no-restore -warnaserror
       - name: 验证格式
         run: dotnet format FloatingTransferStation.slnx --verify-no-changes --no-restore
+      - name: 仓库卫生检查（根目录白名单与 README 本地链接）
+        run: '& .\scripts\check-repo-hygiene.ps1'
       - name: 运行 Release 测试、安装清理契约与打包
         env:
           FTS_CATEGORY_SWITCH_EVIDENCE_DIR: ${{ runner.temp }}/category-switch-evidence

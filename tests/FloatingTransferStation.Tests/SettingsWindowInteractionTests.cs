@@ -177,6 +177,24 @@ public sealed class SettingsWindowInteractionTests
         encoder.Save(stream);
     }
 
+    private static IEnumerable<T> FindDescendants<T>(DependencyObject parent)
+        where T : DependencyObject
+    {
+        for (var index = 0; index < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, index);
+            if (child is T match)
+            {
+                yield return match;
+            }
+
+            foreach (var descendant in FindDescendants<T>(child))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
     [STATestMethod]
     public void SettingsGearButton_IsTheLeftmostHeaderActionAndOpensTheSettingsWindow()
     {
@@ -428,6 +446,145 @@ public sealed class SettingsWindowInteractionTests
             DesignThemeManager.Apply(settings, DesignTheme.Dark);
             settings.UpdateLayout();
             SaveVisualEvidence((Border)settings.FindName("WindowShell"), "settings-dark.png");
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>
+    /// 设置窗头部拖拽回归：头部 Thumb 的 DragDelta 必须移动窗口且限制在工作区内。
+    /// 修复前失败：头部没有任何拖拽区，DragDelta 事件无人处理，窗口位置不变。
+    /// </summary>
+    [STATestMethod]
+    public void HeaderDragRegion_MovesWindowWithinWorkArea()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var thumb = settings.FindName("HeaderDragRegion") as System.Windows.Controls.Primitives.Thumb;
+            Assert.IsNotNull(thumb, "设置窗头部应有拖拽 Thumb。");
+
+            // 先把窗口拖到工作区左上角（远离右/下钳制边界），再做增量断言；
+            // 容差吸收不同缩放的 DPI 物理像素取整；矮屏运行器上窗口可能占满
+            // 工作区高度，垂直期望值取「目标位置与钳制上界」的较小者。
+            var work = SystemParameters.WorkArea;
+            var lowestAllowedTop = Math.Max(work.Top, work.Bottom - settings.Height);
+            var dragToLeftTop = new System.Windows.Controls.Primitives.DragDeltaEventArgs(
+                (work.Left + 16) - settings.Left,
+                (work.Top + 16) - settings.Top);
+            thumb.RaiseEvent(dragToLeftTop);
+            CompleteLayout(settings);
+            Assert.AreEqual(work.Left + 16, settings.Left, 2.5, "拖拽应把窗口移到指定水平位置。");
+            Assert.AreEqual(
+                Math.Min(work.Top + 16, lowestAllowedTop),
+                settings.Top,
+                2.5,
+                "拖拽应把窗口移到指定垂直位置（或矮屏钳制上界）。");
+
+            // 小增量精确作用到窗口位置。
+            thumb.RaiseEvent(new System.Windows.Controls.Primitives.DragDeltaEventArgs(60, 40));
+            CompleteLayout(settings);
+            Assert.AreEqual(work.Left + 76, settings.Left, 2.5, "水平拖拽增量应作用到窗口位置。");
+            Assert.AreEqual(
+                Math.Min(work.Top + 56, lowestAllowedTop),
+                settings.Top,
+                2.5,
+                "垂直拖拽增量应作用到窗口位置（或矮屏钳制上界）。");
+
+            // 越界增量被工作区钳制，而不是把窗口拖出屏幕。
+            thumb.RaiseEvent(new System.Windows.Controls.Primitives.DragDeltaEventArgs(1_000_000, 1_000_000));
+            CompleteLayout(settings);
+            Assert.IsTrue(
+                settings.Left >= work.Left - 0.01 && settings.Left <= Math.Max(work.Left, work.Right - settings.Width) + 0.01,
+                $"窗口左缘应钳制在工作区内，实际 Left={settings.Left}。");
+            Assert.IsTrue(
+                settings.Top >= work.Top - 0.01 && settings.Top <= Math.Max(work.Top, work.Bottom - settings.Height) + 0.01,
+                $"窗口上缘应钳制在工作区内，实际 Top={settings.Top}。");
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>
+    /// 主题下拉鼠标路径回归：真实模板下点击区域必须命中 ToggleButton，
+    /// 其 IsChecked 双向绑定驱动 IsDropDownOpen；Popup 自行关闭（StaysOpen=False）后状态必须同步回。
+    /// 修复前失败：不透明 Surface 边框盖在 ToggleButton 上拦截命中，鼠标永远打不开下拉。
+    /// </summary>
+    [STATestMethod]
+    public void ThemeComboBox_MousePathReachesToggleAndSyncsPopupState()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var combo = settings.FindName("ThemeComboBox") as ComboBox;
+            Assert.IsNotNull(combo);
+            Assert.IsTrue(combo!.IsLoaded, "模板应已应用。");
+
+            // 1) 命中测试：组合框中心点的最顶层可视命中必须落在 ToggleButton 子树内。
+            var toggle = FindDescendants<ToggleButton>(combo).Single();
+            var center = new System.Windows.Point(combo.ActualWidth / 2, combo.ActualHeight / 2);
+            var hit = System.Windows.Media.VisualTreeHelper.HitTest(combo, center)?.VisualHit;
+            var hitInsideToggle = false;
+            for (var node = hit; node is not null; node = System.Windows.Media.VisualTreeHelper.GetParent(node))
+            {
+                if (ReferenceEquals(node, combo))
+                {
+                    break;
+                }
+
+                if (ReferenceEquals(node, toggle))
+                {
+                    hitInsideToggle = true;
+                    break;
+                }
+            }
+
+            Assert.IsTrue(
+                hitInsideToggle,
+                $"点击组合框中心应命中 ToggleButton（修复前被 Surface 边框拦截），实际命中 {hit?.GetType().Name}。");
+
+            // 2) ToggleButton 的双向绑定驱动 IsDropDownOpen（等价鼠标按下翻转）。
+            Assert.IsFalse(combo.IsDropDownOpen);
+            toggle.IsChecked = true;
+            Assert.IsTrue(combo.IsDropDownOpen, "ToggleButton 勾选应打开下拉。");
+
+            // 3) Popup 因 StaysOpen=False 自行关闭时同步回 IsDropDownOpen（下次点击才不会变成空操作）。
+            // Popup 不是 Visual，走模板命名部件查找。
+            var popup = (Popup)combo.Template.FindName("PART_Popup", combo)!;
+            Assert.IsNotNull(popup, "模板应声明 PART_Popup 部件。");
+            popup.IsOpen = false;
+            Assert.IsFalse(
+                combo.IsDropDownOpen,
+                "Popup 自行关闭后 IsDropDownOpen 应回落为 false。");
+            Assert.IsFalse(toggle.IsChecked!.Value, "ToggleButton 勾选状态应随下拉关闭回落。");
+
+            // 4) 沿真实控件路径选择深色并断言偏好落盘。
+            combo.SelectedIndex = 2;
+            Assert.AreEqual(ThemePreference.Dark, preferencesStore.LastSaved?.ThemeMode);
+            Assert.AreEqual(2, combo.SelectedIndex);
+            Assert.AreEqual(
+                DesignTheme.Dark,
+                GetPrivateField<DesignTheme>(window, "_activeDesignTheme"),
+                "选择深色应立即应用主窗主题。");
 
             CloseWindow(settings);
         }

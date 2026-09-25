@@ -128,17 +128,6 @@
           <Setter.Value>
             <ControlTemplate TargetType="ComboBox">
               <Grid>
-                <ToggleButton Focusable="False"
-                              ClickMode="Press"
-                              Background="Transparent"
-                              BorderThickness="0"
-                              IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
-                  <ToggleButton.Template>
-                    <ControlTemplate TargetType="ToggleButton">
-                      <Border Background="{TemplateBinding Background}" />
-                    </ControlTemplate>
-                  </ToggleButton.Template>
-                </ToggleButton>
                 <Border x:Name="Surface"
                         Background="{TemplateBinding Background}"
                         BorderBrush="{TemplateBinding BorderBrush}"
@@ -166,7 +155,23 @@
                           IsHitTestVisible="False" />
                   </Grid>
                 </Border>
-                <Popup IsOpen="{TemplateBinding IsDropDownOpen}"
+                <!-- 命中层必须在最顶：不透明 Surface 在上会拦截全部鼠标命中，
+                     ToggleButton 收不到点击、下拉无法用鼠标打开。 -->
+                <ToggleButton Focusable="False"
+                              ClickMode="Press"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                  <ToggleButton.Template>
+                    <ControlTemplate TargetType="ToggleButton">
+                      <Border Background="{TemplateBinding Background}" />
+                    </ControlTemplate>
+                  </ToggleButton.Template>
+                </ToggleButton>
+                <!-- PART_Popup + 双向 IsOpen：StaysOpen=False 自行关闭时由部件名与绑定同步回 IsDropDownOpen，
+                     避免关闭后状态失步（下次点击变成空操作、需点第二次）。 -->
+                <Popup x:Name="PART_Popup"
+                       IsOpen="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
                        Placement="Bottom"
                        AllowsTransparency="True"
                        PopupAnimation="Fade"
@@ -276,6 +281,10 @@
 
       <Border Grid.Row="0" Background="{DynamicResource HeaderBrush}" CornerRadius="11,0,0,0">
         <Grid Background="Transparent">
+          <Thumb x:Name="HeaderDragRegion"
+                 Style="{StaticResource HeaderThumbStyle}"
+                 Cursor="SizeAll"
+                 DragDelta="HeaderDragRegion_DragDelta" />
           <TextBlock Text="设置"
                      Margin="16,0"
                      FontSize="15"

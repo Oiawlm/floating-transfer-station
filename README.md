@@ -2,20 +2,16 @@
 
 一个贴在屏幕边缘的文字与图片中转站。复制、拖进来、分个类，再把内容拖到真正需要它的软件里。
 
-## 独立 SVG 动画示例
-
-[鹈鹕骑自行车（单 HTML，可调动画）](pelican_bicycle.html) 是一个无需构建步骤即可打开的交互示例，支持播放/暂停、速度、车轮大小、身体摆动、翅膀幅度和配色调整。
-
 > 支持 Windows 11 64 位与 macOS 14+（Apple Silicon）。1.7.0 起 Windows 以 Windows 11 为开发与验证目标，Mac 仅维护 Apple Silicon（Intel Mac 的最后可用版本为 1.6.0）。两端代码统一在 main 维护，下载包统一放在同一个 Release。Mac 包已通过原生自动验证，当前仍为未经 Apple 公证的测试版。
 
 ## 下载与安装
 
-在 [1.11.1 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.11.1) 选择你的平台：
+在 [1.11.2 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.11.2) 选择你的平台：
 
 | 平台 | 下载 | 状态 |
 |---|---|---|
-| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.11.1/FloatingTransferStation-Setup-1.11.1.exe) | 正式版 |
-| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.11.1/FloatingTransferStation-1.11.1-osx-arm64.zip) | 测试版，未 Apple 公证 |
+| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.11.2/FloatingTransferStation-Setup-1.11.2.exe) | 正式版 |
+| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.11.2/FloatingTransferStation-1.11.2-osx-arm64.zip) | 测试版，未 Apple 公证 |
 
 仍在使用 Intel Mac 的读者可以从 [1.6.0 历史发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.6.0) 获取最后的 Intel 包；该版本保留不撤回，但不再获得更新。
 
@@ -31,7 +27,7 @@
 
 ### Mac 安装
 
-解压 `FloatingTransferStation-1.11.1-osx-arm64.zip`，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
+解压 `FloatingTransferStation-1.11.2-osx-arm64.zip`，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
 
 Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自动生成的源码包；Mac 应用包的文件名包含 `osx-arm64`。
 

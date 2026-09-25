@@ -10,3 +10,4 @@ TestResults/
 *.user
 *.suo
 .zcode/
+.preview-data/
