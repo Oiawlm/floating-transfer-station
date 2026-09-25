@@ -474,21 +474,31 @@ public sealed class SettingsWindowInteractionTests
             Assert.IsNotNull(thumb, "设置窗头部应有拖拽 Thumb。");
 
             // 先把窗口拖到工作区左上角（远离右/下钳制边界），再做增量断言；
-            // 2.5 DIP 容差吸收不同缩放的 DPI 物理像素取整。
+            // 容差吸收不同缩放的 DPI 物理像素取整；矮屏运行器上窗口可能占满
+            // 工作区高度，垂直期望值取「目标位置与钳制上界」的较小者。
             var work = SystemParameters.WorkArea;
+            var lowestAllowedTop = Math.Max(work.Top, work.Bottom - settings.Height);
             var dragToLeftTop = new System.Windows.Controls.Primitives.DragDeltaEventArgs(
                 (work.Left + 16) - settings.Left,
                 (work.Top + 16) - settings.Top);
             thumb.RaiseEvent(dragToLeftTop);
             CompleteLayout(settings);
             Assert.AreEqual(work.Left + 16, settings.Left, 2.5, "拖拽应把窗口移到指定水平位置。");
-            Assert.AreEqual(work.Top + 16, settings.Top, 2.5, "拖拽应把窗口移到指定垂直位置。");
+            Assert.AreEqual(
+                Math.Min(work.Top + 16, lowestAllowedTop),
+                settings.Top,
+                2.5,
+                "拖拽应把窗口移到指定垂直位置（或矮屏钳制上界）。");
 
             // 小增量精确作用到窗口位置。
             thumb.RaiseEvent(new System.Windows.Controls.Primitives.DragDeltaEventArgs(60, 40));
             CompleteLayout(settings);
             Assert.AreEqual(work.Left + 76, settings.Left, 2.5, "水平拖拽增量应作用到窗口位置。");
-            Assert.AreEqual(work.Top + 56, settings.Top, 2.5, "垂直拖拽增量应作用到窗口位置。");
+            Assert.AreEqual(
+                Math.Min(work.Top + 56, lowestAllowedTop),
+                settings.Top,
+                2.5,
+                "垂直拖拽增量应作用到窗口位置（或矮屏钳制上界）。");
 
             // 越界增量被工作区钳制，而不是把窗口拖出屏幕。
             thumb.RaiseEvent(new System.Windows.Controls.Primitives.DragDeltaEventArgs(1_000_000, 1_000_000));
