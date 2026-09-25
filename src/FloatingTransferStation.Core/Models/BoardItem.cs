@@ -16,7 +16,9 @@ public sealed class BoardItem : INotifyPropertyChanged
     public required BoardCategory Category { get; set; }
     public required int Order { get; set; }
     public required DateTimeOffset CreatedAt { get; init; }
-    public string? Text { get; init; }
+
+    /// <summary>文字内容。1.13.1 起允许就地更新（用户卡片编辑）；持久化与创建语义不变。</summary>
+    public string? Text { get; set; }
     public string? ImageRelativePath { get; init; }
 
     public bool IsPinned

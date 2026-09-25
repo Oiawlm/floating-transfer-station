@@ -179,6 +179,46 @@ public sealed class BoardMutationService
         }, cancellationToken);
 
     /// <summary>
+    /// 就地更新文字卡片内容并原子持久化;保存失败时还原原文本并提示。
+    /// </summary>
+    public Task<bool> UpdateItemTextAsync(
+        Guid itemId,
+        string text,
+        CancellationToken cancellationToken = default) =>
+        _operationGate.RunAsync(async () =>
+        {
+            var item = _board.FindItem(itemId);
+            if (item is not { Kind: BoardItemKind.Text })
+            {
+                return false;
+            }
+
+            var original = item.Text ?? string.Empty;
+            if (string.Equals(original, text, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            _board.UpdateText(itemId, text);
+            try
+            {
+                await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
+                return true;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _board.UpdateText(itemId, original);
+                _showStatus("内容未保存，已还原原文本。");
+                return false;
+            }
+            catch
+            {
+                _board.UpdateText(itemId, original);
+                throw;
+            }
+        }, cancellationToken);
+
+    /// <summary>
     /// 撤销最近一次成功删除(单条、批量或清空):按锚点插回原分类(不回退删除后的
     /// 其他改动)并持久化;保存失败时回到删除状态。空栈返回 false 并提示。
     /// </summary>

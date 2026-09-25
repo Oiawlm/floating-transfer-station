@@ -326,6 +326,45 @@ public sealed class BoardService
         }
     }
 
+    /// <summary>
+    /// 就地更新文字卡片内容(用户显式编辑)。仅改内容,不动分类、顺序与置顶;
+    /// 找不到条目或条目不是文字卡时返回 false。
+    /// </summary>
+    public bool UpdateText(Guid itemId, string text)
+    {
+        var item = FindItem(itemId);
+        if (item is not { Kind: BoardItemKind.Text })
+        {
+            return false;
+        }
+
+        item.Text = text;
+        return true;
+    }
+
+    public BoardItem? FindItem(Guid itemId)
+    {
+        foreach (var collection in _items.Values)
+        {
+            BoardItem? found = null;
+            foreach (var candidate in collection)
+            {
+                if (candidate.Id == itemId)
+                {
+                    found = candidate;
+                    break;
+                }
+            }
+
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
     public RemovedBoardItems? RemoveMany(IReadOnlyCollection<Guid> itemIds)
     {
         ArgumentNullException.ThrowIfNull(itemIds);

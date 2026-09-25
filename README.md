@@ -10,12 +10,12 @@
 
 ## 下载与安装
 
-在 [1.13.0 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.13.0) 选择你的平台：
+在 [1.14.0 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.14.0) 选择你的平台：
 
 | 平台 | 下载 | 状态 |
 |---|---|---|
-| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.13.0/FloatingTransferStation-Setup-1.13.0.exe) | 正式版 |
-| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.13.0/FloatingTransferStation-1.13.0-osx-arm64.zip) | 测试版，未 Apple 公证 |
+| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.14.0/FloatingTransferStation-Setup-1.14.0.exe) | 正式版 |
+| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.14.0/FloatingTransferStation-1.14.0-osx-arm64.zip) | 测试版，未 Apple 公证 |
 
 仍在使用 Intel Mac 的读者可以从 [1.6.0 历史发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.6.0) 获取最后的 Intel 包；该版本保留不撤回，但不再获得更新。
 
@@ -31,7 +31,7 @@
 
 ### Mac 安装
 
-解压 `FloatingTransferStation-1.13.0-osx-arm64.zip`，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
+解压 `FloatingTransferStation-1.14.0-osx-arm64.zip`，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
 
 Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自动生成的源码包；Mac 应用包的文件名包含 `osx-arm64`。
 
@@ -44,7 +44,7 @@ Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自
 - **图片容错**：同次复制提供多个图片表示时，读取或解码某个表示失败仍会尝试其他有效表示，优先保存可用图片中像素最多的一份；照片保留正确的旋转或镜像方向。
 - **批量复制**：一次复制多张图片保留来源顺序，损坏文件不影响同批其他可用图片。
 - **指定位置放入**：可以从资源管理器、浏览器、微信等软件把常见静态图片或非空文字直接拖到某个分类。
-- **整理内容**：支持三个可改名板卡分类、一个按天复盘标签、置顶、批量置顶、直接多选、批量移动、批量删除和分类内排序。
+- **整理内容**：支持三个可改名板卡分类、一个按天复盘标签、置顶、批量置顶、直接多选、批量移动、批量删除和分类内排序；双击文字卡可就地编辑内容。
 - **再拖出去**：图片和文字使用 Windows 通用拖放格式，可拖到支持这些格式的软件；纯图片多选可以按原顺序一起拖出。
 - **不挡工作区**：窗口贴在屏幕右侧并保持置顶，空闲时收成一条分类标签，移入后再展开。贴边一侧的窗口边缘与屏幕平齐。需要对照面板内容时，点击头部设置按钮左侧的「保持展开」开关（暂停符图标）：面板会一直展开，鼠标移开、点击其他应用或在别处打字都不再自动收起，再次点击恢复自动收起。该开关只对本次运行生效，重启后回到默认的自动收起。
 - **设置**：点击面板头部的齿轮按钮可打开设置窗口，调整主题（跟随系统/浅色/深色）、界面动效、开机自启和全局快捷键（`Ctrl + Alt + V` 唤起面板，默认关闭），管理文本整理插件，查看数据目录与版本信息，或退出应用；改动立即生效并自动保存。
@@ -83,6 +83,7 @@ Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自
 - `Ctrl + A`：选择当前分类全部内容；正在编辑分类名称时仍然只会全选文字。
 - `Esc`：取消当前分类的全部选择；正在编辑分类名称时仍然取消本次改名。
 - `Ctrl + Z`：撤销最近一次删除（单条、批量或清空），恢复到删除前的位置；本次运行内最多保留 20 批，正在编辑文字时不触发。
+- 双击文字卡：就地编辑内容，`Enter` 保存、`Esc` 取消；图片卡不可编辑。
 - 点击卡片图钉：置顶或取消置顶。
 - 多选后点击顶部图钉或按 `Ctrl + P`：批量置顶或取消置顶；只要所选内容中有未置顶项就会统一置顶，全都已置顶时则统一取消置顶；`Ctrl + P` 只在面板展开且不在编辑分类名称时生效。
 - 拖动卡片：分类内排序、移动到其他分类，或拖到外部软件。

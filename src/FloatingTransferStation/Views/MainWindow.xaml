@@ -398,6 +398,7 @@
                  PreviewDragLeave="BoardList_PreviewDragLeave"
                  PreviewDrop="BoardList_PreviewDrop"
                  ButtonBase.Click="BoardList_ButtonClick"
+                 MouseDoubleClick="BoardList_MouseDoubleClick"
                  ScrollViewer.CanContentScroll="True"
                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -435,6 +436,31 @@
                     BorderBrush="{DynamicResource AccentBrush}"
                     Click="SearchClearFilterButton_Click" />
           </StackPanel>
+        </Border>
+
+        <!-- 卡片内容就地编辑：双击文字卡后覆盖其上的编辑器（代码后置定位与显隐）。
+             Enter 保存、Esc 取消、失焦保存；编辑期间收起抑制与复盘编辑器同构。 -->
+        <Border x:Name="CardTextEditorHost"
+                Grid.Row="1"
+                Visibility="Collapsed"
+                Background="{DynamicResource CardBrush}"
+                BorderBrush="{DynamicResource AccentBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Margin="12,2"
+                VerticalAlignment="Top">
+          <TextBox x:Name="CardTextEditor"
+                   Padding="6,4"
+                   FontSize="14"
+                   FontFamily="{StaticResource InterfaceFontFamily}"
+                   TextWrapping="Wrap"
+                   AcceptsReturn="False"
+                   Background="Transparent"
+                   BorderThickness="0"
+                   Foreground="{DynamicResource PrimaryTextBrush}"
+                   TextOptions.TextFormattingMode="Display"
+                   PreviewKeyDown="CardTextEditor_PreviewKeyDown"
+                   LostKeyboardFocus="CardTextEditor_LostKeyboardFocus" />
         </Border>
 
         <Border x:Name="ReviewContentHost"
