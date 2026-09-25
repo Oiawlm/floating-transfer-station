@@ -23,6 +23,7 @@
     <Compile Include="..\FloatingTransferStation.Tests\CategoryScrollStateTests.cs" Link="Shared\CategoryScrollStateTests.cs" />
     <Compile Include="..\FloatingTransferStation.Tests\DefaultCaptureCategoryStateTests.cs" Link="Shared\DefaultCaptureCategoryStateTests.cs" />
     <Compile Include="..\FloatingTransferStation.Tests\DropInsertionCalculatorTests.cs" Link="Shared\DropInsertionCalculatorTests.cs" />
+    <Compile Include="..\FloatingTransferStation.Tests\InsertionSlotResolverTests.cs" Link="Shared\InsertionSlotResolverTests.cs" />
     <Compile Include="..\FloatingTransferStation.Tests\PanelStateMachineTests.cs" Link="Shared\PanelStateMachineTests.cs" />
     <Compile Include="..\FloatingTransferStation.Tests\PluginCatalogTests.cs" Link="Shared\PluginCatalogTests.cs" />
   </ItemGroup>

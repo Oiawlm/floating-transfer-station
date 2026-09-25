@@ -1423,7 +1423,118 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void PinnedDrag_CrossRegionHidesInsertionIndicatorInBothDirections()
+    public void PinnedBoundaryDrag_KeepsIndicatorStableWhileCursorJittersAroundTheRegionLine()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        // AddText 自普通区顶部插入，按显示顺序的反序添加，使显示为
+        // [firstPinned, lastPinned, firstNormal, secondNormal]。
+        var secondNormal = board.AddText("normal two");
+        var firstNormal = board.AddText("normal one");
+        var lastPinned = board.AddText("pinned two");
+        var firstPinned = board.AddText("pinned one");
+        board.SetPinnedMany([firstPinned.Id, lastPinned.Id], true);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var indicator = (Border)window.FindName("InsertionIndicator");
+            var boundaryContainer =
+                (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(lastPinned);
+            Assert.IsNotNull(boundaryContainer);
+            var expectedEdgeY = boundaryContainer.TranslatePoint(
+                new Point(0, boundaryContainer.ActualHeight),
+                list).Y;
+            var dragData = new DragPayloadService().Build(secondNormal);
+            var boundaryMidY = boundaryContainer.ActualHeight / 2;
+
+            // 在置顶边界中线两侧 ±1 DIP 来回抖动：指示条必须持续可见、
+            // 位置稳定停在钳制槽（第一个普通位），拖动效果保持 Move。
+            for (var jitter = 0; jitter < 6; jitter++)
+            {
+                var cursorY = boundaryMidY + (jitter % 2 == 0 ? -1d : 1d);
+                var over = NewDragEventArgs(
+                    dragData,
+                    DragDrop.PreviewDragOverEvent,
+                    boundaryContainer,
+                    new Point(8, cursorY));
+                boundaryContainer.RaiseEvent(over);
+
+                Assert.AreEqual(DragDropEffects.Move, over.Effects, $"jitter {jitter}");
+                Assert.AreEqual(Visibility.Visible, indicator.Visibility, $"jitter {jitter}");
+                Assert.AreEqual(expectedEdgeY, Canvas.GetTop(indicator), 0.5, $"jitter {jitter}");
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void BoardListBlankHover_ResolvesInsertionGeometricallyWithoutJumpingToTheEnd()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        // 按显示顺序的反序添加，使显示为 [top, bottom]。
+        var bottom = board.AddText("bottom");
+        var top = board.AddText("top");
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var indicator = (Border)window.FindName("InsertionIndicator");
+            var topContainer = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(top);
+            var bottomContainer =
+                (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(bottom);
+            Assert.IsNotNull(topContainer);
+            Assert.IsNotNull(bottomContainer);
+            var topEdgeY = topContainer.TranslatePoint(new Point(), list).Y;
+            var bottomTopY = bottomContainer.TranslatePoint(new Point(), list).Y;
+            var dragData = new DragPayloadService().Build(top);
+
+            // 光标落在列表顶部 Padding（不属任何卡片子树）：槽位必须是首项上方，
+            // 而不是回退跳到列表末尾。
+            var paddingHover = NewDragEventArgs(
+                dragData,
+                DragDrop.PreviewDragOverEvent,
+                list,
+                new Point(12, 2));
+            list.RaiseEvent(paddingHover);
+
+            Assert.AreEqual(DragDropEffects.Move, paddingHover.Effects);
+            Assert.AreEqual(Visibility.Visible, indicator.Visibility);
+            Assert.AreEqual(topEdgeY, Canvas.GetTop(indicator), 0.5);
+
+            // 光标悬停在列表中部空白（如竖直滚动条所在列、命中目标不是卡片）：
+            // 槽位跟随光标几何，落在下张卡片上方，而不是跳到末尾。
+            var midListHover = NewDragEventArgs(
+                dragData,
+                DragDrop.PreviewDragOverEvent,
+                list,
+                new Point(12, bottomTopY + bottomContainer.ActualHeight / 2 - 1));
+            list.RaiseEvent(midListHover);
+
+            Assert.AreEqual(DragDropEffects.Move, midListHover.Effects);
+            Assert.AreEqual(Visibility.Visible, indicator.Visibility);
+            Assert.AreEqual(bottomTopY, Canvas.GetTop(indicator), 0.5);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void PinnedDrag_CrossRegionShowsClampedInsertionSlotInBothDirections()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -1443,23 +1554,92 @@ public sealed partial class MainWindowInteractionTests
             var pinnedContainer = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(pinned);
             Assert.IsNotNull(normalContainer);
             Assert.IsNotNull(pinnedContainer);
+            var regionEdgeY = pinnedContainer.TranslatePoint(
+                new Point(0, pinnedContainer.ActualHeight),
+                list).Y;
 
+            // 置顶项拖进普通区下缘：钳制回 pinnedCount 槽，指示条停在分区边界。
             var pinnedIntoNormal = NewDragEventArgs(
                 new DragPayloadService().Build(pinned),
                 DragDrop.PreviewDragOverEvent,
                 normalContainer,
                 new Point(0, normalContainer.ActualHeight));
             normalContainer.RaiseEvent(pinnedIntoNormal);
-            Assert.AreEqual(DragDropEffects.None, pinnedIntoNormal.Effects);
-            Assert.AreEqual(Visibility.Collapsed, indicator.Visibility);
+            Assert.AreEqual(DragDropEffects.Move, pinnedIntoNormal.Effects);
+            Assert.AreEqual(Visibility.Visible, indicator.Visibility);
+            Assert.AreEqual(regionEdgeY, Canvas.GetTop(indicator), 0.5);
 
+            // 普通项拖进置顶区上缘：同样钳制到 pinnedCount 槽。
             var normalIntoPinned = NewDragEventArgs(
                 new DragPayloadService().Build(normal),
                 DragDrop.PreviewDragOverEvent,
                 pinnedContainer,
                 new Point());
             pinnedContainer.RaiseEvent(normalIntoPinned);
-            Assert.AreEqual(DragDropEffects.None, normalIntoPinned.Effects);
+            Assert.AreEqual(DragDropEffects.Move, normalIntoPinned.Effects);
+            Assert.AreEqual(Visibility.Visible, indicator.Visibility);
+            Assert.AreEqual(regionEdgeY, Canvas.GetTop(indicator), 0.5);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void PinnedBoundaryDrag_DropsAtTheClampedIndicatorSlot()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        // 按显示顺序的反序添加，使显示为 [firstPinned, lastPinned, firstNormal, secondNormal]。
+        var secondNormal = board.AddText("normal two");
+        var firstNormal = board.AddText("normal one");
+        var lastPinned = board.AddText("pinned two");
+        var firstPinned = board.AddText("pinned one");
+        board.SetPinnedMany([firstPinned.Id, lastPinned.Id], true);
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var indicator = (Border)window.FindName("InsertionIndicator");
+            var boundaryContainer =
+                (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(lastPinned);
+            Assert.IsNotNull(boundaryContainer);
+            var expectedEdgeY = boundaryContainer.TranslatePoint(
+                new Point(0, boundaryContainer.ActualHeight),
+                list).Y;
+            var dragData = new DragPayloadService().Build(secondNormal);
+            var dropPoint = new Point(8, 1);
+
+            var over = NewDragEventArgs(
+                dragData,
+                DragDrop.PreviewDragOverEvent,
+                boundaryContainer,
+                dropPoint);
+            boundaryContainer.RaiseEvent(over);
+            Assert.AreEqual(DragDropEffects.Move, over.Effects);
+            Assert.AreEqual(Visibility.Visible, indicator.Visibility);
+            Assert.AreEqual(expectedEdgeY, Canvas.GetTop(indicator), 0.5);
+
+            var drop = NewDragEventArgs(
+                dragData,
+                DragDrop.PreviewDropEvent,
+                boundaryContainer,
+                dropPoint);
+            boundaryContainer.RaiseEvent(drop);
+            PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
+            CompleteLayout(window);
+
+            Assert.AreEqual(DragDropEffects.Move, drop.Effects);
+            Assert.AreEqual(1, store.SaveCount);
+            CollectionAssert.AreEqual(
+                new[] { firstPinned.Id, lastPinned.Id, secondNormal.Id, firstNormal.Id },
+                board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
             Assert.AreEqual(Visibility.Collapsed, indicator.Visibility);
         }
         finally
