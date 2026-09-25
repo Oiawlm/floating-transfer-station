@@ -72,11 +72,12 @@ public partial class MainWindow : Window
             }));
     }
 
-    /// <summary>指针离开与收起到点共用：改名草稿还在或面板内编辑控件持有焦点时都不自动收起。</summary>
+    /// <summary>指针离开与收起到点共用：改名草稿还在、面板内编辑控件持有焦点或搜索态进行中时都不自动收起。</summary>
     private bool IsPanelEditHoldActive() =>
         IsCategoryNameEditActive() ||
         _panelState.IsTextEditingActive ||
-        IsPanelTextEditor(Keyboard.FocusedElement);
+        IsPanelTextEditor(Keyboard.FocusedElement) ||
+        _viewModel.IsSearchActive;
 
     // 编辑器键盘焦点是比指针位置更强的使用意图信号：IME 组合窗/候选窗是独立 HWND，
     // 出现在指针下方时系统会补发假的 MouseLeave，判定因此基于焦点而非指针位置。

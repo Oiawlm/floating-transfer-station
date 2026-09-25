@@ -3,6 +3,14 @@ using FloatingTransferStation.Services;
 
 namespace FloatingTransferStation.ViewModels;
 
+/// <summary>内容搜索的类型筛选(2026-09-25 设计草案切片 1):两个 chip 的组合语义。</summary>
+public enum SearchTypeFilter
+{
+    All = 0,
+    Images = 1,
+    TextOnly = 2
+}
+
 public sealed class MainWindowViewModel : ObservableObject
 {
     private readonly DefaultCaptureCategoryState _defaultCaptureCategory;
@@ -10,6 +18,9 @@ public sealed class MainWindowViewModel : ObservableObject
     private CategoryViewModel _defaultCapturePanel;
     private bool _isExternalDropRailVisible;
     private bool _isPanelExpanded;
+    private bool _isSearchActive;
+    private string _searchText = string.Empty;
+    private SearchTypeFilter _searchType;
     private string _statusText = string.Empty;
 
     public MainWindowViewModel(
@@ -54,6 +65,44 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         get => _isPanelExpanded;
         private set => SetProperty(ref _isPanelExpanded, value);
+    }
+
+    /// <summary>搜索态：头部操作区切换为搜索条，过滤当前分类的只读视图；退出即还原。</summary>
+    public bool IsSearchActive
+    {
+        get => _isSearchActive;
+        private set => SetProperty(ref _isSearchActive, value);
+    }
+
+    public string SearchText
+    {
+        get => _searchText;
+        set => SetProperty(ref _searchText, value);
+    }
+
+    public SearchTypeFilter SearchType
+    {
+        get => _searchType;
+        set => SetProperty(ref _searchType, value);
+    }
+
+    /// <summary>进入搜索态(窗口层负责应用过滤与焦点);复盘标签不参与(冻结)。</summary>
+    public void EnterSearch()
+    {
+        IsSearchActive = true;
+    }
+
+    /// <summary>退出搜索态并清空条件;窗口层负责还原列表。</summary>
+    public void ExitSearch()
+    {
+        if (!IsSearchActive)
+        {
+            return;
+        }
+
+        IsSearchActive = false;
+        SearchText = string.Empty;
+        SearchType = SearchTypeFilter.All;
     }
 
     public bool IsExternalDropRailVisible => _isExternalDropRailVisible;

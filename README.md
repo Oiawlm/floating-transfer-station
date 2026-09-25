@@ -10,12 +10,12 @@
 
 ## 下载与安装
 
-在 [1.12.0 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.12.0) 选择你的平台：
+在 [1.13.0 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.13.0) 选择你的平台：
 
 | 平台 | 下载 | 状态 |
 |---|---|---|
-| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.12.0/FloatingTransferStation-Setup-1.12.0.exe) | 正式版 |
-| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.12.0/FloatingTransferStation-1.12.0-osx-arm64.zip) | 测试版，未 Apple 公证 |
+| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.13.0/FloatingTransferStation-Setup-1.13.0.exe) | 正式版 |
+| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.13.0/FloatingTransferStation-1.13.0-osx-arm64.zip) | 测试版，未 Apple 公证 |
 
 仍在使用 Intel Mac 的读者可以从 [1.6.0 历史发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.6.0) 获取最后的 Intel 包；该版本保留不撤回，但不再获得更新。
 
@@ -31,7 +31,7 @@
 
 ### Mac 安装
 
-解压 `FloatingTransferStation-1.12.0-osx-arm64.zip`，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
+解压 `FloatingTransferStation-1.13.0-osx-arm64.zip`，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
 
 Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自动生成的源码包；Mac 应用包的文件名包含 `osx-arm64`。
 
@@ -40,6 +40,7 @@ Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自
 以下为 Windows 正式版说明；Mac 候选版的操作与验证边界见下方“Mac 版”。
 
 - **随手收集**：复制图片或文字后，内容自动进入当前默认分类；来源标记为禁止历史记录的内容会跳过自动采集。与最近一次成功采集完全相同的单条内容，5 秒内不会重复收集。
+- **搜索过滤**：面板头部放大镜或 `Ctrl+F` 搜索当前分类——关键词匹配文字内容，图片/文本 chip 按类型收窄，结果保持置顶在前的顺序；`Esc` 或切换分类退出并还原，过滤不改任何数据。
 - **图片容错**：同次复制提供多个图片表示时，读取或解码某个表示失败仍会尝试其他有效表示，优先保存可用图片中像素最多的一份；照片保留正确的旋转或镜像方向。
 - **批量复制**：一次复制多张图片保留来源顺序，损坏文件不影响同批其他可用图片。
 - **指定位置放入**：可以从资源管理器、浏览器、微信等软件把常见静态图片或非空文字直接拖到某个分类。

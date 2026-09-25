@@ -46,6 +46,12 @@ public partial class MainWindow : Window
             TrackPendingOperation(FlushReviewAsync());
         }
 
+        // 搜索作用于单一分类:切换分类即退出搜索并还原列表(设计草案切片 1)。
+        if (_viewModel.IsSearchActive && _viewModel.ActivePanel?.Category != category)
+        {
+            ExitSearchMode();
+        }
+
         if (_viewModel.ActivePanel?.Category != category)
         {
             ClearUserSelection();
@@ -189,6 +195,7 @@ public partial class MainWindow : Window
         if (_isClosing ||
             Keyboard.FocusedElement is TextBoxBase ||
             !_viewModel.IsPanelExpanded ||
+            _viewModel.IsSearchActive ||
             _viewModel.ActivePanel is not { Items.Count: > 0 })
         {
             return;
@@ -428,6 +435,27 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
+        }
+
+        // Ctrl+F 进入搜索(面板展开且无文本编辑焦点);Esc 在搜索态优先退出搜索。
+        if (e.Key == Key.F &&
+            e.KeyboardDevice.Modifiers == ModifierKeys.Control &&
+            !_isClosing &&
+            Keyboard.FocusedElement is not TextBoxBase &&
+            _viewModel.IsPanelExpanded)
+        {
+            e.Handled = true;
+            EnterSearchMode();
+            return;
+        }
+
+        if (e.Key == Key.Escape &&
+            !_isClosing &&
+            _viewModel.IsSearchActive)
+        {
+            e.Handled = true;
+            ExitSearchMode();
+            return;
         }
 
         if (e.Key == Key.Z &&
