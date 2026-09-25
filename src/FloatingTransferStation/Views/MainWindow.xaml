@@ -148,6 +148,26 @@
                           VerticalAlignment="Center"
                           Margin="0,0,8,0"
                           Style="{StaticResource HeaderActionsHostStyle}">
+                <Button x:Name="PanelHoldButton"
+                        Style="{StaticResource HeaderActionButtonStyle}"
+                        ToolTip="保持展开，暂停自动收起"
+                        AutomationProperties.Name="保持展开，暂停自动收起"
+                        Click="PanelHoldButton_Click">
+                  <!-- 暂停符直译「暂停自动收起」，与条目/批量置顶的图钉形图标区分；
+                       描边图标显式 14.5×14.5 + 1.5 描边（光学足印约 16 DIP），与恢复默认按钮同一规范。 -->
+                  <Path Data="M5,2.75 L5,11.75 M9.5,2.75 L9.5,11.75"
+                        Width="14.5"
+                        Height="14.5"
+                        Stretch="Uniform"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                        StrokeThickness="1.5"
+                        StrokeStartLineCap="Round"
+                        StrokeEndLineCap="Round"
+                        StrokeLineJoin="Round" />
+                </Button>
+
                 <Button x:Name="SettingsButton"
                         Style="{StaticResource HeaderActionButtonStyle}"
                         ToolTip="设置"

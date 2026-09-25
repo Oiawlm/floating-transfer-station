@@ -132,6 +132,91 @@ public sealed class PanelStateMachineTests
 
     [TestMethod]
     [TestCategory("Adversarial")]
+    public void PanelHold_KeepsPanelOpenAcrossPointerLeaveUntilHoldEnds()
+    {
+        var state = new PanelStateMachine();
+        state.Switch(BoardCategory.Inbox);
+        state.BeginPanelHold();
+        state.LeaveSurface();
+
+        Assert.IsFalse(state.WouldCollapse);
+        Assert.IsFalse(state.TryCollapse());
+        state.EndPanelHold();
+        Assert.IsTrue(state.WouldCollapse);
+        Assert.IsTrue(state.TryCollapse());
+        Assert.IsFalse(state.IsExpanded);
+        Assert.AreEqual(BoardCategory.Inbox, state.ActiveCategory);
+    }
+
+    [TestMethod]
+    public void PanelHoldState_IsObservableWithoutAllowingExternalMutation()
+    {
+        var state = new PanelStateMachine();
+
+        Assert.IsFalse(state.IsPanelHoldActive);
+        state.BeginPanelHold();
+        Assert.IsTrue(state.IsPanelHoldActive);
+        state.EndPanelHold();
+        Assert.IsFalse(state.IsPanelHoldActive);
+        Assert.IsFalse(typeof(PanelStateMachine)
+            .GetProperty(nameof(PanelStateMachine.IsPanelHoldActive))!
+            .CanWrite);
+    }
+
+    [TestMethod]
+    public void PanelHold_UnionsWithTextEditingAcrossPointerLeave()
+    {
+        var state = new PanelStateMachine();
+        state.Switch(BoardCategory.Inbox);
+        state.BeginPanelHold();
+        state.BeginTextEditing();
+        state.LeaveSurface();
+
+        Assert.IsFalse(state.TryCollapse());
+        state.EndTextEditing();
+        Assert.IsFalse(state.TryCollapse());
+        state.EndPanelHold();
+        Assert.IsTrue(state.TryCollapse());
+        Assert.IsFalse(state.IsExpanded);
+        Assert.AreEqual(BoardCategory.Inbox, state.ActiveCategory);
+    }
+
+    [TestMethod]
+    public void PanelHold_UnionsWithDragAcrossPointerLeave()
+    {
+        var state = new PanelStateMachine();
+        state.Switch(BoardCategory.Inbox);
+        state.BeginPanelHold();
+        state.BeginDrag();
+        state.LeaveSurface();
+
+        Assert.IsFalse(state.TryCollapse());
+        state.EndDrag();
+        Assert.IsFalse(state.TryCollapse());
+        state.EndPanelHold();
+        Assert.IsTrue(state.TryCollapse());
+        Assert.IsFalse(state.IsExpanded);
+        Assert.AreEqual(BoardCategory.Inbox, state.ActiveCategory);
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
+    public void PanelHold_SurvivesExternalDropCollapse()
+    {
+        var state = new PanelStateMachine();
+        state.Switch(BoardCategory.Inbox);
+        state.BeginPanelHold();
+        state.LeaveSurface();
+
+        state.CollapseForExternalDrop();
+
+        Assert.IsFalse(state.IsExpanded);
+        Assert.IsTrue(state.IsPanelHoldActive);
+        Assert.AreEqual(BoardCategory.Inbox, state.ActiveCategory);
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
     public void RapidEnterAfterLeaveCancelsPendingCollapseCondition()
     {
         var state = new PanelStateMachine();

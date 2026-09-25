@@ -7,11 +7,13 @@ public sealed class PanelStateMachine
     private bool _pointerInside;
     private bool _dragInProgress;
     private bool _textEditingActive;
+    private bool _panelHoldActive;
 
     public BoardCategory? ActiveCategory { get; private set; }
     public BoardCategory? PendingCategory { get; private set; }
     public bool IsDragInProgress => _dragInProgress;
     public bool IsTextEditingActive => _textEditingActive;
+    public bool IsPanelHoldActive => _panelHoldActive;
     public bool IsExpanded { get; private set; }
 
     public void BeginHover(BoardCategory category)
@@ -71,6 +73,11 @@ public sealed class PanelStateMachine
 
     public void EndTextEditing() => _textEditingActive = false;
 
+    /// <summary>用户显式断言面板保持展开（会话级、不持久化），抑制指针离开引发的自动收起。</summary>
+    public void BeginPanelHold() => _panelHoldActive = true;
+
+    public void EndPanelHold() => _panelHoldActive = false;
+
     public void CollapseForExternalDrop()
     {
         PendingCategory = null;
@@ -79,7 +86,7 @@ public sealed class PanelStateMachine
 
     public bool TryCollapse()
     {
-        if (_pointerInside || _dragInProgress || _textEditingActive || !IsExpanded)
+        if (_pointerInside || _dragInProgress || _textEditingActive || _panelHoldActive || !IsExpanded)
         {
             return false;
         }
@@ -89,7 +96,8 @@ public sealed class PanelStateMachine
     }
 
     /// <summary>只读探针：当前条件若调用 TryCollapse 是否会提交收起，不改变状态。</summary>
-    public bool WouldCollapse => !_pointerInside && !_dragInProgress && !_textEditingActive && IsExpanded;
+    public bool WouldCollapse =>
+        !_pointerInside && !_dragInProgress && !_textEditingActive && !_panelHoldActive && IsExpanded;
 
     private static void Validate(BoardCategory category)
     {

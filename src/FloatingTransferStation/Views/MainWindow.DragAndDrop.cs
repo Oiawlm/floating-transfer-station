@@ -354,6 +354,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 固定期间外部拖入只是临时换成轨道几何；会话结束后固定若仍在，直接回展而不是回落收起态。
+        if (_panelState.IsPanelHoldActive && !_isClosing)
+        {
+            _viewModel.SetExternalDropRailVisible(false);
+            RestoreHeldPanelAfterExternalDrop();
+            return;
+        }
+
         ApplyPlacement(WindowController.Collapsed(
             CurrentWorkArea(),
             _settings,
