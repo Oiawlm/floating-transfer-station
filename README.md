@@ -79,6 +79,12 @@ Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自
 
 *设置窗口一屏：主题、动效、自启、快捷键、数据目录*
 
+**主题**
+
+<img src="docs/images/theme-light-dark.png" width="880" alt="同一展开态面板的浅色与深色主题对比">
+
+*浅色与深色主题同一面板*
+
 **插件**
 
 <img src="docs/images/plugins-section.png" width="550" alt="设置窗口插件区块：内建「整理空白」示例插件，默认关闭">

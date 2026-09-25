@@ -14,6 +14,7 @@
 | `review-tab.gif` | 600×1054 | 156 KB | 复盘标签输入 → 切前一天 → 切回，内容仍在 | 复盘段落之后 |
 | `settings-window.png` | 570×1166 | 90 KB | 设置窗口一屏（中性数据目录） | 成组区「设置」 |
 | `plugins-section.png` | 570×265 | 27 KB | 插件区块（「整理空白」默认关闭） | 成组区「插件」 |
+| `theme-light-dark.png` | 900×790 | 160 KB | 同一展开态面板的浅色/深色双联 | 成组区「主题」 |
 
 总量约 1.5 MB。引用宽度一律 ≤ 源宽；GIF 帧率 10–12 fps（hero 12）。
 
@@ -70,6 +71,7 @@ ffprobe -v error -select_streams v:0 -count_frames -show_entries stream=width,he
 | 06 | 面板矩形 | 复盘标签内 IME 旁路逐字输入（KEYEVENTF_UNICODE，勿用剪贴板粘贴）→ 切前一天 → 切回，内容仍在 |
 | 07 | 设置窗口矩形单帧 | 齿轮打开设置；数据目录必须显示 `D:\fts-demo\data` 中性路径 |
 | 08 | 设置窗口插件区块单帧 | 「整理空白」默认关闭如实呈现 |
+| 10 | 面板矩形 [1843,135,717,1260] 单帧 ×2 | `FTS_PREVIEW_THEME=dark` 重启截深色帧（悬停待分类行展开，指针停面板右缘让光标图形出屏）；与浅色帧（同一 seed 重置后同样流程）`hstack` 拼接后缩 900 宽 |
 
 「面板内选择」与拖拽用 SendInput 表演脚本（move/click/drag，ease 曲线插值、`-DwellMs 420` 悬停）；打字用 KEYEVENTF_UNICODE 旁路输入法。已验证的边界：对资源管理器的 Shift 注入无效、Ctrl 多选跨次残留（先点空白清选中）、合成「多选+复制」不可靠（batch-copy 类资产须真人演示）。
 
