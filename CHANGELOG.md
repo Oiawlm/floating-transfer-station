@@ -4,6 +4,8 @@
 
 ## 未发布
 
+- README 视觉化资产入库：面板结构标注图（`docs/images/panel-anatomy.png`）、复盘标签演示（`review-tab.gif`）、设置窗口与插件区块截图（`settings-window.png`、`plugins-section.png`）、浅色/深色主题双联图（`theme-light-dark.png`）、批量复制演示（`batch-copy-images.gif`）插入对应章节，与此前入库的首页循环、拖入分类、多选批量置顶、贴边收起演示（1.13.0 起）共同构成图文说明。全部演示素材取自 1.12.0 真实应用画面；资产清单与再生步骤见 [docs/images/README.md](docs/images/README.md)。
+
 ## 1.14.1
 
 - 修复任务栏停靠侧变化后右缘裁切判定陈旧：任务栏换边等改变工作区的系统设置只广播 `WM_SETTINGCHANGE`（不伴随 `WM_DISPLAYCHANGE`），右缘裁切（1.8.0 的边缘裁切特性）不会重估，窗口可能在新的屏幕边界留下缝或继续越界。现在任何 `WM_SETTINGCHANGE` 都触发裁切重估与窗口贴边重算（该消息罕见，无性能影响）；显示器变更（`WM_DISPLAYCHANGE`）与主题变化（`ImmersiveColorSet`）的既有处理不变。此缺口在 1.11.1 修复时已记入候选池，本版补齐。
