@@ -474,11 +474,18 @@ public sealed partial class MainWindowInteractionTests
             var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(
                 board.Items(BoardCategory.Inbox).Single());
             Assert.IsNotNull(container);
-            var card = FindDescendants<Border>(container)
+            // 阴影由独立的阴影层承载（不在文字子树上，见 CardTemplate_RendersTextOutside…）；
+            // 每张卡共享同一冻结 Effect 实例的契约不变。
+            var shadowLayer = FindDescendants<Border>(container)
+                .Single(candidate => ReferenceEquals(
+                    candidate.Style,
+                    window.FindResource("CardShadowLayerStyle")));
+            Assert.AreSame(effect, shadowLayer.Effect);
+            var cardSurface = FindDescendants<Border>(container)
                 .Single(candidate => ReferenceEquals(
                     candidate.Style,
                     window.FindResource("CardContainerStyle")));
-            Assert.AreSame(effect, card.Effect);
+            Assert.IsNull(cardSurface.Effect, "卡片内容面不得携带 Effect（会关闭 ClearType）。");
         }
         finally
         {

@@ -108,6 +108,7 @@
 
 ## 五·B、层级（Elevation）
 
+- 卡片模板为三层结构（1.11.3 起）：根容器（`CardRootStyle`，承载外距与悬停上浮，无 Effect）+ 阴影层（`CardShadowLayerStyle`，与卡片同形状的不透明底 + 共享冻结 `CardShadowEffect`，不承载内容、不参与命中）+ 内容面（`CardContainerStyle`，不透明卡片底、描边与焦点态，**不得携带 Effect**）。带 `Effect` 的元素会把整个子树渲染进中间位图并强制关闭 ClearType（卡片正文发糊主因），阴影因此必须隔离在文字子树之外；小字号文本（卡片正文/复盘编辑器 14、状态文本 12、徽标计数 9）按像素对齐渲染（`TextFormattingMode=Display`），16px 标题保持 Ideal。
 - 卡片统一携带共享冻结的 `CardShadowEffect`（浅色 `#1D1D1F`/0.12、深色 `#000000`/0.35，模糊 8、深度 2、方向 270°），不逐卡片实例化以保证虚拟化列表性能。
 - 卡片悬停时以渲染位移上浮 1px（`LiftAnimation.LiftedOffsetPx = -1`，167ms 减速曲线，回落用加速曲线），不参与布局、不影响命中测试。
 - 滚动条滑块悬停时经 6px 宽悬停层交叉淡入表现展宽（基宽 4px）。
