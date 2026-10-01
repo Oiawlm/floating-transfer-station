@@ -196,6 +196,118 @@ public sealed class DragPayloadServiceTests
         Assert.ThrowsExactly<ArgumentException>(() => service.BuildInternalBatch([item, item]));
     }
 
+    [STATestMethod]
+    public void BuildClipboardPayload_SingleTextMatchesDragOutDelivery()
+    {
+        var item = BoardItem.CreateText("单条文字", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        var service = new DragPayloadService();
+
+        var data = service.BuildClipboardPayload([item]);
+
+        Assert.AreEqual("单条文字", data.GetData(DataFormats.UnicodeText));
+        Assert.AreEqual("单条文字", data.GetData(DataFormats.Text));
+        Assert.IsFalse(data.GetDataPresent(DataFormats.FileDrop));
+        Assert.AreEqual(item.Id, service.GetInternalItemId(data));
+    }
+
+    [STATestMethod]
+    public void BuildClipboardPayload_SingleImageMatchesDragOutDelivery()
+    {
+        using var directory = new TestDirectory();
+        var item = CreateManagedImage(directory, "single.png");
+        var service = new DragPayloadService();
+
+        var data = service.BuildClipboardPayload([item]);
+
+        CollectionAssert.AreEqual(
+            new[] { item.ImageAbsolutePath! },
+            data.GetFileDropList().Cast<string>().ToArray());
+        Assert.IsTrue(data.GetDataPresent(DataFormats.Bitmap));
+        Assert.AreEqual(item.Id, service.GetInternalItemId(data));
+    }
+
+    [STATestMethod]
+    public void BuildClipboardPayload_MultipleTextsJoinInBoardOrderWithLineBreaks()
+    {
+        var pinned = BoardItem.CreateText("置顶文字", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        var first = BoardItem.CreateText("第一条", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        var second = BoardItem.CreateText("第二条", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        var service = new DragPayloadService();
+
+        var data = service.BuildClipboardPayload([pinned, first, second]);
+
+        Assert.AreEqual(
+            $"置顶文字{Environment.NewLine}第一条{Environment.NewLine}第二条",
+            data.GetData(DataFormats.UnicodeText));
+        Assert.AreEqual(
+            $"置顶文字{Environment.NewLine}第一条{Environment.NewLine}第二条",
+            data.GetData(DataFormats.Text));
+        Assert.IsFalse(data.GetDataPresent(DataFormats.FileDrop));
+        CollectionAssert.AreEqual(
+            new[] { pinned.Id, first.Id, second.Id },
+            service.GetInternalItemIds(data)!.ToArray());
+    }
+
+    [STATestMethod]
+    public void BuildClipboardPayload_ImageOnlyBatchProvidesOrderedFileDropList()
+    {
+        using var directory = new TestDirectory();
+        var first = CreateManagedImage(directory, "first.png");
+        var second = CreateManagedImage(directory, "second.png");
+        var service = new DragPayloadService();
+
+        var data = service.BuildClipboardPayload([second, first]);
+
+        CollectionAssert.AreEqual(
+            new[] { second.ImageAbsolutePath!, first.ImageAbsolutePath! },
+            data.GetFileDropList().Cast<string>().ToArray());
+        Assert.IsFalse(data.GetDataPresent(DataFormats.Bitmap));
+        CollectionAssert.AreEqual(
+            new[] { second.Id, first.Id },
+            service.GetInternalItemIds(data)!.ToArray());
+    }
+
+    [STATestMethod]
+    public void BuildClipboardPayload_MixedSelectionMergesTextAndImageFileGroup()
+    {
+        using var directory = new TestDirectory();
+        var imageFirst = CreateManagedImage(directory, "mixed-first.png");
+        var text = BoardItem.CreateText("混合中的文字", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        var imageSecond = CreateManagedImage(directory, "mixed-second.png");
+        var service = new DragPayloadService();
+
+        var data = service.BuildClipboardPayload([imageFirst, text, imageSecond]);
+
+        Assert.AreEqual("混合中的文字", data.GetData(DataFormats.UnicodeText));
+        CollectionAssert.AreEqual(
+            new[] { imageFirst.ImageAbsolutePath!, imageSecond.ImageAbsolutePath! },
+            data.GetFileDropList().Cast<string>().ToArray());
+        CollectionAssert.AreEqual(
+            new[] { imageFirst.Id, text.Id, imageSecond.Id },
+            service.GetInternalItemIds(data)!.ToArray());
+    }
+
+    [STATestMethod]
+    [TestCategory("Adversarial")]
+    public void BuildClipboardPayload_MissingImageAndInvalidInputAreRejected()
+    {
+        using var directory = new TestDirectory();
+        var existing = CreateManagedImage(directory, "existing.png");
+        var missing = BoardItem.CreateImage(
+            Guid.NewGuid(),
+            "images/missing.png",
+            Path.Combine(directory.Root, "missing.png"),
+            DateTimeOffset.UtcNow);
+        var single = BoardItem.CreateText("single", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        var service = new DragPayloadService();
+
+        Assert.ThrowsExactly<FileNotFoundException>(() =>
+            service.BuildClipboardPayload([existing, missing]));
+        Assert.ThrowsExactly<ArgumentException>(() => service.BuildClipboardPayload([]));
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            service.BuildClipboardPayload([single, single]));
+    }
+
     private static BoardItem CreateManagedImage(TestDirectory directory, string fileName)
     {
         var path = Path.Combine(directory.Root, fileName);

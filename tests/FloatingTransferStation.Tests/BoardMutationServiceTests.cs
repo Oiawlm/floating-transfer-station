@@ -595,6 +595,105 @@ public sealed class BoardMutationServiceTests
             store.LastPersistedSnapshot!.Items.Single().Category);
     }
 
+    [TestMethod]
+    public async Task ClearNonPinned_RemovesOnlyNonPinnedAndKeepsPinnedOrder()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var pinnedTop = board.AddText("置顶一");
+        var pinnedSecond = board.AddText("置顶二");
+        var normalFirst = board.AddText("普通一");
+        var normalSecond = board.AddText("普通二");
+        board.SetPinnedMany([pinnedTop.Id, pinnedSecond.Id], true);
+        var keep = board.AddText("其他分类保留", BoardCategory.Reference);
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        Assert.IsTrue(await service.ClearNonPinnedAsync(BoardCategory.Inbox));
+
+        // 新卡插在普通区顶部,置顶批量保持来源相对顺序:
+        // 清空前 = [置顶二, 置顶一, 普通二, 普通一]。
+        CollectionAssert.AreEqual(
+            new[] { pinnedSecond.Id, pinnedTop.Id },
+            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
+        Assert.AreEqual(1, store.SaveCount);
+        CollectionAssert.AreEqual(
+            new[] { pinnedSecond.Id, pinnedTop.Id },
+            store.LastPersistedSnapshot!.Items
+                .Where(item => item.Category == BoardCategory.Inbox)
+                .OrderBy(item => item.Order)
+                .Select(item => item.Id)
+                .ToArray());
+        Assert.AreSame(keep, board.Items(BoardCategory.Reference).Single());
+        Assert.AreEqual(1, service.PendingUndoDeleteCount, "被清空条目必须整批进入撤销栈。");
+    }
+
+    [TestMethod]
+    public async Task ClearNonPinned_WithoutNonPinnedItemsIsNoOpWithoutSaving()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var pinned = board.AddText("只有置顶");
+        board.SetPinnedMany([pinned.Id], true);
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        Assert.IsFalse(await service.ClearNonPinnedAsync(BoardCategory.Inbox));
+        Assert.AreEqual(0, store.SaveCount);
+        Assert.AreSame(pinned, board.Items(BoardCategory.Inbox).Single());
+        Assert.AreEqual(0, service.PendingUndoDeleteCount, "空操作不得进入撤销栈。");
+    }
+
+    [TestMethod]
+    public async Task ClearNonPinned_SaveFailureRestoresWholeCategoryInExactOrder()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var pinnedTop = board.AddText("置顶一");
+        var normalFirst = board.AddText("普通一");
+        var pinnedSecond = board.AddText("置顶二");
+        board.SetPinnedMany([pinnedTop.Id, pinnedSecond.Id], true);
+        var before = board.Items(BoardCategory.Inbox).ToArray();
+        var store = new MutationStore(directory.Root) { FailSave = true };
+        var messages = new List<string>();
+        var service = new BoardMutationService(board, store, messages.Add);
+
+        Assert.IsFalse(await service.ClearNonPinnedAsync(BoardCategory.Inbox));
+
+        CollectionAssert.AreEqual(
+            before.Select(item => item.Id).ToArray(),
+            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
+        CollectionAssert.AreEquivalent(new[] { "清空未保存，内容已恢复。" }, messages);
+        Assert.AreEqual(0, service.PendingUndoDeleteCount);
+    }
+
+    [TestMethod]
+    public async Task ClearNonPinned_IsUndoableAndKeepsItemsAddedAfterTheClear()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var pinned = board.AddText("置顶");
+        var first = board.AddText("普通一");
+        var second = board.AddText("普通二");
+        board.SetPinnedMany([pinned.Id], true);
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        Assert.IsTrue(await service.ClearNonPinnedAsync(BoardCategory.Inbox));
+        var later = board.AddText("清空后新增");
+
+        Assert.IsTrue(await service.UndoLastDeleteAsync());
+
+        // 清空前 = [置顶, 普通二, 普通一]（新卡在上）；清空后新增位于普通区顶部；
+        // 撤销按锚点插回：普通一跟在普通二之后、新增保持最上。
+        CollectionAssert.AreEqual(
+            new[] { pinned.Id, second.Id, first.Id, later.Id },
+            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
+        Assert.IsTrue(pinned.IsPinned);
+        Assert.IsFalse(first.IsPinned);
+        Assert.AreEqual(2, store.SaveCount, "撤销必须再次持久化。");
+    }
+
     private sealed class MutationStore(string root) : IBoardStore
     {
         public bool FailSave { get; set; }

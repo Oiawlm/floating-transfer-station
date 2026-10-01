@@ -302,15 +302,61 @@ public partial class MainWindow : Window
     private async void DeleteContentButton_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
+        await DeleteFromTrashButtonAsync(rightClick: false);
+    }
+
+    /// <summary>
+    /// 垃圾桶按钮双交互（1.15.0 起）：有选择时左/右键都删除已选（与现状一致）；
+    /// 无选择时按偏好执行左/右键各自的清空行为（默认左=清空非置顶、右=清空全部）。
+    /// </summary>
+    private async void DeleteContentButton_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        await DeleteFromTrashButtonAsync(rightClick: true);
+    }
+
+    private async Task DeleteFromTrashButtonAsync(bool rightClick)
+    {
         if (_isClosing || _isDeletePending || _viewModel.ActivePanel is not { } activePanel)
         {
             return;
         }
 
+        var selectedBefore = CaptureSelectedItemIds();
+        if (selectedBefore.Length > 0)
+        {
+            await DeleteContentAsync(selectedBefore, activePanel.Category);
+            return;
+        }
+
+        var behavior = rightClick
+            ? _preferences.TrashNoSelectionRightClick
+            : MapLeftClickTrashBehavior(_preferences.TrashNoSelectionLeftClick);
+        if (behavior == TrashNoSelectionRightClickAction.NoAction)
+        {
+            return;
+        }
+
         await DeleteContentAsync(
-            CaptureSelectedItemIds(),
+            [],
             activePanel.Category,
-            clearWhenNoSelection: true);
+            behavior == TrashNoSelectionRightClickAction.ClearAll
+                ? TrashClearMode.All
+                : TrashClearMode.NonPinned);
+    }
+
+    private static TrashNoSelectionRightClickAction MapLeftClickTrashBehavior(
+        TrashNoSelectionLeftClickAction leftClick) =>
+        leftClick == TrashNoSelectionLeftClickAction.ClearAll
+            ? TrashNoSelectionRightClickAction.ClearAll
+            : TrashNoSelectionRightClickAction.ClearNonPinned;
+
+    /// <summary>无选择时垃圾桶左/右键清空范围的内部表示（测试经反射传参）。</summary>
+    internal enum TrashClearMode
+    {
+        None,
+        All,
+        NonPinned
     }
 
     /// <summary>
@@ -319,25 +365,104 @@ public partial class MainWindow : Window
     /// </summary>
     internal Task<bool> UndoLastDeleteFromPanelAsync() => _mutations.UndoLastDeleteAsync();
 
+    /// <summary>
+    /// 垃圾桶按钮的可访问名称与提示:有选择时始终是「删除已选 N 项」;
+    /// 无选择时按偏好描述左/右键各自的清空行为（两侧行为一致时合并为单一描述）。
+    /// </summary>
+    private void UpdateDeleteButtonLabel()
+    {
+        var label = DescribeTrashButtonAction(BoardList.SelectedItems.Count);
+        DeleteContentButton.ToolTip = label;
+        AutomationProperties.SetName(DeleteContentButton, label);
+    }
+
+    private string DescribeTrashButtonAction(int selectedCount)
+    {
+        if (selectedCount > 0)
+        {
+            return $"删除已选 {selectedCount} 项";
+        }
+
+        var left = DescribeTrashClearScope(_preferences.TrashNoSelectionLeftClick ==
+            TrashNoSelectionLeftClickAction.ClearNonPinned);
+        var right = _preferences.TrashNoSelectionRightClick switch
+        {
+            TrashNoSelectionRightClickAction.ClearNonPinned =>
+                DescribeTrashClearScope(nonPinned: true),
+            TrashNoSelectionRightClickAction.NoAction => "无操作",
+            _ => DescribeTrashClearScope(nonPinned: false)
+        };
+        return left == right ? left : $"左键{left}，右键{right}";
+    }
+
+    private static string DescribeTrashClearScope(bool nonPinned) =>
+        nonPinned ? "清空非置顶" : "清空全部";
+
     private async Task DeleteContentAsync(
         Guid[] selectedBefore,
         BoardCategory targetCategory,
-        bool clearWhenNoSelection = false)
+        TrashClearMode clearMode = TrashClearMode.None)
     {
-        if (_isClosing || _isDeletePending || (selectedBefore.Length == 0 && !clearWhenNoSelection))
+        if (_isClosing ||
+            _isDeletePending ||
+            (selectedBefore.Length == 0 && clearMode == TrashClearMode.None))
         {
             return;
         }
 
+        // 清空非置顶前先取被清范围：既是状态提示的数量，也是空操作短路条件。
+        var nonPinnedIds = clearMode == TrashClearMode.NonPinned
+            ? _board.Items(targetCategory)
+                .Where(item => !item.IsPinned)
+                .Select(item => item.Id)
+                .ToArray()
+            : [];
+        if (clearMode == TrashClearMode.NonPinned && nonPinnedIds.Length == 0)
+        {
+            ShowStatus("当前分类没有非置顶内容可清空。");
+            return;
+        }
+
+        var clearAllCount = clearMode == TrashClearMode.All
+            ? _board.Items(targetCategory).Count
+            : 0;
         _isDeletePending = true;
         var selectionVersion = _selectionChangeVersion;
         DeleteContentButton.IsEnabled = false;
-        BeginDeletedCardFade(selectedBefore, targetCategory, clearWhenNoSelection);
+        BeginDeletedCardFade(
+            clearMode == TrashClearMode.NonPinned ? nonPinnedIds : selectedBefore,
+            targetCategory,
+            clearMode);
         try
         {
-            var success = selectedBefore.Length == 0
-                ? await _mutations.ClearCategoryAsync(targetCategory)
-                : await _mutations.DeleteManyAsync(selectedBefore);
+            bool success;
+            string? completionStatus = null;
+            if (selectedBefore.Length > 0)
+            {
+                success = await _mutations.DeleteManyAsync(selectedBefore);
+            }
+            else if (clearMode == TrashClearMode.NonPinned)
+            {
+                success = await _mutations.ClearNonPinnedAsync(targetCategory);
+                if (success)
+                {
+                    completionStatus = $"已清空非置顶 {nonPinnedIds.Length} 项（可 Ctrl+Z 撤销）";
+                }
+            }
+            else
+            {
+                success = await _mutations.ClearCategoryAsync(targetCategory);
+                if (success)
+                {
+                    completionStatus = $"已清空全部 {clearAllCount} 项（可 Ctrl+Z 撤销）";
+                }
+            }
+
+            if (completionStatus is { } status)
+            {
+                ShowStatus(status);
+            }
+
             await Dispatcher.InvokeAsync(
                 () =>
                 {
@@ -364,9 +489,9 @@ public partial class MainWindow : Window
     }
 
     private void BeginDeletedCardFade(
-        Guid[] selectedBefore,
+        Guid[] fadeIds,
         BoardCategory targetCategory,
-        bool clearWhenNoSelection)
+        TrashClearMode clearMode)
     {
         // 反馈淡出与数据管线并行执行，不延迟任何数据操作；
         // 保存失败回滚或容器被虚拟化复用后由 RestoreDeletedCardFade 复位。
@@ -376,11 +501,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        HashSet<Guid>? ids = selectedBefore.Length > 0
-            ? [.. selectedBefore]
-            : clearWhenNoSelection
-                ? null
-                : [];
+        HashSet<Guid>? ids = clearMode switch
+        {
+            // 清空全部淡出整个列表；其余路径精确淡出受影响条目。
+            TrashClearMode.All => null,
+            TrashClearMode.NonPinned => [.. fadeIds],
+            _ => fadeIds.Length > 0 ? [.. fadeIds] : []
+        };
         var fade = new DoubleAnimation(1d, 0d, TimeSpan.FromMilliseconds(DesignTokens.DeleteFeedbackMs))
         {
             EasingFunction = FadeAnimation.ExitEasing,
@@ -466,6 +593,12 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             await UndoLastDeleteFromPanelAsync();
+            return;
+        }
+
+        // Ctrl+C 复制选中(交付第二通道):编辑态让路由给 TextBox,无选择时不拦截。
+        if (TryCopySelectionWithCtrlC(e))
+        {
             return;
         }
 

@@ -238,10 +238,11 @@
                 </Button>
 
                 <Button x:Name="DeleteContentButton"
-                        ToolTip="清空当前分类"
-                        AutomationProperties.Name="清空当前分类"
+                        ToolTip="左键清空非置顶，右键清空全部"
+                        AutomationProperties.Name="左键清空非置顶，右键清空全部"
                         Foreground="{DynamicResource DangerBrush}"
-                        Click="DeleteContentButton_Click">
+                        Click="DeleteContentButton_Click"
+                        MouseRightButtonUp="DeleteContentButton_MouseRightButtonUp">
                   <Button.Style>
                     <Style TargetType="Button"
                            BasedOn="{StaticResource HeaderActionButtonStyle}">
@@ -399,6 +400,7 @@
                  PreviewDrop="BoardList_PreviewDrop"
                  ButtonBase.Click="BoardList_ButtonClick"
                  MouseDoubleClick="BoardList_MouseDoubleClick"
+                 PreviewMouseRightButtonUp="BoardList_PreviewMouseRightButtonUp"
                  ScrollViewer.CanContentScroll="True"
                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"

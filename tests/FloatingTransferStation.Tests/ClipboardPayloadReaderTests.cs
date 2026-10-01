@@ -21,6 +21,52 @@ public sealed class ClipboardPayloadReaderTests
     }
 
     [STATestMethod]
+    public void Read_InternalSingleItemDeliveryIsSkippedWithoutReCapture()
+    {
+        var data = new DataObject();
+        data.SetData(DragPayloadService.InternalItemIdFormat, Guid.NewGuid().ToString("D"));
+        data.SetData(DataFormats.UnicodeText, "应用自身复制的卡片文字");
+
+        var snapshot = new ClipboardPayloadReader().Read(data, 91);
+
+        Assert.AreEqual(91u, snapshot.SequenceNumber);
+        Assert.IsNull(snapshot.Text, "应用自身交付的卡片复制不得被自动收集重新入库。");
+        Assert.IsEmpty(snapshot.FilePaths);
+        Assert.IsEmpty(snapshot.ImageCandidates);
+    }
+
+    [STATestMethod]
+    public void Read_InternalBatchDeliveryIsSkippedIncludingFileGroups()
+    {
+        var data = new DataObject();
+        data.SetData(
+            DragPayloadService.InternalItemIdsFormat,
+            new[] { Guid.NewGuid().ToString("D"), Guid.NewGuid().ToString("D") });
+        data.SetFileDropList(new System.Collections.Specialized.StringCollection
+        {
+            @"C:\synthetic\first.png",
+            @"C:\synthetic\second.png"
+        });
+
+        var snapshot = new ClipboardPayloadReader().Read(data, 92);
+
+        Assert.IsNull(snapshot.Text);
+        Assert.IsEmpty(snapshot.FilePaths);
+        Assert.IsEmpty(snapshot.ImageCandidates);
+    }
+
+    [STATestMethod]
+    public void Read_ExternalCopyWithoutInternalMarkerIsStillCaptured()
+    {
+        var data = new DataObject();
+        data.SetData(DataFormats.UnicodeText, "外部应用的普通复制");
+
+        Assert.AreEqual(
+            "外部应用的普通复制",
+            new ClipboardPayloadReader().Read(data, 93).Text);
+    }
+
+    [STATestMethod]
     [DataRow(0, false)]
     [DataRow(1, true)]
     [DataRow(2, false)]

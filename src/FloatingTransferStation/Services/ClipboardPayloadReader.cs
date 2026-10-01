@@ -24,7 +24,7 @@ public sealed class ClipboardPayloadReader(WindowsDataImageReader? imageReader =
 
     public ClipboardSnapshot Read(IDataObject? data, uint sequenceNumber)
     {
-        if (data is null || !AllowsHistory(data))
+        if (data is null || IsInternalDelivery(data) || !AllowsHistory(data))
         {
             return new ClipboardSnapshot(sequenceNumber, null, [], null);
         }
@@ -47,6 +47,25 @@ public sealed class ClipboardPayloadReader(WindowsDataImageReader? imageReader =
             ? data.GetData(DataFormats.UnicodeText, autoConvert: true) as string
             : null;
         return new ClipboardSnapshot(sequenceNumber, bitmap, files, text, encoded);
+    }
+
+    /// <summary>
+    /// 应用自身的卡片复制携带内部条目格式（与拖出负载同源）:这类剪贴板内容是
+    /// 交付副本而非新采集,自动收集必须跳过,否则复制旧卡片会凭空生成重复条目
+    /// （条目通常早已超出与最近采集的 5 秒去重窗口）。
+    /// </summary>
+    private static bool IsInternalDelivery(IDataObject data)
+    {
+        try
+        {
+            return data.GetDataPresent(DragPayloadService.InternalItemIdFormat, autoConvert: false) ||
+                data.GetDataPresent(DragPayloadService.InternalItemIdsFormat, autoConvert: false);
+        }
+        catch
+        {
+            // 无法确认格式时按非内部内容处理,保留正常采集路径。
+            return false;
+        }
     }
 
     private static bool AllowsHistory(IDataObject data)

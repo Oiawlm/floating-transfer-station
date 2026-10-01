@@ -209,11 +209,7 @@ public partial class MainWindow : Window
             ? Visibility.Visible
             : Visibility.Collapsed;
         FadeAnimation.SetIsActive(SelectedCountBadge, count > 0);
-        var label = count > 0
-            ? $"删除已选 {count} 项"
-            : "清空当前分类";
-        DeleteContentButton.ToolTip = label;
-        AutomationProperties.SetName(DeleteContentButton, label);
+        UpdateDeleteButtonLabel();
         UpdateBatchPinButton();
     }
 

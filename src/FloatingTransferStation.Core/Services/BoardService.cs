@@ -488,6 +488,33 @@ public sealed class BoardService
         return new RemovedBoardCategory(category, removed);
     }
 
+    /// <summary>
+    /// 只移除分类内的非置顶条目,置顶区顺序原样保留;返回被移除内容与原分类完整
+    /// 顺序(供保存失败整批回滚与延迟恢复复用)。没有非置顶条目时为空操作,
+    /// 返回 RemovedItems 为空的记录,不触发任何集合变更。
+    /// </summary>
+    public RemovedBoardItems RemoveNonPinned(BoardCategory category)
+    {
+        if (!BoardCategoryCatalog.IsDefined(category))
+        {
+            throw new ArgumentOutOfRangeException(nameof(category));
+        }
+
+        var original = _items[category].ToArray();
+        var removed = original.Where(item => !item.IsPinned).ToArray();
+        if (removed.Length > 0)
+        {
+            ReplaceCategory(category, original.Where(item => item.IsPinned));
+        }
+
+        return new RemovedBoardItems(
+            new Dictionary<BoardCategory, IReadOnlyList<BoardItem>>
+            {
+                [category] = original
+            },
+            removed);
+    }
+
     public void Restore(RemovedBoardCategory removed)
     {
         if (!BoardCategoryCatalog.IsDefined(removed.Category))

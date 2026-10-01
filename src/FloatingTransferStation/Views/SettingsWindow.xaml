@@ -382,6 +382,74 @@
                    Text=""
                    Visibility="Collapsed" />
 
+        <TextBlock Text="内容复制" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+        <Grid Background="Transparent">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Grid.Column="0"
+                     Text="右键卡片复制到剪贴板"
+                     Style="{StaticResource RowCaptionStyle}" />
+          <CheckBox x:Name="RightClickCopyToggle"
+                    Grid.Column="1"
+                    Style="{StaticResource ToggleSwitchStyle}"
+                    AutomationProperties.Name="右键卡片复制到剪贴板"
+                    Checked="RightClickCopyToggle_Checked"
+                    Unchecked="RightClickCopyToggle_Unchecked" />
+        </Grid>
+        <Grid Background="Transparent" Margin="0,6,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Grid.Column="0"
+                     Text="Ctrl + C 复制已选内容"
+                     Style="{StaticResource RowCaptionStyle}" />
+          <CheckBox x:Name="CtrlCCopyToggle"
+                    Grid.Column="1"
+                    Style="{StaticResource ToggleSwitchStyle}"
+                    AutomationProperties.Name="Ctrl + C 复制已选内容"
+                    Checked="CtrlCCopyToggle_Checked"
+                    Unchecked="CtrlCCopyToggle_Unchecked" />
+        </Grid>
+        <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                   Text="复制内容与拖出一致；应用自身的复制不会被自动收集重复入库。选中多张卡片后 Ctrl+C：文字按板内顺序合并，图片给出文件组。" />
+
+        <TextBlock Text="垃圾桶按钮" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+        <Grid Background="Transparent">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Grid.Column="0"
+                     Text="无选择时左键"
+                     Style="{StaticResource RowCaptionStyle}"
+                     Margin="0,0,8,0" />
+          <ComboBox x:Name="TrashLeftClickComboBox"
+                    Grid.Column="1"
+                    Style="{StaticResource ThemedComboBoxStyle}"
+                    AutomationProperties.Name="无选择时左键行为"
+                    SelectionChanged="TrashLeftClickComboBox_SelectionChanged" />
+        </Grid>
+        <Grid Background="Transparent" Margin="0,6,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Grid.Column="0"
+                     Text="无选择时右键"
+                     Style="{StaticResource RowCaptionStyle}"
+                     Margin="0,0,8,0" />
+          <ComboBox x:Name="TrashRightClickComboBox"
+                    Grid.Column="1"
+                    Style="{StaticResource ThemedComboBoxStyle}"
+                    AutomationProperties.Name="无选择时右键行为"
+                    SelectionChanged="TrashRightClickComboBox_SelectionChanged" />
+        </Grid>
+        <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                   Text="有选择时点击垃圾桶始终删除已选内容；两种清空都可 Ctrl+Z 整体撤销。" />
+
         <TextBlock Text="数据目录" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
         <Grid Background="Transparent">
           <Grid.ColumnDefinitions>

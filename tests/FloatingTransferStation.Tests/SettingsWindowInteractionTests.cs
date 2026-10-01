@@ -155,9 +155,12 @@ public sealed class SettingsWindowInteractionTests
         return (T)field.GetValue(window)!;
     }
 
-    private static void SaveVisualEvidence(FrameworkElement visual, string fileName)
+    private static void SaveVisualEvidence(
+        FrameworkElement visual,
+        string fileName,
+        string environmentVariable = "FTS_SETTINGS_EVIDENCE_DIR")
     {
-        var directory = Environment.GetEnvironmentVariable("FTS_SETTINGS_EVIDENCE_DIR");
+        var directory = Environment.GetEnvironmentVariable(environmentVariable);
         if (string.IsNullOrWhiteSpace(directory))
         {
             return;
@@ -587,6 +590,101 @@ public sealed class SettingsWindowInteractionTests
                 DesignTheme.Dark,
                 GetPrivateField<DesignTheme>(window, "_activeDesignTheme"),
                 "选择深色应立即应用主窗主题。");
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CopyGestureToggles_ApplyImmediatelyAndPersist()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var rightClick = settings.FindName("RightClickCopyToggle") as CheckBox;
+            var ctrlC = settings.FindName("CtrlCCopyToggle") as CheckBox;
+            Assert.IsNotNull(rightClick);
+            Assert.IsNotNull(ctrlC);
+            Assert.IsTrue(rightClick.IsChecked!.Value, "右键卡片复制默认开启。");
+            Assert.IsTrue(ctrlC.IsChecked!.Value, "Ctrl+C 复制选中默认开启。");
+
+            rightClick.IsChecked = false;
+            CompleteLayout(window);
+
+            Assert.IsFalse(window.CurrentPreferences.RightClickCardCopyEnabled);
+            Assert.IsFalse(preferencesStore.LastSaved!.RightClickCardCopyEnabled, "改动必须立即落偏好文件。");
+
+            ctrlC.IsChecked = false;
+            CompleteLayout(window);
+
+            Assert.IsFalse(window.CurrentPreferences.CopySelectionWithCtrlCEnabled);
+            Assert.IsFalse(preferencesStore.LastSaved.CopySelectionWithCtrlCEnabled);
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void TrashBehaviorComboBoxes_ApplyImmediatelyPersistAndUpdateButtonLabel()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var left = settings.FindName("TrashLeftClickComboBox") as ComboBox;
+            var right = settings.FindName("TrashRightClickComboBox") as ComboBox;
+            Assert.IsNotNull(left);
+            Assert.IsNotNull(right);
+            Assert.AreEqual("清空非置顶", ((ComboBoxItem)left.SelectedItem).Content);
+            Assert.AreEqual("清空全部", ((ComboBoxItem)right.SelectedItem).Content);
+            var delete = window.FindName("DeleteContentButton") as Button;
+            Assert.IsNotNull(delete);
+            Assert.AreEqual("左键清空非置顶，右键清空全部", delete.ToolTip);
+            SaveVisualEvidence(
+                settings.FindName("WindowShell") as FrameworkElement ?? settings,
+                "settings-copy-and-trash-sections.png",
+                "FTS_DELIVERY_EVIDENCE_DIR");
+
+            left.SelectedIndex = 1;
+            CompleteLayout(window);
+
+            Assert.AreEqual(
+                TrashNoSelectionLeftClickAction.ClearAll,
+                window.CurrentPreferences.TrashNoSelectionLeftClick);
+            Assert.AreEqual(
+                TrashNoSelectionLeftClickAction.ClearAll,
+                preferencesStore.LastSaved!.TrashNoSelectionLeftClick);
+            Assert.AreEqual("清空全部", delete.ToolTip, "双侧行为一致时合并为单一描述。");
+
+            right.SelectedIndex = 2;
+            CompleteLayout(window);
+
+            Assert.AreEqual(
+                TrashNoSelectionRightClickAction.NoAction,
+                window.CurrentPreferences.TrashNoSelectionRightClick);
+            Assert.AreEqual(
+                TrashNoSelectionRightClickAction.NoAction,
+                preferencesStore.LastSaved.TrashNoSelectionRightClick);
+            Assert.AreEqual("左键清空全部，右键无操作", delete.ToolTip);
 
             CloseWindow(settings);
         }

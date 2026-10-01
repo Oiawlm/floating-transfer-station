@@ -39,6 +39,23 @@ public partial class SettingsWindow : Window
         AnimationsToggle.IsChecked = host.CurrentPreferences.AnimationsEnabled;
         StartupToggle.IsChecked = host.StartupManager.IsEnabled();
         GlobalHotkeyToggle.IsChecked = host.CurrentPreferences.GlobalHotkeyEnabled;
+        RightClickCopyToggle.IsChecked = host.CurrentPreferences.RightClickCardCopyEnabled;
+        CtrlCCopyToggle.IsChecked = host.CurrentPreferences.CopySelectionWithCtrlCEnabled;
+        TrashLeftClickComboBox.ItemsSource = new[]
+        {
+            new ComboBoxItem { Content = "清空非置顶", Tag = TrashNoSelectionLeftClickAction.ClearNonPinned },
+            new ComboBoxItem { Content = "清空全部", Tag = TrashNoSelectionLeftClickAction.ClearAll }
+        };
+        TrashLeftClickComboBox.SelectedItem =
+            ((ComboBoxItem[])TrashLeftClickComboBox.ItemsSource)[(int)host.CurrentPreferences.TrashNoSelectionLeftClick];
+        TrashRightClickComboBox.ItemsSource = new[]
+        {
+            new ComboBoxItem { Content = "清空全部", Tag = TrashNoSelectionRightClickAction.ClearAll },
+            new ComboBoxItem { Content = "清空非置顶", Tag = TrashNoSelectionRightClickAction.ClearNonPinned },
+            new ComboBoxItem { Content = "无操作", Tag = TrashNoSelectionRightClickAction.NoAction }
+        };
+        TrashRightClickComboBox.SelectedItem = ((ComboBoxItem[])TrashRightClickComboBox.ItemsSource)
+            .Single(item => Equals(item.Tag, host.CurrentPreferences.TrashNoSelectionRightClick));
         _isSynchronizingControls = false;
 
         DataDirectoryText.Text = host.DataDirectory;
@@ -198,6 +215,66 @@ public partial class SettingsWindow : Window
         _isSynchronizingControls = true;
         GlobalHotkeyToggle.IsChecked = _host.CurrentPreferences.GlobalHotkeyEnabled;
         _isSynchronizingControls = false;
+    }
+
+    private void RightClickCopyToggle_Checked(object sender, RoutedEventArgs e) =>
+        ApplyCopyGesturePreference(rightClickCardCopy: true);
+
+    private void RightClickCopyToggle_Unchecked(object sender, RoutedEventArgs e) =>
+        ApplyCopyGesturePreference(rightClickCardCopy: false);
+
+    private void ApplyCopyGesturePreference(bool rightClickCardCopy)
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with
+        {
+            RightClickCardCopyEnabled = rightClickCardCopy
+        });
+    }
+
+    private void CtrlCCopyToggle_Checked(object sender, RoutedEventArgs e) =>
+        ApplyCtrlCCopyPreference(enabled: true);
+
+    private void CtrlCCopyToggle_Unchecked(object sender, RoutedEventArgs e) =>
+        ApplyCtrlCCopyPreference(enabled: false);
+
+    private void ApplyCtrlCCopyPreference(bool enabled)
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with
+        {
+            CopySelectionWithCtrlCEnabled = enabled
+        });
+    }
+
+    private void TrashLeftClickComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isSynchronizingControls ||
+            TrashLeftClickComboBox.SelectedItem is not ComboBoxItem { Tag: TrashNoSelectionLeftClickAction action })
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with { TrashNoSelectionLeftClick = action });
+    }
+
+    private void TrashRightClickComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isSynchronizingControls ||
+            TrashRightClickComboBox.SelectedItem is not ComboBoxItem { Tag: TrashNoSelectionRightClickAction action })
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with { TrashNoSelectionRightClick = action });
     }
 
     private void OpenDataDirectoryButton_Click(object sender, RoutedEventArgs e)

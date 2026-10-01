@@ -329,6 +329,45 @@ public sealed class BoardMutationService
         }, cancellationToken);
     }
 
+    /// <summary>
+    /// 清空分类的非置顶条目(置顶区顺序原样保留):成功后进入现有撤销栈,
+    /// 保存失败整批回滚;没有非置顶条目时为空操作,返回 false。
+    /// 契约风格与 <see cref="ClearCategoryAsync"/> 一致。
+    /// </summary>
+    public Task<bool> ClearNonPinnedAsync(
+        BoardCategory category,
+        CancellationToken cancellationToken = default)
+    {
+        return _operationGate.RunAsync(async () =>
+        {
+            var removed = _board.RemoveNonPinned(category);
+            if (removed.RemovedItems.Count == 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _board.Restore(removed);
+                _showStatus("清空未保存，内容已恢复。");
+                return false;
+            }
+            catch
+            {
+                _board.Restore(removed);
+                throw;
+            }
+
+            // 与清空全部分类同构:进入会话级撤销栈,图片文件按栈生命周期清理。
+            EnqueueUndoableDelete(removed);
+            return true;
+        }, cancellationToken);
+    }
+
     public Task SaveForShutdownAsync(
         Func<Task> saveAdditionalState,
         CancellationToken cancellationToken = default) =>
