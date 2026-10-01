@@ -48,8 +48,23 @@ public partial class MainWindow
 
     private void CardTextEditor_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
-        // 焦点移出编辑器即提交（与分类改名失焦提交一致）。
+        // 焦点移出编辑器即提交（与分类改名失焦提交一致）。关闭序列已在操作门
+        // 封门前冲刷过编辑；封门后的销毁期失焦不得再注册操作。
+        if (_isClosing)
+        {
+            return;
+        }
+
         CommitCardTextEditing();
+    }
+
+    /// <summary>关闭序列冲刷入口:提交仍打开的卡片编辑（空白同样视为取消）。</summary>
+    private void CommitPendingCardTextEditing()
+    {
+        if (_editingCardItemId is not null)
+        {
+            CommitCardTextEditing();
+        }
     }
 
     /// <summary>双击进入编辑：编辑器覆盖到卡片容器位置，种子为当前文本。</summary>

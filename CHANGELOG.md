@@ -4,6 +4,12 @@
 
 ## 未发布
 
+## 1.15.0
+
+- 修复退出时卡片编辑器仍打开会弹"发生未处理的错误：Board operations are closed."：关闭序列现在在操作门封门前冲刷仍在编辑的卡片内容（随最终保存落盘），窗口销毁期的失焦回调不再在封门后注册操作。回归测试先证明失败路径（打开编辑后直接关闭，修复前必抛）再验证编辑内容随最终保存持久化。该缺口由 1.15.0 新增 Ctrl+C 编辑态让路测试暴露，属 1.14.0 就地编辑引入的既有边界，与双功能分开提交。
+- 新增卡片复制到剪贴板（交付第二通道，解决游戏聊天窗等无法接收拖放的目标）：右键任意卡片把这一张复制到剪贴板，不依赖、不改变当前选择，搜索过滤态同样可用；面板持有键盘焦点、存在选择且不在文字编辑状态时 `Ctrl + C` 复制选中项（参照 Mac 端 `⌘+C` 既有语义；无选择时不改剪贴板，编辑文字或分类改名时让路给编辑器；不做全局热键复制）。复制负载与拖出同构（`DragPayloadService` 打包、`Clipboard.SetDataObject` 落盘）：单条文字为 UnicodeText/Text，多条文字按板内顺序（置顶区在前）用换行合并为一段文本，单张图片为 FileDropList + Bitmap，纯图片多选按来源顺序 FileDropList，文字+图片混合选择合并文本与图片文件组并存。复制不删除源卡片、不进撤销栈；应用自身的复制携带内部条目标记，`ClipboardPayloadReader` 读取时据此跳过，不会触发自动采集重复入库（早于且独立于「与最近采集 5 秒内去重」窗口）。两个手势均可在设置中关闭（默认开启）；实现位于 `Views/MainWindow.ClipboardDelivery.cs` 分部文件。Windows 实现，Mac 端共享核心零改动（Mac 已有 `⌘+C` 语义，遵守暂停边界未接入右键复制）。
+- 新增垃圾桶按钮双交互：有选择时左键、右键都删除选中项（与现状一致）；没有选择时左键清空当前分类的非置顶内容（置顶区顺序原样保留），右键清空全部（含置顶）。两种清空都进现有撤销栈、可 `Ctrl + Z` 整体撤销，沿用保存期间禁用与失败整批回滚模式；无非置顶可清时提示"当前分类没有非置顶内容可清空。"且不保存。成功提示区分"已清空非置顶 N 项（可 Ctrl+Z 撤销）"与"已清空全部 N 项（可 Ctrl+Z 撤销）"；按钮 ToolTip 与自动化名称按当前选择与偏好动态描述双侧行为（默认"左键清空非置顶，右键清空全部"）。共享核心新增 `BoardService.RemoveNonPinned` 与 `BoardMutationService.ClearNonPinnedAsync`（契约对齐 `ClearCategoryAsync`）；无选择时左/右键行为可在设置中调整（默认左=清空非置顶、右=清空全部，右键可选无操作）。
+- 新增设置「内容复制」与「垃圾桶按钮」区块（紧跟全局快捷键之后）：右键卡片复制、`Ctrl + C` 复制选中两个开关（默认开），无选择时左键（清空非置顶/清空全部）与右键（清空全部/清空非置顶/无操作）两个下拉；改动立即生效并经 `preferences.json` 原子持久化。偏好新增 `RightClickCardCopyEnabled`、`CopySelectionWithCtrlCEnabled`、`TrashNoSelectionLeftClick`、`TrashNoSelectionRightClick` 字段（全部带默认值，旧文件缺字段取默认，Mac 端读取兼容）。
 - README 视觉化资产入库：面板结构标注图（`docs/images/panel-anatomy.png`）、复盘标签演示（`review-tab.gif`）、设置窗口与插件区块截图（`settings-window.png`、`plugins-section.png`）、浅色/深色主题双联图（`theme-light-dark.png`）、批量复制演示（`batch-copy-images.gif`）插入对应章节，与此前入库的首页循环、拖入分类、多选批量置顶、贴边收起演示（1.13.0 起）共同构成图文说明。全部演示素材取自 1.12.0 真实应用画面；资产清单与再生步骤见 [docs/images/README.md](docs/images/README.md)。
 
 ## 1.14.1
