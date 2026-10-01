@@ -234,6 +234,47 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
+    [STATestMethod]
+    public void CardEditing_CloseWithOpenEditorFlushesBeforeBoardGateSeals()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingCardEditStore(directory.Root);
+        var board = new BoardService();
+        var item = board.AddText("关闭前仍在编辑", BoardCategory.Inbox);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+        var hasClosed = false;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.RaiseEvent(NewDoubleClickArgs(ContainerOf(window, item)));
+            CompleteLayout(window);
+            EditorInput(window).Text = "关闭时冲刷的编辑";
+            Assert.IsTrue(EditorInput(window).IsKeyboardFocused, "前置条件：编辑器仍打开并持有焦点。");
+
+            // 关闭序列必须在操作门封门前冲刷编辑：修复前窗口销毁期的失焦回调
+            // 在封门后再注册操作，抛出"Board operations are closed."。
+            CloseWindow(window);
+            hasClosed = true;
+
+            Assert.AreEqual("关闭时冲刷的编辑", board.FindItem(item.Id)!.Text);
+            Assert.AreEqual(
+                "关闭时冲刷的编辑",
+                store.LastPersistedSnapshot!.Items.Single(persisted => persisted.Id == item.Id).Text,
+                "编辑内容必须随最终保存落盘。");
+        }
+        finally
+        {
+            if (!hasClosed)
+            {
+                CloseWindow(window);
+            }
+        }
+    }
+
     private sealed class RecordingCardEditStore : IBoardStore
     {
         public RecordingCardEditStore(string root) => ImagesDirectory = Path.Combine(root, "images");
@@ -241,6 +282,7 @@ public sealed partial class MainWindowInteractionTests
         public bool FailSave { get; set; }
         public int SaveCount { get; private set; }
         public int SaveAttempts { get; private set; }
+        public BoardSnapshot? LastPersistedSnapshot { get; private set; }
         public string ImagesDirectory { get; }
 
         public Task<BoardSnapshot> LoadBoardAsync(CancellationToken cancellationToken = default) =>
@@ -255,6 +297,7 @@ public sealed partial class MainWindowInteractionTests
             }
 
             SaveCount++;
+            LastPersistedSnapshot = snapshot;
             return Task.CompletedTask;
         }
 

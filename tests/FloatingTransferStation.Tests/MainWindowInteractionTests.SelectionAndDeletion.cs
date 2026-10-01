@@ -1897,4 +1897,273 @@ public sealed partial class MainWindowInteractionTests
             CloseWindow(window);
         }
     }
+
+    private static MouseButtonEventArgs NewRightButtonUpArgs(object source) =>
+        new(Mouse.PrimaryDevice, 0, MouseButton.Right)
+        {
+            RoutedEvent = UIElement.MouseRightButtonUpEvent,
+            Source = source
+        };
+
+    private static BoardItem AddPinnedText(BoardService board, string text)
+    {
+        var item = board.AddText(text);
+        board.SetPinnedMany([item.Id], true);
+        return item;
+    }
+
+    [STATestMethod]
+    public void TrashButton_NoSelectionLeftClickClearsNonPinnedAndKeepsPinnedOrder()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var pinned = AddPinnedText(board, "置顶保留一");
+        var normalFirst = board.AddText("普通一");
+        var normalSecond = board.AddText("普通二");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var delete = (Button)window.FindName("DeleteContentButton");
+            Assert.AreEqual(0, list.SelectedItems.Count);
+            Assert.AreEqual("左键清空非置顶，右键清空全部", delete.ToolTip);
+            Assert.AreEqual("左键清空非置顶，右键清空全部", AutomationProperties.GetName(delete));
+
+            delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, delete));
+            PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
+            CompleteLayout(window);
+
+            CollectionAssert.AreEqual(
+                new[] { pinned.Id },
+                board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
+                "无选择左键只清非置顶，置顶区原样保留。");
+            Assert.IsTrue(pinned.IsPinned);
+            Assert.AreEqual(
+                "已清空非置顶 2 项（可 Ctrl+Z 撤销）",
+                ((MainWindowViewModel)window.DataContext).StatusText);
+            InvokePrivate(window, "SetHeaderActionsVisible", true);
+            CompleteLayout(window);
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "trash-left-click-clears-non-pinned.png",
+                "FTS_DELIVERY_EVIDENCE_DIR");
+
+            PumpDispatcherUntil(window.Dispatcher, window.UndoLastDeleteFromPanelAsync());
+            CompleteLayout(window);
+
+            // 清空前 = [置顶, 普通二, 普通一]（新卡插在普通区顶部）；整体撤销按原序恢复。
+            CollectionAssert.AreEqual(
+                new[] { pinned.Id, normalSecond.Id, normalFirst.Id },
+                board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
+                "Ctrl+Z 必须整体撤销清空非置顶。");
+            Assert.AreEqual(2, store.SaveCount, "撤销必须再次持久化。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void TrashButton_NoSelectionRightClickClearsAllIncludingPinned()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var pinned = AddPinnedText(board, "置顶也清掉");
+        var normal = board.AddText("普通内容");
+        var keep = board.AddText("其他分类保留", BoardCategory.Reference);
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var delete = (Button)window.FindName("DeleteContentButton");
+
+            delete.RaiseEvent(NewRightButtonUpArgs(delete));
+            PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
+            CompleteLayout(window);
+
+            Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count, "右键清空含置顶的全部内容。");
+            Assert.AreSame(keep, board.Items(BoardCategory.Reference).Single());
+            Assert.AreEqual(
+                "已清空全部 2 项（可 Ctrl+Z 撤销）",
+                ((MainWindowViewModel)window.DataContext).StatusText);
+
+            PumpDispatcherUntil(window.Dispatcher, window.UndoLastDeleteFromPanelAsync());
+            CompleteLayout(window);
+
+            CollectionAssert.AreEquivalent(
+                new[] { pinned, normal },
+                board.Items(BoardCategory.Inbox).ToArray());
+            Assert.IsTrue(pinned.IsPinned, "撤销必须恢复置顶状态。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void TrashButton_WithSelectionBothButtonsDeleteOnlyTheSelection(bool rightClick)
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var pinned = AddPinnedText(board, "置顶保留");
+        var selected = board.AddText("选中的普通内容");
+        var keep = board.AddText("未选中的普通内容");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var delete = (Button)window.FindName("DeleteContentButton");
+            list.SelectedItems.Add(selected);
+            CompleteLayout(window);
+            Assert.AreEqual("删除已选 1 项", delete.ToolTip);
+
+            if (rightClick)
+            {
+                delete.RaiseEvent(NewRightButtonUpArgs(delete));
+            }
+            else
+            {
+                delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, delete));
+            }
+
+            PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
+            CompleteLayout(window);
+
+            CollectionAssert.AreEqual(
+                new[] { pinned.Id, keep.Id },
+                board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
+                "有选择时左/右键都只删除已选内容。");
+            Assert.AreEqual(0, list.SelectedItems.Count);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void TrashButton_NoNonPinnedContentLeftClickShowsHintWithoutSaving()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var pinned = AddPinnedText(board, "只有置顶");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var delete = (Button)window.FindName("DeleteContentButton");
+
+            delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, delete));
+            CompleteLayout(window);
+
+            Assert.AreSame(pinned, board.Items(BoardCategory.Inbox).Single());
+            Assert.AreEqual(0, store.SaveCount, "空操作不得保存。");
+            Assert.IsTrue(delete.IsEnabled, "空操作不进入保存防重入。");
+            Assert.AreEqual(
+                "当前分类没有非置顶内容可清空。",
+                ((MainWindowViewModel)window.DataContext).StatusText);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void TrashButton_NoActionRightClickPreferenceKeepsEverything()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        AddPinnedText(board, "置顶");
+        board.AddText("普通");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+        window.ApplyPreferences(AppPreferences.Default with
+        {
+            TrashNoSelectionRightClick = TrashNoSelectionRightClickAction.NoAction
+        });
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var delete = (Button)window.FindName("DeleteContentButton");
+            Assert.AreEqual(0, list.SelectedItems.Count);
+            Assert.AreEqual("左键清空非置顶，右键无操作", delete.ToolTip);
+
+            delete.RaiseEvent(NewRightButtonUpArgs(delete));
+            CompleteLayout(window);
+
+            Assert.AreEqual(2, board.Items(BoardCategory.Inbox).Count);
+            Assert.AreEqual(0, store.SaveCount);
+            Assert.IsEmpty(((MainWindowViewModel)window.DataContext).StatusText);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void TrashButton_LeftClickClearAllPreferenceClearsEverythingAndAdvertisesSingleScope()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        AddPinnedText(board, "置顶");
+        board.AddText("普通");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+        window.ApplyPreferences(AppPreferences.Default with
+        {
+            TrashNoSelectionLeftClick = TrashNoSelectionLeftClickAction.ClearAll
+        });
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var delete = (Button)window.FindName("DeleteContentButton");
+            Assert.AreEqual(0, list.SelectedItems.Count);
+            Assert.AreEqual("清空全部", delete.ToolTip, "双侧行为一致时合并为单一描述。");
+
+            delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, delete));
+            PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
+            CompleteLayout(window);
+
+            Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
+            Assert.AreEqual(
+                "已清空全部 2 项（可 Ctrl+Z 撤销）",
+                ((MainWindowViewModel)window.DataContext).StatusText);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
 }

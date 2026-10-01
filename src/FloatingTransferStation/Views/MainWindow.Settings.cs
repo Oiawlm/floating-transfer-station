@@ -73,13 +73,14 @@ public partial class MainWindow : Window, ISettingsHost
         settings.Show();
     }
 
-    /// <summary>立即应用偏好（主题/动效/全局快捷键）并异步原子持久化；持久化失败经状态条提示。</summary>
+    /// <summary>立即应用偏好（主题/动效/全局快捷键/复制手势/垃圾桶行为）并异步原子持久化；持久化失败经状态条提示。</summary>
     public void ApplyPreferences(AppPreferences preferences)
     {
         _preferences = preferences;
         ApplyThemePreference(preferences.ThemeMode);
         ApplyAnimationsPreference(preferences.AnimationsEnabled);
         TrySetGlobalHotkey(preferences.GlobalHotkeyEnabled);
+        UpdateDeleteButtonLabel();
         TrackPendingOperation(PersistPreferencesAsync(preferences));
     }
 

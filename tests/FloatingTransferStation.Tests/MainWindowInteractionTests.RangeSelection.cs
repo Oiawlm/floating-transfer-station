@@ -459,7 +459,7 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
 
             Assert.AreEqual(0, list.SelectedItems.Count);
-            Assert.AreEqual("清空当前分类", ((Button)window.FindName("DeleteContentButton")).ToolTip);
+            Assert.AreEqual("左键清空非置顶，右键清空全部", ((Button)window.FindName("DeleteContentButton")).ToolTip);
         }
         finally
         {

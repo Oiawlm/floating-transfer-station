@@ -77,6 +77,72 @@ public sealed class DragPayloadService
         return data;
     }
 
+    /// <summary>
+    /// 构造复制到剪贴板的交付负载:单条与拖出负载同构;多条按板内顺序（置顶区
+    /// 在前、各自排序,由调用方保证）合并——多条文字用换行连接为一段文本,纯图片
+    /// 多选按来源顺序给出文件组,文字+图片混合则合并文本与图片文件组并存。
+    /// 负载始终携带内部条目标记,供自动采集识别应用自身的复制并跳过。
+    /// </summary>
+    public DataObject BuildClipboardPayload(IReadOnlyList<BoardItem> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        if (items.Count == 0 ||
+            items.Any(item => item is null) ||
+            items.Select(item => item.Id).Distinct().Count() != items.Count)
+        {
+            throw new ArgumentException(
+                "A clipboard payload must contain unique items.",
+                nameof(items));
+        }
+
+        if (items.Count == 1)
+        {
+            return Build(items[0]);
+        }
+
+        var textItems = items.Where(item => item.Kind == BoardItemKind.Text).ToArray();
+        if (textItems.Length == 0)
+        {
+            // 纯图片多选与拖出负载同构:按来源顺序文件组 + 内部批量标记。
+            return BuildInternalBatch(items);
+        }
+
+        var imagePaths = new List<string>();
+        foreach (var item in items)
+        {
+            if (item.Kind != BoardItemKind.Image)
+            {
+                continue;
+            }
+
+            var path = item.ImageAbsolutePath;
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                throw new FileNotFoundException("The managed image file is missing.", path);
+            }
+
+            imagePaths.Add(path);
+        }
+
+        var data = new DataObject();
+        data.SetData(
+            InternalItemIdsFormat,
+            items.Select(item => item.Id.ToString("D")).ToArray());
+        var mergedText = string.Join(
+            Environment.NewLine,
+            textItems.Select(item => item.Text ?? string.Empty));
+        data.SetData(DataFormats.UnicodeText, mergedText, autoConvert: true);
+        data.SetData(DataFormats.Text, mergedText, autoConvert: true);
+        if (imagePaths.Count > 0)
+        {
+            var files = new StringCollection();
+            files.AddRange(imagePaths.ToArray());
+            data.SetFileDropList(files);
+        }
+
+        return data;
+    }
+
     public Guid? GetInternalItemId(IDataObject data)
     {
         if (!data.GetDataPresent(InternalItemIdFormat) ||
