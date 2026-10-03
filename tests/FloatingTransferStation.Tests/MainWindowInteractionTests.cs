@@ -618,6 +618,27 @@ public sealed partial class MainWindowInteractionTests
     [DllImport("user32.dll")]
     private static extern nint WindowFromPoint(NativePoint point);
 
+    private const int GwlExStyle = -20;
+    private const int WsExTopmost = 0x0008;
+    private static readonly nint HwndNotopmost = -2;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int GetWindowLong(nint hwnd, int index);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(
+        nint hwnd,
+        nint insertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags);
+
+    private static bool IsWindowTopmost(nint hwnd) =>
+        (GetWindowLong(hwnd, GwlExStyle) & WsExTopmost) != 0;
+
     [StructLayout(LayoutKind.Sequential)]
     private readonly record struct NativePoint(int X, int Y);
 

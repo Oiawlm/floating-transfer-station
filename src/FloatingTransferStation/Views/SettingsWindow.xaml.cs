@@ -18,6 +18,12 @@ namespace FloatingTransferStation.Views;
 /// </summary>
 public partial class SettingsWindow : Window
 {
+    // 内容滚动区最高点让窗口整体矮于工作区 WorkAreaHeightMargin；
+    // 头部行高与 SettingsWindow.xaml 的 RowDefinition 保持一致。
+    private const double WorkAreaHeightMargin = 24;
+    private const double HeaderRowHeight = 46;
+    private const double MinContentHeight = 160;
+
     private readonly ISettingsHost _host;
     private bool _isSynchronizingControls;
     private bool _micaApplied;
@@ -27,6 +33,15 @@ public partial class SettingsWindow : Window
         _host = host;
         InitializeComponent();
         DesignThemeManager.Apply(this, host.CurrentTheme);
+
+        // 限高：内容高于工作区时滚动区收缩并由 ScrollViewer 滚动，而不是顶满整屏、
+        // 把下缘推出屏幕且垂直拖不动。上限必须落在 ScrollViewer 上——窗口 MaxHeight
+        // 只裁剪 HWND，内部布局仍按内容全高排布，滚动区拿不到受限视口。
+        var contentCap = Math.Max(
+            MinContentHeight,
+            SystemParameters.WorkArea.Height - WorkAreaHeightMargin - HeaderRowHeight);
+        SettingsScrollHost.MaxHeight = contentCap;
+        MaxHeight = contentCap + HeaderRowHeight;
 
         _isSynchronizingControls = true;
         ThemeComboBox.ItemsSource = new[]
@@ -91,6 +106,19 @@ public partial class SettingsWindow : Window
         var work = SystemParameters.WorkArea;
         Left = Math.Max(work.Left, Math.Min(Owner.Left - Width - 12, work.Right - Width));
         Top = Math.Clamp(Owner.Top, work.Top, Math.Max(work.Top, work.Bottom - 44));
+        SizeChanged += SettingsWindow_SizeChanged;
+    }
+
+    /// <summary>
+    /// SizeToContent 定稿实际高度后（首帧渲染前的布局期），把窗口上下缘钳回工作区。
+    /// 初始放置时实际高度未测量，只能先按头部可见放置；内容较高时窗口下缘会探出
+    /// 工作区，此处收口，同时保证垂直拖拽钳制在矮屏上仍有向上空间。
+    /// </summary>
+    private void SettingsWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var work = SystemParameters.WorkArea;
+        Top = Math.Clamp(Top, work.Top, Math.Max(work.Top, work.Bottom - ActualHeight));
+        Left = Math.Clamp(Left, work.Left, Math.Max(work.Left, work.Right - ActualWidth));
     }
 
     private void SettingsWindow_PreviewKeyDown(object sender, KeyEventArgs e)

@@ -937,6 +937,55 @@ public sealed partial class MainWindowInteractionTests
     private const int WmWindowPosChanged = 0x0047;
 
     /// <summary>
+    /// 置顶保持回归：Topmost 属性只在 HWND 创建时写入一次，此后出现的其他置顶窗口
+    /// 会排到面板上方。窗口必须能重申 HWND_TOPMOST——被降级后重申调用要能把窗口
+    /// 抬回置顶层，且不移动、不改大小。
+    /// </summary>
+    [STATestMethod]
+    public void Topmost_ReassertedAfterBeingDemoted()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            var timer = GetPrivateField<DispatcherTimer>(window, "_topmostTimer");
+
+            Assert.IsTrue(IsWindowTopmost(handle), "主窗显示后应处于置顶层。");
+            Assert.AreEqual(TimeSpan.FromSeconds(2), timer.Interval);
+            Assert.IsTrue(timer.IsEnabled, "置顶重申计时器应随窗口源创建启动。");
+
+            // 模拟被其他软件挤出置顶带：手动降级，再依赖重申机制恢复。
+            Assert.IsTrue(SetWindowPos(
+                handle,
+                HwndNotopmost,
+                0,
+                0,
+                0,
+                0,
+                NativeMethods.SwpNoSize | NativeMethods.SwpNoMove | NativeMethods.SwpNoActivate));
+            Assert.IsFalse(IsWindowTopmost(handle), "前置条件：手动降级后应不在置顶层。");
+            Assert.IsTrue(GetWindowRect(handle, out var boundsBeforeReassert));
+
+            InvokePrivate(window, "ReassertTopmost");
+
+            Assert.IsTrue(IsWindowTopmost(handle), "重申后窗口必须回到置顶层。");
+            Assert.IsTrue(GetWindowRect(handle, out var boundsAfterReassert));
+            Assert.AreEqual(boundsBeforeReassert.Left, boundsAfterReassert.Left);
+            Assert.AreEqual(boundsBeforeReassert.Top, boundsAfterReassert.Top);
+            Assert.AreEqual(boundsBeforeReassert.Width, boundsAfterReassert.Width);
+            Assert.AreEqual(boundsBeforeReassert.Height, boundsAfterReassert.Height);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>
     /// 迁移原子性契约：一次面板状态迁移中，系统实际应用的每一个窗口矩形都必须等于初始或
     /// 终态矩形（四边各 ≤1px）。观察点同时挂 LocationChanged/SizeChanged 与测试侧
     /// WM_WINDOWPOSCHANGED 钩子：后者覆盖纯尺寸中间态（不触发 LocationChanged）的矩形。
