@@ -80,7 +80,8 @@ public static class DataDirectorySettings
                 return false;
             }
 
-            var full = Path.GetFullPath(candidate).TrimEnd(Path.DirectorySeparatorChar);
+            // 直接用未去尾的规范化路径判根："C:\" 与 "/" 是根，去掉尾分隔符会失真。
+            var full = Path.GetFullPath(candidate);
             return !IsRootDirectory(full);
         }
         catch (Exception exception) when (
@@ -198,16 +199,12 @@ public static class DataDirectorySettings
     {
         try
         {
-            var root = Path.GetPathRoot(path);
-            if (string.IsNullOrEmpty(root))
-            {
-                return false;
-            }
-
-            return string.Equals(
-                Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar),
-                Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar),
-                PathComparison);
+            // 不去尾部分隔符：Windows 的 "C:\" 与 Unix 的 "/" 本身就是根，
+            // 截去分隔符会让根目录变成 "C:"/""，根判定随之失真。
+            var full = Path.GetFullPath(path);
+            var root = Path.GetPathRoot(full);
+            return !string.IsNullOrEmpty(root) &&
+                string.Equals(full, root, PathComparison);
         }
         catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
         {
