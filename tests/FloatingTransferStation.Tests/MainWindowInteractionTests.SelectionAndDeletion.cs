@@ -1103,19 +1103,6 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void SelectionGestureRequiresControlAndNoDragThreshold()
-    {
-        var method = typeof(MainWindow).GetMethod(
-            "ShouldToggleSelection",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        Assert.IsNotNull(method);
-        Assert.AreEqual(true, method.Invoke(null, [ModifierKeys.Control, false]));
-        Assert.AreEqual(false, method.Invoke(null, [ModifierKeys.None, false]));
-        Assert.AreEqual(false, method.Invoke(null, [ModifierKeys.Control, true]));
-    }
-
-    [STATestMethod]
     public void SelectionButtonTogglesPersistentTwoSignalFeedback()
     {
         using var directory = new TestDirectory();

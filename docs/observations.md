@@ -19,4 +19,4 @@
 ## B-007
 
 - 现象：用户实机 1.14.1 报告双击文字卡无法进入就地编辑（README 与 `MainWindow.CardTextEditing.cs` 声称支持，1.14.0 引入）。
-- 当前状态：2026-10-01 在当前 main（1.14.1 源码）上运行既有卡片编辑交互回归（`MainWindowInteractionTests.CardEditing`，覆盖双击进入、Enter 提交、Esc 取消、空白取消、保存失败还原、图片卡与搜索态不进入编辑）5/5 全部通过，自动测试未能复现。暂按"需用户实机复验的观察"处理：请记录复现步骤（分类、卡片内容、是否搜索态、双击间距）、应用版本与录屏；确有回归再按仓库规则先复现后最小修复，不与本功能混在同一提交。
+- 当前状态：2026-10-03 已查明根因并在 1.17.0 手势分区重构中根除，观察转为「待实机复验后关闭」。根因链：双击编辑唯一入口是 `MainWindow.xaml` 挂载的 `Control.MouseDoubleClick`（处理器 `BoardList_MouseDoubleClick`），而命中卡片的预览鼠标处理器（`BoardList_PreviewMouseLeftButtonDown/Up`，为压制 ListBox 默认选择并记录拖拽起点）把事件标记 `Handled`，实机双击时该事件由冒泡 `MouseLeftButtonDown`（`ClickCount==2`）的类处理器触发，预览已处理使其以已处理状态路由、类处理器不再引发——实机双击从未到达处理器。既有测试直接 `RaiseEvent(MouseDoubleClickEvent)` 合成事件，绕过真实输入管线，因此 5/5 通过而实机失效（旧测试方法即漏测根因）。2026-10-03 在 main（1.16.0）上以真实事件序列（两对预览按下/抬起，timestamp 递增）复现证实「真实序列不可达编辑、合成 MouseDoubleClick 可达」，1.17.0 删除该挂载、双击判定改由手势状态机自维护（`MainWindow.CardGestures.cs`，时限/容差取系统双击设置），并新增真实序列与 Win32 消息直驱（完整输入管线）两级守护测试。请用户在 1.17.0 实机复验双击进入编辑后关闭本条；如仍异常，记录复现步骤（分类、卡片内容、双击间距、录屏）与应用版本。

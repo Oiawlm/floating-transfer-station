@@ -23,6 +23,15 @@ public sealed partial class MainWindowInteractionTests
             Source = source
         };
 
+    /// <summary>右键卡片右区（操作列）：复制手势只属于右区。</summary>
+    private static MouseButtonEventArgs NewRightClickArgsOnCard(
+        MainWindow window,
+        BoardItem item)
+    {
+        var hitSource = ZoneHitSource(window, item, CardGestureZones.OperationsZone);
+        return NewRightClickArgs(hitSource);
+    }
+
     private static string StatusOf(MainWindow window) =>
         ((MainWindowViewModel)window.DataContext).StatusText;
 
@@ -56,10 +65,8 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
             list.SelectedItems.Add(second);
-            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(first);
-            Assert.IsNotNull(container);
 
-            list.RaiseEvent(NewRightClickArgs(container));
+            list.RaiseEvent(NewRightClickArgsOnCard(window, first));
             CompleteLayout(window);
 
             Assert.IsNotNull(captured);
@@ -108,10 +115,8 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
-            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(image);
-            Assert.IsNotNull(container);
 
-            list.RaiseEvent(NewRightClickArgs(container));
+            list.RaiseEvent(NewRightClickArgsOnCard(window, image));
             CompleteLayout(window);
 
             Assert.IsNotNull(captured);
@@ -150,14 +155,48 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
-            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(item);
-            Assert.IsNotNull(container);
-            var args = NewRightClickArgs(container);
+            var args = NewRightClickArgsOnCard(window, item);
 
             list.RaiseEvent(args);
             CompleteLayout(window);
 
             Assert.IsFalse(args.Handled, "偏好关闭时右键不拦截。");
+            Assert.IsNull(captured);
+            Assert.IsEmpty(StatusOf(window));
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void RightClickCopy_ContentZoneIsNotIntercepted()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("左区右键无操作");
+        var window = CreateWindow(directory, board);
+        DataObject? captured = null;
+        window.ClipboardWriterOverride = data =>
+        {
+            captured = data;
+            return true;
+        };
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var args = NewRightClickArgs(
+                ZoneHitSource(window, item, CardGestureZones.ContentZone));
+
+            list.RaiseEvent(args);
+            CompleteLayout(window);
+
+            Assert.IsFalse(args.Handled, "左区右键无操作、不拦截（内容区不承载复制手势）。");
             Assert.IsNull(captured);
             Assert.IsEmpty(StatusOf(window));
         }
@@ -195,7 +234,7 @@ public sealed partial class MainWindowInteractionTests
             var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(match);
             Assert.IsNotNull(container, "过滤后匹配卡片必须仍可右键复制。");
 
-            list.RaiseEvent(NewRightClickArgs(container));
+            list.RaiseEvent(NewRightClickArgsOnCard(window, match));
             CompleteLayout(window);
 
             Assert.IsNotNull(captured);
@@ -355,7 +394,7 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
             var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(item);
             Assert.IsNotNull(container);
-            list.RaiseEvent(NewDoubleClickArgs(container));
+            EnterCardEditingWithDoubleClick(window, item);
             CompleteLayout(window);
             var editor = (TextBox)window.FindName("CardTextEditor");
             Assert.IsTrue(editor.IsKeyboardFocused, "前置条件：文字编辑器持有键盘焦点。");
@@ -443,10 +482,8 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
-            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(item);
-            Assert.IsNotNull(container);
 
-            list.RaiseEvent(NewRightClickArgs(container));
+            list.RaiseEvent(NewRightClickArgsOnCard(window, item));
             CompleteLayout(window);
             Assert.IsNotNull(captured);
             Assert.AreEqual("已复制 1 条文字到剪贴板", StatusOf(window));

@@ -173,6 +173,17 @@ public sealed partial class MainWindowInteractionTests
             Source = source
         };
 
+    /// <summary>带 timestamp 的鼠标事件构造：手势层双击判定依赖真实时间戳。</summary>
+    private static MouseButtonEventArgs NewMouseButtonEventArgs(
+        RoutedEvent routedEvent,
+        DependencyObject source,
+        int timestamp) =>
+        new(Mouse.PrimaryDevice, timestamp, MouseButton.Left)
+        {
+            RoutedEvent = routedEvent,
+            Source = source
+        };
+
     private static TextCompositionEventArgs NewTextCompositionEventArgs(
         RoutedEvent routedEvent,
         IInputElement source,

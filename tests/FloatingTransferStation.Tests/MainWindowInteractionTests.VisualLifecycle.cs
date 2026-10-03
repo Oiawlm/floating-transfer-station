@@ -1140,11 +1140,23 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(30d, selectionButton.Width);
             Assert.AreEqual(30d, selectionButton.Height);
             Assert.IsNotNull(contentGrid);
-            Assert.AreEqual(1, Grid.GetColumn(pinButton));
-            Assert.AreEqual(2, Grid.GetColumn(selectionButton));
-            Assert.AreEqual(3, contentGrid.ColumnDefinitions.Count);
+            // 1.17.0 手势分区重构：两个操作按钮包进右区 wrapper（命中标记
+            // CardGestureZones.OperationsZone，占卡片三列 Grid 的 1-2 列），
+            // wrapper 内仍各占固定 30px 列。
+            Assert.AreEqual(2, contentGrid.ColumnDefinitions.Count);
+            Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[0].Width);
             Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[1].Width);
-            Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[2].Width);
+            Assert.AreEqual(0, Grid.GetColumn(pinButton));
+            Assert.AreEqual(1, Grid.GetColumn(selectionButton));
+            var cardGrid = contentGrid.Parent as Grid;
+            Assert.IsNotNull(cardGrid);
+            Assert.AreEqual(3, cardGrid.ColumnDefinitions.Count);
+            Assert.AreEqual(new GridLength(30), cardGrid.ColumnDefinitions[1].Width);
+            Assert.AreEqual(new GridLength(30), cardGrid.ColumnDefinitions[2].Width);
+            Assert.AreEqual(1, Grid.GetColumn(contentGrid));
+            Assert.AreEqual(2, Grid.GetColumnSpan(contentGrid));
+            Assert.AreEqual(CardGestureZones.OperationsZone, contentGrid.Tag as string);
+            Assert.AreEqual(CardGestureZones.ContentZone, (text.Parent as Grid)?.Tag as string);
             Assert.AreEqual(14d, text.FontSize);
             Assert.AreEqual(20d, text.LineHeight);
             Assert.AreEqual(100d, text.MaxHeight);

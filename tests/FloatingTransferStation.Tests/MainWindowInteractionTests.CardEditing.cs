@@ -10,16 +10,14 @@ namespace FloatingTransferStation.Tests;
 
 /// <summary>
 /// 卡片内容就地编辑(用户补充方向切片 1)的回归:双击进入、Enter 提交、Esc 取消、
-/// 空白取消、保存失败还原、图片卡与搜索态不进入编辑。
+/// 空白取消、保存失败还原、图片卡与搜索态不进入编辑。1.17.0 起编辑入口是
+/// 手势层左区双击（真实预览事件序列驱动），不再依赖 Control.MouseDoubleClick。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
-    private static MouseButtonEventArgs NewDoubleClickArgs(object source) =>
-        new(Mouse.PrimaryDevice, 0, MouseButton.Left)
-        {
-            RoutedEvent = Control.MouseDoubleClickEvent,
-            Source = source
-        };
+    /// <summary>经由手势层进入编辑：左区双击（真实预览按下/抬起序列）。</summary>
+    private static void EnterCardEditingWithDoubleClick(MainWindow window, BoardItem item) =>
+        RaiseCardDoubleClick(ZoneHitSource(window, item, CardGestureZones.ContentZone));
 
     private static ListBoxItem ContainerOf(MainWindow window, BoardItem item)
     {
@@ -49,11 +47,8 @@ public sealed partial class MainWindowInteractionTests
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
-            var container = ContainerOf(window, item);
-            var list = (ListBox)window.FindName("BoardList");
 
-            // MouseDoubleClick 是直接路由事件:提升到挂接处理的 BoardList,Source 指向卡片容器。
-            list.RaiseEvent(NewDoubleClickArgs(container));
+            EnterCardEditingWithDoubleClick(window, item);
             CompleteLayout(window);
 
             Assert.AreEqual(Visibility.Visible, EditorHost(window).Visibility);
@@ -101,11 +96,7 @@ public sealed partial class MainWindowInteractionTests
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
-            var container = ContainerOf(window, item);
-            var list = (ListBox)window.FindName("BoardList");
-
-            // MouseDoubleClick 是直接路由事件:提升到挂接处理的 BoardList,Source 指向卡片容器。
-            list.RaiseEvent(NewDoubleClickArgs(container));
+            EnterCardEditingWithDoubleClick(window, item);
             EditorInput(window).Text = "不应保存的修改";
             EditorInput(window).RaiseEvent(new KeyEventArgs(
                 Keyboard.PrimaryDevice,
@@ -142,11 +133,7 @@ public sealed partial class MainWindowInteractionTests
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
-            var container = ContainerOf(window, item);
-            var list = (ListBox)window.FindName("BoardList");
-
-            // MouseDoubleClick 是直接路由事件:提升到挂接处理的 BoardList,Source 指向卡片容器。
-            list.RaiseEvent(NewDoubleClickArgs(container));
+            EnterCardEditingWithDoubleClick(window, item);
             EditorInput(window).Text = "   ";
             window.CommitCardTextForTest();
             CompleteLayout(window);
@@ -177,11 +164,7 @@ public sealed partial class MainWindowInteractionTests
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
-            var container = ContainerOf(window, item);
-            var list = (ListBox)window.FindName("BoardList");
-
-            // MouseDoubleClick 是直接路由事件:提升到挂接处理的 BoardList,Source 指向卡片容器。
-            list.RaiseEvent(NewDoubleClickArgs(container));
+            EnterCardEditingWithDoubleClick(window, item);
             EditorInput(window).Text = "保存会失败的修改";
             window.CommitCardTextForTest();
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
@@ -216,17 +199,50 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
 
-            var list = (ListBox)window.FindName("BoardList");
-            list.RaiseEvent(NewDoubleClickArgs(ContainerOf(window, image)));
+            RaiseCardDoubleClick(ZoneHitSource(window, image, CardGestureZones.ContentZone));
             CompleteLayout(window);
             Assert.AreEqual(Visibility.Collapsed, EditorHost(window).Visibility, "图片卡不进入文本编辑。");
 
             window.EnterSearchMode();
             CompleteLayout(window);
-            list.RaiseEvent(NewDoubleClickArgs(ContainerOf(window, text)));
+            RaiseCardDoubleClick(ZoneHitSource(window, text, CardGestureZones.ContentZone));
             CompleteLayout(window);
             Assert.AreEqual(Visibility.Collapsed, EditorHost(window).Visibility, "搜索态不进入编辑。");
             window.ExitSearchMode();
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardEditing_DoubleClickWhileEditingDoesNotReenter()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingCardEditStore(directory.Root);
+        var board = new BoardService();
+        var item = board.AddText("已在编辑", BoardCategory.Inbox);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            EnterCardEditingWithDoubleClick(window, item);
+            CompleteLayout(window);
+            EditorInput(window).Text = "手动改动";
+            var host = EditorHost(window);
+
+            // 已有编辑时再次双击（同一张卡）：守卫直接返回，不重置种子文本。
+            RaiseCardDoubleClick(ZoneHitSource(window, item, CardGestureZones.ContentZone));
+            CompleteLayout(window);
+
+            Assert.AreEqual(Visibility.Visible, host.Visibility);
+            Assert.AreEqual("手动改动", EditorInput(window).Text, "编辑中的双击不得重置编辑器内容。");
+            Assert.IsTrue(EditorInput(window).IsKeyboardFocused);
         }
         finally
         {
@@ -249,8 +265,7 @@ public sealed partial class MainWindowInteractionTests
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
-            var list = (ListBox)window.FindName("BoardList");
-            list.RaiseEvent(NewDoubleClickArgs(ContainerOf(window, item)));
+            EnterCardEditingWithDoubleClick(window, item);
             CompleteLayout(window);
             EditorInput(window).Text = "关闭时冲刷的编辑";
             Assert.IsTrue(EditorInput(window).IsKeyboardFocused, "前置条件：编辑器仍打开并持有焦点。");

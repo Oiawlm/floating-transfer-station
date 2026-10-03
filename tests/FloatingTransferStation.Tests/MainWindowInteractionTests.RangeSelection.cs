@@ -172,10 +172,11 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             ClickSelectionButton(window, items[1]);
             var target = RealizeCard(window, items[3]);
+            var hitSource = ZoneSourceOf(target, CardGestureZones.OperationsZone);
             CollapseForSetup(window);
             var list = (ListBox)window.FindName("BoardList");
             Assert.IsFalse(((MainWindowViewModel)window.DataContext).IsPanelExpanded);
-            WithThreadKeyboardModifiers(ModifierKeys.Shift, () => RaiseCardClick(target));
+            WithThreadKeyboardModifiers(ModifierKeys.Shift, () => RaiseCardClick(hitSource));
             CollectionAssert.AreEqual(new[] { items[1] }, list.SelectedItems.Cast<BoardItem>().ToArray());
 
             ExpandCategory(window, BoardCategory.Inbox);
@@ -204,8 +205,12 @@ public sealed partial class MainWindowInteractionTests
             ClickSelectionButton(window, items[2]);
             var list = (ListBox)window.FindName("BoardList");
             var target = RealizeCard(window, items[0]);
+            var hitSource = ZoneSourceOf(target, CardGestureZones.OperationsZone);
             WithThreadKeyboardModifiers(ModifierKeys.Shift, () =>
-                target.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseDownEvent, target)));
+                hitSource.RaiseEvent(NewMouseButtonEventArgs(
+                    Mouse.PreviewMouseDownEvent,
+                    hitSource,
+                    NextIsolatedClickTimestamp())));
             CollectionAssert.AreEquivalent(new[] { items[0], items[2] },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
             var data = GetPrivateMethod("BuildInternalDragData")!.Invoke(window, [items[0]]) as DataObject;
@@ -214,15 +219,24 @@ public sealed partial class MainWindowInteractionTests
                 new DragPayloadService().GetInternalItemIds(data)!.ToArray());
             typeof(MainWindow).GetField("_dragThresholdCrossed",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(window, true);
-            target.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseUpEvent, target));
+            target.RaiseEvent(NewMouseButtonEventArgs(
+                Mouse.PreviewMouseUpEvent,
+                target,
+                NextIsolatedClickTimestamp()));
             CollectionAssert.AreEquivalent(new[] { items[0], items[2] },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
 
-            target = RealizeCard(window, items[4]);
+            hitSource = ZoneSourceOf(RealizeCard(window, items[4]), CardGestureZones.OperationsZone);
             WithThreadKeyboardModifiers(ModifierKeys.Shift, () =>
-                target.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseDownEvent, target)));
+                hitSource.RaiseEvent(NewMouseButtonEventArgs(
+                    Mouse.PreviewMouseDownEvent,
+                    hitSource,
+                    NextIsolatedClickTimestamp())));
             WithThreadKeyboardModifiers(ModifierKeys.None, () =>
-                target.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseUpEvent, target)));
+                hitSource.RaiseEvent(NewMouseButtonEventArgs(
+                    Mouse.PreviewMouseUpEvent,
+                    hitSource,
+                    NextIsolatedClickTimestamp())));
             CollectionAssert.AreEquivalent(items[2..5], list.SelectedItems.Cast<BoardItem>().ToArray());
         }
         finally
@@ -504,20 +518,19 @@ public sealed partial class MainWindowInteractionTests
         return container;
     }
 
-    private static void ClickCard(MainWindow window, BoardItem item, ModifierKeys modifiers)
+    /// <summary>
+    /// 单击卡片指定分区（默认右区操作列——选择手势只属于右区；左区单击
+    /// 无选择语义，由 CardGestures 契约测试单独覆盖）。时间戳与此前点击
+    /// 拉开超过系统双击时限，保证各次单击互相独立。
+    /// </summary>
+    private static void ClickCard(
+        MainWindow window,
+        BoardItem item,
+        ModifierKeys modifiers,
+        string? zoneTag = null)
     {
-        var container = RealizeCard(window, item);
-        WithThreadKeyboardModifiers(modifiers, () => RaiseCardClick(container));
-    }
-
-    private static void RaiseCardClick(ListBoxItem container)
-    {
-        var down = NewMouseButtonEventArgs(Mouse.PreviewMouseDownEvent, container);
-        container.RaiseEvent(down);
-        Assert.IsTrue(down.Handled, "The card's real preview mouse route must reach the window handler.");
-        var up = NewMouseButtonEventArgs(Mouse.PreviewMouseUpEvent, container);
-        container.RaiseEvent(up);
-        Assert.IsTrue(up.Handled);
+        var hitSource = ZoneHitSource(window, item, zoneTag ?? CardGestureZones.OperationsZone);
+        WithThreadKeyboardModifiers(modifiers, () => RaiseCardClick(hitSource));
     }
 
     private static void WithThreadKeyboardModifiers(ModifierKeys modifiers, Action action)
