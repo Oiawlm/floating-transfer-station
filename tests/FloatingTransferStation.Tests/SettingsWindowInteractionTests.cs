@@ -526,6 +526,78 @@ public sealed class SettingsWindowInteractionTests
     }
 
     /// <summary>
+    /// 设置窗限高与滚动回归：此前 SizeToContent=Height 无上限，内容高于屏幕时窗口
+    /// 顶满整屏、下缘探出工作区且垂直拖不动。窗口高度必须受工作区钳制，
+    /// 内容超出视口时必须可滚动到最底部（退出按钮）。
+    /// </summary>
+    [STATestMethod]
+    public void SettingsWindow_ClampsHeightToWorkAreaAndScrollsOverflow()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+
+            var work = SystemParameters.WorkArea;
+            Assert.IsTrue(
+                settings.MaxHeight <= work.Height,
+                $"设置窗最大高度不得超出工作区，MaxHeight={settings.MaxHeight}，工作区高={work.Height}。");
+            var scroll = settings.FindName("SettingsScrollHost") as ScrollViewer;
+            Assert.IsNotNull(scroll, "设置内容应包在 ScrollViewer 中。");
+            Assert.AreEqual(ScrollBarVisibility.Auto, scroll.VerticalScrollBarVisibility);
+            Assert.AreEqual(ScrollBarVisibility.Disabled, scroll.HorizontalScrollBarVisibility);
+            // 上限必须落在 ScrollViewer 上：窗口 MaxHeight 只裁剪 HWND，滚动区
+            // 拿不到受限视口，内容仍按全高排布而无法滚动。
+            Assert.AreEqual(
+                Math.Max(160d, work.Height - 24d - 46d),
+                scroll.MaxHeight,
+                0.01,
+                "滚动区高度上限应按工作区推定。");
+            Assert.IsTrue(
+                settings.ActualHeight <= settings.MaxHeight + 0.01,
+                $"设置窗实际高度必须服从最大高度，ActualHeight={settings.ActualHeight}。");
+
+            // 模拟矮屏：限高后窗口收缩，内容（含退出按钮）滚动可达。
+            settings.SizeToContent = SizeToContent.Manual;
+            settings.MaxHeight = 320;
+            scroll.MaxHeight = 274;
+            settings.Height = 320;
+            CompleteLayout(settings);
+
+            Assert.IsTrue(
+                Math.Abs(settings.ActualHeight - 320) <= 0.01,
+                $"限高后窗口应收缩到 320，实际 ActualHeight={settings.ActualHeight}。");
+            Assert.IsTrue(scroll.ScrollableHeight > 0, "内容超出视口时应出现纵向滚动量。");
+            scroll.ScrollToVerticalOffset(scroll.ScrollableHeight / 2);
+            CompleteLayout(settings);
+            SaveVisualEvidence(
+                (Border)settings.FindName("WindowShell"),
+                "settings-scroll-limited.png");
+
+            var exit = (Button)settings.FindName("ExitButton");
+            scroll.ScrollToEnd();
+            CompleteLayout(settings);
+
+            Assert.IsTrue(scroll.VerticalOffset > 0, "滚动到底后应有实际滚动位移。");
+            var exitBottom = exit.TransformToVisual(scroll).Transform(new Point()).Y + exit.ActualHeight;
+            Assert.IsTrue(
+                exitBottom <= scroll.ViewportHeight + 0.5,
+                $"滚动到底后退出按钮应完整进入视口，按钮下缘 {exitBottom}，视口高 {scroll.ViewportHeight}。");
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>
     /// 主题下拉鼠标路径回归：真实模板下点击区域必须命中 ToggleButton，
     /// 其 IsChecked 双向绑定驱动 IsDropDownOpen；Popup 自行关闭（StaysOpen=False）后状态必须同步回。
     /// 修复前失败：不透明 Surface 边框盖在 ToggleButton 上拦截命中，鼠标永远打不开下拉。

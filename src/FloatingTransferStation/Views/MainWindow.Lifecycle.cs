@@ -105,6 +105,30 @@ public partial class MainWindow : Window
         return new WorkArea(area.Left, area.Top, area.Width, area.Height);
     }
 
+    /// <summary>
+    /// 重申置顶：Topmost 只在 HWND 创建时写入一次，之后出现的其他置顶窗口
+    /// （截图贴图、同类悬浮工具等）会排到面板上方。周期性把窗口抬回置顶带
+    /// 最高层，不移动、不改大小、不抢焦点；自有设置窗作为 owned 窗口仍在其上。
+    /// </summary>
+    private void ReassertTopmost()
+    {
+        if (_isClosing ||
+            _windowSource?.Handle is not { } handle || handle == 0 ||
+            !IsVisible)
+        {
+            return;
+        }
+
+        NativeMethods.SetWindowPos(
+            handle,
+            NativeMethods.HwndTopmost,
+            0,
+            0,
+            0,
+            0,
+            NativeMethods.SwpNoSize | NativeMethods.SwpNoMove | NativeMethods.SwpNoActivate);
+    }
+
     private void ApplyPlacement(WindowPlacement placement)
     {
         CancelPanelCollapseExit();
@@ -206,6 +230,7 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
+        _topmostTimer.Stop();
         if (_allowClose)
         {
             StopClipboardListening();
@@ -245,6 +270,7 @@ public partial class MainWindow : Window
             _windowOperationCancellation = new CancellationTokenSource();
             _isClosing = false;
             IsEnabled = true;
+            _topmostTimer.Start();
             ShowStatus("退出前保存失败，悬浮中转站暂未关闭。");
         }
     }

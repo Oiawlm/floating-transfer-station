@@ -308,216 +308,223 @@
         </Grid>
       </Border>
 
-      <StackPanel Grid.Row="1" Margin="16,14,16,16">
-        <TextBlock Text="主题" Style="{StaticResource SectionTitleStyle}" />
-        <ComboBox x:Name="ThemeComboBox"
-                  Style="{StaticResource ThemedComboBoxStyle}"
-                  AutomationProperties.Name="主题"
-                  SelectionChanged="ThemeComboBox_SelectionChanged" />
-
-        <TextBlock Text="动效" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
-        <Grid Background="Transparent">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <TextBlock Grid.Column="0"
-                     Text="启用界面过渡动画"
-                     Style="{StaticResource RowCaptionStyle}" />
-          <CheckBox x:Name="AnimationsToggle"
-                    Grid.Column="1"
-                    Style="{StaticResource ToggleSwitchStyle}"
-                    AutomationProperties.Name="启用界面过渡动画"
-                    Checked="AnimationsToggle_Checked"
-                    Unchecked="AnimationsToggle_Unchecked" />
-        </Grid>
-
-        <TextBlock Text="开机自启" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
-        <Grid Background="Transparent">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <TextBlock Grid.Column="0"
-                     Text="登录 Windows 时自动运行"
-                     Style="{StaticResource RowCaptionStyle}" />
-          <CheckBox x:Name="StartupToggle"
-                    Grid.Column="1"
-                    Style="{StaticResource ToggleSwitchStyle}"
-                    AutomationProperties.Name="登录 Windows 时自动运行"
-                    Checked="StartupToggle_Checked"
-                    Unchecked="StartupToggle_Unchecked" />
-        </Grid>
-        <TextBlock x:Name="StartupNoteText"
-                   Style="{StaticResource NoteCaptionStyle}"
-                   Text="运行安装程序更新版本后，自启会重新开启，可在本设置中再次关闭。" />
-        <TextBlock x:Name="StartupStatusText"
-                   Style="{StaticResource NoteCaptionStyle}"
-                   Foreground="{DynamicResource DangerBrush}"
-                   Text=""
-                   Visibility="Collapsed" />
-
-        <TextBlock Text="全局快捷键" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
-        <Grid Background="Transparent">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <TextBlock Grid.Column="0"
-                     Text="Ctrl + Alt + V 唤起面板"
-                     Style="{StaticResource RowCaptionStyle}" />
-          <CheckBox x:Name="GlobalHotkeyToggle"
-                    Grid.Column="1"
-                    Style="{StaticResource ToggleSwitchStyle}"
-                    AutomationProperties.Name="Ctrl + Alt + V 唤起面板"
-                    Checked="GlobalHotkeyToggle_Checked"
-                    Unchecked="GlobalHotkeyToggle_Unchecked" />
-        </Grid>
-        <TextBlock x:Name="GlobalHotkeyNoteText"
-                   Style="{StaticResource NoteCaptionStyle}"
-                   Text="开启后任何界面按组合键展开面板到默认接收分类；默认关闭，组合键被其他软件占用时开启会提示失败。" />
-        <TextBlock x:Name="GlobalHotkeyStatusText"
-                   Style="{StaticResource NoteCaptionStyle}"
-                   Foreground="{DynamicResource DangerBrush}"
-                   Text=""
-                   Visibility="Collapsed" />
-
-        <TextBlock Text="内容复制" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
-        <Grid Background="Transparent">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <TextBlock Grid.Column="0"
-                     Text="右键卡片复制到剪贴板"
-                     Style="{StaticResource RowCaptionStyle}" />
-          <CheckBox x:Name="RightClickCopyToggle"
-                    Grid.Column="1"
-                    Style="{StaticResource ToggleSwitchStyle}"
-                    AutomationProperties.Name="右键卡片复制到剪贴板"
-                    Checked="RightClickCopyToggle_Checked"
-                    Unchecked="RightClickCopyToggle_Unchecked" />
-        </Grid>
-        <Grid Background="Transparent" Margin="0,6,0,0">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <TextBlock Grid.Column="0"
-                     Text="Ctrl + C 复制已选内容"
-                     Style="{StaticResource RowCaptionStyle}" />
-          <CheckBox x:Name="CtrlCCopyToggle"
-                    Grid.Column="1"
-                    Style="{StaticResource ToggleSwitchStyle}"
-                    AutomationProperties.Name="Ctrl + C 复制已选内容"
-                    Checked="CtrlCCopyToggle_Checked"
-                    Unchecked="CtrlCCopyToggle_Unchecked" />
-        </Grid>
-        <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                   Text="复制内容与拖出一致；应用自身的复制不会被自动收集重复入库。选中多张卡片后 Ctrl+C：文字按板内顺序合并，图片给出文件组。" />
-
-        <TextBlock Text="垃圾桶按钮" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
-        <Grid Background="Transparent">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-          </Grid.ColumnDefinitions>
-          <TextBlock Grid.Column="0"
-                     Text="无选择时左键"
-                     Style="{StaticResource RowCaptionStyle}"
-                     Margin="0,0,8,0" />
-          <ComboBox x:Name="TrashLeftClickComboBox"
-                    Grid.Column="1"
+      <!-- 内容高于工作区时窗口已限高（见 code-behind），超出部分在此滚动；
+           复用 MainWindowStyles 的全局细滚动条样式。 -->
+      <ScrollViewer x:Name="SettingsScrollHost"
+                    Grid.Row="1"
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="16,14,16,16">
+          <TextBlock Text="主题" Style="{StaticResource SectionTitleStyle}" />
+          <ComboBox x:Name="ThemeComboBox"
                     Style="{StaticResource ThemedComboBoxStyle}"
-                    AutomationProperties.Name="无选择时左键行为"
-                    SelectionChanged="TrashLeftClickComboBox_SelectionChanged" />
-        </Grid>
-        <Grid Background="Transparent" Margin="0,6,0,0">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-          </Grid.ColumnDefinitions>
-          <TextBlock Grid.Column="0"
-                     Text="无选择时右键"
-                     Style="{StaticResource RowCaptionStyle}"
-                     Margin="0,0,8,0" />
-          <ComboBox x:Name="TrashRightClickComboBox"
+                    AutomationProperties.Name="主题"
+                    SelectionChanged="ThemeComboBox_SelectionChanged" />
+
+          <TextBlock Text="动效" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+          <Grid Background="Transparent">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="启用界面过渡动画"
+                       Style="{StaticResource RowCaptionStyle}" />
+            <CheckBox x:Name="AnimationsToggle"
+                      Grid.Column="1"
+                      Style="{StaticResource ToggleSwitchStyle}"
+                      AutomationProperties.Name="启用界面过渡动画"
+                      Checked="AnimationsToggle_Checked"
+                      Unchecked="AnimationsToggle_Unchecked" />
+          </Grid>
+
+          <TextBlock Text="开机自启" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+          <Grid Background="Transparent">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="登录 Windows 时自动运行"
+                       Style="{StaticResource RowCaptionStyle}" />
+            <CheckBox x:Name="StartupToggle"
+                      Grid.Column="1"
+                      Style="{StaticResource ToggleSwitchStyle}"
+                      AutomationProperties.Name="登录 Windows 时自动运行"
+                      Checked="StartupToggle_Checked"
+                      Unchecked="StartupToggle_Unchecked" />
+          </Grid>
+          <TextBlock x:Name="StartupNoteText"
+                     Style="{StaticResource NoteCaptionStyle}"
+                     Text="运行安装程序更新版本后，自启会重新开启，可在本设置中再次关闭。" />
+          <TextBlock x:Name="StartupStatusText"
+                     Style="{StaticResource NoteCaptionStyle}"
+                     Foreground="{DynamicResource DangerBrush}"
+                     Text=""
+                     Visibility="Collapsed" />
+
+          <TextBlock Text="全局快捷键" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+          <Grid Background="Transparent">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="Ctrl + Alt + V 唤起面板"
+                       Style="{StaticResource RowCaptionStyle}" />
+            <CheckBox x:Name="GlobalHotkeyToggle"
+                      Grid.Column="1"
+                      Style="{StaticResource ToggleSwitchStyle}"
+                      AutomationProperties.Name="Ctrl + Alt + V 唤起面板"
+                      Checked="GlobalHotkeyToggle_Checked"
+                      Unchecked="GlobalHotkeyToggle_Unchecked" />
+          </Grid>
+          <TextBlock x:Name="GlobalHotkeyNoteText"
+                     Style="{StaticResource NoteCaptionStyle}"
+                     Text="开启后任何界面按组合键展开面板到默认接收分类；默认关闭，组合键被其他软件占用时开启会提示失败。" />
+          <TextBlock x:Name="GlobalHotkeyStatusText"
+                     Style="{StaticResource NoteCaptionStyle}"
+                     Foreground="{DynamicResource DangerBrush}"
+                     Text=""
+                     Visibility="Collapsed" />
+
+          <TextBlock Text="内容复制" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+          <Grid Background="Transparent">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="右键卡片复制到剪贴板"
+                       Style="{StaticResource RowCaptionStyle}" />
+            <CheckBox x:Name="RightClickCopyToggle"
+                      Grid.Column="1"
+                      Style="{StaticResource ToggleSwitchStyle}"
+                      AutomationProperties.Name="右键卡片复制到剪贴板"
+                      Checked="RightClickCopyToggle_Checked"
+                      Unchecked="RightClickCopyToggle_Unchecked" />
+          </Grid>
+          <Grid Background="Transparent" Margin="0,6,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="Ctrl + C 复制已选内容"
+                       Style="{StaticResource RowCaptionStyle}" />
+            <CheckBox x:Name="CtrlCCopyToggle"
+                      Grid.Column="1"
+                      Style="{StaticResource ToggleSwitchStyle}"
+                      AutomationProperties.Name="Ctrl + C 复制已选内容"
+                      Checked="CtrlCCopyToggle_Checked"
+                      Unchecked="CtrlCCopyToggle_Unchecked" />
+          </Grid>
+          <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                     Text="复制内容与拖出一致；应用自身的复制不会被自动收集重复入库。选中多张卡片后 Ctrl+C：文字按板内顺序合并，图片给出文件组。" />
+
+          <TextBlock Text="垃圾桶按钮" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+          <Grid Background="Transparent">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="无选择时左键"
+                       Style="{StaticResource RowCaptionStyle}"
+                       Margin="0,0,8,0" />
+            <ComboBox x:Name="TrashLeftClickComboBox"
+                      Grid.Column="1"
+                      Style="{StaticResource ThemedComboBoxStyle}"
+                      AutomationProperties.Name="无选择时左键行为"
+                      SelectionChanged="TrashLeftClickComboBox_SelectionChanged" />
+          </Grid>
+          <Grid Background="Transparent" Margin="0,6,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="无选择时右键"
+                       Style="{StaticResource RowCaptionStyle}"
+                       Margin="0,0,8,0" />
+            <ComboBox x:Name="TrashRightClickComboBox"
+                      Grid.Column="1"
+                      Style="{StaticResource ThemedComboBoxStyle}"
+                      AutomationProperties.Name="无选择时右键行为"
+                      SelectionChanged="TrashRightClickComboBox_SelectionChanged" />
+          </Grid>
+          <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                     Text="有选择时点击垃圾桶始终删除已选内容；两种清空都可 Ctrl+Z 整体撤销。" />
+
+          <TextBlock Text="数据目录" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+          <Grid Background="Transparent">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="DataDirectoryText"
+                     Grid.Column="0"
+                     Style="{StaticResource ReadOnlyPathBoxStyle}"
+                     Margin="0,0,8,0"
+                     VerticalAlignment="Center"
+                     AutomationProperties.Name="数据目录" />
+            <Button x:Name="OpenDataDirectoryButton"
                     Grid.Column="1"
-                    Style="{StaticResource ThemedComboBoxStyle}"
-                    AutomationProperties.Name="无选择时右键行为"
-                    SelectionChanged="TrashRightClickComboBox_SelectionChanged" />
-        </Grid>
-        <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                   Text="有选择时点击垃圾桶始终删除已选内容；两种清空都可 Ctrl+Z 整体撤销。" />
+                    Style="{StaticResource SettingsActionButtonStyle}"
+                    Content="打开"
+                    ToolTip="在资源管理器中打开数据目录"
+                    AutomationProperties.Name="在资源管理器中打开数据目录"
+                    Click="OpenDataDirectoryButton_Click" />
+          </Grid>
 
-        <TextBlock Text="数据目录" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
-        <Grid Background="Transparent">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <TextBox x:Name="DataDirectoryText"
-                   Grid.Column="0"
-                   Style="{StaticResource ReadOnlyPathBoxStyle}"
-                   Margin="0,0,8,0"
-                   VerticalAlignment="Center"
-                   AutomationProperties.Name="数据目录" />
-          <Button x:Name="OpenDataDirectoryButton"
-                  Grid.Column="1"
-                  Style="{StaticResource SettingsActionButtonStyle}"
-                  Content="打开"
-                  ToolTip="在资源管理器中打开数据目录"
-                  AutomationProperties.Name="在资源管理器中打开数据目录"
-                  Click="OpenDataDirectoryButton_Click" />
-        </Grid>
+          <TextBlock Text="插件" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+          <StackPanel x:Name="PluginListPanel" />
+          <TextBlock x:Name="PluginHelpText" Style="{StaticResource NoteCaptionStyle}" />
+          <TextBlock x:Name="PluginStatusText"
+                     Style="{StaticResource NoteCaptionStyle}"
+                     Foreground="{DynamicResource DangerBrush}"
+                     Text=""
+                     Visibility="Collapsed" />
+          <Grid Background="Transparent" Margin="0,6,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="PluginDirectoryText"
+                     Grid.Column="0"
+                     Style="{StaticResource ReadOnlyPathBoxStyle}"
+                     Margin="0,0,8,0"
+                     VerticalAlignment="Center"
+                     AutomationProperties.Name="插件目录" />
+            <Button x:Name="OpenPluginDirectoryButton"
+                    Grid.Column="1"
+                    Style="{StaticResource SettingsActionButtonStyle}"
+                    Content="打开"
+                    ToolTip="在资源管理器中打开插件目录"
+                    AutomationProperties.Name="在资源管理器中打开插件目录"
+                    Click="OpenPluginDirectoryButton_Click" />
+          </Grid>
 
-        <TextBlock Text="插件" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
-        <StackPanel x:Name="PluginListPanel" />
-        <TextBlock x:Name="PluginHelpText" Style="{StaticResource NoteCaptionStyle}" />
-        <TextBlock x:Name="PluginStatusText"
-                   Style="{StaticResource NoteCaptionStyle}"
-                   Foreground="{DynamicResource DangerBrush}"
-                   Text=""
-                   Visibility="Collapsed" />
-        <Grid Background="Transparent" Margin="0,6,0,0">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <TextBox x:Name="PluginDirectoryText"
-                   Grid.Column="0"
-                   Style="{StaticResource ReadOnlyPathBoxStyle}"
-                   Margin="0,0,8,0"
-                   VerticalAlignment="Center"
-                   AutomationProperties.Name="插件目录" />
-          <Button x:Name="OpenPluginDirectoryButton"
-                  Grid.Column="1"
-                  Style="{StaticResource SettingsActionButtonStyle}"
-                  Content="打开"
-                  ToolTip="在资源管理器中打开插件目录"
-                  AutomationProperties.Name="在资源管理器中打开插件目录"
-                  Click="OpenPluginDirectoryButton_Click" />
-        </Grid>
+          <TextBlock Text="关于" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+          <TextBlock Foreground="{DynamicResource PrimaryTextBrush}" FontSize="13">
+            <Run x:Name="AppNameRun" FontWeight="SemiBold" /><Run Text="  " /><Run x:Name="VersionRun" Foreground="{DynamicResource SecondaryTextBrush}" />
+          </TextBlock>
+          <TextBlock FontSize="12" Margin="0,4,0,0">
+            <Hyperlink x:Name="RepoLink"
+                       NavigateUri="https://github.com/Oiawlm/floating-transfer-station"
+                       Foreground="{DynamicResource AccentBrush}"
+                       RequestNavigate="RepoLink_RequestNavigate">GitHub 仓库与更新记录</Hyperlink>
+          </TextBlock>
 
-        <TextBlock Text="关于" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
-        <TextBlock Foreground="{DynamicResource PrimaryTextBrush}" FontSize="13">
-          <Run x:Name="AppNameRun" FontWeight="SemiBold" /><Run Text="  " /><Run x:Name="VersionRun" Foreground="{DynamicResource SecondaryTextBrush}" />
-        </TextBlock>
-        <TextBlock FontSize="12" Margin="0,4,0,0">
-          <Hyperlink x:Name="RepoLink"
-                     NavigateUri="https://github.com/Oiawlm/floating-transfer-station"
-                     Foreground="{DynamicResource AccentBrush}"
-                     RequestNavigate="RepoLink_RequestNavigate">GitHub 仓库与更新记录</Hyperlink>
-        </TextBlock>
-
-        <Button x:Name="ExitButton"
-                Style="{StaticResource ExitButtonStyle}"
-                Content="退出悬浮中转站"
-                Margin="0,20,0,0"
-                ToolTip="保存全部内容后退出"
-                AutomationProperties.Name="退出悬浮中转站"
-                Click="ExitButton_Click" />
-      </StackPanel>
+          <Button x:Name="ExitButton"
+                  Style="{StaticResource ExitButtonStyle}"
+                  Content="退出悬浮中转站"
+                  Margin="0,20,0,0"
+                  ToolTip="保存全部内容后退出"
+                  AutomationProperties.Name="退出悬浮中转站"
+                  Click="ExitButton_Click" />
+        </StackPanel>
+      </ScrollViewer>
 
       <Border Grid.RowSpan="2"
               Panel.ZIndex="10"

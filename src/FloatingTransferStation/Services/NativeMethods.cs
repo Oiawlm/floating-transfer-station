@@ -37,6 +37,10 @@ internal static class NativeMethods
     internal const uint SwpNoZOrder = 0x0004;
     internal const uint SwpNoActivate = 0x0010;
 
+    // hWndInsertAfter：置顶带的最高层（HWND_TOPMOST）。Topmost 属性只在 HWND
+    // 创建时生效一次，其后出现的其他置顶窗口会排到上面，需要周期性重申。
+    internal static readonly nint HwndTopmost = -1;
+
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetWindowPos(

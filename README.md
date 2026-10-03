@@ -10,12 +10,12 @@
 
 ## 下载与安装
 
-在 [1.15.0 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.15.0) 选择你的平台：
+在 [1.15.1 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.15.1) 选择你的平台：
 
 | 平台 | 下载 | 状态 |
 |---|---|---|
-| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.15.0/FloatingTransferStation-Setup-1.15.0.exe) | 正式版 |
-| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.15.0/FloatingTransferStation-1.15.0-osx-arm64.zip) | 测试版，未 Apple 公证 |
+| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.15.1/FloatingTransferStation-Setup-1.15.1.exe) | 正式版 |
+| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.15.1/FloatingTransferStation-1.15.1-osx-arm64.zip) | 测试版，未 Apple 公证 |
 
 仍在使用 Intel Mac 的读者可以从 [1.6.0 历史发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.6.0) 获取最后的 Intel 包；该版本保留不撤回，但不再获得更新。
 
@@ -31,7 +31,7 @@
 
 ### Mac 安装
 
-解压 `FloatingTransferStation-1.15.0-osx-arm64.zip`，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
+解压 `FloatingTransferStation-1.15.1-osx-arm64.zip`，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
 
 Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自动生成的源码包；Mac 应用包的文件名包含 `osx-arm64`。
 
@@ -51,8 +51,8 @@ Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自
 - **整理内容**：支持三个可改名板卡分类、一个按天复盘标签、置顶、批量置顶、直接多选、批量移动、批量删除和分类内排序；双击文字卡可就地编辑内容。
 - **再拖出去**：图片和文字使用 Windows 通用拖放格式，可拖到支持这些格式的软件；纯图片多选可以按原顺序一起拖出。
 - **复制出去**：右键任意卡片把它复制到剪贴板，再粘贴到游戏聊天窗等无法拖入的目标；面板持有键盘焦点且有选择时 `Ctrl + C` 复制选中项——多条文字按板内顺序合并为一段文本，纯图片多选按原顺序给出文件组，文字+图片混合则两者并存。复制不删除卡片、不进撤销栈，应用自身的复制也不会被自动收集重复入库。
-- **不挡工作区**：窗口贴在屏幕右侧并保持置顶，空闲时收成一条分类标签，移入后再展开。贴边一侧的窗口边缘与屏幕平齐。需要对照面板内容时，点击头部设置按钮左侧的「保持展开」开关（暂停符图标）：面板会一直展开，鼠标移开、点击其他应用或在别处打字都不再自动收起，再次点击恢复自动收起。该开关只对本次运行生效，重启后回到默认的自动收起。
-- **设置**：点击面板头部的齿轮按钮可打开设置窗口，调整主题（跟随系统/浅色/深色）、界面动效、开机自启、全局快捷键（`Ctrl + Alt + V` 唤起面板，默认关闭）、内容复制手势（右键卡片复制、`Ctrl + C` 复制选中）和垃圾桶按钮无选择时的左右键行为，管理文本整理插件，查看数据目录与版本信息，或退出应用；改动立即生效并自动保存。
+- **不挡工作区**：窗口贴在屏幕右侧并始终保持在所有窗口最上层（其他置顶窗口出现后会自动恢复层级），空闲时收成一条分类标签，移入后再展开。贴边一侧的窗口边缘与屏幕平齐。需要对照面板内容时，点击头部设置按钮左侧的「保持展开」开关（暂停符图标）：面板会一直展开，鼠标移开、点击其他应用或在别处打字都不再自动收起，再次点击恢复自动收起。该开关只对本次运行生效，重启后回到默认的自动收起。
+- **设置**：点击面板头部的齿轮按钮可打开设置窗口，调整主题（跟随系统/浅色/深色）、界面动效、开机自启、全局快捷键（`Ctrl + Alt + V` 唤起面板，默认关闭）、内容复制手势（右键卡片复制、`Ctrl + C` 复制选中）和垃圾桶按钮无选择时的左右键行为，管理文本整理插件，查看数据目录与版本信息，或退出应用；改动立即生效并自动保存。设置内容超过屏幕高度时窗口限高并出现滚动条，可滚动查看全部设置。
 - **插件**：把带 `plugin.json` 清单的插件文件夹放进数据目录的 `plugins/` 即可出现在设置的插件区块；声明式文本整理插件默认关闭，启用后在文字入库前按序应用正则规则（自动采集与外部拖入共用），正则按行匹配（`^`/`$` 锚定每行），规则失败或结果被清空时保留原文；内建"整理空白"示例插件，用户目录中的同名插件会覆盖内建版本。
 - **本地保存**：内容、顺序、置顶状态、分类名称和窗口位置保存在本机。
 

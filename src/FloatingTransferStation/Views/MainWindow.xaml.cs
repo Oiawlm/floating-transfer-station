@@ -34,6 +34,8 @@ public partial class MainWindow : Window
         TimeSpan.FromMilliseconds(DesignTokens.CategoryRevealMs);
     private static readonly TimeSpan PanelCollapseExitAnimationDuration =
         TimeSpan.FromMilliseconds(DesignTokens.PanelCollapseExitMs);
+    // 置顶重申周期：足够短以在其他置顶窗口出现后很快恢复层级，足够长可忽略开销。
+    private static readonly TimeSpan TopmostReassertInterval = TimeSpan.FromSeconds(2);
     private const double CategoryRevealOffset = DesignTokens.ContentEntranceOffsetPx;
     private const double PanelCollapseExitOffset = DesignTokens.CollapseExitOffsetPx;
     private static readonly HandoffBehavior CategoryRevealAnimationHandoffBehavior =
@@ -51,6 +53,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _expandIntentTimer;
     private readonly DispatcherTimer _collapseTimer;
     private readonly DispatcherTimer _statusTimer;
+    private readonly DispatcherTimer _topmostTimer;
     private readonly MainWindowViewModel _viewModel;
     private readonly object _pendingOperationsLock = new();
     private readonly HashSet<Task> _pendingOperations = [];
@@ -155,6 +158,8 @@ public partial class MainWindow : Window
         _collapseTimer.Tick += CollapseTimer_Tick;
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _statusTimer.Tick += StatusTimer_Tick;
+        _topmostTimer = new DispatcherTimer { Interval = TopmostReassertInterval };
+        _topmostTimer.Tick += (_, _) => ReassertTopmost();
         InitializeDailyReviewEditing();
         InitializeCategoryNameEditing();
         InitializePanelTextEditing();
@@ -201,6 +206,8 @@ public partial class MainWindow : Window
     /// </summary>
     internal void OnGlobalHotkeyPressed()
     {
+        // 用户显式唤起时立即抬到置顶带最高层，不等周期重申。
+        ReassertTopmost();
         if (_isClosing ||
             _viewModel.IsPanelExpanded ||
             _viewModel.IsExternalDropRailVisible)
@@ -277,6 +284,9 @@ public partial class MainWindow : Window
         {
             ShowStatus("全局快捷键注册失败，可能被其他软件占用。");
         }
+
+        ReassertTopmost();
+        _topmostTimer.Start();
     }
 
     private void ApplyWindowMaterial()
