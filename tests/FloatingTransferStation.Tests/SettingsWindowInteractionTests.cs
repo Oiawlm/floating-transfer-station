@@ -86,6 +86,32 @@ public sealed class SettingsWindowInteractionTests
         window.UpdateLayout();
     }
 
+    /// <summary>
+    /// 把主窗放到工作区低位并断言生效：OpenSettings 会先 Show 主窗，窗口 Top 必须
+    /// 在显示并完成布局后再赋值，提前赋值会被窗口设置恢复与首帧布局覆盖。
+    /// </summary>
+    private static double PlaceOwnerLow(MainWindow window)
+    {
+        var work = SystemParameters.WorkArea;
+        // 优先 600 DIP：初始放置缺陷在 Owner.Top 超过 work.Bottom-窗口实际高度
+        // （本机约 24，注意不是修复前代码里的 44 常量）时复现，600 远超该阈值；
+        // 矮工作区时退到下缘上方 10 DIP，保证 Owner 自身仍落在工作区内。
+        var ownerTop = Math.Min(600, work.Bottom - 10);
+        if (ownerTop < work.Top + 24)
+        {
+            Assert.Inconclusive($"工作区高 {work.Height} DIP 过小，无法构造有效的低位 Owner 前提。");
+        }
+
+        window.Top = ownerTop;
+        CompleteLayout(window);
+        Assert.AreEqual(
+            ownerTop,
+            window.Top,
+            2.5,
+            "主窗 Top 应保持在低位：设置窗初始放置以此为 Owner.Top。");
+        return ownerTop;
+    }
+
     private static void CloseWindow(Window window)
     {
         var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -481,8 +507,10 @@ public sealed class SettingsWindowInteractionTests
             // 先把窗口拖到工作区左上角（远离右/下钳制边界），再做增量断言；
             // 容差吸收不同缩放的 DPI 物理像素取整；矮屏运行器上窗口可能占满
             // 工作区高度，垂直期望值取「目标位置与钳制上界」的较小者。
+            // 钳制上界用渲染定稿的 ActualHeight：Height 的 SizeToContent 写回值与
+            // 最终渲染高度存在亚 DIP 差异，「整窗入屏」不变量以下缘不越 work.Bottom 为准。
             var work = SystemParameters.WorkArea;
-            var lowestAllowedTop = Math.Max(work.Top, work.Bottom - settings.Height);
+            var lowestAllowedTop = Math.Max(work.Top, work.Bottom - settings.ActualHeight);
             var dragToLeftTop = new System.Windows.Controls.Primitives.DragDeltaEventArgs(
                 (work.Left + 16) - settings.Left,
                 (work.Top + 16) - settings.Top);
@@ -512,8 +540,105 @@ public sealed class SettingsWindowInteractionTests
                 settings.Left >= work.Left - 0.01 && settings.Left <= Math.Max(work.Left, work.Right - settings.Width) + 0.01,
                 $"窗口左缘应钳制在工作区内，实际 Left={settings.Left}。");
             Assert.IsTrue(
-                settings.Top >= work.Top - 0.01 && settings.Top <= Math.Max(work.Top, work.Bottom - settings.Height) + 0.01,
+                settings.Top >= work.Top - 0.01 && settings.Top <= Math.Max(work.Top, work.Bottom - settings.ActualHeight) + 0.01,
                 $"窗口上缘应钳制在工作区内，实际 Top={settings.Top}。");
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>
+    /// 设置窗初始放置回归（1.15.1 遗留缺口）：打开时窗口必须整窗落在工作区内，
+    /// 不依赖任何用户交互。此前 SourceInitialized 按 work.Bottom-44 魔法常量放置
+    /// （只保证顶部一条 44px 带可见），Owner.Top 超过 work.Bottom-窗口实际高度
+    /// （本机约 24）时下缘即探出工作区；而 SizeChanged 安全网挂在 SourceInitialized
+    /// 之后，尺寸事件早已全部发生、钳位从未生效（探针实测：Owner.Top=300 时下缘
+    /// 1294.7 > 工作区 1018.7）。修复前失败：Owner.Top=600 时下缘 1576.4，探出
+    /// 约 558 DIP。修复后的不变量对任意工作区高度都必须成立。
+    /// </summary>
+    [STATestMethod]
+    public void SettingsWindow_OpensFullyInsideWorkAreaWithoutInteraction()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeStartupManager());
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            PlaceOwnerLow(window);
+
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+
+            var work = SystemParameters.WorkArea;
+            Assert.IsTrue(
+                settings.Top >= work.Top - 0.5,
+                $"设置窗上缘不得高于工作区，Top={settings.Top}，work.Top={work.Top}。");
+            Assert.IsTrue(
+                settings.Top + settings.ActualHeight <= work.Bottom + 0.5,
+                $"设置窗下缘必须落在工作区内，下缘={settings.Top + settings.ActualHeight}，work.Bottom={work.Bottom}。");
+            Assert.IsTrue(
+                settings.Left >= work.Left - 0.5 && settings.Left + settings.ActualWidth <= work.Right + 0.5,
+                $"设置窗水平方向必须落在工作区内，Left={settings.Left}，右缘={settings.Left + settings.ActualWidth}。");
+            Assert.IsTrue(
+                settings.ActualHeight <= settings.MaxHeight + 0.01,
+                $"设置窗实际高度必须服从最大高度，ActualHeight={settings.ActualHeight}。");
+
+            SaveVisualEvidence((Border)settings.FindName("WindowShell"), "settings-open-placement.png");
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>
+    /// 设置窗头部拖拽「平滑钳制」回归（1.15.1 遗留瞬移的收口）：窗口打开时若已探出
+    /// 工作区下缘，头部一次带微小垂直抖动的点击会让 DragDelta 的越界钳位把 Top 一次
+    /// 拉到钳制边界（探针实测：Top 300 → 24，跳变 276 DIP、占工作区 97.6%）。
+    /// 拖后 Top 的变化量不得超过拖拽量与容差之和；窗口已贴工作区下缘时允许不动。
+    /// </summary>
+    [STATestMethod]
+    public void SettingsWindow_HeaderDragDelta_ClampsSmoothlyWithoutTeleport()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeStartupManager());
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            PlaceOwnerLow(window);
+
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var thumb = settings.FindName("HeaderDragRegion") as System.Windows.Controls.Primitives.Thumb;
+            Assert.IsNotNull(thumb, "设置窗头部应有拖拽 Thumb。");
+
+            var topBefore = settings.Top;
+            thumb.RaiseEvent(new System.Windows.Controls.Primitives.DragDeltaEventArgs(0, 2));
+            CompleteLayout(settings);
+
+            var work = SystemParameters.WorkArea;
+            // 有向区间而非绝对变化量：正向小位移只允许 Top 上移拖拽量（或钳制不动），
+            // 不得出现任何方向的远超拖拽量的跳变。窗口已贴工作区下缘时允许不动。
+            Assert.IsTrue(
+                settings.Top >= topBefore - 2.5 && settings.Top <= topBefore + 2 + 2.5,
+                $"2 DIP 的垂直拖拽不得产生远超拖拽量的跳变，Top {topBefore} → {settings.Top}。");
+            Assert.IsTrue(
+                settings.Top >= work.Top - 0.5 && settings.Top + settings.ActualHeight <= work.Bottom + 0.5,
+                $"拖拽后整窗必须仍落在工作区内，Top={settings.Top}，下缘={settings.Top + settings.ActualHeight}。");
 
             CloseWindow(settings);
         }
