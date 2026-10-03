@@ -6,4 +6,5 @@ public static class ProductIdentity
     public static string Version { get; } = typeof(ProductIdentity).Assembly.GetName().Version!.ToString(3);
     public const string SettingsRegistryKey = @"Software\FloatingTransferStation";
     public const string DataDirectoryRegistryValue = "DataDirectory";
+    public const string DataParentDirectoryRegistryValue = "DataParentDirectory";
 }

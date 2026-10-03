@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -238,6 +239,103 @@ public sealed partial class MainWindowInteractionTests
                 });
 
             Assert.IsFalse(viewModel.IsPanelExpanded);
+        }
+        finally
+        {
+            CloseReviewWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void ReviewToolbar_DateDropdownRemovedAndStateStaysRight()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateReviewWindow(directory);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Reference);
+            CompleteLayout(window);
+            LoadReview(window);
+
+            // 1.16.0 起日期下拉已删除：日期导航只保留 ‹ › 单步切换。
+            Assert.IsNull(window.FindName("ReviewDateComboBox"));
+
+            var state = (TextBlock)window.FindName("ReviewDateState");
+            Assert.IsNotNull(state);
+            Assert.AreEqual("今天", state.Text);
+
+            var previous = (Button)window.FindName("ReviewPreviousButton");
+            var next = (Button)window.FindName("ReviewNextButton");
+            Assert.IsTrue(previous.IsEnabled);
+            Assert.IsFalse(next.IsEnabled);
+
+            previous.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, previous));
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+            while (state.Text == "今天" && DateTime.UtcNow < deadline)
+            {
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+            }
+
+            Assert.AreEqual(
+                DateOnly.FromDateTime(DateTime.Now).AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                state.Text);
+            Assert.IsTrue(next.IsEnabled);
+        }
+        finally
+        {
+            CloseReviewWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void ReviewEditor_BrushesFollowThemeDictionary()
+    {
+        AssertEditorBrushesFollowThemeDictionary(DesignTheme.Dark, "review-editor-dark.png");
+        AssertEditorBrushesFollowThemeDictionary(DesignTheme.Light, "review-editor-light.png");
+    }
+
+    private static void AssertEditorBrushesFollowThemeDictionary(DesignTheme theme, string evidenceFileName)
+    {
+        using var directory = new TestDirectory();
+        var window = CreateReviewWindow(directory);
+
+        try
+        {
+            window.Show();
+            DesignThemeManager.Apply(window, theme);
+            ExpandCategory(window, BoardCategory.Reference);
+            CompleteLayout(window);
+            LoadReview(window);
+            var editor = (TextBox)window.FindName("ReviewEditor");
+            Assert.IsNotNull(editor);
+            editor.Text = "深浅两套主题下都应可读的复盘文字。";
+            CompleteLayout(window);
+
+            // DynamicResource 必须解析为当前主题字典中的画刷实例（防写死常量，
+            // 也防样式退回系统默认：深色下黑字黑底不可读）。
+            Assert.AreSame(window.FindResource("PrimaryTextBrush"), editor.Foreground);
+            Assert.AreSame(window.FindResource("PrimaryTextBrush"), editor.CaretBrush);
+            Assert.AreSame(window.FindResource("AccentBrush"), editor.SelectionBrush);
+            // SelectionTextBrush 有意不设：沿用系统默认「强调色选区 + 白字」语义。
+            // 断言本地值未被固定（Aero2 主题默认给白字，断 null 会依赖系统实现细节）。
+            Assert.AreEqual(
+                DependencyProperty.UnsetValue,
+                editor.ReadLocalValue(
+                    System.Windows.Controls.Primitives.TextBoxBase.SelectionTextBrushProperty));
+
+            var previous = (Button)window.FindName("ReviewPreviousButton");
+            Assert.IsNotNull(previous);
+            Assert.AreEqual(
+                window.FindResource("PrimaryTextBrush"),
+                previous.Foreground,
+                "导航按钮前景必须来自主题字典，而不是 Aero2 系统画刷。");
+
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                evidenceFileName,
+                "FTS_DAILY_REVIEW_EVIDENCE_DIR");
         }
         finally
         {

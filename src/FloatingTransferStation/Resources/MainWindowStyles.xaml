@@ -109,6 +109,243 @@
     </Setter>
   </Style>
 
+  <!-- 两窗共享的主题控件样式（单一事实来源）：主窗与设置窗都 merge 本字典，
+       颜色一律走 DynamicResource 主题键，随 DesignTheme.*.xaml 整本替换重解析。
+       样式不放 DesignTheme.*.xaml——那是会被整本替换的纯颜色字典，放样式等于双份。 -->
+
+  <!-- 常规文字输入框：纯 Setter 版（默认模板自带 PART_ContentHost，不自绘）。
+       Foreground/CaretBrush/SelectionBrush 补齐主题缺口；SelectionTextBrush 有意不设：
+       沿用系统默认的「强调色选区 + 白字」语义（与 OnAccentBrush 约定一致），
+       主题样式若再固定选区文字颜色，深浅两套强调色下必有一套对比失效。 -->
+  <Style x:Key="ThemedTextBoxStyle" TargetType="TextBox">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Style.Triggers>
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter Property="Opacity" Value="0.5" />
+      </Trigger>
+      <Trigger Property="IsKeyboardFocusWithin" Value="True">
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <!-- 常规操作按钮（设置窗原 SettingsActionButtonStyle 提升，两窗共用）：
+       自绘模板脱离 Aero2 系统画刷，禁用态压暗。 -->
+  <Style x:Key="ThemedActionButtonStyle" TargetType="Button">
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="Surface"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="6">
+            <ContentPresenter HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Margin="{TemplateBinding Padding}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Surface" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
+              <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource HoverBorderBrush}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Surface" Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.4" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- 导航按钮（复盘 ‹ › 等）：动作按钮的小方块形态。Focusable 必须为 True——
+       键盘可达性与既有回归（复盘失焦恢复收起）都依赖按钮能接收焦点，
+       与头部动作按钮（装饰性、不可聚焦）不同。 -->
+  <Style x:Key="ThemedNavButtonStyle" TargetType="Button" BasedOn="{StaticResource ThemedActionButtonStyle}">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="Focusable" Value="True" />
+  </Style>
+
+  <!-- 搜索类型 chip（ToggleButton）：Aero2 默认模板用系统画刷渲染 chrome、
+       忽略主题 Background，必须自绘模板；选中态进入主题强调体系。 -->
+  <Style x:Key="ThemedFilterChipStyle" TargetType="ToggleButton">
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToggleButton">
+          <Border x:Name="Surface"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="5">
+            <ContentPresenter HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Margin="{TemplateBinding Padding}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Surface" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
+              <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource HoverBorderBrush}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Surface" Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Surface" Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
+              <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+              <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.4" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- 常规下拉框（设置窗原 ThemedComboBoxStyle 提升，两窗共用）：
+       命中层必须置顶、PART_Popup 与 IsDropDownOpen 双向同步，注释见模板内。 -->
+  <Style x:Key="ThemedComboBoxStyle" TargetType="ComboBox">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="ItemContainerStyle">
+      <Setter.Value>
+        <Style TargetType="ComboBoxItem">
+          <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+          <Setter Property="FontSize" Value="13" />
+          <Setter Property="Cursor" Value="Hand" />
+          <Setter Property="Template">
+            <Setter.Value>
+              <ControlTemplate TargetType="ComboBoxItem">
+                <Border x:Name="ItemSurface"
+                        Background="Transparent"
+                        Padding="10,7"
+                        CornerRadius="4"
+                        Margin="4,2">
+                  <ContentPresenter />
+                </Border>
+                <ControlTemplate.Triggers>
+                  <Trigger Property="IsHighlighted" Value="True">
+                    <Setter TargetName="ItemSurface" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
+                  </Trigger>
+                  <Trigger Property="IsSelected" Value="True">
+                    <Setter TargetName="ItemSurface" Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
+                  </Trigger>
+                </ControlTemplate.Triggers>
+              </ControlTemplate>
+            </Setter.Value>
+          </Setter>
+        </Style>
+      </Setter.Value>
+    </Setter>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ComboBox">
+          <Grid>
+            <Border x:Name="Surface"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="6">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="22" />
+                </Grid.ColumnDefinitions>
+                <ContentPresenter Grid.Column="0"
+                                  Content="{TemplateBinding SelectionBoxItem}"
+                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                  Margin="10,0,0,0"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Center" />
+                <Path Grid.Column="1"
+                      Data="M 0 0 L 4 4 L 8 0"
+                      Stroke="{DynamicResource SecondaryTextBrush}"
+                      StrokeThickness="1.5"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      IsHitTestVisible="False" />
+              </Grid>
+            </Border>
+            <!-- 命中层必须在最顶：不透明 Surface 在上会拦截全部鼠标命中，
+                 ToggleButton 收不到点击、下拉无法用鼠标打开。 -->
+            <ToggleButton Focusable="False"
+                          ClickMode="Press"
+                          Background="Transparent"
+                          BorderThickness="0"
+                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+              <ToggleButton.Template>
+                <ControlTemplate TargetType="ToggleButton">
+                  <Border Background="{TemplateBinding Background}" />
+                </ControlTemplate>
+              </ToggleButton.Template>
+            </ToggleButton>
+            <!-- PART_Popup + 双向 IsOpen：StaysOpen=False 自行关闭时由部件名与绑定同步回 IsDropDownOpen，
+                 避免关闭后状态失步（下次点击变成空操作、需点第二次）。 -->
+            <Popup x:Name="PART_Popup"
+                   IsOpen="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                   Placement="Bottom"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade"
+                   StaysOpen="False">
+              <Border Background="{DynamicResource HeaderBrush}"
+                      BorderBrush="{DynamicResource BorderBrush}"
+                      BorderThickness="1"
+                      CornerRadius="6"
+                      Margin="0,3,0,0"
+                      MinWidth="{TemplateBinding ActualWidth}">
+                <ScrollViewer MaxHeight="150">
+                  <ItemsPresenter Margin="2" />
+                </ScrollViewer>
+              </Border>
+            </Popup>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource HoverBorderBrush}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <Style x:Key="CategoryTabContainerStyle" TargetType="Border">
     <Setter Property="Margin" Value="5" />
     <Setter Property="Background" Value="Transparent" />

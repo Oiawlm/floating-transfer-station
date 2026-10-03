@@ -26,7 +26,9 @@ public enum TrashNoSelectionRightClickAction
 /// 用户偏好首版：主题模式（跟随系统/浅色/深色）与动效开关；
 /// 1.10.0 起新增全局快捷键唤起开关（默认关闭，仅用户显式开启时注册系统热键）；
 /// 1.15.0 起新增卡片复制手势与垃圾桶按钮无选择行为（默认右键卡片复制、
-/// Ctrl+C 复制选中、左键清空非置顶、右键清空全部）。
+/// Ctrl+C 复制选中、左键清空非置顶、右键清空全部）；
+/// 1.16.0 起新增插件目录覆盖（null = 默认数据目录下 plugins，插件目录是用户偏好
+/// 而非受管数据契约；启用状态 plugins-state.json 仍留在数据目录）。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -37,7 +39,8 @@ public sealed record AppPreferences(
     bool RightClickCardCopyEnabled = true,
     bool CopySelectionWithCtrlCEnabled = true,
     TrashNoSelectionLeftClickAction TrashNoSelectionLeftClick = TrashNoSelectionLeftClickAction.ClearNonPinned,
-    TrashNoSelectionRightClickAction TrashNoSelectionRightClick = TrashNoSelectionRightClickAction.ClearAll)
+    TrashNoSelectionRightClickAction TrashNoSelectionRightClick = TrashNoSelectionRightClickAction.ClearAll,
+    string? PluginsDirectoryOverride = null)
 {
     public static AppPreferences Default { get; } = new();
 }
