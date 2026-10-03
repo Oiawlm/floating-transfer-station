@@ -324,6 +324,53 @@ public sealed class SettingsWindowPluginTests
     }
 
     [STATestMethod]
+    public void DirectorySection_RendersInBothThemes()
+    {
+        AssertSettingsDirectoryEvidence(DesignTheme.Dark, "settings-directory-dark.png");
+        AssertSettingsDirectoryEvidence(DesignTheme.Light, "settings-directory-light.png");
+    }
+
+    private static void AssertSettingsDirectoryEvidence(DesignTheme theme, string fileName)
+    {
+        using var directory = new TestDirectory();
+        var catalog = CreateCatalog(directory);
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), catalog);
+        try
+        {
+            var settings = OpenSettings(window);
+            DesignThemeManager.Apply(settings, theme);
+            CompleteLayout(settings);
+
+            AssertDirectoryControlsVisible(settings);
+            SaveVisualEvidence(settings, fileName);
+        }
+        finally
+        {
+            CloseLeftoverSettings(window);
+        }
+    }
+
+    private static void AssertDirectoryControlsVisible(SettingsWindow settings)
+    {
+        Assert.AreEqual(Visibility.Visible, ((Button)settings.FindName("ChangeDataDirectoryButton")!).Visibility);
+        Assert.AreEqual(Visibility.Visible, ((Button)settings.FindName("OpenDataDirectoryButton")!).Visibility);
+        Assert.AreEqual(Visibility.Visible, ((Button)settings.FindName("ChangePluginDirectoryButton")!).Visibility);
+        Assert.AreEqual(Visibility.Visible, ((Button)settings.FindName("ResetPluginDirectoryButton")!).Visibility);
+    }
+
+    private static void CloseLeftoverSettings(MainWindow window)
+    {
+        var field = typeof(MainWindow).GetField(
+            "_settingsWindow",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        if (field?.GetValue(window) is Window leftover)
+        {
+            CompleteLayout(leftover);
+            leftover.Close();
+        }
+    }
+
+    [STATestMethod]
     public void MissingCatalog_HidesDirectoryControlsAndExplains()
     {
         using var directory = new TestDirectory();
@@ -339,6 +386,40 @@ public sealed class SettingsWindowPluginTests
             Assert.AreEqual(
                 Visibility.Collapsed,
                 ((Button)settings.FindName("OpenPluginDirectoryButton")!).Visibility);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void DirectoryControls_ShowChangeButtonsAndDefaultNote()
+    {
+        using var directory = new TestDirectory();
+        var catalog = CreateCatalog(directory);
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), catalog);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+
+            // 数据目录区块：路径 + 更改 + 打开（1.16.0 起可更改，不再只读）。
+            var changeData = settings.FindName("ChangeDataDirectoryButton") as Button;
+            Assert.IsNotNull(changeData);
+            Assert.AreEqual(Visibility.Visible, changeData.Visibility);
+
+            // 插件目录区块：路径 + 更改 + 恢复默认 + 打开，默认时说明文字标明默认。
+            Assert.AreEqual(
+                Visibility.Visible,
+                ((Button)settings.FindName("ChangePluginDirectoryButton")!).Visibility);
+            Assert.AreEqual(
+                Visibility.Visible,
+                ((Button)settings.FindName("ResetPluginDirectoryButton")!).Visibility);
+            var note = settings.FindName("PluginDirectoryNoteText") as TextBlock;
+            Assert.IsNotNull(note);
+            StringAssert.Contains(note.Text, "默认");
+            StringAssert.Contains(note.Text, "数据目录");
         }
         finally
         {

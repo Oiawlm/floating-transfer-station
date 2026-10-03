@@ -95,4 +95,32 @@ public sealed class AppPreferencesTests
         Assert.AreEqual(TrashNoSelectionLeftClickAction.ClearNonPinned, restored.TrashNoSelectionLeftClick);
         Assert.AreEqual(TrashNoSelectionRightClickAction.ClearAll, restored.TrashNoSelectionRightClick);
     }
+
+    [TestMethod]
+    public void Default_UsesDefaultPluginsDirectory()
+    {
+        Assert.IsNull(AppPreferences.Default.PluginsDirectoryOverride);
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesPluginsDirectoryOverride()
+    {
+        var preferences = new AppPreferences(PluginsDirectoryOverride: @"D:\MyPlugins");
+
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            JsonSerializer.Serialize(preferences));
+
+        Assert.AreEqual(preferences, restored);
+        Assert.AreEqual(@"D:\MyPlugins", restored!.PluginsDirectoryOverride);
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutPluginsDirectoryField_FallsBackToDefault()
+    {
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"ThemeMode":0,"AnimationsEnabled":true}""");
+
+        Assert.IsNotNull(restored);
+        Assert.IsNull(restored.PluginsDirectoryOverride, "旧版 preferences.json 缺字段时必须回落到默认插件目录。");
+    }
 }

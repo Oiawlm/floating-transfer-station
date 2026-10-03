@@ -16,7 +16,6 @@ public partial class MainWindow
     private string _reviewBaseContent = string.Empty;
     private bool _reviewDirty;
     private bool _reviewLoading;
-    private bool _reviewDateSelectionUpdating;
     private bool _reviewLoaded;
 
     private void InitializeDailyReviewEditing()
@@ -89,7 +88,6 @@ public partial class MainWindow
             {
                 // Switching back (or a stale load) must not discard unsaved editor input.
                 ReviewStatus.Text = "有未保存的修改";
-                await RefreshReviewDatesAsync();
                 UpdateReviewDateControls();
                 return;
             }
@@ -98,7 +96,6 @@ public partial class MainWindow
             ReviewEditor.Text = document.Content;
             _reviewLoading = false;
             ReviewStatus.Text = document.Exists ? "已加载" : "今天还没有复盘内容。";
-            await RefreshReviewDatesAsync();
             UpdateReviewDateControls();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -150,7 +147,6 @@ public partial class MainWindow
                     _reviewSaveTimer.Start();
                 }
 
-                await RefreshReviewDatesAsync();
                 return true;
             }
             catch (IOException exception)
@@ -214,17 +210,6 @@ public partial class MainWindow
         }
     }
 
-    private async void ReviewDateComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_reviewDateSelectionUpdating || !IsReviewActive() ||
-            ReviewDateComboBox.SelectedItem is not DateOnly date || date == _reviewDate)
-        {
-            return;
-        }
-
-        await SwitchReviewDateAsync(date);
-    }
-
     private async Task SwitchReviewDateAsync(DateOnly date)
     {
         if (_dailyReviews is null || date > DateOnly.FromDateTime(DateTime.Now))
@@ -239,32 +224,6 @@ public partial class MainWindow
         }
 
         await LoadReviewDateAsync(date);
-    }
-
-    private async Task RefreshReviewDatesAsync()
-    {
-        if (_dailyReviews is null)
-        {
-            return;
-        }
-
-        var dates = (await _dailyReviews.ListDatesAsync()).ToList();
-        if (!dates.Contains(_reviewDate))
-        {
-            dates.Add(_reviewDate);
-        }
-
-        dates.Sort((left, right) => right.CompareTo(left));
-        _reviewDateSelectionUpdating = true;
-        try
-        {
-            ReviewDateComboBox.ItemsSource = dates;
-            ReviewDateComboBox.SelectedItem = _reviewDate;
-        }
-        finally
-        {
-            _reviewDateSelectionUpdating = false;
-        }
     }
 
     private void UpdateReviewDateControls()
@@ -291,7 +250,6 @@ public partial class MainWindow
 
         try
         {
-            await RefreshReviewDatesAsync();
             if (!IsReviewActive() || (change.Date is { } date && date != _reviewDate))
             {
                 return;

@@ -8,6 +8,9 @@ public sealed class BoardOperationGate
     private int _registeredOperationCount;
     private bool _isSealed;
 
+    /// <summary>门是否已封闭（封门后新操作抛 InvalidOperationException）。</summary>
+    public bool IsSealed => _isSealed;
+
     public async Task<T> RunAsync<T>(
         Func<Task<T>> operation,
         CancellationToken cancellationToken = default)
@@ -69,6 +72,18 @@ public sealed class BoardOperationGate
         }
     }
 
+    /// <summary>
+    /// 显式重开已封闭的操作门。仅供封门后的最终操作已成功、但外层流程失败需要恢复
+    /// 运行的场景（如应用内数据目录搬迁在发布后回滚）；正常运行永不调用。
+    /// </summary>
+    public void Reopen()
+    {
+        lock (_stateLock)
+        {
+            _isSealed = false;
+        }
+    }
+
     private void RegisterOperation()
     {
         lock (_stateLock)
@@ -96,13 +111,5 @@ public sealed class BoardOperationGate
         }
 
         drained?.TrySetResult();
-    }
-
-    private void Reopen()
-    {
-        lock (_stateLock)
-        {
-            _isSealed = false;
-        }
     }
 }

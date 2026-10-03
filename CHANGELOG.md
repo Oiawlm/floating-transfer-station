@@ -4,6 +4,12 @@
 
 ## 未发布
 
+## 1.16.0
+
+- 新增设置内更改数据目录与插件目录：设置窗口「数据目录」区块新增「更改…」，选择一个父文件夹后在应用内完成内容搬迁——按安装器 `PrepareDataDirectoryMigration` 同一协议（受管形状校验、可写探针、目标卷空间与目标非存在校验、复制到 `.migration-时间戳` 暂存目录、逐项校验后同卷原子发布），成功后原子更新 HKCU 登记（`DataDirectory`+`DataParentDirectory`，写入顺序与回滚同安装器）并以 `--relocated` 自动重启（仅该模式限时重试等待旧实例释放单实例锁，普通双启动仍立即失败）；旧受管目录不立即删除，下一次在新目录成功启动后经同一形状守卫校验再自动清理（校验不过保留并提示），既没有崩溃窗口丢数据，也不会因残留目录卡死迁回。迁移期间静默全部写入者（停剪贴板采集与复盘 watcher、操作门封门并冲刷全部存储），任一步失败清暂存、恢复运行、原目录与登记不动；登记成功后重启失败则直接退出并提示手动启动（登记已指向新目录，无分叉）。共享核心新增 `DataDirectoryRelocation` 搬迁原语与 `DataDirectorySettings` 形状/探针规则（`NormalizeManagedDataDirectory` 硬化到与卸载器 `IsManagedDataDirectory` 完全一致：受管父的上级为磁盘根时拒绝），安装器零改动。插件目录为用户偏好而非受管契约：「更改…/恢复默认」写入 `preferences.json` 新字段 `PluginsDirectoryOverride`（旧文件缺字段取默认），重启生效；目录落在数据目录之内时忽略并提示，插件的启用状态文件仍留在数据目录。Windows 实现（设置窗为 WPF 专属界面），Mac 端共享核心仅作兼容性扩展（新偏好字段默认值兼容、`ListDatesAsync` 接口保留供 Mac 日期列表使用），Mac 功能零改动（开发暂停中）。
+
+- 修复复盘页深色模式不可读并移除日期下拉：复盘编辑器此前设了 `Background/BorderBrush` 却漏了 `Foreground`（深色卡片上继承系统黑字不可读）、`CaretBrush`（黑光标不可见）与 `SelectionBrush`（系统强调色与应用紫冲突）；‹ › 导航按钮为裸按钮走 Aero2 系统模板（深色下是“白色按钮”）。根因是这些控件从未进入主题体系（整本替换 `DesignTheme.*.xaml` 只对 `{DynamicResource}` 生效）——修复从单一事实来源出发：把设置窗的 `ThemedComboBoxStyle` 与 `ThemedActionButtonStyle`（补禁用态）提升到两窗共享的 `MainWindowStyles.xaml`，新增 `ThemedNavButtonStyle`（可聚焦，保住既有失焦收起回归与键盘可达性）与 `ThemedTextBoxStyle`（`SelectionTextBrush` 有意不设，沿用系统“强调色选区+白字”语义，测试锁死防后人固定画刷）；复盘编辑器与导航按钮接入共享样式，搜索输入框、类型 chip 与“清空筛选”按钮属同根因一并接入并以双主题截图验证。日期下拉（点开通常只有“今天”一项）移除，日期导航只保留 ‹ › 单步切换；`ReviewDateState` 右对齐保持位置语义。新增双主题回归：画刷解析自主题字典（防写死常量）、`ReviewDateComboBox` 不存在、初始“今天”、点击 ‹ 后为昨天日期；截图取证显示修复前深色下编辑器文字不可见+白色系统按钮+白色下拉，修复后白字可读+主题化控件。Mac 端遵守暂停边界零改动（Core 的 `ListDatesAsync` 接口保留并注明仅 macOS 消费）。
+
 ## 1.15.2
 
 - 修复设置窗口打开时下缘探出屏幕、点击头部即瞬移到近满屏：1.15.1 限高修复后窗口高度可达约整屏，但初始放置仍按「work.Bottom-44」魔法常量仅保证顶部 44px 可见，Owner.Top 稍低窗口下缘即探出工作区（探针实测：Owner.Top=300 时下缘 1294.7 > 工作区 1018.7）；同时 SizeChanged 安全网挂在 SourceInitialized 之后，而 SizeToContent 的尺寸定稿与尺寸事件在此之前已全部发生，钳位从未生效（死代码），此时在头部带 2px 下移抖动点击一次，DragDelta 的越界钳位便一次把 Top 拉到钳制边界（实测 300 → 24，跳变 276 DIP、占工作区 97.6%），表现为「一点头部就瞬移」。现改为初始放置用已定稿的 ActualHeight 把整窗钳进工作区（对任意合法 Owner.Top 与矮工作区均成立），头部拖拽与安全网钳位统一改用渲染定稿的 ActualHeight、不再依赖 .NET 10 把 SizeToContent 定稿值写回 Height 的行为（写回值与最终渲染高度存在亚 DIP 差异），安全网钳位改挂构造函数、对打开后的尺寸再变化（如运行时改缩放）持续生效；本次只承诺主屏场景（SystemParameters.WorkArea），按窗口所在显示器取工作区列为后续增强。新增 STA 回归测试覆盖「打开即整窗入屏」与「拖拽平滑钳制」两条失败路径（修复前失败、修复后通过）。Windows 实现（设置窗为 WPF 专属界面），Mac 端共享核心零改动。

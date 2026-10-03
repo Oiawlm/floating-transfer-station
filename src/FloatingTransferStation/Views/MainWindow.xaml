@@ -306,14 +306,11 @@
                 </Grid.ColumnDefinitions>
                 <Grid Grid.Column="0" Margin="0,0,6,0">
                   <TextBox x:Name="SearchInput"
+                           Style="{StaticResource ThemedTextBoxStyle}"
                            Height="24"
                            VerticalContentAlignment="Center"
                            Padding="6,0"
                            FontSize="12"
-                           Background="{DynamicResource CardBrush}"
-                           Foreground="{DynamicResource PrimaryTextBrush}"
-                           BorderBrush="{DynamicResource SecondaryTextBrush}"
-                           BorderThickness="1"
                            TextChanged="SearchInput_TextChanged"
                            PreviewKeyDown="SearchInput_PreviewKeyDown" />
                   <TextBlock x:Name="SearchInputHint"
@@ -331,8 +328,7 @@
                               FontSize="11"
                               Padding="6,1"
                               Margin="0,0,4,0"
-                              Background="{DynamicResource CardBrush}"
-                              Foreground="{DynamicResource PrimaryTextBrush}"
+                              Style="{StaticResource ThemedFilterChipStyle}"
                               Click="SearchChip_Click" />
                 <ToggleButton x:Name="SearchTextChip"
                               Grid.Column="2"
@@ -340,8 +336,7 @@
                               FontSize="11"
                               Padding="6,1"
                               Margin="0,0,6,0"
-                              Background="{DynamicResource CardBrush}"
-                              Foreground="{DynamicResource PrimaryTextBrush}"
+                              Style="{StaticResource ThemedFilterChipStyle}"
                               Click="SearchChip_Click" />
                 <Button x:Name="SearchClearButton"
                         Grid.Column="3"
@@ -433,9 +428,7 @@
                     FontSize="12"
                     Padding="10,3"
                     HorizontalAlignment="Center"
-                    Background="{DynamicResource CardBrush}"
-                    Foreground="{DynamicResource PrimaryTextBrush}"
-                    BorderBrush="{DynamicResource AccentBrush}"
+                    Style="{StaticResource ThemedActionButtonStyle}"
                     Click="SearchClearFilterButton_Click" />
           </StackPanel>
         </Border>
@@ -452,6 +445,7 @@
                 Margin="12,2"
                 VerticalAlignment="Top">
           <TextBox x:Name="CardTextEditor"
+                   Style="{StaticResource ThemedTextBoxStyle}"
                    Padding="6,4"
                    FontSize="14"
                    FontFamily="{StaticResource InterfaceFontFamily}"
@@ -459,7 +453,6 @@
                    AcceptsReturn="False"
                    Background="Transparent"
                    BorderThickness="0"
-                   Foreground="{DynamicResource PrimaryTextBrush}"
                    TextOptions.TextFormattingMode="Display"
                    PreviewKeyDown="CardTextEditor_PreviewKeyDown"
                    LostKeyboardFocus="CardTextEditor_LostKeyboardFocus" />
@@ -476,45 +469,38 @@
               <RowDefinition Height="*" />
               <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
+            <!-- 日期导航仅保留 ‹ › 一步切一天（原日期下拉对绝大多数用户只有一项，已移除；
+                 日期文本靠右对齐保持原下拉区域的位置语义）。 -->
             <Grid Grid.Row="0" Margin="0,0,0,8">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
               <Button x:Name="ReviewPreviousButton"
                       Grid.Column="0"
                       Content="‹"
-                      Width="30"
-                      Height="28"
+                      Style="{StaticResource ThemedNavButtonStyle}"
                       ToolTip="上一天"
                       Click="ReviewPreviousButton_Click" />
               <Button x:Name="ReviewNextButton"
                       Grid.Column="1"
                       Content="›"
-                      Width="30"
-                      Height="28"
+                      Style="{StaticResource ThemedNavButtonStyle}"
                       Margin="4,0,0,0"
                       ToolTip="下一天"
                       Click="ReviewNextButton_Click" />
-              <ComboBox x:Name="ReviewDateComboBox"
-                        Grid.Column="2"
-                        Margin="8,0,0,0"
-                        MinWidth="128"
-                        HorizontalAlignment="Left"
-                        VerticalContentAlignment="Center"
-                        ItemStringFormat="{}{0:yyyy-MM-dd}"
-                        SelectionChanged="ReviewDateComboBox_SelectionChanged" />
               <TextBlock x:Name="ReviewDateState"
-                         Grid.Column="3"
+                         Grid.Column="2"
                          Margin="8,0,0,0"
+                         HorizontalAlignment="Right"
                          VerticalAlignment="Center"
                          Foreground="{DynamicResource SecondaryTextBrush}"
                          Text="今天" />
             </Grid>
             <TextBox x:Name="ReviewEditor"
                      Grid.Row="1"
+                     Style="{StaticResource ThemedTextBoxStyle}"
                      AcceptsReturn="True"
                      TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"
@@ -523,8 +509,6 @@
                      Padding="12"
                      FontSize="14"
                      TextOptions.TextFormattingMode="Display"
-                     BorderBrush="{DynamicResource BorderBrush}"
-                     Background="{DynamicResource CardBrush}"
                      TextChanged="ReviewEditor_TextChanged"
                      AutomationProperties.Name="每日复盘编辑器" />
             <TextBlock x:Name="ReviewStatus"

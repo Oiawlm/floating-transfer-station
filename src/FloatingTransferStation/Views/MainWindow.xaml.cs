@@ -63,6 +63,8 @@ public partial class MainWindow : Window
     private readonly IStartupManager _startupManager;
     private readonly PluginCatalog? _pluginCatalog;
     private readonly IGlobalHotkeySource _globalHotkeySource;
+    private readonly BoardOperationGate? _operationGate;
+    private readonly DataDirectoryChangeService? _dataDirectoryChangeService;
     private readonly string _dataDirectory;
     private readonly Func<Window, double>? _rightEdgeBleedProvider;
     private AppPreferences _preferences = AppPreferences.Default;
@@ -122,7 +124,9 @@ public partial class MainWindow : Window
         string? dataDirectory = null,
         Func<Window, double>? rightEdgeBleedProvider = null,
         PluginCatalog? pluginCatalog = null,
-        IGlobalHotkeySource? globalHotkeySource = null)
+        IGlobalHotkeySource? globalHotkeySource = null,
+        BoardOperationGate? operationGate = null,
+        DataDirectoryChangeService? dataDirectoryChangeService = null)
     {
         InitializeComponent();
         _preferences = preferences ?? AppPreferences.Default;
@@ -130,6 +134,8 @@ public partial class MainWindow : Window
         _startupManager = startupManager ?? new WindowsStartupManager();
         _pluginCatalog = pluginCatalog;
         _globalHotkeySource = globalHotkeySource ?? new Win32GlobalHotkeySource();
+        _operationGate = operationGate;
+        _dataDirectoryChangeService = dataDirectoryChangeService;
         _dataDirectory = dataDirectory ?? string.Empty;
         _activeDesignTheme = ResolveTheme(_preferences.ThemeMode);
         DesignThemeManager.Apply(this, _activeDesignTheme);
@@ -274,10 +280,7 @@ public partial class MainWindow : Window
         _windowSource.AddHook(WndProc);
         RefreshEdgeBleed();
         ApplyWindowMaterial();
-        if (!NativeMethods.AddClipboardFormatListener(_windowSource.Handle))
-        {
-            ShowStatus("剪贴板监听未启动，请重新打开悬浮中转站。");
-        }
+        StartClipboardListening();
 
         // 偏好开启但注册失败时不改写偏好：状态条提示，下次启动自动重试。
         if (_preferences.GlobalHotkeyEnabled && !TrySetGlobalHotkey(enable: true))
@@ -287,6 +290,21 @@ public partial class MainWindow : Window
 
         ReassertTopmost();
         _topmostTimer.Start();
+    }
+
+    /// <summary>注册剪贴板格式监听；已在监听时为 no-op。搬迁静默期停止后可由此恢复。</summary>
+    private void StartClipboardListening()
+    {
+        var handle = _windowSource?.Handle ?? 0;
+        if (handle == 0)
+        {
+            return;
+        }
+
+        if (!NativeMethods.AddClipboardFormatListener(handle))
+        {
+            ShowStatus("剪贴板监听未启动，请重新打开悬浮中转站。");
+        }
     }
 
     private void ApplyWindowMaterial()

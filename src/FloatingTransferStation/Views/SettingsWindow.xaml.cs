@@ -27,6 +27,7 @@ public partial class SettingsWindow : Window
     private readonly ISettingsHost _host;
     private bool _isSynchronizingControls;
     private bool _micaApplied;
+    private bool _isChangingDataDirectory;
 
     public SettingsWindow(ISettingsHost host)
     {
@@ -135,7 +136,7 @@ public partial class SettingsWindow : Window
 
     private void SettingsWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape)
+        if (e.Key == Key.Escape && !_isChangingDataDirectory)
         {
             e.Handled = true;
             Close();
@@ -155,7 +156,10 @@ public partial class SettingsWindow : Window
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
-        Close();
+        if (!_isChangingDataDirectory)
+        {
+            Close();
+        }
     }
 
     private void ThemeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -337,10 +341,113 @@ public partial class SettingsWindow : Window
         catch (Exception exception) when (
             exception is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            StartupStatusText.Text = "无法打开数据目录。";
-            StartupStatusText.Visibility = Visibility.Visible;
+            ShowDataDirectoryStatus("无法打开数据目录。");
         }
     }
+
+    /// <summary>
+    /// 更改数据目录：选父文件夹 → 预检（形状/可写/卷空间/目标不存在）→ 确认对话框
+    /// （源→目标、数据体积、自动重启、旧目录处置）→ 迁移并自动重启。迁移期间
+    /// 锁定设置内容并显示进度，失败恢复原状并提示。
+    /// </summary>
+    private async void ChangeDataDirectoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (_isChangingDataDirectory)
+        {
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "选择内容存储父文件夹（将在其中创建 悬浮中转站\\Data）"
+        };
+        if (dialog.ShowDialog(this) != true || string.IsNullOrWhiteSpace(dialog.FolderName))
+        {
+            return;
+        }
+
+        var preview = _host.DescribeDataDirectoryChange(dialog.FolderName);
+        if (!preview.Valid || preview.TargetDataDirectory is null)
+        {
+            ShowDataDirectoryStatus(preview.Refusal ?? "无法使用所选位置。");
+            return;
+        }
+
+        var confirmed = MessageBox.Show(
+            this,
+            $"内容存储位置将变更：\n\n当前位置：{_host.DataDirectory}\n新位置：{preview.TargetDataDirectory}\n数据体积：约 {FormatByteSize(preview.SizeBytes)}\n\n迁移完成并登记后应用会自动重启；旧目录会在下次启动并通过安全校验后自动清理。\n\n现在开始迁移？",
+            "更改内容存储位置",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question,
+            MessageBoxResult.No);
+        if (confirmed != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        _isChangingDataDirectory = true;
+        SettingsScrollHost.IsEnabled = false;
+        ShowDataDirectoryStatus("正在准备迁移…");
+        try
+        {
+            var progress = new Progress<DataDirectoryCopyProgress>(update =>
+            {
+                if (IsLoaded)
+                {
+                    ShowDataDirectoryStatus(
+                        $"正在迁移内容… {FormatByteSize(update.CopiedBytes)} / {FormatByteSize(update.TotalBytes)}");
+                }
+            });
+            var result = await _host.ChangeDataDirectoryAsync(dialog.FolderName, progress);
+            if (result.ExitApplication)
+            {
+                if (result.Error is not null)
+                {
+                    MessageBox.Show(
+                        this,
+                        result.Error,
+                        ProductIdentity.DisplayName,
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+
+                return;
+            }
+
+            ShowDataDirectoryStatus(result.Error ?? "迁移未完成，原目录未做改动。");
+        }
+        finally
+        {
+            _isChangingDataDirectory = false;
+            if (IsLoaded)
+            {
+                SettingsScrollHost.IsEnabled = true;
+                HideDataDirectoryStatus();
+            }
+        }
+    }
+
+    private void ShowDataDirectoryStatus(string message)
+    {
+        DataDirectoryStatusText.Text = message;
+        DataDirectoryStatusText.Visibility = Visibility.Visible;
+    }
+
+    private void HideDataDirectoryStatus()
+    {
+        DataDirectoryStatusText.Text = string.Empty;
+        DataDirectoryStatusText.Visibility = Visibility.Collapsed;
+    }
+
+    private static string FormatByteSize(long bytes) => bytes switch
+    {
+        < 0 => "0 B",
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024d:F0} KB",
+        < 1024L * 1024 * 1024 => $"{bytes / (1024d * 1024):F1} MB",
+        _ => $"{bytes / (1024d * 1024 * 1024):F2} GB"
+    };
 
     /// <summary>
     /// 填充插件区块：每个插件一行（名称/版本 + 描述或加载错误 + 启用开关）。
@@ -353,11 +460,14 @@ public partial class SettingsWindow : Window
         {
             PluginDirectoryText.Text = string.Empty;
             OpenPluginDirectoryButton.Visibility = Visibility.Collapsed;
+            ChangePluginDirectoryButton.Visibility = Visibility.Collapsed;
+            ResetPluginDirectoryButton.Visibility = Visibility.Collapsed;
+            PluginDirectoryNoteText.Visibility = Visibility.Collapsed;
             PluginHelpText.Text = "插件系统在本次运行中不可用。";
             return;
         }
 
-        PluginDirectoryText.Text = catalog.UserPluginsDirectory;
+        RefreshPluginDirectoryDisplay();
         foreach (var entry in catalog.Entries)
         {
             PluginListPanel.Children.Add(CreatePluginRow(entry));
@@ -370,6 +480,47 @@ public partial class SettingsWindow : Window
         }
 
         PluginHelpText.Text = "插件默认关闭；启用后立即生效并自动保存。放入用户目录的同名插件会覆盖内建版本。";
+    }
+
+    private void RefreshPluginDirectoryDisplay()
+    {
+        PluginDirectoryText.Text = _host.EffectivePluginsDirectory;
+        PluginDirectoryNoteText.Text = _host.PluginsDirectoryIsDefault
+            ? "当前使用默认插件目录（数据目录下 plugins）；更改后重启生效，启用状态仍保存在数据目录。"
+            : "自定义插件目录；更改后重启生效，启用状态仍保存在数据目录。";
+    }
+
+    private async void ChangePluginDirectoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "选择插件文件夹" };
+        if (dialog.ShowDialog(this) != true || string.IsNullOrWhiteSpace(dialog.FolderName))
+        {
+            return;
+        }
+
+        await ApplyPluginsDirectoryAsync(dialog.FolderName);
+    }
+
+    private async void ResetPluginDirectoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        await ApplyPluginsDirectoryAsync(null);
+    }
+
+    private async Task ApplyPluginsDirectoryAsync(string? directoryOverride)
+    {
+        var error = await _host.ApplyPluginsDirectoryAsync(directoryOverride);
+        if (error is not null)
+        {
+            PluginStatusText.Text = error;
+            PluginStatusText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        PluginStatusText.Text = string.Empty;
+        PluginStatusText.Visibility = Visibility.Collapsed;
+        RefreshPluginDirectoryDisplay();
     }
 
     private Grid CreatePluginRow(PluginEntry entry)

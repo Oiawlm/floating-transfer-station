@@ -85,118 +85,8 @@
         </Setter>
       </Style>
 
-      <Style x:Key="ThemedComboBoxStyle" TargetType="ComboBox">
-        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
-        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Height" Value="32" />
-        <Setter Property="FontSize" Value="13" />
-        <Setter Property="HorizontalContentAlignment" Value="Left" />
-        <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="ItemContainerStyle">
-          <Setter.Value>
-            <Style TargetType="ComboBoxItem">
-              <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
-              <Setter Property="FontSize" Value="13" />
-              <Setter Property="Cursor" Value="Hand" />
-              <Setter Property="Template">
-                <Setter.Value>
-                  <ControlTemplate TargetType="ComboBoxItem">
-                    <Border x:Name="ItemSurface"
-                            Background="Transparent"
-                            Padding="10,7"
-                            CornerRadius="4"
-                            Margin="4,2">
-                      <ContentPresenter />
-                    </Border>
-                    <ControlTemplate.Triggers>
-                      <Trigger Property="IsHighlighted" Value="True">
-                        <Setter TargetName="ItemSurface" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
-                      </Trigger>
-                      <Trigger Property="IsSelected" Value="True">
-                        <Setter TargetName="ItemSurface" Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
-                      </Trigger>
-                    </ControlTemplate.Triggers>
-                  </ControlTemplate>
-                </Setter.Value>
-              </Setter>
-            </Style>
-          </Setter.Value>
-        </Setter>
-        <Setter Property="Template">
-          <Setter.Value>
-            <ControlTemplate TargetType="ComboBox">
-              <Grid>
-                <Border x:Name="Surface"
-                        Background="{TemplateBinding Background}"
-                        BorderBrush="{TemplateBinding BorderBrush}"
-                        BorderThickness="{TemplateBinding BorderThickness}"
-                        CornerRadius="6">
-                  <Grid>
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="*" />
-                      <ColumnDefinition Width="22" />
-                    </Grid.ColumnDefinitions>
-                    <ContentPresenter Grid.Column="0"
-                                      Content="{TemplateBinding SelectionBoxItem}"
-                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
-                                      Margin="10,0,0,0"
-                                      HorizontalAlignment="Left"
-                                      VerticalAlignment="Center" />
-                    <Path Grid.Column="1"
-                          Data="M 0 0 L 4 4 L 8 0"
-                          Stroke="{DynamicResource SecondaryTextBrush}"
-                          StrokeThickness="1.5"
-                          StrokeStartLineCap="Round"
-                          StrokeEndLineCap="Round"
-                          HorizontalAlignment="Center"
-                          VerticalAlignment="Center"
-                          IsHitTestVisible="False" />
-                  </Grid>
-                </Border>
-                <!-- 命中层必须在最顶：不透明 Surface 在上会拦截全部鼠标命中，
-                     ToggleButton 收不到点击、下拉无法用鼠标打开。 -->
-                <ToggleButton Focusable="False"
-                              ClickMode="Press"
-                              Background="Transparent"
-                              BorderThickness="0"
-                              IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
-                  <ToggleButton.Template>
-                    <ControlTemplate TargetType="ToggleButton">
-                      <Border Background="{TemplateBinding Background}" />
-                    </ControlTemplate>
-                  </ToggleButton.Template>
-                </ToggleButton>
-                <!-- PART_Popup + 双向 IsOpen：StaysOpen=False 自行关闭时由部件名与绑定同步回 IsDropDownOpen，
-                     避免关闭后状态失步（下次点击变成空操作、需点第二次）。 -->
-                <Popup x:Name="PART_Popup"
-                       IsOpen="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
-                       Placement="Bottom"
-                       AllowsTransparency="True"
-                       PopupAnimation="Fade"
-                       StaysOpen="False">
-                  <Border Background="{DynamicResource HeaderBrush}"
-                          BorderBrush="{DynamicResource BorderBrush}"
-                          BorderThickness="1"
-                          CornerRadius="6"
-                          Margin="0,3,0,0"
-                          MinWidth="{TemplateBinding ActualWidth}">
-                    <ScrollViewer MaxHeight="150">
-                      <ItemsPresenter Margin="2" />
-                    </ScrollViewer>
-                  </Border>
-                </Popup>
-              </Grid>
-              <ControlTemplate.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                  <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource HoverBorderBrush}" />
-                </Trigger>
-              </ControlTemplate.Triggers>
-            </ControlTemplate>
-          </Setter.Value>
-        </Setter>
-      </Style>
+      <!-- ThemedComboBoxStyle / ThemedActionButtonStyle 已提升至 MainWindowStyles.xaml
+           （两窗共享的单一事实来源）；本字典仅保留设置窗私有样式。 -->
 
       <Style x:Key="ReadOnlyPathBoxStyle" TargetType="TextBox">
         <Setter Property="IsReadOnly" Value="True" />
@@ -225,44 +115,7 @@
         </Setter>
       </Style>
 
-      <Style x:Key="SettingsActionButtonStyle" TargetType="Button">
-        <Setter Property="Height" Value="30" />
-        <Setter Property="Padding" Value="14,0" />
-        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="FontSize" Value="13" />
-        <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="Focusable" Value="False" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-        <Setter Property="Template">
-          <Setter.Value>
-            <ControlTemplate TargetType="Button">
-              <Border x:Name="Surface"
-                      Background="{TemplateBinding Background}"
-                      BorderBrush="{TemplateBinding BorderBrush}"
-                      BorderThickness="{TemplateBinding BorderThickness}"
-                      CornerRadius="6">
-                <ContentPresenter HorizontalAlignment="Center"
-                                  VerticalAlignment="Center"
-                                  Margin="{TemplateBinding Padding}" />
-              </Border>
-              <ControlTemplate.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                  <Setter TargetName="Surface" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
-                  <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource HoverBorderBrush}" />
-                </Trigger>
-                <Trigger Property="IsPressed" Value="True">
-                  <Setter TargetName="Surface" Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
-                </Trigger>
-              </ControlTemplate.Triggers>
-            </ControlTemplate>
-          </Setter.Value>
-        </Setter>
-      </Style>
-
-      <Style x:Key="ExitButtonStyle" TargetType="Button" BasedOn="{StaticResource SettingsActionButtonStyle}">
+      <Style x:Key="ExitButtonStyle" TargetType="Button" BasedOn="{StaticResource ThemedActionButtonStyle}">
         <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
         <Setter Property="Height" Value="34" />
@@ -461,6 +314,7 @@
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBox x:Name="DataDirectoryText"
                      Grid.Column="0"
@@ -468,14 +322,29 @@
                      Margin="0,0,8,0"
                      VerticalAlignment="Center"
                      AutomationProperties.Name="数据目录" />
-            <Button x:Name="OpenDataDirectoryButton"
+            <Button x:Name="ChangeDataDirectoryButton"
                     Grid.Column="1"
-                    Style="{StaticResource SettingsActionButtonStyle}"
+                    Style="{StaticResource ThemedActionButtonStyle}"
+                    Content="更改…"
+                    Margin="0,0,8,0"
+                    ToolTip="更改内容存储位置"
+                    AutomationProperties.Name="更改内容存储位置"
+                    Click="ChangeDataDirectoryButton_Click" />
+            <Button x:Name="OpenDataDirectoryButton"
+                    Grid.Column="2"
+                    Style="{StaticResource ThemedActionButtonStyle}"
                     Content="打开"
                     ToolTip="在资源管理器中打开数据目录"
                     AutomationProperties.Name="在资源管理器中打开数据目录"
                     Click="OpenDataDirectoryButton_Click" />
           </Grid>
+          <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                     Text="更改时选择一个父文件夹，将在其中创建并管理「悬浮中转站\Data」；内容完整迁移并登记后应用自动重启，旧目录在下次启动确认安全后清理。" />
+          <TextBlock x:Name="DataDirectoryStatusText"
+                     Style="{StaticResource NoteCaptionStyle}"
+                     Foreground="{DynamicResource DangerBrush}"
+                     Text=""
+                     Visibility="Collapsed" />
 
           <TextBlock Text="插件" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
           <StackPanel x:Name="PluginListPanel" />
@@ -489,6 +358,8 @@
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBox x:Name="PluginDirectoryText"
                      Grid.Column="0"
@@ -496,14 +367,33 @@
                      Margin="0,0,8,0"
                      VerticalAlignment="Center"
                      AutomationProperties.Name="插件目录" />
-            <Button x:Name="OpenPluginDirectoryButton"
+            <Button x:Name="ChangePluginDirectoryButton"
                     Grid.Column="1"
-                    Style="{StaticResource SettingsActionButtonStyle}"
+                    Style="{StaticResource ThemedActionButtonStyle}"
+                    Content="更改…"
+                    Margin="0,0,8,0"
+                    ToolTip="更改插件目录"
+                    AutomationProperties.Name="更改插件目录"
+                    Click="ChangePluginDirectoryButton_Click" />
+            <Button x:Name="ResetPluginDirectoryButton"
+                    Grid.Column="2"
+                    Style="{StaticResource ThemedActionButtonStyle}"
+                    Content="恢复默认"
+                    Margin="0,0,8,0"
+                    ToolTip="恢复默认插件目录（数据目录下 plugins）"
+                    AutomationProperties.Name="恢复默认插件目录"
+                    Click="ResetPluginDirectoryButton_Click" />
+            <Button x:Name="OpenPluginDirectoryButton"
+                    Grid.Column="3"
+                    Style="{StaticResource ThemedActionButtonStyle}"
                     Content="打开"
                     ToolTip="在资源管理器中打开插件目录"
                     AutomationProperties.Name="在资源管理器中打开插件目录"
                     Click="OpenPluginDirectoryButton_Click" />
           </Grid>
+          <TextBlock x:Name="PluginDirectoryNoteText"
+                     Style="{StaticResource NoteCaptionStyle}"
+                     Text="插件目录可改为任意文件夹，保存后重启生效；插件的启用状态仍保存在数据目录。" />
 
           <TextBlock Text="关于" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
           <TextBlock Foreground="{DynamicResource PrimaryTextBrush}" FontSize="13">

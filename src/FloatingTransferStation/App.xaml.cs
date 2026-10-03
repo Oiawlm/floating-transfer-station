@@ -6,6 +6,11 @@ namespace FloatingTransferStation;
 
 public partial class App : Application
 {
+    // --relocated：搬迁后自动重启的实例。旧实例先写登记再退本进程，互斥锁短暂
+    // 仍被旧实例持有，因此仅此模式允许限时重试等待锁释放；普通双启动保持立即失败。
+    private static readonly TimeSpan RelocatedMutexRetryTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan RelocatedMutexRetryInterval = TimeSpan.FromMilliseconds(200);
+
     private AppLifecycleService? _lifecycle;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -26,13 +31,23 @@ public partial class App : Application
             // 用隔离数据目录启动，并可强制亮/暗主题，绝不触碰已安装应用的数据。
             var previewDataDirectory = Environment.GetEnvironmentVariable("FTS_PREVIEW_DATA_DIR");
             var previewTheme = Environment.GetEnvironmentVariable("FTS_PREVIEW_THEME");
+            var isRelaunchedAfterRelocation = e.Args.Contains(DataDirectoryChangeService.RelaunchArgument);
 
             _lifecycle = new AppLifecycleService();
             var lifecycleStarted = string.IsNullOrWhiteSpace(previewDataDirectory)
-                ? _lifecycle.TryStart()
+                ? TryStartWithRelocationRetry(isRelaunchedAfterRelocation)
                 : _lifecycle.TryStart(PreviewMutexName(previewDataDirectory));
             if (!lifecycleStarted)
             {
+                if (isRelaunchedAfterRelocation)
+                {
+                    MessageBox.Show(
+                        "迁移后自动启动等待超时，请手动启动悬浮中转站。",
+                        ProductIdentity.DisplayName,
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+
                 Shutdown();
                 return;
             }
@@ -48,7 +63,19 @@ public partial class App : Application
                     : DesignTheme.Light;
             }
 
+            // 装配方向（无循环依赖）：注册表数据目录 → preferences.json → 插件目录覆盖。
+            // 偏好存放在数据目录内，插件目录真相跟随偏好而非登记，故先读偏好再建目录树。
             var store = new LocalStore(paths, new AtomicTextWriter());
+            var preferences = await store.LoadPreferencesAsync();
+            var (effectivePaths, pluginsDirectoryWarning) = AppPaths.ResolvePluginsDirectoryOverride(
+                paths,
+                preferences.PluginsDirectoryOverride);
+            paths = effectivePaths;
+            if (pluginsDirectoryWarning is not null)
+            {
+                preferences = preferences with { PluginsDirectoryOverride = null };
+            }
+
             var board = new BoardService();
             var snapshot = await store.LoadBoardAsync();
             var normalizer = new ImageNormalizer(paths.ImagesDirectory);
@@ -60,7 +87,6 @@ public partial class App : Application
             board.Restore(snapshot);
             var settings = await store.LoadSettingsAsync();
             settings = await new DailyReviewMigration(store).EnsureAsync(board, settings);
-            var preferences = await store.LoadPreferencesAsync();
             var pluginCatalog = new PluginCatalog(
                 paths,
                 Path.Combine(AppContext.BaseDirectory, "plugins"),
@@ -107,9 +133,30 @@ public partial class App : Application
                 startupManager: new WindowsStartupManager(),
                 dataDirectory: paths.DataDirectory,
                 rightEdgeBleedProvider: ScreenEdgeGeometry.GetRightEdgeBleed,
-                pluginCatalog: pluginCatalog);
+                pluginCatalog: pluginCatalog,
+                operationGate: boardOperationGate,
+                dataDirectoryChangeService: string.IsNullOrWhiteSpace(previewDataDirectory)
+                    ? DataDirectoryChangeService.CreateDefault(new WindowsDataDirectorySettings())
+                    : null);
             MainWindow = window;
             window.Show();
+            if (pluginsDirectoryWarning is not null)
+            {
+                window.ShowStatus(pluginsDirectoryWarning);
+            }
+
+            // 搬迁后的延迟清理：此刻已在新目录拿到单实例锁，按形状守卫删除旧受管目录。
+            // 删除可能涉及大量文件，放后台执行，结果经状态条提示。
+            _ = Task.Run(() => DataDirectoryCleanupProcessor.Run(paths.DataDirectory))
+                .ContinueWith(
+                    cleanup =>
+                    {
+                        if (cleanup.Result is { } notice)
+                        {
+                            window.ShowStatus(notice);
+                        }
+                    },
+                    TaskScheduler.FromCurrentSynchronizationContext());
         }
         catch (Exception exception)
         {
@@ -119,6 +166,30 @@ public partial class App : Application
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(1);
+        }
+    }
+
+    private bool TryStartWithRelocationRetry(bool isRelaunchedAfterRelocation)
+    {
+        if (!isRelaunchedAfterRelocation)
+        {
+            return _lifecycle!.TryStart();
+        }
+
+        var deadline = DateTime.UtcNow + RelocatedMutexRetryTimeout;
+        while (true)
+        {
+            if (_lifecycle!.TryStart())
+            {
+                return true;
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                return false;
+            }
+
+            Thread.Sleep(RelocatedMutexRetryInterval);
         }
     }
 
