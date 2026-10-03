@@ -78,6 +78,11 @@ public partial class SettingsWindow : Window
         VersionRun.Text = $"版本 {ProductIdentity.Version}";
         PopulatePluginSection();
         Owner = host.HostWindow;
+        // 安全网钳位必须挂在构造函数：SizeToContent 的测量与尺寸变化事件在
+        // SourceInitialized 之前就已全部发生（探针实测 Loaded 先于 SourceInitialized），
+        // 挂晚了整个初始放置过程没有任何钳位（1.15.1 缺陷）；此后尺寸再变化
+        // （如运行时改缩放）仍由它持续兜底。
+        SizeChanged += SettingsWindow_SizeChanged;
         SourceInitialized += SettingsWindow_SourceInitialized;
     }
 
@@ -105,14 +110,21 @@ public partial class SettingsWindow : Window
 
         var work = SystemParameters.WorkArea;
         Left = Math.Max(work.Left, Math.Min(Owner.Left - Width - 12, work.Right - Width));
-        Top = Math.Clamp(Owner.Top, work.Top, Math.Max(work.Top, work.Bottom - 44));
-        SizeChanged += SettingsWindow_SizeChanged;
+        // 整窗入屏：下缘约束用已定稿的实际高度（SizeToContent 在 HWND 创建前完成测量，
+        // 探针实测 SourceInitialized 时 ActualHeight 已是定稿值），不再用 1.15.1 的
+        // work.Bottom-44——它只保证顶部一条 44px 带可见，与真实高度无关，窗口高度接近
+        // 整屏时下缘照样探出工作区。若个别环境此时尚未定稿，构造函数挂上的 SizeChanged
+        // 钳位会在定稿后收口。本次只承诺主屏工作区（SystemParameters.WorkArea）；
+        // 按窗口所在显示器取工作区（MonitorFromWindow）为后续增强。
+        Top = Math.Clamp(Owner.Top, work.Top, Math.Max(work.Top, work.Bottom - ActualHeight));
     }
 
     /// <summary>
-    /// SizeToContent 定稿实际高度后（首帧渲染前的布局期），把窗口上下缘钳回工作区。
-    /// 初始放置时实际高度未测量，只能先按头部可见放置；内容较高时窗口下缘会探出
-    /// 工作区，此处收口，同时保证垂直拖拽钳制在矮屏上仍有向上空间。
+    /// 尺寸定稿或打开后再变化（如运行时改缩放）时，把窗口上下缘钳回工作区。
+    /// 探针实测 SizeToContent 的测量与尺寸事件先于 SourceInitialized 发生，该处理器
+    /// 必须在构造函数挂接才覆盖初始放置；Top/Left 尚为 NaN（未放置）时 Clamp 结果
+    /// 仍为 NaN，赋回等于保持未设置。同时保证垂直拖拽钳制在矮屏上仍有向上空间。
+    /// 只按主屏工作区（SystemParameters.WorkArea）钳制。
     /// </summary>
     private void SettingsWindow_SizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -134,8 +146,10 @@ public partial class SettingsWindow : Window
     private void HeaderDragRegion_DragDelta(object sender, DragDeltaEventArgs e)
     {
         var work = SystemParameters.WorkArea;
+        // 垂直钳制用渲染定稿的 ActualHeight 而非 Height：Height 依赖 .NET 10 把
+        // SizeToContent 定稿值写回的行为，写回缺失时 NaN 会让上界钳制静默失效。
         Left = Math.Clamp(Left + e.HorizontalChange, work.Left, Math.Max(work.Left, work.Right - Width));
-        Top = Math.Clamp(Top + e.VerticalChange, work.Top, Math.Max(work.Top, work.Bottom - Height));
+        Top = Math.Clamp(Top + e.VerticalChange, work.Top, Math.Max(work.Top, work.Bottom - ActualHeight));
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)
