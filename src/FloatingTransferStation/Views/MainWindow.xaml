@@ -394,7 +394,6 @@
                  PreviewDragLeave="BoardList_PreviewDragLeave"
                  PreviewDrop="BoardList_PreviewDrop"
                  ButtonBase.Click="BoardList_ButtonClick"
-                 MouseDoubleClick="BoardList_MouseDoubleClick"
                  PreviewMouseRightButtonUp="BoardList_PreviewMouseRightButtonUp"
                  ScrollViewer.CanContentScroll="True"
                  ScrollViewer.VerticalScrollBarVisibility="Auto"

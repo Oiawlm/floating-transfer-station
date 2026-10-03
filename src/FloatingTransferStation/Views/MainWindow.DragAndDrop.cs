@@ -17,84 +17,29 @@ namespace FloatingTransferStation.Views;
 
 public partial class MainWindow : Window
 {
-
-    private void BoardList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        var source = e.OriginalSource as DependencyObject;
-        if (FindAncestor<Button>(source) is not null)
-        {
-            _dragItem = null;
-            _dragThresholdCrossed = false;
-            _selectionModifiers = ModifierKeys.None;
-            return;
-        }
-
-        var container = FindAncestor<ListBoxItem>(source);
-        if (container is null)
-        {
-            _dragItem = null;
-            _dragThresholdCrossed = false;
-            _selectionModifiers = ModifierKeys.None;
-            if (FindAncestor<ScrollBar>(source) is null)
-            {
-                ClearUserSelection();
-            }
-
-            return;
-        }
-
-        _dragStart = e.GetPosition(this);
-        _dragItem = container.DataContext as BoardItem;
-        _dragThresholdCrossed = false;
-        _selectionModifiers = Keyboard.Modifiers;
-        e.Handled = true;
-    }
-
-    private void BoardList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        if (_dragItem is { } item && !_dragThresholdCrossed)
-        {
-            if (_selectionModifiers.HasFlag(ModifierKeys.Shift))
-            {
-                SelectRange(item, _selectionModifiers.HasFlag(ModifierKeys.Control));
-            }
-            else if (ShouldToggleSelection(_selectionModifiers, _dragThresholdCrossed))
-            {
-                ToggleSelection(item);
-            }
-        }
-
-        if (_dragItem is not null)
-        {
-            e.Handled = true;
-        }
-
-        _dragItem = null;
-        _dragThresholdCrossed = false;
-        _selectionModifiers = ModifierKeys.None;
-    }
-
     private void BoardList_PreviewMouseMove(object sender, MouseEventArgs e)
     {
         // 搜索过滤期间禁用拖拽：内部排序的落点按可见(已过滤)视图计算会得到错误的源索引，
         // 拖出语义也随视图收窄产生歧义（设计草案切片 1 明确禁用）。
-        if (_viewModel.IsSearchActive || e.LeftButton != MouseButtonState.Pressed || _dragItem is null)
+        if (_viewModel.IsSearchActive || e.LeftButton != MouseButtonState.Pressed || _pressItem is null)
         {
             return;
         }
 
         var position = e.GetPosition(this);
-        if (Math.Abs(position.X - _dragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
-            Math.Abs(position.Y - _dragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+        if (Math.Abs(position.X - _pressStartPosition.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(position.Y - _pressStartPosition.Y) < SystemParameters.MinimumVerticalDragDistance)
         {
             return;
         }
 
         _dragThresholdCrossed = true;
+        // 拖拽不是点击：双击痕迹一并作废，拖拽结束后的快速连击按独立单击判定。
+        _lastCardClick = null;
         try
         {
             BeginPanelDrag();
-            var data = BuildInternalDragData(_dragItem);
+            var data = BuildInternalDragData(_pressItem);
             DragDrop.DoDragDrop((DependencyObject)sender, data, DragDropEffects.Copy | DragDropEffects.Move);
         }
         catch (FileNotFoundException)
@@ -108,9 +53,7 @@ public partial class MainWindow : Window
         finally
         {
             EndPanelDrag();
-            _dragItem = null;
-            _dragThresholdCrossed = false;
-            _selectionModifiers = ModifierKeys.None;
+            ResetCardPressState();
         }
     }
 
@@ -138,11 +81,6 @@ public partial class MainWindow : Window
             ? _dragPayload.BuildInternalBatch(plan.Items)
             : _dragPayload.Build(plan.Items[0]);
     }
-
-    private static bool ShouldToggleSelection(
-        ModifierKeys modifiers,
-        bool dragThresholdCrossed) =>
-        modifiers.HasFlag(ModifierKeys.Control) && !dragThresholdCrossed;
 
     private void ToggleSelection(BoardItem item)
     {

@@ -15,23 +15,6 @@ public partial class MainWindow
 {
     private Guid? _editingCardItemId;
 
-    private void BoardList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        if (e.OriginalSource is not DependencyObject source)
-        {
-            return;
-        }
-
-        var container = FindAncestor<ListBoxItem>(source);
-        if (container?.Content is not BoardItem { Kind: BoardItemKind.Text } item)
-        {
-            return;
-        }
-
-        e.Handled = true;
-        BeginCardTextEditing(item, container);
-    }
-
     private void CardTextEditor_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter)

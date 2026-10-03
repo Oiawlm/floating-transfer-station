@@ -22,13 +22,22 @@ public partial class MainWindow
     /// </summary>
     internal Func<DataObject, bool>? ClipboardWriterOverride { get; set; }
 
-    /// <summary>右键卡片复制（1.15.0 起，设置可关闭）：不进入选择、不打开菜单。</summary>
+    /// <summary>
+    /// 右键卡片复制（1.15.0 起，设置可关闭；1.17.0 起限于右区操作列）：
+    /// 不进入选择、不打开菜单。左区右键无操作、不拦截（内容区不承载复制手势）。
+    /// </summary>
     private void BoardList_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (_isClosing ||
             !_preferences.RightClickCardCopyEnabled ||
             e.OriginalSource is not DependencyObject source ||
-            FindAncestor<ListBoxItem>(source)?.DataContext is not BoardItem item)
+            FindAncestor<ListBoxItem>(source) is not { } container ||
+            container.DataContext is not BoardItem item)
+        {
+            return;
+        }
+
+        if (ResolveCardHitZone(source, container) != CardHitZone.Operations)
         {
             return;
         }

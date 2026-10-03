@@ -77,10 +77,6 @@ public partial class MainWindow : Window
     private bool _micaApplied;
     private IDataObject? _externalDragData;
     private ExternalDropPayload? _externalDragPayload;
-    private Point _dragStart;
-    private BoardItem? _dragItem;
-    private bool _dragThresholdCrossed;
-    private ModifierKeys _selectionModifiers;
     private WindowSettings _settings;
     private long _externalDragSurfaceVersion;
     private int _scrollRestoreVersion;
