@@ -192,6 +192,59 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void CardHalves_RealInputLeftHalfBareClickHasNoSelectionSemantics()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("左半真实单击", BoardCategory.Inbox);
+        var other = board.AddText("已选的另一张", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(other);
+
+            // 左半中央（约 25% 卡宽处）：单击不得产生任何选择语义——
+            // 左半只承载双击编辑与拖拽，既有已选条目保持不变。
+            var contentZone = HalvesZoneOf(container, CardGestureZones.ContentZone);
+            var zoneOrigin = contentZone.TranslatePoint(new Point(), container);
+            var clickPoint = new Point(
+                zoneOrigin.X + contentZone.ActualWidth / 2,
+                zoneOrigin.Y + contentZone.ActualHeight * 0.6);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                ClickRealAt(window, container, clickPoint);
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+
+            CollectionAssert.AreEquivalent(
+                new[] { other },
+                list.SelectedItems.Cast<BoardItem>().ToArray(),
+                "卡片左半的真实输入单击不得产生选择语义（既有已选保留）。");
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                EditorHost(window).Visibility,
+                "左半单击不得进入编辑。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void CardHalves_EditSessionFlushesWhenSearchFiltersOutAnchor()
     {
         using var directory = new TestDirectory();
