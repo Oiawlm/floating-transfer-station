@@ -61,16 +61,20 @@ public partial class MainWindow
     private ModifierKeys _pressModifiers;
     private bool _dragThresholdCrossed;
     private CardClickTrace? _lastCardClick;
-    private bool _pressStartedOnButton;
     private Button? _pressButton;
 
     private void BoardList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        var source = e.OriginalSource as DependencyObject;
+
         // 编辑器覆盖层是列表的兄弟元素：任何到达列表预览层的按下都不在
         // 编辑器内，先冲刷悬挂会话（提交已输入文字）再开始本次手势。
-        CommitPendingCardTextEditing();
-
-        var source = e.OriginalSource as DependencyObject;
+        // 滚动条例外——拖动滚动条与滚轮同属滚动语义，只让覆盖层跟随，
+        // 不终结会话（与下方 ClearUserSelection 共用同一滚动条排除判定）。
+        if (FindAncestor<ScrollBar>(source) is null)
+        {
+            CommitCardTextEditing();
+        }
 
         // 右半操作按钮（置顶/选择）与卡片一样由手势层接管：真实输入下
         // 原生按钮的 Click 会先被 ListBox 默认单击选择对冒泡按下的处理与捕获
@@ -91,7 +95,6 @@ public partial class MainWindow
             _pressZone = Equals(hitButton.CommandParameter, "TogglePin")
                 ? CardHitZone.OperationsPin
                 : CardHitZone.Operations;
-            _pressStartedOnButton = true;
             _pressButton = hitButton;
             _dragThresholdCrossed = false;
             _pressModifiers = Keyboard.Modifiers;
@@ -117,7 +120,6 @@ public partial class MainWindow
         _pressTimestamp = e.Timestamp;
         _pressItem = container.DataContext as BoardItem;
         _pressZone = ResolveCardHitZone(source, container);
-        _pressStartedOnButton = false;
         _pressButton = null;
         _dragThresholdCrossed = false;
         _pressModifiers = Keyboard.Modifiers;
@@ -131,7 +133,7 @@ public partial class MainWindow
             // 按钮按压的意图分发要求释放点仍在按钮上（按钮常规语义：滑离
             // 取消）。判定用 Up 命中源——不依赖 IsMouseOver（按钮未悬停淡出
             // 时不可命中，IsMouseOver 会误报 false 而吞掉合法点击）。
-            if (!_pressStartedOnButton ||
+            if (_pressButton is null ||
                 FindAncestor<Button>(e.OriginalSource as DependencyObject) == _pressButton)
             {
                 DispatchCardClick(item);
@@ -214,27 +216,23 @@ public partial class MainWindow
         }
 
         var delta = (long)_pressTimestamp - last.Timestamp;
+        // 系统双击容差是物理像素，GetPosition 是 DIP：按窗口 DPI 换算成 DIP
+        // 再比较（一次查询换算 X/Y，150%/200% 缩放下容差不失真）。
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var toleranceX = GetSystemMetrics(SmCxddoubleclk) / dpi.DpiScaleX;
+        var toleranceY = GetSystemMetrics(SmCydoubleclk) / dpi.DpiScaleY;
         return delta >= 0 &&
             delta <= GetDoubleClickTime() &&
-            Math.Abs(_pressStartPosition.X - last.Position.X) <= DoubleClickToleranceX &&
-            Math.Abs(_pressStartPosition.Y - last.Position.Y) <= DoubleClickToleranceY;
+            Math.Abs(_pressStartPosition.X - last.Position.X) <= toleranceX &&
+            Math.Abs(_pressStartPosition.Y - last.Position.Y) <= toleranceY;
     }
-
-    /// <summary>
-    /// 系统双击位置容差（DIP）：GetSystemMetrics 返回物理像素，GetPosition
-    /// 是 DIP，按窗口 DPI 换算后再比较，150%/200% 缩放下容差不失真。
-    /// </summary>
-    private double DoubleClickToleranceX =>
-        GetSystemMetrics(SmCxddoubleclk) / VisualTreeHelper.GetDpi(this).DpiScaleX;
-
-    private double DoubleClickToleranceY =>
-        GetSystemMetrics(SmCydoubleclk) / VisualTreeHelper.GetDpi(this).DpiScaleY;
 
     private void ResetCardPressState()
     {
+        _pressStartPosition = default;
+        _pressTimestamp = 0;
         _pressItem = null;
         _pressZone = CardHitZone.Content;
-        _pressStartedOnButton = false;
         _pressButton = null;
         _dragThresholdCrossed = false;
         _pressModifiers = ModifierKeys.None;

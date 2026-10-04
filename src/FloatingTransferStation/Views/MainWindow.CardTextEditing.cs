@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Threading;
 using FloatingTransferStation.Models;
 
 namespace FloatingTransferStation.Views;
@@ -22,8 +23,9 @@ public partial class MainWindow
     private Guid? _editingCardItemId;
 
     /// <summary>
-    /// 滚动跟随挂载：用路由事件（handledEventsToo）接收列表内部 ScrollViewer
-    /// 的滚动，不遍历模板找实例（虚拟化/模板演进都无感）。
+    /// 会话跟踪挂载：用路由事件（handledEventsToo）接收列表内部 ScrollViewer
+    /// 的滚动（不遍历模板找实例，虚拟化/模板演进都无感），并跟随窗口尺寸
+    /// 变化刷新覆盖层位置。
     /// </summary>
     private void InitializeCardEditSessionTracking()
     {
@@ -31,16 +33,23 @@ public partial class MainWindow
             ScrollViewer.ScrollChangedEvent,
             new ScrollChangedEventHandler(BoardList_ScrollChanged),
             handledEventsToo: true);
+        // 窗口缩放/贴边重排改变锚点容器在面板内的位置（无集合变化、滚动
+        // 位移也可能为 0）：尺寸定稿后刷新一次，覆盖层保持对准容器。
+        SizeChanged += (_, _) => RefreshCardEditSession();
     }
 
     private void BoardList_ScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         // 垂直滚动改变锚点容器的可视位置：覆盖层重定位跟随；锚点滚出
-        // 虚拟化窗口（容器被回收）时由刷新判定终结。范围/视口尺寸变化
-        // （无位移的布局收缩）交给集合变化钩子，不在这里重复触发。
+        // 视口（容器被回收或落入虚拟化缓存区）时由刷新判定终结。延迟到
+        // Loaded 优先级：ScrollChanged 时点容器回收/重排可能未定稿，同步
+        // 判定会拿到中间态。范围/视口尺寸变化（无位移的布局收缩）不在
+        // 这里触发，交给集合变化与窗口尺寸钩子。
         if (e.VerticalChange != 0)
         {
-            RefreshCardEditSession();
+            Dispatcher.BeginInvoke(
+                DispatcherPriority.Loaded,
+                new Action(RefreshCardEditSession));
         }
     }
 
@@ -60,28 +69,18 @@ public partial class MainWindow
 
     private void CardTextEditor_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
-        // 焦点兜底终结（窗口失活、点击面板外控件）：会话有效性已由锚点刷新
-        // 单点负责，这里只补齐锚点刷新覆盖不到的真实失焦；不回焦——焦点
-        // 正移向用户选择的新目标。关闭序列已在操作门封门前冲刷过编辑；
-        // 封门后的销毁期失焦不得再注册操作。
-        if (_isClosing)
+        // 焦点兜底终结（切走应用、系统夺焦——新焦点离开本窗口）：会话有效性
+        // 由锚点刷新单点负责，焦点在本窗口内迁移（IME 交互、点头部/搜索框
+        // 等）不终结——那些路径要么有自己的视图钩子，要么锚点仍有效、编辑
+        // 内容原地保留。不回焦——焦点正移向用户选择的新目标。关闭序列已在
+        // 操作门封门前冲刷过编辑；封门后的销毁期失焦不得再注册操作。
+        if (_isClosing ||
+            e.NewFocus is DependencyObject newFocus && IsAncestorOf(newFocus))
         {
             return;
         }
 
         CommitCardTextEditing();
-    }
-
-    /// <summary>
-    /// 悬挂会话冲刷入口：提交仍打开的卡片编辑（空白同样视为取消）。
-    /// 关闭序列与手势层按下共用。
-    /// </summary>
-    private void CommitPendingCardTextEditing()
-    {
-        if (_editingCardItemId is not null)
-        {
-            CommitCardTextEditing();
-        }
     }
 
     /// <summary>
@@ -138,28 +137,47 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 视图代际终结（换面板）：提交悬挂编辑并清理手势记忆，防跨视图幽灵
-    /// 双击/幽灵选中。在搜索退出与焦点转移之前调用——它们的中间状态
+    /// 视图代际终结（换面板）：清理手势记忆并提交悬挂编辑。手势记忆与是否
+    /// 在编辑无关——未编辑时切换视图同样要作废双击痕迹/按压会话，防跨视图
+    /// 幽灵双击/幽灵选中。在搜索退出与焦点转移之前调用——它们的中间状态
     /// 不应干扰提交流径。
     /// </summary>
     private void EndCardEditSessionForViewChange()
     {
-        if (_editingCardItemId is null)
-        {
-            return;
-        }
-
+        ClearCardGestureMemory();
         CommitCardTextEditing();
+    }
+
+    /// <summary>视图代际清理：跨视图的双击痕迹与按压会话一律作废。</summary>
+    private void ClearCardGestureMemory()
+    {
         _lastCardClick = null;
         ResetCardPressState();
     }
 
-    /// <summary>锚点条目仍在当前面板且容器已实现（未被过滤/虚拟化回收）。</summary>
-    private ListBoxItem? FindEditingAnchorContainer(Guid itemId) =>
-        _viewModel.ActivePanel?.Items is { } items &&
-        items.FirstOrDefault(item => item.Id == itemId) is { } anchor
-            ? BoardList.ItemContainerGenerator.ContainerFromItem(anchor) as ListBoxItem
-            : null;
+    /// <summary>
+    /// 锚点条目仍在当前面板、容器已实现且未被滚出视口。容器「已实现」
+    /// 不等于「可见」：虚拟化缓存区的容器仍实现但锚点已滚出视口，覆盖层
+    /// 无法对准容器（定位的 Y 夹 0 会钉在列表顶部压住首卡），按锚点失效
+    /// 终结。
+    /// </summary>
+    private ListBoxItem? FindEditingAnchorContainer(Guid itemId)
+    {
+        if (_viewModel.ActivePanel?.Items is not { } items ||
+            items.FirstOrDefault(item => item.Id == itemId) is not { } anchor ||
+            BoardList.ItemContainerGenerator.ContainerFromItem(anchor)
+                is not ListBoxItem container)
+        {
+            return null;
+        }
+
+        var top = container.TranslatePoint(new Point(0, 0), BoardList).Y;
+        return double.IsNaN(top) ||
+            top >= BoardList.ActualHeight ||
+            top + container.ActualHeight <= 0
+            ? null
+            : container;
+    }
 
     private void PositionCardEditorOver(ListBoxItem container)
     {

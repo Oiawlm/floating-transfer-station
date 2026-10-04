@@ -247,7 +247,7 @@ public partial class MainWindow : Window
         IsEnabled = false;
         // 仍在编辑的卡片先提交:在操作门封门前注册,编辑内容随最终保存落盘;
         // 否则窗口销毁期的失焦回调会在封门后再注册操作并抛出异常。
-        CommitPendingCardTextEditing();
+        CommitCardTextEditing();
         _ = TrySetGlobalHotkey(false);
         var operationCancellation = _windowOperationCancellation;
         try

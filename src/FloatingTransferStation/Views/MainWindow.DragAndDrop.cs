@@ -25,7 +25,7 @@ public partial class MainWindow : Window
         if (_viewModel.IsSearchActive ||
             e.LeftButton != MouseButtonState.Pressed ||
             _pressItem is null ||
-            _pressStartedOnButton)
+            _pressButton is not null)
         {
             return;
         }

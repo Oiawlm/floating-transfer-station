@@ -575,9 +575,10 @@ public sealed partial class MainWindowInteractionTests
                 NextIsolatedClickTimestamp()));
 
             // 按钮按压是独立会话：拖拽排除（BoardList_PreviewMouseMove 的
-            // 早退条件）以此为判定源——按住按钮移动不得拖出整张卡。
-            var startedOnButton = GetPrivateField<bool>(window, "_pressStartedOnButton");
-            Assert.IsTrue(startedOnButton, "按钮按压必须记录为按钮会话（拖拽排除的判定源）。");
+            // 早退条件）以命中按钮实例为唯一判定源——按住按钮移动不得
+            // 拖出整张卡。
+            var pressButton = GetPrivateField<System.Windows.Controls.Button?>(window, "_pressButton");
+            Assert.AreSame(pinButton, pressButton, "按钮按压必须记录命中按钮（拖拽排除的判定源）。");
         }
         finally
         {
@@ -587,6 +588,136 @@ public sealed partial class MainWindowInteractionTests
 
     private static TextBox SearchInput(MainWindow window) =>
         (TextBox)window.FindName("SearchInput");
+
+    [STATestMethod]
+    public void CardHalves_ScrollBarPressDoesNotFlushEditSession()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingCardEditStore(directory.Root);
+        var board = new BoardService();
+        AddScrollableItems(board, BoardCategory.Inbox);
+        var anchor = board.Items(BoardCategory.Inbox).ToArray()[1];
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewer = FindDescendant<ScrollViewer>((ListBox)window.FindName("BoardList"));
+            Assert.IsNotNull(viewer);
+            Assert.IsTrue(viewer.ScrollableHeight > 0, "前置条件：列表可滚动。");
+
+            EnterCardEditingWithDoubleClick(window, anchor);
+            EditorInput(window).Text = "拖滚动条期间的编辑";
+
+            // 拖动滚动条与滚轮同属滚动语义：会话跟随重定位，不因滚动条
+            // 按下（焦点/手势层按下）而终结。
+            var thumb = FindDescendant<System.Windows.Controls.Primitives.Thumb>(viewer);
+            Assert.IsNotNull(thumb, "前置条件：滚动条 Thumb 已实现。");
+            thumb.RaiseEvent(NewMouseButtonEventArgs(
+                Mouse.PreviewMouseDownEvent,
+                thumb,
+                NextIsolatedClickTimestamp()));
+            CompleteLayout(window);
+
+            Assert.AreEqual(
+                Visibility.Visible,
+                EditorHost(window).Visibility,
+                "滚动条按下不得终结编辑会话（滚动只跟随）。");
+            Assert.AreEqual(
+                "拖滚动条期间的编辑",
+                EditorInput(window).Text,
+                "会话保留时编辑内容不丢失。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardHalves_SearchFilterFlushesWithoutFocusMigration()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingCardEditStore(directory.Root);
+        var board = new BoardService();
+        var item = board.AddText("无焦点迁移的过滤锚点", BoardCategory.Inbox);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            EnterCardEditingWithDoubleClick(window, item);
+            EditorInput(window).Text = "过滤钩子独立提交的编辑";
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            // 绕过 EnterSearchMode 的清选择/聚焦搜索框（焦点路径也会终结
+            // 会话），直接驱动过滤单点：证明 ApplySearchFilter 的锚点判定
+            // 独立于焦点迁移。
+            viewModel.EnterSearch();
+            viewModel.SearchText = "不匹配的关键词";
+            InvokePrivate(window, "ApplySearchFilter");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(50));
+
+            Assert.AreEqual(Visibility.Collapsed, EditorHost(window).Visibility);
+            Assert.AreEqual(
+                "过滤钩子独立提交的编辑",
+                board.FindItem(item.Id)!.Text,
+                "过滤钩子必须独立于焦点迁移终结并提交会话。");
+            viewModel.ExitSearch();
+            InvokePrivate(window, "ApplySearchFilter");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardHalves_FocusMigrationWithinWindowKeepsEditSession()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingCardEditStore(directory.Root);
+        var board = new BoardService();
+        var item = board.AddText("焦点在窗口内迁移", BoardCategory.Inbox);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            EnterCardEditingWithDoubleClick(window, item);
+            EditorInput(window).Text = "焦点迁移期间的编辑";
+
+            // 焦点移到窗口内其他控件（如列表本身）：锚点仍有效，会话不因
+            // 窗口内焦点迁移而终结（IME 交互等瞬时夺焦同理）；终结只由
+            // 锚点失效或显式 Enter/Esc 驱动。
+            var list = (ListBox)window.FindName("BoardList");
+            Assert.IsTrue(list.Focus(), "前置条件：列表可聚焦。");
+            CompleteLayout(window);
+
+            Assert.AreEqual(
+                Visibility.Visible,
+                EditorHost(window).Visibility,
+                "窗口内焦点迁移不得终结编辑会话。");
+            Assert.AreEqual(
+                "焦点迁移期间的编辑",
+                EditorInput(window).Text,
+                "会话保留时编辑内容不丢失。");
+            Assert.AreNotEqual(
+                "焦点迁移期间的编辑",
+                board.FindItem(item.Id)!.Text,
+                "会话保留时不得提交。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
 
     [STATestMethod]
     public void CardHalves_RealInputRightHalfRightClickCopiesToClipboard()
