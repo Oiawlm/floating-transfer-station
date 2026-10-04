@@ -41,6 +41,10 @@ public partial class MainWindow : Window
 
     private void ActivatePanel(BoardCategory category)
     {
+        // 编辑会话锚定当前面板视图：换面板即终结（提交+清手势记忆），
+        // 早于搜索退出与焦点转移——它们的中间状态不应干扰提交流径。
+        EndCardEditSessionForViewChange();
+
         if (IsReviewActive() && category != DailyReviewMigration.ReviewCategory)
         {
             TrackPendingOperation(FlushReviewAsync());

@@ -164,6 +164,9 @@ public partial class MainWindow
         }
 
         UpdateSearchEmptyHint();
+        // 过滤改变可见视图（进出搜索、改关键词/类型共用本单点）：锚点被过滤
+        // 移出视图即终结会话，仍在视图内则覆盖层重定位跟随。
+        RefreshCardEditSession();
     }
 
     private static bool MatchesSearchFilter(object item, string keyword, SearchTypeFilter type)

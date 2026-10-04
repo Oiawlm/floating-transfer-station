@@ -72,10 +72,11 @@ public partial class MainWindow : Window
             }));
     }
 
-    /// <summary>指针离开与收起到点共用：改名草稿还在、面板内编辑控件持有焦点或搜索态进行中时都不自动收起。</summary>
+    /// <summary>指针离开与收起到点共用：改名草稿还在、卡片/面板编辑进行中或搜索态进行中时都不自动收起。</summary>
     private bool IsPanelEditHoldActive() =>
         IsCategoryNameEditActive() ||
         _panelState.IsTextEditingActive ||
+        _editingCardItemId is not null ||
         IsPanelTextEditor(Keyboard.FocusedElement) ||
         _viewModel.IsSearchActive;
 

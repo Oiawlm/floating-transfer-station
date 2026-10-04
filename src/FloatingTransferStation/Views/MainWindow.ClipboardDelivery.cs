@@ -23,8 +23,26 @@ public partial class MainWindow
     internal Func<DataObject, bool>? ClipboardWriterOverride { get; set; }
 
     /// <summary>
-    /// 右键卡片复制（1.15.0 起，设置可关闭；1.17.0 起限于右区操作列）：
-    /// 不进入选择、不打开菜单。左区右键无操作、不拦截（内容区不承载复制手势）。
+    /// 压制 ListBox 对卡片右键按下的默认选中：右键的契约是只复制（分发在
+    /// Up），不得改变选择。真实输入的右键 Down 若放行，ListBox 默认处理会
+    /// 先选中命中项——合成测试只驱动 Up 事件，掩盖过这一实机偏差（B-007
+    /// 同族）。列表空白与滚动条不经过本压制，原生行为不变。
+    /// </summary>
+    private void BoardList_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_isClosing ||
+            e.OriginalSource is not DependencyObject source ||
+            FindAncestor<ListBoxItem>(source) is null)
+        {
+            return;
+        }
+
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 右键卡片复制（1.15.0 起，设置可关闭；1.17.0 起限于右半）：
+    /// 不进入选择、不打开菜单。左半右键无操作、不拦截（内容区不承载复制手势）。
     /// </summary>
     private void BoardList_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {

@@ -25,7 +25,7 @@ public partial class MainWindow
             // 与主窗 Closing 冲刷序列同构：先提交就地编辑（封门前），停全部写入者，
             // 冲刷看板/复盘/窗口设置并封闭操作门，随后保持静默直到退出或恢复。
             host._topmostTimer.Stop();
-            host.CommitPendingCardTextEditing();
+            host.CommitCardTextEditing();
             _ = host.TrySetGlobalHotkey(false);
             var operationCancellation = host._windowOperationCancellation;
             operationCancellation.Cancel();
