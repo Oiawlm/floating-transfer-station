@@ -21,7 +21,11 @@ public partial class MainWindow : Window
     {
         // 搜索过滤期间禁用拖拽：内部排序的落点按可见(已过滤)视图计算会得到错误的源索引，
         // 拖出语义也随视图收窄产生歧义（设计草案切片 1 明确禁用）。
-        if (_viewModel.IsSearchActive || e.LeftButton != MouseButtonState.Pressed || _pressItem is null)
+        // 按钮按压不起拖：按住置顶/选择按钮移动不应拖出整张卡（按钮有自己的意图）。
+        if (_viewModel.IsSearchActive ||
+            e.LeftButton != MouseButtonState.Pressed ||
+            _pressItem is null ||
+            _pressStartedOnButton)
         {
             return;
         }

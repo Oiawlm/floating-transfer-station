@@ -16,8 +16,8 @@ namespace FloatingTransferStation.Tests;
 /// Control.MouseDoubleClick 挂载，而命中卡片的预览鼠标处理器把事件标记
 /// Handled，实机双击的系统触发链被阻断。本文件全部用真实事件序列
 /// （预览按下/抬起，timestamp 可控递增）驱动手势层，不依赖系统双击链。
-/// 左区（内容列）：双击编辑、拖拽起点，无选择语义；
-/// 右区（操作列）：单击 toggle 选择、Shift 范围选择、右键复制。
+/// 左半：双击编辑、拖拽起点，无选择语义；
+/// 右半：单击 toggle 选择、Shift 范围选择、右键复制。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -86,7 +86,7 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
 
             // B-007 守护：真实事件序列（两对预览按下/抬起，timestamp 递增、
-            // 命中左区）必须进入就地编辑——手势层自维护双击判定，不依赖
+            // 命中左半）必须进入就地编辑——手势层自维护双击判定，不依赖
             // Control.MouseDoubleClick 的系统触发链。
             RaiseCardDoubleClick(ZoneHitSource(window, item, CardGestureZones.ContentZone));
             CompleteLayout(window);
@@ -145,7 +145,7 @@ public sealed partial class MainWindowInteractionTests
             CollectionAssert.AreEqual(
                 new[] { second },
                 list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "左区单击（裸/Ctrl/Shift）不得产生任何选择语义。");
+                "左半单击（裸/Ctrl/Shift）不得产生任何选择语义。");
         }
         finally
         {
@@ -170,21 +170,21 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
             list.SelectedItems.Add(second);
 
-            // 裸单击右区：toggle 命中条目，不影响其他已选。
+            // 裸单击右半：toggle 命中条目，不影响其他已选。
             ClickCard(window, first, ModifierKeys.None);
             CollectionAssert.AreEquivalent(
                 new[] { first, second },
                 list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "右区单击 toggle 命中条目且不影响其他已选。");
+                "右半单击 toggle 命中条目且不影响其他已选。");
 
             // 再单击：取消选择，其他已选保留。
             ClickCard(window, first, ModifierKeys.None);
             CollectionAssert.AreEqual(
                 new[] { second },
                 list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "再次右区单击取消命中条目。");
+                "再次右半单击取消命中条目。");
 
-            // 取证：右区单击选中一张、其他已选保留的选中态视觉。
+            // 取证：右半单击选中一张、其他已选保留的选中态视觉。
             ClickCard(window, first, ModifierKeys.None);
             SaveVisualEvidence(
                 (Border)window.FindName("WindowShell"),
@@ -216,7 +216,7 @@ public sealed partial class MainWindowInteractionTests
             CollectionAssert.AreEqual(
                 new[] { item },
                 list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "Ctrl+右区单击与裸单击等效 toggle。");
+                "Ctrl+右半单击与裸单击等效 toggle。");
         }
         finally
         {
@@ -229,7 +229,7 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
-        var item = board.AddText("右区双击");
+        var item = board.AddText("右半双击");
         var other = board.AddText("另一张");
         var window = CreateWindow(directory, board);
 
@@ -240,18 +240,18 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
 
-            // 右区双击净效果等同一次单击：第一击 toggle，第二击识别为双击不再
+            // 右半双击净效果等同一次单击：第一击 toggle，第二击识别为双击不再
             // toggle（避免选中态闪烁）。
             RaiseCardDoubleClick(ZoneHitSource(window, item, CardGestureZones.OperationsZone));
             CollectionAssert.AreEqual(
                 new[] { item },
                 list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "右区双击只 toggle 一次。");
+                "右半双击只 toggle 一次。");
 
             Assert.AreEqual(
                 string.Empty,
                 StatusOf(window),
-                "右区双击不触发编辑或复制等其他意图。");
+                "右半双击不触发编辑或复制等其他意图。");
             _ = other;
         }
         finally
@@ -276,7 +276,7 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
             var hitSource = ZoneHitSource(window, item, CardGestureZones.ContentZone);
 
-            // 第二击超出系统双击时限：两次独立单击——左区单击无任何语义，
+            // 第二击超出系统双击时限：两次独立单击——左半单击无任何语义，
             // 不得进入编辑。
             RaiseCardPressAndRelease(hitSource, NextIsolatedClickTimestamp());
             RaiseCardPressAndRelease(hitSource, NextIsolatedClickTimestamp());
@@ -303,7 +303,7 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
-        var item = board.AddText("真实输入右区单击", BoardCategory.Inbox);
+        var item = board.AddText("真实输入右半单击", BoardCategory.Inbox);
         var window = CreateWindow(directory, board);
 
         try
@@ -502,7 +502,7 @@ public sealed partial class MainWindowInteractionTests
                     TimeSpan.FromMilliseconds(GetDoubleClickTime() + 100));
 
                 // 双击位置容差按系统 SM_CX/CYDOUBLECLK 判定：真实输入把两次点击
-                // 打到同一卡片左区上下两端（相距超过容差），必须判为两次独立
+                // 打到同一卡片左半上下两端（相距超过容差），必须判为两次独立
                 // 单击，不进入编辑。
                 ClickRealAt(window, container, new Point(24, container.ActualHeight * 0.2));
                 ClickRealAt(window, container, new Point(24, container.ActualHeight * 0.8));
@@ -619,7 +619,7 @@ public sealed partial class MainWindowInteractionTests
         }
 
         // 路由同步完成后 Handled 已定型：手势层的 Up 处理器对命中卡片置 true，
-        // 据此确认真实消息没有被输入管线丢弃。按钮命中路径（右区按钮淡入后
+        // 据此确认真实消息没有被输入管线丢弃。按钮命中路径（右半按钮淡入后
         // 可命中）由按钮命令承接，Up 不经手势层置 Handled。
         Assert.IsNotNull(upArgs);
         if (requireGestureHandled)

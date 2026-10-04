@@ -519,7 +519,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     /// <summary>
-    /// 单击卡片指定分区（默认右区操作列——选择手势只属于右区；左区单击
+    /// 单击卡片指定分区（默认右半——选择手势只属于右半；左半单击
     /// 无选择语义，由 CardGestures 契约测试单独覆盖）。时间戳与此前点击
     /// 拉开超过系统双击时限，保证各次单击互相独立。
     /// </summary>
