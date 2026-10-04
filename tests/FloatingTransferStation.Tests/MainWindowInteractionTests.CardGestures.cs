@@ -299,6 +299,124 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void CardGestures_RealInputOperationsClickTogglesSelection()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("真实输入右区单击", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var clickPoint = ButtonCenterInContainer(
+                container,
+                button => Equals(button.CommandParameter, "ToggleSelection"));
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                // 守护（1.17.1 修复的实机缺陷）：悬停淡入后的按钮命中路径。
+                // 旧实现早退放行原生按钮 Click，而 ListBox 默认单击选择会先
+                // 处理并捕获冒泡按下，按钮收不到自己的抬起、Click 永不触发
+                // ——合成/UIA 可达、真实输入不可达。现在手势层接管按钮命中，
+                // 等淡入完成（按钮可命中）后单击必须 toggle 选中该卡。
+                ClickRealAt(
+                    window,
+                    container,
+                    clickPoint,
+                    requireGestureHandled: false,
+                    hoverSettleMilliseconds: 450);
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+
+            var list = (ListBox)window.FindName("BoardList");
+            CollectionAssert.AreEquivalent(
+                new[] { item },
+                list.SelectedItems.Cast<BoardItem>().ToArray(),
+                "真实输入管线在选择按钮上的单击必须 toggle 选中该卡。");
+            Assert.IsFalse(item.IsPinned, "选择按钮单击不得误触置顶。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardGestures_RealInputPinButtonTogglesPinWithoutTouchingSelection()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("真实输入置顶按钮", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var clickPoint = ButtonCenterInContainer(
+                container,
+                button => Equals(button.CommandParameter, "TogglePin"));
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                ClickRealAt(
+                    window,
+                    container,
+                    clickPoint,
+                    requireGestureHandled: false,
+                    hoverSettleMilliseconds: 450);
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+
+            // 手势分发对置顶是异步落盘；泵到状态翻转或超时。
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+            while (!item.IsPinned && DateTime.UtcNow < deadline)
+            {
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+            }
+
+            Assert.IsTrue(item.IsPinned, "真实输入管线在置顶按钮上的单击必须置顶该卡。");
+            var list = (ListBox)window.FindName("BoardList");
+            Assert.IsFalse(
+                list.SelectedItems.Cast<BoardItem>().Any(),
+                "置顶按钮单击不得改变选择。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>把卡片模板内指定操作按钮的中心换算到容器坐标系（真实输入点击点）。</summary>
+    private static Point ButtonCenterInContainer(
+        ListBoxItem container,
+        Func<System.Windows.Controls.Primitives.ButtonBase, bool> match)
+    {
+        var button = FindDescendants<System.Windows.Controls.Primitives.ButtonBase>(container).Single(match);
+        return button.TranslatePoint(
+            new Point(button.ActualWidth / 2, button.ActualHeight / 2),
+            container);
+    }
+
+    [STATestMethod]
     public void CardGestures_RealInputDoubleClickOpensEditor()
     {
         using var directory = new TestDirectory();
@@ -463,7 +581,12 @@ public sealed partial class MainWindowInteractionTests
     /// 使同一物理点在两击间的窗口相对位置漂移、干扰双击位置容差。
     /// positionInContainer 为卡片容器坐标系内的点。
     /// </summary>
-    private static void ClickRealAt(MainWindow window, FrameworkElement container, Point positionInContainer)
+    private static void ClickRealAt(
+        MainWindow window,
+        FrameworkElement container,
+        Point positionInContainer,
+        bool requireGestureHandled = true,
+        int hoverSettleMilliseconds = 0)
     {
         var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
         var screen = container.PointToScreen(positionInContainer);
@@ -471,6 +594,10 @@ public sealed partial class MainWindowInteractionTests
         Assert.IsTrue(ScreenToClient(hwnd, ref client), "屏幕点到客户区换算必须成功。");
         Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y)), "真实光标必须可移入窗口。");
         PumpUntilMouseOver(window);
+        if (hoverSettleMilliseconds > 0)
+        {
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(hoverSettleMilliseconds));
+        }
         MouseButtonEventArgs? upArgs = null;
         var upSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         MouseButtonEventHandler onUp = (_, e) =>
@@ -492,9 +619,13 @@ public sealed partial class MainWindowInteractionTests
         }
 
         // 路由同步完成后 Handled 已定型：手势层的 Up 处理器对命中卡片置 true，
-        // 据此确认真实消息没有被输入管线丢弃。
+        // 据此确认真实消息没有被输入管线丢弃。按钮命中路径（右区按钮淡入后
+        // 可命中）由按钮命令承接，Up 不经手势层置 Handled。
         Assert.IsNotNull(upArgs);
-        Assert.IsTrue(upArgs.Handled, "真实点击必须被手势层处理（按下命中卡片）。");
+        if (requireGestureHandled)
+        {
+            Assert.IsTrue(upArgs.Handled, "真实点击必须被手势层处理（按下命中卡片）。");
+        }
     }
 
     /// <summary>等待 WPF 认定真实光标已悬停在窗口上（MouseEnter 处理完成）。</summary>

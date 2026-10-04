@@ -107,6 +107,16 @@ public partial class MainWindow : Window
             return;
         }
 
+        await ToggleCardPinAsync(item);
+    }
+
+    /// <summary>
+    /// 单卡置顶/取消置顶（含选择与滚动位置恢复）。由两条入口共用：
+    /// BoardList_ButtonClick（合成与 UIA 自动化路径）与卡片手势层
+    /// （真实输入路径，见 MainWindow.CardGestures.cs）。
+    /// </summary>
+    private async Task ToggleCardPinAsync(BoardItem item)
+    {
         var selectedBefore = CaptureSelectedItemIds();
         var selectionVersion = _selectionChangeVersion;
         var category = item.Category;
