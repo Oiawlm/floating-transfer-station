@@ -11,15 +11,18 @@ namespace FloatingTransferStation.Views;
 /// <summary>
 /// 卡片指针手势状态机（1.17.0 左右分区重构）。卡片指针输入收敛为单一模型：
 /// Down 记录按压会话（命中条目、命中区域、修饰键、起点）→ Move 判拖拽 →
-/// Up 按「区域 × 双击窗 × 修饰键」分发意图（编辑 / 选择 / 复制），
+/// Up 按「区域 × 双击窗 × 修饰键」分发意图（编辑 / 选择 / 置顶 / 复制），
 /// 意图实现（BeginCardTextEditing、ToggleSelection、SelectRange、
-/// CopyBoardItemsToClipboard）保持与手势判定解耦。
+/// ToggleCardPinAsync、CopyBoardItemsToClipboard）保持与手势判定解耦。
 /// 分区契约：左区（内容列）承载双击编辑与拖拽起点，无选择语义；
-/// 右区（操作列）承载单击选择与右键复制；边缘环带归左区（贴边点击
-/// 承载拖拽，不误触选择/复制）。
+/// 右区（操作列）承载单击选择与右键复制，置顶按钮为右区内的独立置顶意图；
+/// 边缘环带归左区（贴边点击承载拖拽，不误触选择/复制）。
 /// 双击判定由手势层自维护（上次抬键的时间戳与位置），不依赖
 /// Control.MouseDoubleClick——其系统触发链会被预览层为压制 ListBox
 /// 默认选择而设置的 Handled 阻断（docs/observations.md B-007 的实机根因）。
+/// 操作区按钮同样由手势层接管：真实输入下原生按钮 Click 会先被 ListBox
+/// 默认单击选择吞掉（合成/UIA 可达、实机不可达，1.16.0 起的隐性缺陷，
+/// 1.17.1 修复）。
 /// </summary>
 public partial class MainWindow
 {
@@ -31,6 +34,9 @@ public partial class MainWindow
 
         /// <summary>右区：操作列（置顶/选择按钮所在区域），承载单击选择与右键复制。</summary>
         Operations,
+
+        /// <summary>右区·置顶按钮：单击置顶/取消置顶，与右区选择手势不同的独立意图。</summary>
+        OperationsPin,
     }
 
     /// <summary>一次成功点击（未拖拽的按下-抬起）的痕迹，用于双击窗口判定。</summary>
@@ -47,10 +53,27 @@ public partial class MainWindow
     {
         var source = e.OriginalSource as DependencyObject;
 
-        // 按钮（置顶/选择）自带完整功能，手势层让路。
-        if (FindAncestor<Button>(source) is not null)
+        // 卡片操作区按钮（置顶/选择）与 wrapper 一样由手势层接管：真实输入下
+        // 原生按钮的 Click 会先被 ListBox 默认单击选择对冒泡按下的处理与捕获
+        // 吞掉（实机上 BoardList_ButtonClick 不可达，B-007 同族的「合成可达、
+        // 实机不可达」缺陷，1.16.0 起即存在）；合成与 UIA 自动化路径仍走
+        // BoardList_ButtonClick。列表外的按钮不经过本处理器，原生行为不变。
+        if (FindAncestor<Button>(source) is { } hitButton)
         {
-            ResetCardPressState();
+            if (FindAncestor<ListBoxItem>(hitButton) is not { } buttonContainer)
+            {
+                ResetCardPressState();
+                return;
+            }
+
+            _pressStartPosition = e.GetPosition(this);
+            _pressItem = buttonContainer.DataContext as BoardItem;
+            _pressZone = Equals(hitButton.CommandParameter, "TogglePin")
+                ? CardHitZone.OperationsPin
+                : CardHitZone.Operations;
+            _dragThresholdCrossed = false;
+            _pressModifiers = Keyboard.Modifiers;
+            e.Handled = true;
             return;
         }
 
@@ -108,6 +131,12 @@ public partial class MainWindow
                     BeginCardTextEditing(item, container);
                 }
             }
+        }
+        else if (_pressZone == CardHitZone.OperationsPin)
+        {
+            // 置顶按钮是右区内的独立意图：单击置顶/取消置顶，不触碰选择；
+            // 语义与 BoardList_ButtonClick 的 TogglePin 分支共用同一实现。
+            _ = ToggleCardPinAsync(item);
         }
         else if (_pressZone == CardHitZone.Operations)
         {

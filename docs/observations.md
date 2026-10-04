@@ -19,4 +19,11 @@
 ## B-007
 
 - 现象：用户实机 1.14.1 报告双击文字卡无法进入就地编辑（README 与 `MainWindow.CardTextEditing.cs` 声称支持，1.14.0 引入）。
-- 当前状态：2026-10-03 已查明根因并在 1.17.0 手势分区重构中根除，观察转为「待实机复验后关闭」。根因链：双击编辑唯一入口是 `MainWindow.xaml` 挂载的 `Control.MouseDoubleClick`（处理器 `BoardList_MouseDoubleClick`），而命中卡片的预览鼠标处理器（`BoardList_PreviewMouseLeftButtonDown/Up`，为压制 ListBox 默认选择并记录拖拽起点）把事件标记 `Handled`，实机双击时该事件由冒泡 `MouseLeftButtonDown`（`ClickCount==2`）的类处理器触发，预览已处理使其以已处理状态路由、类处理器不再引发——实机双击从未到达处理器。既有测试直接 `RaiseEvent(MouseDoubleClickEvent)` 合成事件，绕过真实输入管线，因此 5/5 通过而实机失效（旧测试方法即漏测根因）。2026-10-03 在 main（1.16.0）上以真实事件序列（两对预览按下/抬起，timestamp 递增）复现证实「真实序列不可达编辑、合成 MouseDoubleClick 可达」，1.17.0 删除该挂载、双击判定改由手势状态机自维护（`MainWindow.CardGestures.cs`，时限/容差取系统双击设置），并新增真实序列与 Win32 消息直驱（完整输入管线）两级守护测试。请用户在 1.17.0 实机复验双击进入编辑后关闭本条；如仍异常，记录复现步骤（分类、卡片内容、双击间距、录屏）与应用版本。
+- 当前状态：2026-10-03 已查明根因并在 1.17.0 手势分区重构中根除；2026-10-04 实机复验通过（真实鼠标双击文字卡左区进入就地编辑，编辑器打开并持焦），观察关闭。根因链：双击编辑唯一入口是 `MainWindow.xaml` 挂载的 `Control.MouseDoubleClick`（处理器 `BoardList_MouseDoubleClick`），而命中卡片的预览鼠标处理器（`BoardList_PreviewMouseLeftButtonDown/Up`，为压制 ListBox 默认选择并记录拖拽起点）把事件标记 `Handled`，实机双击时该事件由冒泡 `MouseLeftButtonDown`（`ClickCount==2`）的类处理器触发，预览已处理使其以已处理状态路由、类处理器不再引发——实机双击从未到达处理器。既有测试直接 `RaiseEvent(MouseDoubleClickEvent)` 合成事件，绕过真实输入管线，因此 5/5 通过而实机失效（旧测试方法即漏测根因）。2026-10-03 在 main（1.16.0）上以真实事件序列（两对预览按下/抬起，timestamp 递增）复现证实「真实序列不可达编辑、合成 MouseDoubleClick 可达」，1.17.0 删除该挂载、双击判定改由手势状态机自维护（`MainWindow.CardGestures.cs`，时限/容差取系统双击设置），并新增真实序列与 Win32 消息直驱（完整输入管线）两级守护测试。
+
+## B-007b（同族：操作区按钮实机不可达）
+
+- 现象：1.17.0 实机验收发现——真实鼠标悬停卡片使置顶/选择按钮淡入后，单击任一按钮全程无反应（不选中、不置顶）；不悬停立即点击（按钮尚未可命中，落在 wrapper 背景）则正常。1.16.0 起即存在，此前用户靠 `Ctrl + 单击` 正文绕过而未被报告；1.17.0 移除该补偿路径后完全暴露。
+- 根因（2026-10-04 进程内复现 + 事件路由证据）：手势层对按钮命中早退放行原生按钮 `Click`，但真实输入下 `ListBox` 默认单击选择的类处理器会先处理并捕获冒泡按下（进程内探针：冒泡按下/抬起均以已处理状态到达窗口，按钮自身的按下/抬起处理从未运行），按钮收不到自己的抬起、`Click` 永不触发——`BoardList_ButtonClick` 合成事件与 UIA 自动化可达、真实鼠标不可达。既有真实输入测试只覆盖「立即点击」时按钮不可命中的 wrapper 路径，按钮命中路径漏测。
+- 修复（1.17.1）：手势层接管卡片操作区按钮的按下/抬起——置顶按钮分发放置顶语义（`ToggleCardPinAsync`，与 `BoardList_ButtonClick` 共用），选择按钮与 wrapper 统一走右区选择手势；列表外按钮原生行为不变，UIA 自动化仍走 `BoardList_ButtonClick`。守护测试补齐按钮命中路径：悬停淡入完成后在选择/置顶按钮中心的 Win32 消息直驱单击。实机复验进行中，待 1.17.1 安装后确认关闭。
+
