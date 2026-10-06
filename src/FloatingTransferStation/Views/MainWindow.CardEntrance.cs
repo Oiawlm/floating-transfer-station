@@ -38,11 +38,13 @@ public partial class MainWindow
 
     private void ActivePanelItems_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        // 入场动画只属于真正新入库的内容(剪贴板捕获、拖入走单条 Add)。
+        // 程序性重排与批量恢复通过 BoardItemCollection.ReplaceAll 发单个 Reset,
+        // 不在此重演入场,避免大批量操作触发逐条动画风暴。
         if (!ClientAreaAnimationsEnabled ||
             _isClosing ||
             !_viewModel.IsPanelExpanded ||
-            (e.Action != NotifyCollectionChangedAction.Add &&
-                e.Action != NotifyCollectionChangedAction.Move) ||
+            e.Action != NotifyCollectionChangedAction.Add ||
             e.NewItems is not { Count: > 0 })
         {
             return;

@@ -188,6 +188,19 @@ public partial class MainWindow : Window
         _statusTimer.Start();
     }
 
+    /// <summary>
+    /// 采纳后台装载期间完成的复盘迁移结果：同步退出保存用的设置基准与
+    /// 复盘分类的显示名，使迁移无需在窗口构造前完成（启动先显示收起态）。
+    /// </summary>
+    internal void AdoptMigratedSettings(WindowSettings settings)
+    {
+        _settings = settings;
+        _viewModel.ApplyCategoryName(
+            _viewModel.Categories.Single(
+                panel => panel.Category == DailyReviewMigration.ReviewCategory),
+            settings.CategoryName(DailyReviewMigration.ReviewCategory));
+    }
+
     private void StatusTimer_Tick(object? sender, EventArgs e)
     {
         _statusTimer.Stop();

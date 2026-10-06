@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Threading;
+using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.Views;
 
@@ -77,16 +79,8 @@ public partial class App : Application
             }
 
             var board = new BoardService();
-            var snapshot = await store.LoadBoardAsync();
             var normalizer = new ImageNormalizer(paths.ImagesDirectory);
-            await normalizer.RepairStoredImagesOnceAsync(
-                snapshot.Items
-                    .Where(item => item.Kind == Models.BoardItemKind.Image)
-                    .Select(item => item.ImageAbsolutePath!)
-                    .Where(path => !string.IsNullOrWhiteSpace(path)));
-            board.Restore(snapshot);
             var settings = await store.LoadSettingsAsync();
-            settings = await new DailyReviewMigration(store).EnsureAsync(board, settings);
             var pluginCatalog = new PluginCatalog(
                 paths,
                 Path.Combine(AppContext.BaseDirectory, "plugins"),
@@ -139,11 +133,21 @@ public partial class App : Application
                     ? DataDirectoryChangeService.CreateDefault(new WindowsDataDirectorySettings())
                     : null);
             MainWindow = window;
+            // 先显示收起态窗口：分类轨只依赖已装载的偏好与设置，板面数据转入
+            // 后台装载，大数据量不再拖住启动到可见的时间（见 LoadBoardInBackgroundAsync）。
             window.Show();
             if (pluginsDirectoryWarning is not null)
             {
                 window.ShowStatus(pluginsDirectoryWarning);
             }
+
+            _ = LoadBoardInBackgroundAsync(
+                store,
+                board,
+                normalizer,
+                settings,
+                window,
+                boardOperationGate);
 
             // 搬迁后的延迟清理：此刻已在新目录拿到单实例锁，按形状守卫删除旧受管目录。
             // 删除可能涉及大量文件，放后台执行，结果经状态条提示。
@@ -166,6 +170,50 @@ public partial class App : Application
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(1);
+        }
+    }
+
+    /// <summary>
+    /// 板面数据后台装载：装载（含逐图存在性校验与复盘迁移）在操作门内进行，
+    /// 装载期间到达的剪贴板捕获在门上排队、装载完成后按序补录，不丢失、不乱序。
+    /// 全量图片修复扫描进一步延后到空闲。装载只回填内存集合，失败时状态条提示，
+    /// 磁盘上的 board.json 及其 .bak 不受影响。
+    /// </summary>
+    private static async Task LoadBoardInBackgroundAsync(
+        LocalStore store,
+        BoardService board,
+        ImageNormalizer normalizer,
+        WindowSettings settings,
+        MainWindow window,
+        BoardOperationGate operationGate)
+    {
+        try
+        {
+            var migrated = await operationGate.RunAsync(async () =>
+            {
+                var snapshot = await store.LoadBoardAsync();
+                board.Restore(snapshot);
+                return await new DailyReviewMigration(store).EnsureAsync(board, settings);
+            });
+            if (!ReferenceEquals(migrated, settings))
+            {
+                await window.Dispatcher.InvokeAsync(() => window.AdoptMigratedSettings(migrated));
+            }
+
+            var imagePaths = BoardCategoryCatalog.Ordered
+                .SelectMany(category => board.Items(category))
+                .Where(item => item.Kind == BoardItemKind.Image)
+                .Select(item => item.ImageAbsolutePath!)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .ToArray();
+            await window.Dispatcher.InvokeAsync(
+                () => _ = normalizer.RepairStoredImagesOnceAsync(imagePaths),
+                DispatcherPriority.ApplicationIdle);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await window.Dispatcher.InvokeAsync(
+                () => window.ShowStatus("历史内容装载失败，部分内容暂时不可见，重启应用可重试。"));
         }
     }
 

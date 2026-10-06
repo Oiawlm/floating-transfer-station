@@ -39,6 +39,7 @@ jobs:
           FTS_VISUAL_TRANSITIONS_EVIDENCE_DIR: ${{ runner.temp }}/visual-transitions-evidence
           FTS_DELIVERY_EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
           FTS_GESTURE_EVIDENCE_DIR: ${{ runner.temp }}/gesture-evidence
+          FTS_MOTION_TRANSITIONS_EVIDENCE_DIR: ${{ runner.temp }}/motion-transitions-evidence
         run: '& .\scripts\build-release.ps1 -DotnetPath (Get-Command dotnet).Source -WindowsOnly'
       - name: 严格 Release 构建
         run: dotnet build FloatingTransferStation.slnx -c Release --no-restore -warnaserror
@@ -99,6 +100,13 @@ jobs:
         with:
           name: delivery-evidence
           path: ${{ runner.temp }}/delivery-evidence/*.png
+          if-no-files-found: error
+          retention-days: 30
+      - name: 保存动效过渡与置顶不重演入场截图
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: motion-transitions-evidence
+          path: ${{ runner.temp }}/motion-transitions-evidence/*.png
           if-no-files-found: error
           retention-days: 30
       - name: 保存卡片左右分区手势截图

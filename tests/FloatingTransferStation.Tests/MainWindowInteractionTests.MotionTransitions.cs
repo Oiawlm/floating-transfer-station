@@ -294,7 +294,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void PinnedMove_ReplaysCardEntranceAnimation()
+    public void PinnedMove_DoesNotReplayCardEntranceAnimation()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -312,19 +312,33 @@ public sealed partial class MainWindowInteractionTests
             var containerBefore =
                 (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(plain);
 
+            // 置顶是程序性重排（单次 Reset），不是新内容入库；不重演入场动画，
+            // 大批量置顶/撤销因此不会触发逐条动画风暴。
             board.SetPinnedMany([plain.Id], true);
             CompleteLayout(window);
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "pin-reorder-no-entrance.png",
+                "FTS_MOTION_TRANSITIONS_EVIDENCE_DIR");
 
             var container =
                 (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(plain);
             Assert.IsNotNull(container);
-            Assert.IsTrue(container.HasAnimatedProperties);
+            Assert.IsFalse(
+                container.HasAnimatedProperties,
+                "程序性重排不得重播入场动画。");
             if (ReferenceEquals(container, containerBefore))
             {
-                Assert.AreEqual(
-                    1d,
-                    container.GetAnimationBaseValue(UIElement.OpacityProperty));
+                Assert.AreEqual(1d, container.Opacity);
             }
+
+            // 收窄语义的另一侧：真正的新内容入库仍播入场动画。
+            var fresh = board.AddText("fresh capture");
+            CompleteLayout(window);
+            var freshContainer =
+                (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(fresh);
+            Assert.IsNotNull(freshContainer);
+            Assert.IsTrue(freshContainer.HasAnimatedProperties);
         }
         finally
         {
