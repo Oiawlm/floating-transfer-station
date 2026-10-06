@@ -248,12 +248,12 @@
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0"
-                       Text="右键卡片右侧操作区复制到剪贴板"
+                       Text="右键卡片右半复制到剪贴板"
                        Style="{StaticResource RowCaptionStyle}" />
             <CheckBox x:Name="RightClickCopyToggle"
                       Grid.Column="1"
                       Style="{StaticResource ToggleSwitchStyle}"
-                      AutomationProperties.Name="右键卡片右侧操作区复制到剪贴板"
+                      AutomationProperties.Name="右键卡片右半复制到剪贴板"
                       Checked="RightClickCopyToggle_Checked"
                       Unchecked="RightClickCopyToggle_Unchecked" />
           </Grid>

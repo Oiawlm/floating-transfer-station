@@ -23,7 +23,7 @@ public sealed partial class MainWindowInteractionTests
             Source = source
         };
 
-    /// <summary>右键卡片右区（操作列）：复制手势只属于右区。</summary>
+    /// <summary>右键卡片右半：复制手势只属于右半。</summary>
     private static MouseButtonEventArgs NewRightClickArgsOnCard(
         MainWindow window,
         BoardItem item)
@@ -175,7 +175,7 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
-        var item = board.AddText("左区右键无操作");
+        var item = board.AddText("左半右键无操作");
         var window = CreateWindow(directory, board);
         DataObject? captured = null;
         window.ClipboardWriterOverride = data =>
@@ -196,7 +196,7 @@ public sealed partial class MainWindowInteractionTests
             list.RaiseEvent(args);
             CompleteLayout(window);
 
-            Assert.IsFalse(args.Handled, "左区右键无操作、不拦截（内容区不承载复制手势）。");
+            Assert.IsFalse(args.Handled, "左半右键无操作、不拦截（内容区不承载复制手势）。");
             Assert.IsNull(captured);
             Assert.IsEmpty(StatusOf(window));
         }

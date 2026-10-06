@@ -1140,23 +1140,30 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(30d, selectionButton.Width);
             Assert.AreEqual(30d, selectionButton.Height);
             Assert.IsNotNull(contentGrid);
-            // 1.17.0 手势分区重构：两个操作按钮包进右区 wrapper（命中标记
-            // CardGestureZones.OperationsZone，占卡片三列 Grid 的 1-2 列），
-            // wrapper 内仍各占固定 30px 列。
+            // 1.18.0 对半分区：命中层两列 * /* 各占一半；右半（Tag=
+            // CardGestureZones.OperationsZone）右上角保留按钮包（仍各占
+            // 固定 30px 列、右对齐）；内容视觉层全宽在命中层之下（无 Tag，
+            // 指针命中总落在命中层上）。
             Assert.AreEqual(2, contentGrid.ColumnDefinitions.Count);
             Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[0].Width);
             Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[1].Width);
             Assert.AreEqual(0, Grid.GetColumn(pinButton));
             Assert.AreEqual(1, Grid.GetColumn(selectionButton));
-            var cardGrid = contentGrid.Parent as Grid;
-            Assert.IsNotNull(cardGrid);
-            Assert.AreEqual(3, cardGrid.ColumnDefinitions.Count);
-            Assert.AreEqual(new GridLength(30), cardGrid.ColumnDefinitions[1].Width);
-            Assert.AreEqual(new GridLength(30), cardGrid.ColumnDefinitions[2].Width);
-            Assert.AreEqual(1, Grid.GetColumn(contentGrid));
-            Assert.AreEqual(2, Grid.GetColumnSpan(contentGrid));
-            Assert.AreEqual(CardGestureZones.OperationsZone, contentGrid.Tag as string);
-            Assert.AreEqual(CardGestureZones.ContentZone, (text.Parent as Grid)?.Tag as string);
+            Assert.AreEqual(HorizontalAlignment.Right, contentGrid.HorizontalAlignment);
+            Assert.AreEqual(VerticalAlignment.Top, contentGrid.VerticalAlignment);
+            var operationsZone = contentGrid.Parent as Grid;
+            Assert.IsNotNull(operationsZone);
+            Assert.AreEqual(CardGestureZones.OperationsZone, operationsZone.Tag as string);
+            var hitLayer = operationsZone.Parent as Grid;
+            Assert.IsNotNull(hitLayer);
+            Assert.AreEqual(2, hitLayer.ColumnDefinitions.Count);
+            Assert.AreEqual(new GridLength(1, GridUnitType.Star), hitLayer.ColumnDefinitions[0].Width);
+            Assert.AreEqual(new GridLength(1, GridUnitType.Star), hitLayer.ColumnDefinitions[1].Width);
+            Assert.AreEqual(1, Grid.GetColumn(operationsZone));
+            var contentZone = FindDescendants<Grid>(container)
+                .Single(candidate => Equals(candidate.Tag as string, CardGestureZones.ContentZone));
+            Assert.AreEqual(0, Grid.GetColumn(contentZone));
+            Assert.IsNull((text.Parent as Grid)?.Tag, "内容视觉层不得携带命中标记（命中总落在命中层）。");
             Assert.AreEqual(14d, text.FontSize);
             Assert.AreEqual(20d, text.LineHeight);
             Assert.AreEqual(100d, text.MaxHeight);

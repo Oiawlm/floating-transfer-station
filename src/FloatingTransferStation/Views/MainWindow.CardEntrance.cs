@@ -38,6 +38,17 @@ public partial class MainWindow
 
     private void ActivePanelItems_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        // 集合变化统一交给编辑会话刷新的锚点判定（判定源唯一）：锚点被移除/
+        // 集合重置 → 终结提交；新增/移动只改变锚点位置 → 覆盖层重定位跟随。
+        // 延迟到 Loaded 优先级：容器生成滞后于集合事件，同步判定会拿到
+        // 中间态的旧容器。
+        if (_editingCardItemId is not null)
+        {
+            Dispatcher.BeginInvoke(
+                DispatcherPriority.Loaded,
+                new Action(RefreshCardEditSession));
+        }
+
         // 入场动画只属于真正新入库的内容(剪贴板捕获、拖入走单条 Add)。
         // 程序性重排与批量恢复通过 BoardItemCollection.ReplaceAll 发单个 Reset,
         // 不在此重演入场,避免大批量操作触发逐条动画风暴。

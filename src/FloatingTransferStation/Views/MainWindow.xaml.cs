@@ -165,6 +165,7 @@ public partial class MainWindow : Window
         InitializeDailyReviewEditing();
         InitializeCategoryNameEditing();
         InitializePanelTextEditing();
+        InitializeCardEditSessionTracking();
         SourceInitialized += MainWindow_SourceInitialized;
 
         ApplyPlacement(WindowController.Collapsed(
