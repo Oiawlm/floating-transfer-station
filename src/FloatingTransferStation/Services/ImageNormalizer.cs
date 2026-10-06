@@ -1,4 +1,5 @@
 using System.Windows.Media.Imaging;
+using FloatingTransferStation.Controls;
 using FloatingTransferStation.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
@@ -360,6 +361,9 @@ public sealed class ImageNormalizer : IImageNormalizer
             EnsureManagedImagePath(temporaryPath);
             await image.SaveAsPngAsync(temporaryPath, cancellationToken).ConfigureAwait(false);
             MoveManagedFile(temporaryPath, imagePath, overwrite: true);
+            // 原地重写打破了“受管图片路径内容不变”的前提，缩略图缓存必须主动驱逐，
+            // 否则后续容器实现会命中旧位图；已显示旧位图的卡片在回收复用时取新。
+            AsyncThumbnailImage.SharedConverter.Invalidate(imagePath);
         }
         finally
         {

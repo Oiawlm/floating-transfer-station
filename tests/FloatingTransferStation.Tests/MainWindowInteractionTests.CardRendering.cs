@@ -2,6 +2,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
+using FloatingTransferStation.Controls;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -133,6 +135,160 @@ public sealed partial class MainWindowInteractionTests
                 body.LineStackingStrategy,
                 "正文行距语义应保持 BlockLineHeight。");
             Assert.AreEqual(100d, body.MaxHeight, 0d, "正文最大高度应为 100 DIP（5 行 × 20）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void BoardList_RealizesOnlyVisibleContainersForLargeCategories()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        for (var index = 0; index < 2000; index++)
+        {
+            board.AddText($"虚拟化条目 {index}");
+        }
+
+        var window = CreateWindow(directory, board);
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+
+            // 虚拟化 + Recycling 生效的直接证据：两千条目只有视口附近的少量容器被实现。
+            var realizedContainers = FindDescendants<ListBoxItem>(list).Count();
+            Assert.IsTrue(
+                realizedContainers is > 0 and < 100,
+                $"两千条目下实现的容器数应远小于条目总数，实际 {realizedContainers}。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void BatchStructuralChange_DoesNotResetScrollToTop()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var items = Enumerable.Range(0, 200)
+            .Select(index => board.AddText($"滚动条目 {index}"))
+            .ToArray();
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var viewer = FindDescendants<ScrollViewer>(list).Single();
+            viewer.ScrollToVerticalOffset(800);
+            CompleteLayout(window);
+            Assert.IsTrue(viewer.VerticalOffset > 400, "前置：已滚动到中部。");
+
+            // 单 Reset 的批量重排（置顶最底条目）后视口不得跳回顶部；
+            // 旧实现 Clear+逐条 Add 会在 Count 归零时把偏移钳到 0。
+            board.SetPinnedMany([items[0].Id], true);
+            CompleteLayout(window);
+
+            Assert.IsTrue(
+                viewer.VerticalOffset > 400,
+                $"批量结构变更后视口跳回顶部（offset={viewer.VerticalOffset}）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    private static void WriteCardPng(string path, int width, int height)
+    {
+        const int bytesPerPixel = 4;
+        var stride = width * bytesPerPixel;
+        var pixels = new byte[stride * height];
+        Array.Fill(pixels, (byte)0x7F);
+        var bitmap = BitmapSource.Create(
+            width,
+            height,
+            96,
+            96,
+            PixelFormats.Bgra32,
+            null,
+            pixels,
+            stride);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
+
+    [STATestMethod]
+    public void CardText_BindsBoundedPreviewInsteadOfFullText()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var longText = new string('长', 2000);
+        board.AddText(longText);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var body = FindDescendants<TextBlock>(list)
+                .Single(candidate => candidate.Text?.Length == 600);
+
+            // 显示层排版只用有界预览（含换行重排），全文仍留在 Text 上供搜索/编辑/复制。
+            Assert.AreEqual(longText[..600], body.Text);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardThumbnail_DecodesAtBucketedDisplayWidthAfterLayout()
+    {
+        using var directory = new TestDirectory();
+        var imagePath = Path.Combine(directory.Root, "wide-card.png");
+        WriteCardPng(imagePath, width: 1200, height: 600);
+        var board = new BoardService();
+        board.AddImage(Guid.NewGuid(), "images/wide-card.png", imagePath, BoardCategory.CustomerOriginal);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.CustomerOriginal);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var thumbnail = FindDescendants<AsyncThumbnailImage>(list).Single();
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+            while (thumbnail.Source is null && DateTime.UtcNow < deadline)
+            {
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+                // 泵帧不必然驱动布局：可见性翻转后的重排需要显式 UpdateLayout。
+                window.UpdateLayout();
+            }
+
+            var source = (BitmapSource?)thumbnail.Source;
+            Assert.IsNotNull(source, "布局完成后应按显示宽度解码缩略图。");
+            var scale = VisualTreeHelper.GetDpi(thumbnail).PixelsPerDip;
+            var pixels = (int)Math.Ceiling(thumbnail.ActualWidth * Math.Max(1d, scale));
+            // 解码宽 = max(基线 512, 显示宽×DPI 的 128px 上取桶)，上限 1024。
+            var expected = Math.Max(512, Math.Min(((pixels + 127) / 128) * 128, 1024));
+            Assert.AreEqual(expected, source.PixelWidth, "解码宽应贴合显示宽度×DPI 的桶（不低于基线）。");
+            Assert.IsTrue(source.IsFrozen);
         }
         finally
         {

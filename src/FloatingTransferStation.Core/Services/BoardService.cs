@@ -37,12 +37,12 @@ public sealed record RemovedBoardCategory(
 
 public sealed class BoardService
 {
-    private readonly Dictionary<BoardCategory, ObservableCollection<BoardItem>> _items =
+    private readonly Dictionary<BoardCategory, BoardItemCollection> _items =
         BoardCategoryCatalog.Ordered.ToDictionary(
             category => category,
-            _ => new ObservableCollection<BoardItem>());
+            _ => new BoardItemCollection());
 
-    public ObservableCollection<BoardItem> Items(BoardCategory category) => _items[category];
+    public BoardItemCollection Items(BoardCategory category) => _items[category];
 
     public BoardItem AddText(string text, Guid? id = null, DateTimeOffset? createdAt = null) =>
         AddText(text, BoardCategory.Inbox, id, createdAt);
@@ -412,6 +412,7 @@ public sealed class BoardService
     /// 前驱缺失或已变区时回退到该区顶部;同一批删除保持原始相对顺序。与
     /// <see cref="Restore(RemovedBoardItems)"/> 的整类替换不同,本方法不回退
     /// 删除之后发生的其他改动(新增、移动、重新置顶),适合延迟恢复(撤销)。
+    /// 位置计算在当前状态的副本上完成后一次整批替换,只发出单个 Reset。
     /// </summary>
     public void RestoreInsert(RemovedBoardItems removed)
     {
@@ -419,29 +420,37 @@ public sealed class BoardService
         var removedIds = removed.RemovedItems.Select(item => item.Id).ToHashSet();
         foreach (var (category, originalItems) in removed.OriginalCategories)
         {
-            var collection = _items[category];
+            var working = _items[category].ToList();
+            var survivingIds = new HashSet<Guid>();
+            foreach (var item in working)
+            {
+                survivingIds.Add(item.Id);
+            }
+
             BoardItem? chainedAnchor = null;
             foreach (var item in originalItems.Where(item => removedIds.Contains(item.Id)))
             {
                 // 链式锚点只在同区(置顶/普通)内生效,避免普通内容跟在置顶链后落入置顶区。
-                var anchor = FindSurvivingAnchor(originalItems, item, removedIds, collection)
+                var anchor = FindSurvivingAnchor(originalItems, item, removedIds, survivingIds)
                     ?? (chainedAnchor is { } chain && chain.IsPinned == item.IsPinned ? chain : null);
                 var index = anchor is null
-                    ? (item.IsPinned ? 0 : FirstNormalIndex(collection))
-                    : IndexOf(collection, anchor.Id) + 1;
-                collection.Insert(Math.Clamp(index, 0, collection.Count), item);
+                    ? (item.IsPinned ? 0 : FirstNormalIndex(working))
+                    : IndexOf(working, anchor.Id) + 1;
+                working.Insert(Math.Clamp(index, 0, working.Count), item);
+                survivingIds.Add(item.Id);
                 chainedAnchor = item;
             }
 
+            _items[category].ReplaceAll(working);
             Reindex(category);
         }
     }
 
-    private BoardItem? FindSurvivingAnchor(
+    private static BoardItem? FindSurvivingAnchor(
         IReadOnlyList<BoardItem> originalItems,
         BoardItem removedItem,
         HashSet<Guid> removedIds,
-        ObservableCollection<BoardItem> current)
+        HashSet<Guid> survivingIds)
     {
         BoardItem? anchor = null;
         foreach (var candidate in originalItems)
@@ -453,7 +462,7 @@ public sealed class BoardService
 
             if (!removedIds.Contains(candidate.Id) &&
                 candidate.IsPinned == removedItem.IsPinned &&
-                IndexOf(current, candidate.Id) >= 0)
+                survivingIds.Contains(candidate.Id))
             {
                 anchor = candidate;
             }
@@ -462,7 +471,7 @@ public sealed class BoardService
         return anchor;
     }
 
-    private static int FirstNormalIndex(ObservableCollection<BoardItem> collection)
+    private static int FirstNormalIndex(IReadOnlyList<BoardItem> collection)
     {
         for (var index = 0; index < collection.Count; index++)
         {
@@ -522,34 +531,26 @@ public sealed class BoardService
             throw new ArgumentOutOfRangeException(nameof(removed));
         }
 
-        var collection = _items[removed.Category];
-        foreach (var item in removed.Items.OrderBy(item => item.Order))
+        // 空分类上按 Order 升序逐条钳位插入,等价于按序整批替换。
+        var ordered = removed.Items.OrderBy(item => item.Order).ToArray();
+        foreach (var item in ordered)
         {
             item.Category = removed.Category;
-            collection.Insert(Math.Clamp(item.Order, 0, collection.Count), item);
         }
 
+        _items[removed.Category].ReplaceAll(ordered);
         Reindex(removed.Category);
     }
 
     public void Restore(BoardSnapshot snapshot)
     {
-        foreach (var collection in _items.Values)
-        {
-            collection.Clear();
-        }
-
         foreach (var category in BoardCategoryCatalog.Ordered)
         {
-            foreach (var item in snapshot.Items
-                         .Where(item => item.Category == category)
-                         .OrderByDescending(item => item.IsPinned)
-                         .ThenBy(item => item.Order)
-                         .ThenBy(item => item.CreatedAt))
-            {
-                _items[category].Add(item);
-            }
-
+            _items[category].ReplaceAll(snapshot.Items
+                .Where(item => item.Category == category)
+                .OrderByDescending(item => item.IsPinned)
+                .ThenBy(item => item.Order)
+                .ThenBy(item => item.CreatedAt));
             Reindex(category);
         }
     }
@@ -647,13 +648,7 @@ public sealed class BoardService
         BoardCategory category,
         IEnumerable<BoardItem> items)
     {
-        var collection = _items[category];
-        collection.Clear();
-        foreach (var item in items)
-        {
-            collection.Add(item);
-        }
-
+        _items[category].ReplaceAll(items);
         Reindex(category);
     }
 
@@ -661,34 +656,44 @@ public sealed class BoardService
         BoardCategory category,
         IEnumerable<BoardItem> items)
     {
+        var desired = items as IList<BoardItem> ?? items.ToList();
         var collection = _items[category];
-        var desired = items.ToArray();
-        if (desired.Length != collection.Count)
+        if (!PreservesMembership(collection, desired))
         {
             throw new InvalidOperationException("A reorder must preserve category membership.");
         }
 
-        for (var targetIndex = 0; targetIndex < desired.Length; targetIndex++)
+        collection.ReplaceAll(desired);
+        Reindex(category);
+    }
+
+    /// <summary>成员一致性校验：目标序列与本分类包含完全相同的条目集合（O(N)）。</summary>
+    private static bool PreservesMembership(IList<BoardItem> current, IList<BoardItem> desired)
+    {
+        if (desired.Count != current.Count)
         {
-            var item = desired[targetIndex];
-            if (collection[targetIndex].Id == item.Id)
-            {
-                continue;
-            }
+            return false;
+        }
 
-            var currentIndex = IndexOf(collection, item.Id);
-            if (currentIndex < 0)
+        var ids = new HashSet<Guid>();
+        foreach (var item in desired)
+        {
+            // 重复 Id 在合法面板状态中不存在；出现重复直接视为破坏成员关系。
+            if (!ids.Add(item.Id))
             {
-                throw new InvalidOperationException("A reorder must preserve category membership.");
-            }
-
-            if (currentIndex != targetIndex)
-            {
-                collection.Move(currentIndex, targetIndex);
+                return false;
             }
         }
 
-        Reindex(category);
+        for (var index = 0; index < current.Count; index++)
+        {
+            if (!ids.Contains(current[index].Id))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void Reindex(BoardCategory category)

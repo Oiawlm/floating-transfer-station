@@ -281,7 +281,7 @@ public sealed class ImageThumbnailConverterTests
     }
 
     [STATestMethod]
-    public void Convert_ConcurrentRequestsShareFrozenPreviewsWithoutCacheRaces()
+    public void Convert_ConcurrentRequestsSettleOnOneCachedInstancePerWidth()
     {
         using var directory = new TestDirectory();
         var path = Path.Combine(directory.Root, "concurrent.png");
@@ -304,19 +304,27 @@ public sealed class ImageThumbnailConverterTests
             Assert.IsNotNull(image);
             Assert.IsTrue(image.IsFrozen);
             Assert.AreEqual(index % 2 == 0 ? 512 : 300, image.PixelWidth);
-            Assert.AreSame(images[index % 2], image);
         }
+
+        // 并发未命中各自解码（解码在锁外），但收敛后同一宽度只剩一个缓存实例。
+        var canonicalWide = (BitmapSource?)converter.Convert(path, typeof(BitmapSource), 512, CultureInfo.InvariantCulture);
+        var canonicalNarrow = (BitmapSource?)converter.Convert(path, typeof(BitmapSource), 300, CultureInfo.InvariantCulture);
+        Assert.IsNotNull(canonicalWide);
+        Assert.IsNotNull(canonicalNarrow);
+        Assert.AreSame(canonicalWide, converter.Convert(path, typeof(BitmapSource), 512, CultureInfo.InvariantCulture));
+        Assert.AreSame(canonicalNarrow, converter.Convert(path, typeof(BitmapSource), 300, CultureInfo.InvariantCulture));
+        Assert.AreNotSame(canonicalWide, canonicalNarrow);
 
         File.Delete(path);
         Assert.IsFalse(File.Exists(path));
     }
 
     [STATestMethod]
-    public void Convert_CacheEvictsLeastRecentlyUsedPreviewAfterSixtyFourEntries()
+    public void Convert_CacheEvictsLeastRecentlyUsedPreviewAfterTwoHundredFiftySixEntries()
     {
         using var directory = new TestDirectory();
         var converter = new ImageThumbnailConverter();
-        var paths = Enumerable.Range(0, 65)
+        var paths = Enumerable.Range(0, 257)
             .Select(index => Path.Combine(directory.Root, $"cached-{index}.png"))
             .ToArray();
         foreach (var path in paths)
@@ -326,23 +334,24 @@ public sealed class ImageThumbnailConverterTests
 
         var first = converter.Convert(paths[0], typeof(BitmapSource), 32, CultureInfo.InvariantCulture);
         var second = converter.Convert(paths[1], typeof(BitmapSource), 32, CultureInfo.InvariantCulture);
-        foreach (var path in paths.Skip(2).Take(62))
+        foreach (var path in paths.Skip(2).Take(254))
         {
             Assert.IsNotNull(converter.Convert(path, typeof(BitmapSource), 32, CultureInfo.InvariantCulture));
         }
 
         Assert.AreSame(first, converter.Convert(paths[0], typeof(BitmapSource), 32, CultureInfo.InvariantCulture));
-        Assert.IsNotNull(converter.Convert(paths[64], typeof(BitmapSource), 32, CultureInfo.InvariantCulture));
+        Assert.IsNotNull(converter.Convert(paths[256], typeof(BitmapSource), 32, CultureInfo.InvariantCulture));
 
         Assert.AreSame(first, converter.Convert(paths[0], typeof(BitmapSource), 32, CultureInfo.InvariantCulture));
         Assert.AreNotSame(second, converter.Convert(paths[1], typeof(BitmapSource), 32, CultureInfo.InvariantCulture));
     }
 
     [STATestMethod]
-    public void Convert_CacheEvictsPreviewsAboveThirtyTwoMebibytes()
+    public void Convert_CacheEvictsPreviewsAboveSixtyFourMebibytes()
     {
         using var directory = new TestDirectory();
-        var paths = Enumerable.Range(0, 3)
+        // 每张 2048×2048 解码后 16 MiB；64 MiB 恰好容纳 4 张，第 5 张触发 LRU 逐出。
+        var paths = Enumerable.Range(0, 5)
             .Select(index => Path.Combine(directory.Root, $"large-cached-{index}.png"))
             .ToArray();
         foreach (var path in paths)
@@ -353,8 +362,11 @@ public sealed class ImageThumbnailConverterTests
         var converter = new ImageThumbnailConverter();
         var first = converter.Convert(paths[0], typeof(BitmapSource), 2048, CultureInfo.InvariantCulture);
         var second = converter.Convert(paths[1], typeof(BitmapSource), 2048, CultureInfo.InvariantCulture);
-        Assert.AreSame(first, converter.Convert(paths[0], typeof(BitmapSource), 2048, CultureInfo.InvariantCulture));
         Assert.IsNotNull(converter.Convert(paths[2], typeof(BitmapSource), 2048, CultureInfo.InvariantCulture));
+        Assert.IsNotNull(converter.Convert(paths[3], typeof(BitmapSource), 2048, CultureInfo.InvariantCulture));
+        Assert.AreSame(first, converter.Convert(paths[0], typeof(BitmapSource), 2048, CultureInfo.InvariantCulture));
+
+        Assert.IsNotNull(converter.Convert(paths[4], typeof(BitmapSource), 2048, CultureInfo.InvariantCulture));
 
         Assert.AreSame(first, converter.Convert(paths[0], typeof(BitmapSource), 2048, CultureInfo.InvariantCulture));
         Assert.AreNotSame(second, converter.Convert(paths[1], typeof(BitmapSource), 2048, CultureInfo.InvariantCulture));

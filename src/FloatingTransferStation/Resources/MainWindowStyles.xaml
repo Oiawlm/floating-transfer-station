@@ -892,7 +892,6 @@
             <Grid Background="Transparent">
               <controls:AsyncThumbnailImage Height="120"
                      SourcePath="{Binding ImageAbsolutePath}"
-                     DecodeWidth="512"
                      Stretch="Uniform">
                 <Image.Style>
                   <Style TargetType="Image">
@@ -907,7 +906,7 @@
                 </Image.Style>
               </controls:AsyncThumbnailImage>
 
-              <TextBlock Text="{Binding Text}"
+              <TextBlock Text="{Binding PreviewText}"
                          FontFamily="{StaticResource InterfaceFontFamily}"
                          FontSize="14"
                          FontWeight="Normal"
