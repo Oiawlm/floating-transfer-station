@@ -9,6 +9,10 @@
        由 DesignThemeManager 在运行时整体替换；本字典内一律以 DynamicResource 引用。 -->
   <FontFamily x:Key="InterfaceFontFamily">Segoe UI Variable, Segoe UI</FontFamily>
   <GridLength x:Key="CardOperationColumnWidth">30</GridLength>
+  <!-- 文字卡正文右侧排他内缩（派生资源，唯一数值来源）：两列 CardOperationColumnWidth
+       （置顶/选择按钮条）+ 4 DIP 间隙。对半分区的内容视觉层全宽、按钮悬停才淡入，
+       正文不内缩就会与角按钮条争用同一批像素（1.20.0）；命中层与图片卡不受影响。 -->
+  <Thickness x:Key="CardTextReservedRightInset" Left="0" Top="0" Right="64" Bottom="0" />
   <CornerRadius x:Key="ShellCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="HeaderActionCornerRadius">7</CornerRadius>
@@ -924,6 +928,10 @@
                       <DataTrigger Binding="{Binding Kind}"
                                    Value="{x:Static models:BoardItemKind.Text}">
                         <Setter Property="Visibility" Value="Visible" />
+                        <!-- 仅文字态右侧内缩：为右上角操作按钮条预留排他空间（派生资源，
+                             见 CardTextReservedRightInset），换行与省略在按钮条左缘之前完成。 -->
+                        <Setter Property="Margin"
+                                Value="{StaticResource CardTextReservedRightInset}" />
                       </DataTrigger>
                     </Style.Triggers>
                   </Style>
