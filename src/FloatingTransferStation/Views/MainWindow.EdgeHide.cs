@@ -17,7 +17,6 @@ public partial class MainWindow : Window
     // 回位轮询节奏：业界主流 ~100ms（TrafficMonitor、winautohidev2 等一致）；
     // 仅 Docked 期间运行，窗口离屏收不到鼠标事件，轮询是回位检测的唯一可靠途径。
     private static readonly TimeSpan EdgeHideRecallPollInterval = TimeSpan.FromMilliseconds(100);
-    // 构建产物哈希轮换注释：Smart App Control 云判定偶发误拦新产物，递增本行后重建即换哈希。v1。
 
     // 回位驻留时长：连续命中 ≥200ms 才恢复，过滤扫边误触（调研经验值）。
     // 右缘滚动条拖拽等驻留动作可能意外唤回——一次性语义把代价限制为一次，属
@@ -117,7 +116,9 @@ public partial class MainWindow : Window
     /// 回位恢复：一次矩形变更移回隐藏时刻的原放置。面板本就未收起，指针此刻在
     /// 原窗口位置（回位区内），随后的 Root_MouseEnter 与既有展开/保持机制自然
     /// 接管——「移回原位自动展开」由此成立，无需任何新展开逻辑。恢复即解除
-    /// 一次性待命并停轮询。
+    /// 一次性待命并停轮询。混合 DPI 多屏下离屏期间 WM_DPICHANGED 可能改变窗口
+    /// DPI 上下文，恢复经原 DIP 放置折算的落点偏差由落回原显示器时的
+    /// WM_DPICHANGED 自校正兜底（回位触发判定本身是物理像素直比，不受影响）。
     /// </summary>
     private void RestoreFromEdgeHide()
     {
