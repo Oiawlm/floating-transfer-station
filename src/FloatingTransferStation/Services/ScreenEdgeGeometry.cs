@@ -54,6 +54,26 @@ public static class ScreenEdgeGeometry
         return WindowSettings.EdgeBleed;
     }
 
+    /// <summary>
+    /// 枚举全部显示器边界（虚拟屏幕物理像素）。贴边隐藏以此求「所有显示器
+    /// 最右缘」；原生枚举失败返回空列表，调用方自行回退。
+    /// </summary>
+    public static IReadOnlyList<MonitorBounds> AllMonitors()
+    {
+        var monitors = new List<MonitorBounds>();
+        return NativeMethods.EnumDisplayMonitors(
+            0,
+            0,
+            (_, _, ref bounds, _) =>
+            {
+                monitors.Add(MonitorBounds.FromNativeRect(bounds));
+                return true;
+            },
+            0)
+            ? monitors
+            : Array.Empty<MonitorBounds>();
+    }
+
     private static double GetRightEdgeBleed(nint windowHandle)
     {
         try
@@ -75,23 +95,14 @@ public static class ScreenEdgeGeometry
                 return 0d;
             }
 
-            var monitors = new List<MonitorBounds>();
-            var currentBounds = MonitorBounds.FromNativeRect(info.Monitor);
-            if (!NativeMethods.EnumDisplayMonitors(
-                    0,
-                    0,
-                    (_, _, ref bounds, _) =>
-                    {
-                        monitors.Add(MonitorBounds.FromNativeRect(bounds));
-                        return true;
-                    },
-                    0))
+            var monitors = AllMonitors();
+            if (monitors.Count == 0)
             {
                 return 0d;
             }
 
             return RightEdgeBleedFor(
-                currentBounds,
+                MonitorBounds.FromNativeRect(info.Monitor),
                 MonitorBounds.FromNativeRect(info.Work),
                 monitors);
         }

@@ -1,6 +1,6 @@
 # 文档索引
 
-当前规则以[架构说明](architecture.md)、[项目指南](../PROJECT_GUIDE.md)和[贡献指南](../CONTRIBUTING.md)为准。版本发布使用[发布指南](releasing.md)，尚未稳定复现的问题见[现场观察](observations.md)。界面颜色、圆角与动效规范见[设计规范](design.md)。夜间持续改进循环（提案、决策框架、设计冻结清单与候选池）见[持续改进循环](improvement-loop.md)。阶段性研究与文档评审材料在 [research/](research/)；跨窗口交接提示词在 [handoff/](handoff/)。README 视觉化的资产规划、录制管线选型与执行交接见 [research/2026-09-25-readme-visual-plan.md](research/2026-09-25-readme-visual-plan.md) 等三份材料与 [handoff/2026-09-25-readme-visuals-execution-prompt.md](handoff/2026-09-25-readme-visuals-execution-prompt.md)；演示资产清单与再生步骤见 [images/README.md](images/README.md)。
+当前规则以[架构说明](architecture.md)、[项目指南](../PROJECT_GUIDE.md)和[贡献指南](../CONTRIBUTING.md)为准。版本发布使用[发布指南](releasing.md)，尚未稳定复现的问题见[现场观察](observations.md)。界面颜色、圆角与动效规范见[设计规范](design.md)；已定型、不得回退的行为契约（断言/由来/锁定测试/关联）见[设计契约清单](design-contracts.md)。夜间持续改进循环（提案、决策框架、冻结清单指针与候选池）见[持续改进循环](improvement-loop.md)。阶段性研究与文档评审材料在 [research/](research/)；跨窗口交接提示词在 [handoff/](handoff/)。README 视觉化的资产规划、录制管线选型与执行交接见 [research/2026-09-25-readme-visual-plan.md](research/2026-09-25-readme-visual-plan.md) 等三份材料与 [handoff/2026-09-25-readme-visuals-execution-prompt.md](handoff/2026-09-25-readme-visuals-execution-prompt.md)；演示资产清单与再生步骤见 [images/README.md](images/README.md)。
 
 设计和计划是当时的决策记录。下面的提交与发布版本说明落地位置；历史计划中的未勾选步骤保持原样，不表示今天仍需重新执行，也不替代人工验收证据。
 
@@ -24,6 +24,7 @@
 | 撤销与回收站（草案） | [设计草案](superpowers/specs/2026-09-25-undo-recycle-bin-design.md) | 切片 1 已随 1.11.0 落地；回收站未排期 | 1.11.0（部分） |
 | 键盘直达（草案） | [设计草案](superpowers/specs/2026-09-25-keyboard-direct-access-design.md) | 未排期，在候选池 | 未实施 |
 | 插入指示条闪烁 + 卡片文字清晰度 | [设计](superpowers/specs/2026-09-25-indicator-flicker-text-clarity-design.md) | [计划](superpowers/plans/2026-09-25-indicator-flicker-text-clarity.md) | 1.11.3 |
+| 卡片文字避让、一次性贴边隐藏与设计契约沉淀 | [设计](superpowers/specs/2026-10-07-text-ops-avoidance-and-edge-hide-design.md) | [计划](superpowers/plans/2026-10-07-text-ops-avoidance-and-edge-hide.md) | 1.20.0 |
 
 批量置顶早期设计中的“恢复最初选择”，后来受到 Esc 设计中“用户已取消选择则不恢复”的修订；隐藏状态下 Ctrl+P 的约束由 1.4.1 守卫设计补充。理解当前行为时需要连同后续修订一起阅读。
 

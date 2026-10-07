@@ -281,6 +281,9 @@ public partial class MainWindow : Window
         _expandIntentTimer.Stop();
         _collapseTimer.Stop();
         _panelState.CollapseForExternalDrop();
+        // 贴边隐藏待命只在展开态有意义：外部拖放把面板换成轨道几何即解除，
+        // 不留悬置 armed（未进入 Docked）。
+        DisarmEdgeHide();
         _viewModel.SetExternalDropRailVisible(true);
         _viewModel.SetPanelExpanded(false);
         ApplyPlacement(WindowController.CategoryRail(CurrentWorkArea(), _settings, _rightEdgeBleed));

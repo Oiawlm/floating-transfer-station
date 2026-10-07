@@ -169,6 +169,26 @@
                         StrokeLineJoin="Round" />
                 </Button>
 
+                <Button x:Name="EdgeHideButton"
+                        Style="{StaticResource HeaderActionButtonStyle}"
+                        ToolTip="一次性移出屏幕：鼠标离开后收进屏幕边缘，移回原位自动展开"
+                        AutomationProperties.Name="一次性移出屏幕：鼠标离开后收进屏幕边缘，移回原位自动展开"
+                        Click="EdgeHideButton_Click">
+                  <!-- 「箭头收入右缘」语汇（→|）：箭头指向右缘竖线，直译一次性贴边隐藏；
+                       描边图标显式 14.5×14.5 + 1.5 描边（光学足印约 16 DIP），与暂停符/搜索/恢复默认按钮同一规范。 -->
+                  <Path Data="M3,12 L15,12 M11,8 L15,12 L11,16 M19,5 L19,19"
+                        Width="14.5"
+                        Height="14.5"
+                        Stretch="Uniform"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                        StrokeThickness="1.5"
+                        StrokeStartLineCap="Round"
+                        StrokeEndLineCap="Round"
+                        StrokeLineJoin="Round" />
+                </Button>
+
                 <Button x:Name="SearchButton"
                         Style="{StaticResource HeaderActionButtonStyle}"
                         ToolTip="搜索当前分类"

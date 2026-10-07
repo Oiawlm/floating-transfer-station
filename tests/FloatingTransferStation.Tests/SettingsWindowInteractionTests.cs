@@ -244,8 +244,12 @@ public sealed class SettingsWindowInteractionTests
             var actions = (StackPanel)window.FindName("HeaderActions");
             var buttons = actions.Children.OfType<Button>().ToArray();
             Assert.AreEqual("PanelHoldButton", buttons[0].Name, "保持展开开关位于操作区最左。");
-            Assert.AreEqual("SearchButton", buttons[1].Name, "搜索入口紧随保持展开开关(2026-09-25 设计草案:放大镜在齿轮左侧)。");
-            Assert.AreEqual("SettingsButton", buttons[2].Name, "齿轮与红色清空按钮保持距离。");
+            Assert.AreEqual(
+                "EdgeHideButton",
+                buttons[1].Name,
+                "一次性贴边隐藏紧随保持展开开关（1.20.0：同为「在场行为」组）。");
+            Assert.AreEqual("SearchButton", buttons[2].Name, "搜索入口在齿轮左侧(2026-09-25 设计草案)。");
+            Assert.AreEqual("SettingsButton", buttons[3].Name, "齿轮与红色清空按钮保持距离。");
             Assert.AreEqual("DeleteContentButton", buttons[^1].Name);
 
             gear.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));

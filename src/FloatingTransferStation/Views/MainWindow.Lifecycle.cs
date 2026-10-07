@@ -231,6 +231,7 @@ public partial class MainWindow : Window
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
         _topmostTimer.Stop();
+        _edgeHideRecallTimer.Stop();
         if (_allowClose)
         {
             StopClipboardListening();
