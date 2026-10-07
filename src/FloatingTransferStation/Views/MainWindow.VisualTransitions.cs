@@ -323,6 +323,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 一次性贴边隐藏融入既有收起节奏：armed 且抑制复用成立时整窗移出屏幕，
+        // 不走收起；否则既有收起流程原样。
+        if (_edgeHide.IsArmed && TryCommitEdgeHide())
+        {
+            return;
+        }
+
         SaveCurrentScrollOffset();
         if (!ClientAreaAnimationsEnabled)
         {
@@ -416,6 +423,8 @@ public partial class MainWindow : Window
         _pendingCollapsedVisualHandoff = null;
         ApplyPlacement(placement);
         _viewModel.SetPanelExpanded(false);
+        // 贴边隐藏待命只在展开态有意义：面板已收起（且未进入 Docked）即解除。
+        DisarmEdgeHide();
         UpdateStatusPresentation();
         WindowShell.Opacity = 1d;
         WindowShell.IsHitTestVisible = true;

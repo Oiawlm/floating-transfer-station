@@ -162,6 +162,8 @@ public partial class MainWindow : Window
         _statusTimer.Tick += StatusTimer_Tick;
         _topmostTimer = new DispatcherTimer { Interval = TopmostReassertInterval };
         _topmostTimer.Tick += (_, _) => ReassertTopmost();
+        _edgeHideRecallTimer = new DispatcherTimer { Interval = EdgeHideRecallPollInterval };
+        _edgeHideRecallTimer.Tick += EdgeHideRecallTimer_Tick;
         InitializeDailyReviewEditing();
         InitializeCategoryNameEditing();
         InitializePanelTextEditing();
@@ -218,14 +220,25 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// 全局快捷键唤起：展开面板并定位到当前默认接收分类；已展开或拖放轨道
-    /// 可见时保持现状，避免打断正在进行的交互。
+    /// 可见时保持现状，避免打断正在进行的交互。贴边隐藏离屏期间热键是找回
+    /// 兜底：立即回原位并解除（面板本就展开，不重复展开序列）。
     /// </summary>
     internal void OnGlobalHotkeyPressed()
     {
         // 用户显式唤起时立即抬到置顶带最高层，不等周期重申。
         ReassertTopmost();
-        if (_isClosing ||
-            _viewModel.IsPanelExpanded ||
+        if (_isClosing)
+        {
+            return;
+        }
+
+        if (_edgeHide.IsDocked)
+        {
+            RestoreFromEdgeHide();
+            return;
+        }
+
+        if (_viewModel.IsPanelExpanded ||
             _viewModel.IsExternalDropRailVisible)
         {
             return;
@@ -355,7 +368,7 @@ public partial class MainWindow : Window
         {
             // 任务栏停靠侧等改变工作区的系统设置只广播 WM_SETTINGCHANGE（不伴随
             // WM_DISPLAYCHANGE），右缘裁切判定会停在旧值；任何系统参数变化都重估。
-            Dispatcher.BeginInvoke(RefreshEdgeBleed);
+            Dispatcher.BeginInvoke(OnDisplayEnvironmentChanged);
 
             if (System.Runtime.InteropServices.Marshal.PtrToStringUni(lParam)
                     is { Length: > 0 } section &&
@@ -382,10 +395,25 @@ public partial class MainWindow : Window
 
         if (!_isClosing && message == NativeMethods.WmDisplayChange)
         {
-            Dispatcher.BeginInvoke(RefreshEdgeBleed);
+            Dispatcher.BeginInvoke(OnDisplayEnvironmentChanged);
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// 显示器/工作区环境变化（WM_DISPLAYCHANGE、WM_SETTINGCHANGE）：贴边隐藏的
+    /// 离屏窗口在新显示器布局下可能失去回位路径，立即恢复（防找不到窗口）；
+    /// 随后重估右缘裁切并按当前面板状态重新贴齐。
+    /// </summary>
+    private void OnDisplayEnvironmentChanged()
+    {
+        if (_edgeHide.IsDocked)
+        {
+            RestoreFromEdgeHide();
+        }
+
+        RefreshEdgeBleed();
     }
 
     /// <summary>

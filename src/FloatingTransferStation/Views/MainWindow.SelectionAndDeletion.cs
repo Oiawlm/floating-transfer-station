@@ -293,8 +293,11 @@ public partial class MainWindow : Window
 
     private void SetHeaderActionsVisible(bool visible)
     {
-        FadeAnimation.SetIsActive(HeaderActions, visible);
-        HeaderActions.IsHitTestVisible = visible;
+        // 贴边隐藏待命期间头部常显：鼠标离开恰是最需要看到待命指示的时刻
+        // （否则待命生效的瞬间就是按钮淡出的瞬间，用户无从得知已进入待命）。
+        var effective = visible || _edgeHide.IsArmed;
+        FadeAnimation.SetIsActive(HeaderActions, effective);
+        HeaderActions.IsHitTestVisible = effective;
     }
 
     private async void ResetWindowButton_Click(object sender, RoutedEventArgs e)

@@ -73,6 +73,23 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetMonitorInfoW(nint monitor, ref MonitorInfo info);
 
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct Point
+    {
+        public int X;
+        public int Y;
+    }
+
+    // 物理像素光标位置（虚拟屏幕坐标系）：贴边隐藏回位轮询用，与显示器矩形
+    // 同坐标系直比，不做运行时 DPI 换算（窗口离屏后其 CompositionTarget 不可信）。
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetCursorPos(out Point point);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetWindowRect(nint hwnd, out NativeRect rectangle);
+
     internal delegate bool MonitorEnumProc(nint monitor, nint deviceContext, ref NativeRect bounds, nint data);
 
     [DllImport("user32.dll", SetLastError = true)]

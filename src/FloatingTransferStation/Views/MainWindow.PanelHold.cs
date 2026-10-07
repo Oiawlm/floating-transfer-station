@@ -16,7 +16,7 @@ public partial class MainWindow : Window
             UpdatePanelHoldButton();
             if (!_isClosing)
             {
-                ReconcileSurfaceAfterPanelHold();
+                ReconcileSurfaceAfterSuppressionRelease();
             }
 
             return;
@@ -41,8 +41,8 @@ public partial class MainWindow : Window
         AutomationProperties.SetName(PanelHoldButton, label);
     }
 
-    /// <summary>解除保持后的表面重估：指针仍在面板内则维持展开，否则按既有节奏恢复自动收起。</summary>
-    private void ReconcileSurfaceAfterPanelHold()
+    /// <summary>解除「在场行为」抑制后的表面重估：指针仍在面板内则维持展开，否则按既有节奏恢复自动收起。</summary>
+    private void ReconcileSurfaceAfterSuppressionRelease()
     {
         if (IsMouseOver)
         {

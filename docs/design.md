@@ -118,8 +118,13 @@
 - 窗口壳弃用 `AllowsTransparency` 分层透明，改用 `WindowChrome`（`GlassFrameThickness=-1` 整窗玻璃帧）承载 DWM 材质，经 `DWMWA_SYSTEMBACKDROP_TYPE` 应用 Mica；材质不可用的旧系统回退到不透明壳色。
 - 圆角由 DWM（`DWMWA_WINDOW_CORNER_PREFERENCE=ROUND`）裁剪，内容层以 `DesignTokens.DwmCornerRadius = 8` 四角同步自裁剪，保证渲染位图与屏幕一致。贴右缘时窗口整体越出工作区一个 `WindowSettings.EdgeBleed`（右缘屏幕裁切），可见右缘平直、左缘保留圆角；内容层按裁切量右内缩，可见内容完整落在屏幕内（1.11.1 起：轨道右缘对齐工作区右缘，越出区只承载窗壳）；右贴任务栏或右邻显示器时回退贴齐，`WM_DISPLAYCHANGE` 后重估。
 - 壳表面为半透明 Mica 色调（浅 `#CCF7F8FA`、深 `#CC202021`，`WindowShellTintHex` / `WindowShellTintDarkHex`），深浅切换时同步 `DWMWA_USE_IMMERSIVE_DARK_MODE`。
-- **迁移原子性（1.8.1 起）**：一次面板状态迁移（展开/收起/拖放轨道揭示）只允许一次窗口矩形变更。已创建 HWND 的窗口经单次 Win32 `SetWindowPos` 应用终态矩形（物理像素；两条锚定边各自取整后相减，右缘含裁切量不因取整漂移），随后在 `WM_WINDOWPOSCHANGING` 守卫下对齐 WPF 尺寸/位置账本——守卫把对齐期间任何中间矩形改写回终态，陈旧 DP 混合值不会重推出可见中间态。构造期（HWND 未创建）保留纯属性路径。STA 契约：观察到的每个窗口矩形 ∈ {初始, 终态}（`*ChangesTheObservedWindowRectangleOnlyBetweenStableStates` 系列锁定）。禁止用 `SetWindowRgn` 或动效/延迟/隐藏窗口装饰性掩盖。
+- **迁移原子性（1.8.1 起）**：一次面板状态迁移只允许一次窗口矩形变更。已创建 HWND 的窗口经单次 Win32 `SetWindowPos` 应用终态矩形（物理像素；两条锚定边各自取整后相减，右缘含裁切量不因取整漂移），随后在 `WM_WINDOWPOSCHANGING` 守卫下对齐 WPF 尺寸/位置账本——守卫把对齐期间任何中间矩形改写回终态，陈旧 DP 混合值不会重推出可见中间态。构造期（HWND 未创建）保留纯属性路径。STA 契约：观察到的每个窗口矩形 ∈ {初始, 终态}（`*ChangesTheObservedWindowRectangleOnlyBetweenStableStates` 系列锁定）。禁止用 `SetWindowRgn` 或动效/延迟/隐藏窗口装饰性掩盖。
 - 本机预览与截图取证：设 `FTS_PREVIEW_DATA_DIR`（隔离数据目录、独立单实例锁）与可选 `FTS_PREVIEW_THEME=dark|light` 启动，不影响已安装应用。
+
+## 五·D、卡片文字避让与一次性贴边隐藏（1.20.0）
+
+- **文字避让操作列（1.20.0 起）**：文字卡正文右侧为右上角操作按钮条预留排他空间，任何时刻（悬停/非悬停）零像素争用。内缩量唯一来源是 WPF 派生资源 `CardTextReservedRightInset`（两列 `CardOperationColumnWidth` 30×2 + 4 DIP 间隙 = 64），不得在别处写死第二个数值；命中层对半分区与图片卡全幅不变。280px 最窄面板下每行文字约损失 21% 宽度，是消除像素争用的确定代价。
+- **一次性贴边隐藏（1.20.0 起）**：头部按钮（暂停符右侧、「箭头收入右缘」图标）切换语义；待命期间按钮转强调色、头部操作区常显（鼠标离开恰是最需要看到待命指示的时刻）。隐藏 = 整窗**同尺寸纯移动**到所有显示器右缘之外（含 DWM 阴影余量 32 物理像素，目标矩形与每一个显示器零交集），面板保持展开、内容冻结，沿用迁移原子性（隐藏与恢复各一次矩形变更）；触发融入既有 250ms 收起节奏，抑制条件复用 `PanelStateMachine.WouldCollapse`。回位区 = 隐藏时刻屏幕内可见矩形外扩 8 物理像素，以物理像素保存（此后不做运行时 DPI 换算），光标驻留 ≥200ms 恢复；恢复即回原位原形并自动解除（一次性），热键与显示器变化兜底。图标遵守 14.5×14.5 + 1.5 描边规范；窗口位移不做动画（全仓放置迁移一致）。行为契约全文见[设计契约清单](design-contracts.md) 第 16、17 条。
 
 ## 六、动效原则（评审基准）
 
