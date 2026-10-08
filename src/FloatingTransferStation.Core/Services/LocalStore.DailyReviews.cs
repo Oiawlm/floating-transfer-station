@@ -38,34 +38,6 @@ public sealed partial class LocalStore
         return new DailyReviewDocument(date, content, true, Fingerprint(content));
     }
 
-    public async Task<IReadOnlyList<DateOnly>> ListDatesAsync(
-        CancellationToken cancellationToken = default)
-    {
-        if (!Directory.Exists(ReviewsDirectory))
-        {
-            return [];
-        }
-
-        var dates = new List<DateOnly>();
-        foreach (var path in Directory.EnumerateFiles(ReviewsDirectory, "*.md", SearchOption.TopDirectoryOnly))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!TryParseDate(Path.GetFileNameWithoutExtension(path), out var date))
-            {
-                continue;
-            }
-
-            var content = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrWhiteSpace(content))
-            {
-                dates.Add(date);
-            }
-        }
-
-        dates.Sort((left, right) => right.CompareTo(left));
-        return dates;
-    }
-
     public async Task SaveAsync(
         DateOnly date,
         string content,

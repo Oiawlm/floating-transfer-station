@@ -1,18 +1,17 @@
 # 架构说明
 
-悬浮中转站使用 .NET 10：Windows 界面为 WPF，Mac 候选界面为 Avalonia。两端引用同一个 `FloatingTransferStation.Core`，保持同一份分类、顺序、置顶和保存规则。
+悬浮中转站使用 .NET 10：Windows 界面为 WPF，业务核心在 `FloatingTransferStation.Core`，保持同一份分类、顺序、置顶和保存规则。2026-10-08 起 Mac 端永久停止开发并已从仓库移除；历史 Release 与历史档案原样保留。
 
 ## 平台边界
 
 - `src/FloatingTransferStation.Core/`：共享数据模型、ViewModels、BoardService/BoardMutationService、LocalStore、原子写入、路径检查、图片输入限制与格式检查。
-- `LocalStore` 同时提供 `IDailyReviewStore`：按本地日期读写 `reviews/yyyy-MM-dd.md`，串行化原子保存，并通过目录监听向两端窗口报告外部变更。
+- `LocalStore` 同时提供 `IDailyReviewStore`：按本地日期读写 `reviews/yyyy-MM-dd.md`，串行化原子保存，并通过目录监听向窗口报告外部变更。
 - `src/FloatingTransferStation/`：保留 WPF 窗口、Windows 剪贴板格式、注册表、安装器和系统集成；启动显式向共享 `AppPaths` 传入 Windows 数据目录设置。
-- `src/FloatingTransferStation.Mac/`：Avalonia 窗口和系统拖放；NSPasteboard 只桥接变化序号、类型和编码图片。读取前后核对代际并跳过隐私标记；图片归一化在后台执行，保存/回滚复用共享操作门。窗口加载完成前禁用内容操作，关闭等待加载和已登记的改名、导入及内容保存。
-- `tests/FloatingTransferStation.Core.Tests/`：链接 Windows 已有纯业务测试，在两个平台执行；额外覆盖 Unix 符号链接、大小写和数据恢复。`FloatingTransferStation.Mac.Tests` 覆盖 Mac 选择、传输与窗口生命周期。
+- `tests/FloatingTransferStation.Core.Tests/`：共享核心业务回归；覆盖原子保存的损坏恢复、受管图片路径形状（正斜杠/反斜杠）与大小写语义。
 
-Mac 数据与 Windows 数据独立，不提供自动跨设备同步。`board.json`、`settings.json` 与 `reviews/*.md` 格式继续共享；“两端同步”指功能维护和版本构建同步。复盘文件是普通 Markdown，可由 Obsidian 直接打开。
+`board.json`、`settings.json` 与 `reviews/*.md` 格式保持稳定。复盘文件是普通 Markdown，可由 Obsidian 直接打开。
 
-两端视觉层共用同一组设计 token 数值（唯一来源是共享 Core 的 `DesignTokens`，人类可读规范见 [设计规范](design.md)），由 WPF 与 Avalonia 各自渲染；不引入共享 UI 框架，允许各平台用自己的机制实现同样的时长、曲线与色板。
+视觉层使用同一组设计 token 数值（唯一来源是共享 Core 的 `DesignTokens`，人类可读规范见 [设计规范](design.md)），由 WPF 渲染。
 
 ## 主要责任
 

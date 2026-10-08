@@ -1,9 +1,8 @@
 namespace FloatingTransferStation.Design;
 
 /// <summary>
-/// 双端共用的设计 token 唯一数值来源。WPF 资源字典与 Mac 端常量镜像这些值，
-/// 相等性由 Windows 端 STA 测试锁定（Mac 端直接引用本类常量，编译期一致）。
-/// 人类可读规范见 docs/design.md；修改任何值必须同步该文档与两端镜像。
+/// 设计 token 唯一数值来源。WPF 资源字典引用这些值。
+/// 人类可读规范见 docs/design.md；修改任何值必须同步该文档。
 /// </summary>
 public static class DesignTokens
 {

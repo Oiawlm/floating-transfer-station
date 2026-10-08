@@ -21,14 +21,13 @@ public sealed class DailyReviewStoreTests
         Assert.AreEqual(date, loaded.Date);
         Assert.AreEqual("# 今天\n\n完成了功能", loaded.Content);
         Assert.IsTrue(loaded.Exists);
-        CollectionAssert.AreEqual(new[] { date }, (await store.ListDatesAsync()).ToArray());
         CollectionAssert.AreEqual(
             Encoding.UTF8.GetBytes("# 今天\n\n完成了功能"),
             await File.ReadAllBytesAsync(Path.Combine(paths.ReviewsDirectory, "2026-09-14.md")));
     }
 
     [TestMethod]
-    public async Task SaveWhitespace_DeletesFileAndRemovesDateFromList()
+    public async Task SaveWhitespace_DeletesTheDateFile()
     {
         using var directory = new TestDirectory();
         var paths = AppPaths.ForTests(directory.Root);
@@ -39,25 +38,7 @@ public sealed class DailyReviewStoreTests
         await store.SaveAsync(date, " \n\t ");
 
         Assert.IsFalse((await store.LoadAsync(date)).Exists);
-        CollectionAssert.AreEqual(Array.Empty<DateOnly>(), (await store.ListDatesAsync()).ToArray());
         Assert.IsFalse(File.Exists(Path.Combine(paths.ReviewsDirectory, "2026-09-14.md")));
-    }
-
-    [TestMethod]
-    public async Task ListDates_IgnoresInvalidNamesAndEmptyFilesAndSortsDescending()
-    {
-        using var directory = new TestDirectory();
-        var paths = AppPaths.ForTests(directory.Root);
-        Directory.CreateDirectory(paths.ReviewsDirectory);
-        await File.WriteAllTextAsync(Path.Combine(paths.ReviewsDirectory, "2026-09-10.md"), "早");
-        await File.WriteAllTextAsync(Path.Combine(paths.ReviewsDirectory, "2026-09-12.md"), " ");
-        await File.WriteAllTextAsync(Path.Combine(paths.ReviewsDirectory, "not-a-date.md"), "无效");
-        await File.WriteAllTextAsync(Path.Combine(paths.ReviewsDirectory, "2026-09-11.txt"), "错误扩展名");
-        using IDailyReviewStore store = new LocalStore(paths, new AtomicTextWriter());
-
-        CollectionAssert.AreEqual(
-            new[] { new DateOnly(2026, 9, 10) },
-            (await store.ListDatesAsync()).ToArray());
     }
 
     [TestMethod]

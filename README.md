@@ -6,20 +6,17 @@
 
 <p align="center"><em>复制的内容自动入库，拖出去即可交付</em></p>
 
-> 支持 Windows 11 64 位与 macOS 14+（Apple Silicon）。1.7.0 起 Windows 以 Windows 11 为开发与验证目标，Mac 仅维护 Apple Silicon（Intel Mac 的最后可用版本为 1.6.0）。两端代码统一在 main 维护，下载包统一放在同一个 Release。Mac 包已通过原生自动验证，当前仍为未经 Apple 公证的测试版。
+> 支持 Windows 11 64 位。1.7.0 起 Windows 以 Windows 11 为开发与验证目标。2026-10-08 起 Mac 端永久停止开发并已从仓库移除；历史 Release（含 1.6.0 Intel Mac 包与最后的 Apple Silicon 测试包）原样保留在历史发行版中，不撤回、不更新。
 
 ## 下载与安装
 
-在 [1.20.0 统一发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.20.0) 选择你的平台：
+在 [1.21.0 发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.21.0) 下载 Windows 安装程序：
 
 | 平台 | 下载 | 状态 |
 |---|---|---|
-| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.20.0/FloatingTransferStation-Setup-1.20.0.exe) | 正式版 |
-| Mac · Apple Silicon（M 系列芯片） | [Mac ARM64 ZIP](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.20.0/FloatingTransferStation-1.20.0-osx-arm64.zip) | 测试版，未 Apple 公证 |
+| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.21.0/FloatingTransferStation-Setup-1.21.0.exe) | 正式版 |
 
-仍在使用 Intel Mac 的读者可以从 [1.6.0 历史发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.6.0) 获取最后的 Intel 包；该版本保留不撤回，但不再获得更新。
-
-发行页同时提供 `SHA256SUMS.txt`。Windows 和 Mac 都无需另装 .NET。
+发行页同时提供 `SHA256SUMS.txt`。Windows 无需另装 .NET。
 
 ### Windows 安装
 
@@ -29,15 +26,11 @@
 
 本地 Windows 构建产物使用中文名，GitHub Release 为了稳定下载链接使用上面的英文文件名。
 
-### Mac 安装
-
-解压 `FloatingTransferStation-1.20.0-osx-arm64.zip`，将 `FloatingTransferStation.app` 拖入“应用程序”。Mac 包使用临时签名，首次打开可能被 Gatekeeper 阻止；使用前请阅读下方的 Mac 验证与签名说明。
-
-Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自动生成的源码包；Mac 应用包的文件名包含 `osx-arm64`。
+Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自动生成的源码包。
 
 ## 它能做什么
 
-以下为 Windows 正式版说明；Mac 候选版的操作与验证边界见下方“Mac 版”。
+以下为 Windows 正式版说明。
 
 <img src="docs/images/panel-anatomy.png" width="720" alt="面板结构标注：分类标签、复盘标签、卡片正文与置顶/选择按钮、头部按钮组（保持展开、一次性贴边隐藏、搜索、设置、恢复默认、清空）">
 
@@ -101,7 +94,7 @@ Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自
 
 三个板卡分类的默认名称是“图片、文本2、待分类”；“文本1”在升级后变为“复盘”，仍可以修改标签名称。覆盖安装新版本时会保留已保存的分类名称；只有尚未保存名称的分类使用默认值。
 
-复盘标签每天对应一个本地 Markdown 文件，保存在数据目录的 `reviews/yyyy-MM-dd.md`。打开标签即可编辑今天的内容，输入停止后自动保存；Windows 端用工具栏的 `‹` `›` 按天前后切换（1.16.0 起日期下拉已移除），Mac 端保留日期列表选择。文件由 Obsidian 或其他编辑器修改时，应用会刷新；同时编辑会提示保留本地、载入文件或合并。复盘标签不会接收剪贴板或拖放内容。编辑器（含分类改名）持有键盘焦点期间面板不会因指针离开而自动收起——这覆盖中文输入法候选窗出现时系统误报的指针离开；焦点离开后面板按既有节奏收起。
+复盘标签每天对应一个本地 Markdown 文件，保存在数据目录的 `reviews/yyyy-MM-dd.md`。打开标签即可编辑今天的内容，输入停止后自动保存；用工具栏的 `‹` `›` 按天前后切换（1.16.0 起日期下拉已移除）。文件由 Obsidian 或其他编辑器修改时，应用会刷新；同时编辑会提示保留本地、载入文件或合并。复盘标签不会接收剪贴板或拖放内容。编辑器（含分类改名）持有键盘焦点期间面板不会因指针离开而自动收起——这覆盖中文输入法候选窗出现时系统误报的指针离开；焦点离开后面板按既有节奏收起。
 
 <img src="docs/images/review-tab.gif" width="580" alt="演示：在复盘标签输入文字，切到前一天再切回，内容仍在">
 
@@ -136,25 +129,7 @@ Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自
 
 从 1.4.3 或更早版本升级时，先保留原程序目录完成一次原地更新（1.4.4 或更新版本），再运行安装器更换程序目录；内容存储位置可以照常选择。新卸载器会核对当前安装目录的归属，清理失败会提示并保留数据位置登记。修复前已遗留的旧卸载器无法追溯保护，应从 Windows 设置或当前程序目录进入卸载。
 
-## Mac 版
-
-Mac 测试版使用 Avalonia 界面，复用 Windows 的分类、排序、置顶、批量变更和原子保存核心。支持文字/静态图片收集、三个板卡分类改名、按天 Markdown 复盘、连续选择、批量置顶/移动/删除、向外拖出文字或多张图片、右侧置顶与悬停展开。单击板卡分类指定本次运行的默认收集分类；复盘标签不改变收集目标。两端共用 `version.txt`，并在同一个 Release 下载；平台验证与签名状态分别说明。
-
-Mac 使用 `⌘` 替代上述快捷键中的 `Ctrl`；双击分类或 `F2` 改名，编辑时按 `Enter` 保存、`Esc` 取消。`⌘ + V` 或“粘贴”按钮手动收集，`⌘ + C` 复制选中的一段文字或一组图片，`⌘ + Q` 或窗口右上角 × 保存后退出。
-
-- **安装**：`FloatingTransferStation-<版本>-osx-arm64.zip` 用于 Apple Silicon。解压后将 `FloatingTransferStation.app` 拖入“应用程序”，无需另装 .NET。Intel Mac 请使用 1.6.0 历史包，不再获得更新。
-- **数据**：保存在 `~/Library/Application Support/FloatingTransferStation/Data/`。删除应用本身保留数据；需要彻底删除时，先退出并备份，再由用户手动删除这个精确目录。Mac 不读取 Windows 安装登记。
-- **采集边界**：每 500 ms 检查一次剪贴板，规范化/保存期间只处理一个采集，极快连续复制可能无法逐条记录；手动粘贴或重新复制可补收。尊重 NSPasteboard 的隐私/临时内容标记。暂不自动登记登录启动，可在 macOS 系统设置的登录项中添加应用。
-- **验证状态**：本机可交叉编译 Apple Silicon Mac 包，并运行跨平台测试和 Windows 上的 Avalonia 窗口验证。Apple Silicon 的 CI 验证原生启动、窗口截图，以及合成文字、隐私标记、编码图片和文件剪贴板传输；具体结果以对应提交的 CI 和附件为准。第三方软件间拖放仍需 Mac 人工验收；Windows 截图不作为 Mac 实机证据。
-- **签名状态**：统一发行页中的 Mac 测试包来自已通过原生 CI 的临时签名产物，尚无 Developer ID 签名和 Apple 公证，首次打开可能被 Gatekeeper 阻止。下载入口与 Windows 放在一起不代表 Mac 已通过 Apple 公证。
-
-单独生成 Apple Silicon Mac 候选包：
-
-```powershell
-& ./scripts/build-macos.ps1
-```
-
-输出在 `artifacts/macos/<架构>/`，同时提供 SHA-256 和签名/原生验证状态的 JSON。中间 `.app` 打包后自动清理，只保留压缩包；开发时需要保留可加 `-KeepAppBundle`。
+Mac 版已于 2026-10-08 停止开发并从仓库移除；历史 Mac 安装包与说明见 [1.6.0](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.6.0) 与 [1.20.0](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.20.0) 历史发行版（原样保留，不再更新）。
 
 ## 当前限制
 
@@ -179,15 +154,13 @@ Mac 使用 `⌘` 替代上述快捷键中的 `Ctrl`；双击分类或 `F2` 改�
 & .\.tools\dotnet\dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore
 ```
 
-同步生成 Windows 安装包和 Apple Silicon Mac 候选包：
+生成 Windows 安装包：
 
 ```powershell
 & .\scripts\build-release.ps1
 ```
 
 默认构建允许 `CHANGELOG.md` 中保留未发布记录；正式发布使用 `build-release.ps1 -ForRelease`，检查步骤见[发布指南](docs/releasing.md)。开发运行不会登记开机自启，自启项由安装器统一管理。版本变化见[更新记录](CHANGELOG.md)。
-
-Mac 上开发使用 `dotnet test FloatingTransferStation.Mac.slnx -c Release` 和 `dotnet run --project src/FloatingTransferStation.Mac`。Windows 上运行此项目仅预览 Mac 界面，数据保存在独立的 `%LocalAppData%/FloatingTransferStation.MacPreview/Data/`，自动采集关闭。
 
 更完整的改动规则见 [贡献指南](CONTRIBUTING.md)，主要组件与数据流见 [架构说明](docs/architecture.md)，可复现的仓库检查命令见 [项目指南](PROJECT_GUIDE.md)。
 

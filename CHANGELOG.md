@@ -4,6 +4,10 @@
 
 ## 未发布
 
+## 1.21.0
+
+- 面板外形恒定为四角圆角（契约 #6 重写，2026-10-08 用户决策）：根因删除 1.8.0 引入的「右缘越屏裁切」机制（`WindowSettings.EdgeBleed` 常量、`ScreenEdgeGeometry` bleed 判定、放置参数链与内容层右内缩全链移除）——该条件性使可见态外形随任务栏停靠侧、多显示器布局、显示器插拔与系统广播漂移。现在可见态（展开/收起/拖放轨道）窗口矩形完整落在工作区内、四角圆角恒定；`WM_DISPLAYCHANGE`/`WM_SETTINGCHANGE` 只触发贴边隐藏离屏恢复兜底（契约 #17 原语义）与按当前面板状态重新贴齐（顺带补齐轨道态分支：外部拖放轨道下广播不再误贴为收起几何）。贴边隐藏所需的显示器枚举等价迁至 `MonitorBounds`，离屏态语义不变。新增守护测试：可见态矩形∈工作区、宽==可见宽、广播后重贴齐且外形不变、内容层无右内缩（收起/展开/轨道/拖宽/重置共 7 用例）。设计契约 #6 全文重写，`docs/design.md` §四/§五·C 同步；历史档案（2026-09-23 右缘裁切 spec）按规保留不改。
+- Mac 端永久停止开发并彻底移除（2026-10-08 用户决策，取代 2026-09-23 暂停令与更早的双平台同步维护令）：删除 `FloatingTransferStation.Mac` 工程、`FloatingTransferStation.Mac.Tests`、`FloatingTransferStation.Mac.slnx`、macOS 构建/打包/烟雾脚本、`installer/macos/` 与 CI 的 macOS job（quality 门收敛为仅 Windows 依赖，检查名「格式、测试与构建」不变）；活文档（README、AGENTS、CONTRIBUTING、PROJECT_GUIDE、ROADMAP、releasing、architecture、improvement-loop、docs/README）转 Windows-only。随目标移除同步清理死代码：`AppPaths` 的 macOS 路径分支、`IDailyReviewStore.ListDatesAsync`（自 Windows 1.16.0 起无消费者，唯一外部消费者是 Mac 工程）及其实现与测试。**历史 Release（含 1.6.0 Intel Mac 包）与全部历史 tag 原样保留**，不撤回、不重打、不重发；历史档案（CHANGELOG 历史版本节、docs/handoff、docs/research、docs/superpowers）不改写。
 - 仓库级评审抑制 `SixLabors.ImageSharp` 3.1.12 的五份已知漏洞公告（`Directory.Build.props` 集中 `NuGetAuditSuppress`）：修复版本均为 ImageSharp 4.1.2，而 4.x 为商业授权（构建期强制 license key）、3.x 已无安全补丁线；经逐条可达性评审——TIFF CCITT T6/T4 编码器越界写（高危）与 HistogramEqualization 未校验索引（高危）在本应用不可达（唯一输出编码是 PNG、无任何 Histogram 调用），BigTIFF 解码空转与 ICC CLUT 过量分配（中危，DoS 级）经评审暂时接受。待 ImageSharp 4 授权或迁移方案确定后解除抑制。
 
 ## 1.20.0

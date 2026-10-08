@@ -15,7 +15,7 @@
 | 仓库维护与边界修复 | 已批准的审查结论写入计划 | [计划与完成记录](superpowers/plans/2026-09-03-repository-maintenance.md) | `03b748b` / 1.4.2 |
 | 剪贴板损坏图片表示回退 | [设计](superpowers/specs/2026-09-06-clipboard-image-fallback-design.md) | [计划](superpowers/plans/2026-09-06-clipboard-image-fallback.md) | [v1.4.3](https://github.com/Oiawlm/floating-transfer-station/tree/v1.4.3) 对应提交 / 1.4.3 |
 | 连续范围选择 | [Issue #17](https://github.com/Oiawlm/floating-transfer-station/issues/17) | [设计、计划与验证](superpowers/plans/2026-09-07-range-selection.md) | `5d01510` / 1.5.0 |
-| macOS 同步与统一发行 | 已批准的实施范围 | [实施记录](superpowers/plans/2026-09-08-macos.md) | `c6d2be1` / 1.6.0 |
+| 跨平台统一发行（历史） | 已批准的实施范围 | 历史实施计划存于 docs/superpowers/plans/（目标平台已于 2026-10-08 移除） | `c6d2be1` / 1.6.0 |
 | 每日复盘标签 | [设计](superpowers/specs/2026-09-14-daily-review-tab-design.md) | [计划](superpowers/plans/2026-09-14-daily-review-tab.md) | `33fc51d` / 1.7.0 |
 | 界面与动效升级 | [设计](superpowers/specs/2026-09-22-ui-motion-upgrade-design.md) | [计划](superpowers/plans/2026-09-22-ui-motion-upgrade.md) | 1.7.0 |
 | 右缘边缘裁切与设置首版 | [设计](superpowers/specs/2026-09-23-edge-bleed-and-settings-design.md) | [计划](superpowers/plans/2026-09-23-edge-bleed-and-settings.md) | 1.8.0 |
