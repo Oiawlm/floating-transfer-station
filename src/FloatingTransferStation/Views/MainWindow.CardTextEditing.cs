@@ -153,6 +153,8 @@ public partial class MainWindow
         }
 
         _editingCardItemId = item.Id;
+        // 组合标记按会话重置：上次会话被中断残留的标记不得让本次 Enter/Esc 失效。
+        _activeCardTextCompositions.Remove(item);
         item.BeginTextEdit();
         // 焦点在模板应用后注入（照分类改名范式）；失败不回滚——可见性已由
         // 条目状态驱动，稍后的点击仍可把焦点送入编辑器。
@@ -278,15 +280,27 @@ public partial class MainWindow
         await _mutations.UpdateItemTextAsync(itemId, newText);
     }
 
-    /// <summary>锚点条目优先取当前面板（虚拟化回收后仍是同一实例），跨面板兜底查全板。</summary>
+    /// <summary>锚点条目优先取当前面板（虚拟化回收后仍是同一实例），跨面板兜底查全板；
+    /// 删除竞态下兜底取容器上的条目实例（组合标记清理仍需该引用，Id 不符视为不存在）。</summary>
     private BoardItem? FindEditingItem(Guid itemId) =>
+        FindEditingItemCore(itemId) ??
+        (TryGetEditingCardContainerCore(itemId)?.DataContext is BoardItem candidate &&
+            candidate.Id == itemId
+                ? candidate
+                : null);
+
+    private BoardItem? FindEditingItemCore(Guid itemId) =>
         _viewModel.ActivePanel?.Items.FirstOrDefault(item => item.Id == itemId) ??
         _board.FindItem(itemId);
 
     /// <summary>编辑中卡片的容器（未编辑或锚点未实现时为 null）。手势层用它识别编辑表面。</summary>
     private ListBoxItem? TryGetEditingCardContainer() =>
-        _editingCardItemId is { } itemId &&
-        FindEditingItem(itemId) is { } editingItem
+        _editingCardItemId is { } itemId
+            ? TryGetEditingCardContainerCore(itemId)
+            : null;
+
+    private ListBoxItem? TryGetEditingCardContainerCore(Guid itemId) =>
+        FindEditingItemCore(itemId) is { } editingItem
             ? BoardList.ItemContainerGenerator.ContainerFromItem(editingItem) as ListBoxItem
             : null;
 

@@ -321,6 +321,18 @@ public sealed partial class MainWindowInteractionTests
                 display.Margin,
                 editor.Margin,
                 "编辑器与显示文本必须同宽度同位置（同样的操作列避让）。");
+            var editorOrigin = editor.TransformToAncestor(container).Transform(new Point(0, 0));
+            var displayOrigin = display.TransformToAncestor(container).Transform(new Point(0, 0));
+            Assert.AreEqual(
+                displayOrigin.X,
+                editorOrigin.X,
+                0.5,
+                "编辑器与显示文本在容器内的横向原点必须一致（同位置盖写）。");
+            Assert.AreEqual(
+                displayOrigin.Y,
+                editorOrigin.Y,
+                0.5,
+                "编辑器与显示文本在容器内的纵向原点必须一致（同位置盖写）。");
 
             editor.Text = "键入中的草稿";
             CompleteLayout(window);

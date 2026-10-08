@@ -68,15 +68,20 @@ public partial class MainWindow
         var source = e.OriginalSource as DependencyObject;
 
         // 编辑中的卡片是编辑表面（1.22.0 前由覆盖层整卡接管：编辑期卡片对
-        // 手势不可交互，保持同等语义）：容器内任何按下不冲刷会话、不启动
-        // 按压/拖拽会话、不作手势分发；落在编辑器 TextBox 上的按下自然到
-        // 达文本盒（放置光标/选择），其余区域为无动作。不置 e.Handled——
-        // 不拦截手势层之外的路由。
+        // 手势不可交互，保持同等语义）：文本区按下交给编辑器（放置光标/选择，
+        // TextBox 自行标记已处理，ListBoxItem 的默认选择语义不会介入）；其余
+        // 区域的按下整卡吞掉（防止冒泡到 ListBoxItem 触发默认选择），不冲刷
+        // 会话、不启动按压/拖拽会话、不作手势分发。
         if (TryGetEditingCardContainer() is { } editingContainer &&
             (ReferenceEquals(source, editingContainer) ||
              source is not null && editingContainer.IsAncestorOf(source)))
         {
             ResetCardPressState();
+            if (FindAncestor<System.Windows.Controls.TextBox>(source) is null)
+            {
+                e.Handled = true;
+            }
+
             return;
         }
 

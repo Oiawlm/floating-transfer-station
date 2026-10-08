@@ -884,7 +884,7 @@
   <DataTemplate DataType="{x:Type models:BoardItem}">
     <Grid Style="{StaticResource CardRootStyle}">
       <Border Style="{StaticResource CardShadowLayerStyle}" />
-      <Border x:Name="CardSurface" Style="{StaticResource CardContainerStyle}">
+      <Border Style="{StaticResource CardContainerStyle}">
         <Grid Background="Transparent">
           <Border x:Name="CardHoverFillLayer"
                   Background="{DynamicResource HoverSurfaceBrush}"
@@ -1034,13 +1034,12 @@
 
             <!-- 就地编辑器（1.22.0）：内容 Grid 的最后子元素=命中层之上，可见性由
                  条目 IsEditing 驱动（Collapsed 时不参与命中，手势层不受影响）。
-                 背景绑定卡面实际底色（跟随选中态），不透明盖写同区域显示文本
-                 （放置光标/选择即点编辑器）；样式与显示态 TextBlock 同度量，见
-                 CardTextEditorStyle。键位与失焦处理经窗口级路由事件挂接
-                （ResourceDictionary 不能声明事件处理器，MainWindow.CardTextEditing
-                 按 OriginalSource 过滤）。 -->
+                 卡面底色不透明盖写同区域显示文本（放置光标/选择即点编辑器；卡面
+                 底色为常量 CardBrush，选中着色来自独立叠加层）。样式与显示态
+                 TextBlock 同度量，见 CardTextEditorStyle。键位与失焦处理经窗口级
+                 路由事件挂接（ResourceDictionary 不能声明事件处理器，
+                 MainWindow.CardTextEditing 按 OriginalSource 过滤）。 -->
             <TextBox Style="{StaticResource CardTextEditorStyle}"
-                     Background="{Binding Background, ElementName=CardSurface}"
                      Margin="{StaticResource CardTextReservedRightInset}"
                      Text="{Binding DraftText, UpdateSourceTrigger=PropertyChanged}" />
           </Grid>
