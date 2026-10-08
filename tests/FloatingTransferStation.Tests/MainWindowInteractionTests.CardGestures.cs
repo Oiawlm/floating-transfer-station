@@ -91,12 +91,15 @@ public sealed partial class MainWindowInteractionTests
             RaiseCardDoubleClick(ZoneHitSource(window, item, CardGestureZones.ContentZone));
             CompleteLayout(window);
 
-            Assert.AreEqual(Visibility.Visible, EditorHost(window).Visibility);
-            Assert.AreEqual("真实序列双击", EditorInput(window).Text);
-            Assert.IsTrue(EditorInput(window).IsKeyboardFocused);
+            Assert.IsTrue(EditorInput(window, item).IsVisible);
+            Assert.AreEqual("真实序列双击", EditorInput(window, item).Text);
+            Assert.IsTrue(EditorInput(window, item).IsKeyboardFocused);
 
             // 系统双击链挂载已删除：合成 MouseDoubleClick 事件不再是编辑入口。
-            EditorHost(window).Visibility = Visibility.Collapsed;
+            // 先提交结束本次编辑（覆盖层可手工隐藏的时代已过去），再验证合成事件
+            // 不会重新打开编辑。
+            window.CommitCardTextForTest();
+            CompleteLayout(window);
             var other = board.AddText("另一张卡");
             CompleteLayout(window);
             list.RaiseEvent(NewMouseButtonEventArgs(
@@ -104,10 +107,8 @@ public sealed partial class MainWindowInteractionTests
                 ContainerOf(window, other)));
             CompleteLayout(window);
 
-            Assert.AreEqual(
-                Visibility.Collapsed,
-                EditorHost(window).Visibility,
-                "MouseDoubleClick 挂载必须已删除，编辑入口只有手势层。");
+            AssertNoVisibleCardEditor(window);
+            // MouseDoubleClick 挂载必须已删除，编辑入口只有手势层。
         }
         finally
         {
@@ -282,15 +283,13 @@ public sealed partial class MainWindowInteractionTests
             RaiseCardPressAndRelease(hitSource, NextIsolatedClickTimestamp());
             CompleteLayout(window);
 
-            Assert.AreEqual(
-                Visibility.Collapsed,
-                EditorHost(window).Visibility,
-                "超窗双击必须判定为两次独立单击，不进入编辑。");
+            AssertNoVisibleCardEditor(window);
+            // 超窗双击必须判定为两次独立单击，不进入编辑。
 
             // 对照：时限内的第二击进入编辑（同源同卡）。
             RaiseCardDoubleClick(hitSource);
             CompleteLayout(window);
-            Assert.AreEqual(Visibility.Visible, EditorHost(window).Visibility);
+            Assert.IsTrue(EditorInput(window, item).IsVisible);
         }
         finally
         {
@@ -458,11 +457,10 @@ public sealed partial class MainWindowInteractionTests
                 RestoreCursorPosition(savedCursor);
             }
 
-            Assert.AreEqual(
-                Visibility.Visible,
-                EditorHost(window).Visibility,
+            Assert.IsTrue(
+                EditorInput(window, item).IsVisible,
                 "真实输入管线的双击必须进入就地编辑。");
-            Assert.AreEqual("真实输入双击", EditorInput(window).Text);
+            Assert.AreEqual("真实输入双击", EditorInput(window, item).Text);
             SaveVisualEvidence(
                 (Border)window.FindName("WindowShell"),
                 "gesture-real-double-click-editing.png",
@@ -513,10 +511,8 @@ public sealed partial class MainWindowInteractionTests
             }
 
             CompleteLayout(window);
-            Assert.AreEqual(
-                Visibility.Collapsed,
-                EditorHost(window).Visibility,
-                "位置过远的第二击必须判为独立单击，不进入编辑。");
+            AssertNoVisibleCardEditor(window);
+            // 位置过远的第二击必须判为独立单击，不进入编辑。
         }
         finally
         {

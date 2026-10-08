@@ -16,6 +16,8 @@ public sealed class BoardItem : INotifyPropertyChanged
 
     private bool _isPinned;
     private bool _startsNormalRegion;
+    private bool _isEditing;
+    private string? _draftText;
     private string? _text;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -70,6 +72,44 @@ public sealed class BoardItem : INotifyPropertyChanged
 
     [JsonIgnore]
     public string? ImageAbsolutePath { get; set; }
+
+    /// <summary>
+    /// 就地编辑会话标志（1.22.0 起编辑器移入卡片 DataTemplate，由条目状态驱动
+    /// 显示/编辑原位切换；挂载在条目而非容器上，虚拟化回收不错乱）。会话状态
+    /// 不持久化，编辑草稿以 <see cref="DraftText"/> 承载，提交前绝不进入
+    /// <see cref="Text"/>（显示与持久化只认 Text/PreviewText）。
+    /// </summary>
+    [JsonIgnore]
+    public bool IsEditing
+    {
+        get => _isEditing;
+        private set => SetProperty(ref _isEditing, value);
+    }
+
+    /// <summary>编辑中的全文草稿（编辑器双向绑定源）。非编辑态恒为 null。</summary>
+    [JsonIgnore]
+    public string? DraftText
+    {
+        get => _draftText;
+        set => SetProperty(ref _draftText, value);
+    }
+
+    /// <summary>进入编辑：草稿种子为全文（与显示用的有界预览无关）。</summary>
+    public void BeginTextEdit()
+    {
+        DraftText = Text ?? string.Empty;
+        IsEditing = true;
+    }
+
+    /// <summary>
+    /// 结束编辑（提交与取消共用的状态清理）：草稿由调用方在调用前读取，
+    /// 此处一并丢弃，非编辑态不残留草稿。
+    /// </summary>
+    public void EndTextEdit()
+    {
+        IsEditing = false;
+        DraftText = null;
+    }
 
     public static BoardItem CreateText(string text, Guid id, DateTimeOffset createdAt) => new()
     {

@@ -469,6 +469,39 @@
     </Style.Triggers>
   </Style>
 
+  <!-- 卡片就地编辑器（1.22.0 起编辑器移入卡片 DataTemplate 原位切换，取代浮层）：
+       与显示态 TextBlock 同度量——FontSize 14、Wrap、Display 像素对齐、
+       InterfaceFontFamily、零内边距、无边框，宽度经同样的 CardTextReservedRightInset
+       右避让；背景为不透明卡片底色（盖写同区域的显示文本，两态像素重合，显示态
+       保持可见、卡片高度恒定不随草稿塌缩，也不盖邻卡）；无独立圆角/阴影。行距取
+       输入字体自然度量——TextBox 不暴露 LineHeight/LineStackingStrategy（WPF 平台
+       约束），多行编辑的行距与显示态存在 ≤1.5px/行的字体度量差，水平度量与宽度
+       完全一致。滚动条 Hidden：溢出内容可滚但不占内容宽，编辑态换行宽度与显示态
+       一致。可见性由条目 IsEditing 驱动（状态挂在条目上，虚拟化回收不错乱）。焦点
+       提示在卡片级 accent 细环（模板内 CardEditingRingLayer），不在文字盒上加边。 -->
+  <Style x:Key="CardTextEditorStyle" TargetType="TextBox">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="AcceptsReturn" Value="False" />
+    <Setter Property="VerticalScrollBarVisibility" Value="Hidden" />
+    <Setter Property="MaxHeight" Value="100" />
+    <Setter Property="Visibility" Value="Collapsed" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsEditing}" Value="True">
+        <Setter Property="Visibility" Value="Visible" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+
   <Style x:Key="BoardListStyle" TargetType="ListBox">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
@@ -886,6 +919,19 @@
                   views:FadeAnimation.IsActive="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
                   views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
                   views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+          <!-- 编辑环（1.22.0）：就地编辑的焦点提示=accent 细环，绑定条目 IsEditing——
+               会话在窗口内焦点迁移期间持续（契约：焦点迁移不终结编辑），环与之一致；
+               迟于选中环声明，两者同为编辑/选中叠加时编辑环在上。 -->
+          <Border x:Name="CardEditingRingLayer"
+                  BorderBrush="{DynamicResource AccentBrush}"
+                  BorderThickness="1"
+                  CornerRadius="8"
+                  Margin="-1"
+                  Opacity="0"
+                  IsHitTestVisible="False"
+                  views:FadeAnimation.IsActive="{Binding IsEditing}"
+                  views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                  views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}" />
 
           <!-- 1.18.0 对半分区：内容视觉层全宽在下（图片/文字横贯整卡），
                其上叠加两列 * /* 的命中层（CardGestureZones）承载左右对半的
@@ -933,6 +979,8 @@
                         <Setter Property="Margin"
                                 Value="{StaticResource CardTextReservedRightInset}" />
                       </DataTrigger>
+                      <!-- 编辑期间显示态保持可见（不隐藏、高度恒定）：编辑器以卡片底色
+                           不透明盖写同一区域，两态像素重合，卡片高度不随草稿塌缩。 -->
                     </Style.Triggers>
                   </Style>
                 </TextBlock.Style>
@@ -980,6 +1028,16 @@
                 </Grid>
               </Grid>
             </Grid>
+
+            <!-- 就地编辑器（1.22.0）：内容 Grid 的最后子元素=命中层之上，可见性由
+                 条目 IsEditing 驱动（Collapsed 时不参与命中，手势层不受影响）。
+                 卡片底色不透明背景盖写同区域显示文本（放置光标/选择即点编辑器）；
+                 样式与显示态 TextBlock 同度量，见 CardTextEditorStyle。键位与
+                 失焦处理经窗口级路由事件挂接（ResourceDictionary 不能声明事件
+                 处理器，MainWindow.CardTextEditing 按 OriginalSource 过滤）。 -->
+            <TextBox Style="{StaticResource CardTextEditorStyle}"
+                     Margin="{StaticResource CardTextReservedRightInset}"
+                     Text="{Binding DraftText, UpdateSourceTrigger=PropertyChanged}" />
           </Grid>
         </Grid>
       </Border>
