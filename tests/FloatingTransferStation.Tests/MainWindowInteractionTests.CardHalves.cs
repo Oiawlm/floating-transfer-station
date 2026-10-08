@@ -105,10 +105,9 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             EnterCardEditingWithDoubleClick(window, item);
             CompleteLayout(window);
-            EditorInput(window).Text = "切类目时提交的编辑";
-            Assert.AreEqual(
-                Visibility.Visible,
-                EditorHost(window).Visibility,
+            EditorInput(window, item).Text = "切类目时提交的编辑";
+            Assert.IsTrue(
+                EditorInput(window, item).IsVisible,
                 "前置条件：编辑会话已打开。");
 
             // Bug A 复现：类目页签不夺键盘焦点，ActivatePanel 整体替换列表
@@ -116,10 +115,8 @@ public sealed partial class MainWindowInteractionTests
             InvokePrivate(window, "ActivatePanel", BoardCategory.Reference);
             CompleteLayout(window);
 
-            Assert.AreEqual(
-                Visibility.Collapsed,
-                EditorHost(window).Visibility,
-                "切换类目必须终结编辑会话（编辑框不得悬挂）。");
+            AssertNoVisibleCardEditor(window);
+            // 切换类目必须终结编辑会话（编辑框不得悬挂）。
             Assert.AreEqual(
                 "切类目时提交的编辑",
                 board.FindItem(item.Id)!.Text,
@@ -233,10 +230,8 @@ public sealed partial class MainWindowInteractionTests
                 new[] { other },
                 list.SelectedItems.Cast<BoardItem>().ToArray(),
                 "卡片左半的真实输入单击不得产生选择语义（既有已选保留）。");
-            Assert.AreEqual(
-                Visibility.Collapsed,
-                EditorHost(window).Visibility,
-                "左半单击不得进入编辑。");
+            AssertNoVisibleCardEditor(window);
+            // 左半单击不得进入编辑。
         }
         finally
         {
@@ -259,7 +254,7 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             EnterCardEditingWithDoubleClick(window, item);
-            EditorInput(window).Text = "过滤冲刷的编辑";
+            EditorInput(window, item).Text = "过滤冲刷的编辑";
 
             // 关键词不匹配锚点：过滤把锚点移出视图（源集合不变），
             // 会话必须终结并提交，而不是悬挂在过滤后的列表上。
@@ -269,7 +264,7 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(50));
 
-            Assert.AreEqual(Visibility.Collapsed, EditorHost(window).Visibility);
+            AssertNoVisibleCardEditor(window);
             Assert.AreEqual(
                 "过滤冲刷的编辑",
                 board.FindItem(item.Id)!.Text,
@@ -298,14 +293,14 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             EnterCardEditingWithDoubleClick(window, item);
-            EditorInput(window).Text = "锚点移除前输入的编辑";
+            EditorInput(window, item).Text = "锚点移除前输入的编辑";
 
             Assert.IsTrue(
                 board.RemoveMany([item.Id]) is not null,
                 "前置条件：锚点条目被移除。");
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(50));
 
-            Assert.AreEqual(Visibility.Collapsed, EditorHost(window).Visibility);
+            AssertNoVisibleCardEditor(window);
             Assert.IsNull(
                 board.FindItem(item.Id),
                 "锚点条目已被移除，编辑内容无处落地是预期行为。");
@@ -317,7 +312,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CardHalves_ScrollRepositionsEditorAndFlushesWhenAnchorVirtualized()
+    public void CardHalves_ScrollKeepsEditorSessionAndFlushesWhenAnchorVirtualized()
     {
         using var directory = new TestDirectory();
         var store = new RecordingCardEditStore(directory.Root);
@@ -336,27 +331,19 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(viewer.ScrollableHeight > 0, "前置条件：列表可滚动。");
 
             EnterCardEditingWithDoubleClick(window, anchor);
-            EditorInput(window).Text = "滚动跟随的编辑";
-            var marginBefore = EditorHost(window).Margin;
+            EditorInput(window, anchor).Text = "滚动跟随的编辑";
 
-            // 锚点仍在视口：覆盖层重定位跟随（滚动即提交是 UX 回归）。
+            // 锚点仍在视口：会话原地保留（滚动即提交是 UX 回归）；就地编辑器
+            // 随卡片原位滚动，无需（也不再存在）覆盖层重定位。
             ScrollTo(window, viewer, Math.Min(60d, viewer.ScrollableHeight));
-            var marginAfterScroll = EditorHost(window).Margin;
-            Assert.AreEqual(
-                Visibility.Visible,
-                EditorHost(window).Visibility,
+            Assert.IsTrue(
+                EditorInput(window, anchor).IsVisible,
                 "锚点仍在视口时滚动不得终结会话。");
-            Assert.AreNotEqual(
-                marginBefore,
-                marginAfterScroll,
-                "覆盖层必须随滚动重定位到锚点容器的新位置。");
 
             // 锚点滚出虚拟化窗口：容器被回收 → 会话终结并提交。
             ScrollTo(window, viewer, viewer.ScrollableHeight);
-            Assert.AreEqual(
-                Visibility.Collapsed,
-                EditorHost(window).Visibility,
-                "锚点滚出视口（容器回收）必须终结会话。");
+            AssertNoVisibleCardEditor(window);
+            // 锚点滚出视口（容器回收）必须终结会话。
             Assert.AreEqual(
                 "滚动跟随的编辑",
                 board.FindItem(anchor.Id)!.Text,
@@ -384,19 +371,19 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             EnterCardEditingWithDoubleClick(window, first);
-            EditorInput(window).Text = "第一张的接续提交";
+            EditorInput(window, first).Text = "第一张的接续提交";
 
             // 接续：旧守卫 _editingCardItemId is not null 会静默拒绝（编辑
             // 功能卡死）。现在必须先提交上一会话、再在第二张上开新会话。
             EnterCardEditingWithDoubleClick(window, second);
             CompleteLayout(window);
 
-            Assert.AreEqual(Visibility.Visible, EditorHost(window).Visibility);
+            Assert.IsTrue(EditorInput(window, second).IsVisible);
             Assert.AreEqual(
                 "第二张的原始内容",
-                EditorInput(window).Text,
+                EditorInput(window, second).Text,
                 "接续编辑的种子必须是新卡文本。");
-            Assert.IsTrue(EditorInput(window).IsKeyboardFocused);
+            Assert.IsTrue(EditorInput(window, second).IsKeyboardFocused);
             Assert.AreEqual(
                 "第一张的接续提交",
                 board.FindItem(first.Id)!.Text,
@@ -425,7 +412,7 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
             EnterCardEditingWithDoubleClick(window, edited);
-            EditorInput(window).Text = "单击他卡冲刷的编辑";
+            EditorInput(window, edited).Text = "单击他卡冲刷的编辑";
 
             // 编辑中单击另一张卡的右半：先冲刷悬挂会话，再分发本次手势。
             ClickCard(window, other, ModifierKeys.None);
@@ -475,10 +462,8 @@ public sealed partial class MainWindowInteractionTests
                 Mouse.PreviewMouseUpEvent, hitSource, quickClick + 5));
             CompleteLayout(window);
 
-            Assert.AreEqual(
-                Visibility.Collapsed,
-                EditorHost(window).Visibility,
-                "长按抬键+快速单击必须判为两次独立单击，不得进入编辑。");
+            AssertNoVisibleCardEditor(window);
+            // 长按抬键+快速单击必须判为两次独立单击，不得进入编辑。
         }
         finally
         {
@@ -511,10 +496,8 @@ public sealed partial class MainWindowInteractionTests
                 new[] { item },
                 list.SelectedItems.Cast<BoardItem>().ToArray(),
                 "右半第一击的 toggle 必须保留。");
-            Assert.AreEqual(
-                Visibility.Collapsed,
-                EditorHost(window).Visibility,
-                "跨半两击不得判为双击进入编辑。");
+            AssertNoVisibleCardEditor(window);
+            // 跨半两击不得判为双击进入编辑。
 
             // 反向：左半单击（痕迹）+ 双击时限内右半第二击 → 独立 toggle。
             RaiseCardPressAndRelease(contentSource, NextIsolatedClickTimestamp());
@@ -662,9 +645,9 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(viewer.ScrollableHeight > 0, "前置条件：列表可滚动。");
 
             EnterCardEditingWithDoubleClick(window, anchor);
-            EditorInput(window).Text = "拖滚动条期间的编辑";
+            EditorInput(window, anchor).Text = "拖滚动条期间的编辑";
 
-            // 拖动滚动条与滚轮同属滚动语义：会话跟随重定位，不因滚动条
+            // 拖动滚动条与滚轮同属滚动语义：会话原地保留，不因滚动条
             // 按下（焦点/手势层按下）而终结。
             var thumb = FindDescendant<System.Windows.Controls.Primitives.Thumb>(viewer);
             Assert.IsNotNull(thumb, "前置条件：滚动条 Thumb 已实现。");
@@ -674,13 +657,12 @@ public sealed partial class MainWindowInteractionTests
                 NextIsolatedClickTimestamp()));
             CompleteLayout(window);
 
-            Assert.AreEqual(
-                Visibility.Visible,
-                EditorHost(window).Visibility,
+            Assert.IsTrue(
+                EditorInput(window, anchor).IsVisible,
                 "滚动条按下不得终结编辑会话（滚动只跟随）。");
             Assert.AreEqual(
                 "拖滚动条期间的编辑",
-                EditorInput(window).Text,
+                EditorInput(window, anchor).Text,
                 "会话保留时编辑内容不丢失。");
         }
         finally
@@ -704,7 +686,7 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             EnterCardEditingWithDoubleClick(window, item);
-            EditorInput(window).Text = "过滤钩子独立提交的编辑";
+            EditorInput(window, item).Text = "过滤钩子独立提交的编辑";
             var viewModel = (MainWindowViewModel)window.DataContext;
 
             // 绕过 EnterSearchMode 的清选择/聚焦搜索框（焦点路径也会终结
@@ -715,7 +697,7 @@ public sealed partial class MainWindowInteractionTests
             InvokePrivate(window, "ApplySearchFilter");
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(50));
 
-            Assert.AreEqual(Visibility.Collapsed, EditorHost(window).Visibility);
+            AssertNoVisibleCardEditor(window);
             Assert.AreEqual(
                 "过滤钩子独立提交的编辑",
                 board.FindItem(item.Id)!.Text,
@@ -744,7 +726,7 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             EnterCardEditingWithDoubleClick(window, item);
-            EditorInput(window).Text = "焦点迁移期间的编辑";
+            EditorInput(window, item).Text = "焦点迁移期间的编辑";
 
             // 焦点移到窗口内其他控件（如列表本身）：锚点仍有效，会话不因
             // 窗口内焦点迁移而终结（IME 交互等瞬时夺焦同理）；终结只由
@@ -753,13 +735,12 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(list.Focus(), "前置条件：列表可聚焦。");
             CompleteLayout(window);
 
-            Assert.AreEqual(
-                Visibility.Visible,
-                EditorHost(window).Visibility,
+            Assert.IsTrue(
+                EditorInput(window, item).IsVisible,
                 "窗口内焦点迁移不得终结编辑会话。");
             Assert.AreEqual(
                 "焦点迁移期间的编辑",
-                EditorInput(window).Text,
+                EditorInput(window, item).Text,
                 "会话保留时编辑内容不丢失。");
             Assert.AreNotEqual(
                 "焦点迁移期间的编辑",
@@ -866,10 +847,8 @@ public sealed partial class MainWindowInteractionTests
                 RestoreCursorPosition(savedCursor);
             }
 
-            Assert.AreEqual(
-                Visibility.Collapsed,
-                EditorHost(window).Visibility,
-                "图片卡左半双击无操作（图片编辑是后续切片）。");
+            AssertNoVisibleCardEditor(window);
+            // 图片卡左半双击无操作（图片编辑是后续切片）。
         }
         finally
         {

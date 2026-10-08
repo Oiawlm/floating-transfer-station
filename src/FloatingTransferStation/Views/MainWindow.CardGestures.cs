@@ -67,10 +67,27 @@ public partial class MainWindow
     {
         var source = e.OriginalSource as DependencyObject;
 
-        // 编辑器覆盖层是列表的兄弟元素：任何到达列表预览层的按下都不在
-        // 编辑器内，先冲刷悬挂会话（提交已输入文字）再开始本次手势。
-        // 滚动条例外——拖动滚动条与滚轮同属滚动语义，只让覆盖层跟随，
-        // 不终结会话（与下方 ClearUserSelection 共用同一滚动条排除判定）。
+        // 编辑中的卡片是编辑表面（1.22.0 前由覆盖层整卡接管：编辑期卡片对
+        // 手势不可交互，保持同等语义）：文本区按下交给编辑器（放置光标/选择，
+        // TextBox 自行标记已处理，ListBoxItem 的默认选择语义不会介入）；其余
+        // 区域的按下整卡吞掉（防止冒泡到 ListBoxItem 触发默认选择），不冲刷
+        // 会话、不启动按压/拖拽会话、不作手势分发。
+        if (TryGetEditingCardContainer() is { } editingContainer &&
+            (ReferenceEquals(source, editingContainer) ||
+             source is not null && editingContainer.IsAncestorOf(source)))
+        {
+            ResetCardPressState();
+            if (FindAncestor<System.Windows.Controls.TextBox>(source) is null)
+            {
+                e.Handled = true;
+            }
+
+            return;
+        }
+
+        // 编辑卡之外的列表按下先冲刷悬挂会话（提交已输入文字）再开始本次
+        // 手势。滚动条例外——拖动滚动条与滚轮同属滚动语义，不终结会话
+        // （与下方 ClearUserSelection 共用同一滚动条排除判定）。
         if (FindAncestor<ScrollBar>(source) is null)
         {
             CommitCardTextEditing();
