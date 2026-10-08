@@ -161,7 +161,8 @@ public partial class MainWindow
             new Action(() =>
             {
                 if (!item.IsEditing ||
-                    FindDescendant<TextBox>(container) is not { } editor)
+                    FindDescendant<TextBox>(container) is not { } editor ||
+                    !ReferenceEquals(editor.DataContext, item))
                 {
                     return;
                 }
@@ -236,19 +237,26 @@ public partial class MainWindow
 
         // 提交顺序锁定（T7 评审修正）：先取草稿，再清锚点防二次提交（折叠引发
         // 焦点回调重入时锚点已空、直接返回），最后 EndTextEdit 收起编辑态——
-        // 草稿读取必须在 EndTextEdit 之前（它会清掉 DraftText）。编辑器折叠前
-        // 先把焦点显式还给列表：折叠持有键盘焦点的元素时 WPF 会在列表内重选
-        // 焦点并 BringIntoView（滚动跳变）；列表本身不承载滚动语义。焦点迁移
-        // 与 EndTextEdit 的顺序不可换。UpdateItemTextAsync 的同步段（等值短路、
-        // 内存更新、操作门注册）在返回前完成；关闭序列依赖这一点在封门前排队
-        // （BoardOperationGate.SealAndRunAsync 会先排空已注册操作再执行最终
-        // 保存），因此 async void 不丢最后一笔编辑。
+        // 草稿读取必须在 EndTextEdit 之前（它会清掉 DraftText）。IME 组合标记
+        // 一并清理（组合中会话被终结时组合完成事件可能不再到来，残留会使同卡
+        // 下次编辑的 Enter/Esc 失效）。编辑器折叠前先把焦点显式还给列表：折叠
+        // 持有键盘焦点的元素时 WPF 会在列表内重选焦点并 BringIntoView（滚动
+        // 跳变）；列表本身不承载滚动语义。焦点迁移与 EndTextEdit 的顺序不可换。
+        // UpdateItemTextAsync 的同步段（等值短路、内存更新、操作门注册）在返回
+        // 前完成；关闭序列依赖这一点在封门前排队（BoardOperationGate.
+        // SealAndRunAsync 会先排空已注册操作再执行最终保存），因此 async void
+        // 不丢最后一笔编辑。
         var editingItem = FindEditingItem(itemId);
         var newText = editingItem?.DraftText ?? string.Empty;
         var editorHoldsFocus = TryGetEditingCardContainer() is { } container &&
             FindDescendant<TextBox>(container) is { } editor &&
             editor.IsKeyboardFocused;
         _editingCardItemId = null;
+        if (editingItem is not null)
+        {
+            _activeCardTextCompositions.Remove(editingItem);
+        }
+
         if (restoreFocusToList || editorHoldsFocus)
         {
             BoardList.Focus();
@@ -292,15 +300,21 @@ public partial class MainWindow
             return;
         }
 
+        var editingItem = FindEditingItem(itemId);
         var editorHoldsFocus = TryGetEditingCardContainer() is { } container &&
             FindDescendant<TextBox>(container) is { } editor &&
             editor.IsKeyboardFocused;
         _editingCardItemId = null;
+        if (editingItem is not null)
+        {
+            _activeCardTextCompositions.Remove(editingItem);
+        }
+
         if (restoreFocusToList || editorHoldsFocus)
         {
             BoardList.Focus();
         }
 
-        FindEditingItem(itemId)?.EndTextEdit();
+        editingItem?.EndTextEdit();
     }
 }

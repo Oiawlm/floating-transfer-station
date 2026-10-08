@@ -71,10 +71,10 @@ public partial class MainWindow
         // 手势不可交互，保持同等语义）：容器内任何按下不冲刷会话、不启动
         // 按压/拖拽会话、不作手势分发；落在编辑器 TextBox 上的按下自然到
         // 达文本盒（放置光标/选择），其余区域为无动作。不置 e.Handled——
-        // 不拦截手势层之外的输入路由。
+        // 不拦截手势层之外的路由。
         if (TryGetEditingCardContainer() is { } editingContainer &&
-            source is not null &&
-            editingContainer.IsAncestorOf(source))
+            (ReferenceEquals(source, editingContainer) ||
+             source is not null && editingContainer.IsAncestorOf(source)))
         {
             ResetCardPressState();
             return;

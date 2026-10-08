@@ -471,14 +471,17 @@
 
   <!-- 卡片就地编辑器（1.22.0 起编辑器移入卡片 DataTemplate 原位切换，取代浮层）：
        与显示态 TextBlock 同度量——FontSize 14、Wrap、Display 像素对齐、
-       InterfaceFontFamily、零内边距、无边框，宽度经同样的 CardTextReservedRightInset
-       右避让；背景为不透明卡片底色（盖写同区域的显示文本，两态像素重合，显示态
-       保持可见、卡片高度恒定不随草稿塌缩，也不盖邻卡）；无独立圆角/阴影。行距取
-       输入字体自然度量——TextBox 不暴露 LineHeight/LineStackingStrategy（WPF 平台
-       约束），多行编辑的行距与显示态存在 ≤1.5px/行的字体度量差，水平度量与宽度
-       完全一致。滚动条 Hidden：溢出内容可滚但不占内容宽，编辑态换行宽度与显示态
-       一致。可见性由条目 IsEditing 驱动（状态挂在条目上，虚拟化回收不错乱）。焦点
-       提示在卡片级 accent 细环（模板内 CardEditingRingLayer），不在文字盒上加边。 -->
+       InterfaceFontFamily、零内边距，宽度经同样的 CardTextReservedRightInset 右避让
+      （显示态的同一内缩只在文字态触发，而编辑仅对文字态开放，条件天然一致）；
+       背景默认卡片底色、实例上绑定卡面实际底色（跟随选中态），不透明盖写同区域
+       显示文本（显示态保持可见、卡片高度恒定不随草稿塌缩，也不盖邻卡；全文超出
+       有界预览时编辑态以 MaxHeight=100 为共同上限，卡片至多长到显示态同款上限）；
+       无独立圆角/阴影。行距取输入字体自然度量——TextBox 不暴露
+       LineHeight/LineStackingStrategy（WPF 平台约束），多行编辑的行距与显示态存在
+       ≤1.5px/行的字体度量差，水平度量与宽度完全一致。滚动条 Hidden：溢出内容可滚
+       但不占内容宽，编辑态换行宽度与显示态一致。可见性由条目 IsEditing 驱动（状态
+       挂在条目上，虚拟化回收不错乱）。焦点提示在卡片级 accent 细环（模板内
+       CardEditingRingLayer），不在文字盒上加边。 -->
   <Style x:Key="CardTextEditorStyle" TargetType="TextBox">
     <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
     <Setter Property="CaretBrush" Value="{DynamicResource AccentBrush}" />
@@ -881,7 +884,7 @@
   <DataTemplate DataType="{x:Type models:BoardItem}">
     <Grid Style="{StaticResource CardRootStyle}">
       <Border Style="{StaticResource CardShadowLayerStyle}" />
-      <Border Style="{StaticResource CardContainerStyle}">
+      <Border x:Name="CardSurface" Style="{StaticResource CardContainerStyle}">
         <Grid Background="Transparent">
           <Border x:Name="CardHoverFillLayer"
                   Background="{DynamicResource HoverSurfaceBrush}"
@@ -1031,11 +1034,13 @@
 
             <!-- 就地编辑器（1.22.0）：内容 Grid 的最后子元素=命中层之上，可见性由
                  条目 IsEditing 驱动（Collapsed 时不参与命中，手势层不受影响）。
-                 卡片底色不透明背景盖写同区域显示文本（放置光标/选择即点编辑器）；
-                 样式与显示态 TextBlock 同度量，见 CardTextEditorStyle。键位与
-                 失焦处理经窗口级路由事件挂接（ResourceDictionary 不能声明事件
-                 处理器，MainWindow.CardTextEditing 按 OriginalSource 过滤）。 -->
+                 背景绑定卡面实际底色（跟随选中态），不透明盖写同区域显示文本
+                 （放置光标/选择即点编辑器）；样式与显示态 TextBlock 同度量，见
+                 CardTextEditorStyle。键位与失焦处理经窗口级路由事件挂接
+                （ResourceDictionary 不能声明事件处理器，MainWindow.CardTextEditing
+                 按 OriginalSource 过滤）。 -->
             <TextBox Style="{StaticResource CardTextEditorStyle}"
+                     Background="{Binding Background, ElementName=CardSurface}"
                      Margin="{StaticResource CardTextReservedRightInset}"
                      Text="{Binding DraftText, UpdateSourceTrigger=PropertyChanged}" />
           </Grid>

@@ -291,15 +291,21 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
 
+            var container = ContainerOf(window, item);
+            var heightBefore = container.ActualHeight;
             EnterCardEditingWithDoubleClick(window, item);
             CompleteLayout(window);
 
-            var container = ContainerOf(window, item);
             var editor = FindDescendants<TextBox>(container).Single();
             Assert.IsTrue(
                 container.IsAncestorOf(editor),
                 "编辑器必须在卡片容器内原位出现（禁止浮层回归）。");
             Assert.IsTrue(editor.IsVisible);
+            Assert.AreEqual(
+                heightBefore,
+                container.ActualHeight,
+                0.5,
+                "进入编辑不得改变卡片高度（编辑态以同度量盖写，非浮层/不塌缩）。");
             Assert.AreEqual(
                 "原位编辑的卡片",
                 editor.Text,
@@ -311,6 +317,10 @@ public sealed partial class MainWindowInteractionTests
                 Visibility.Visible,
                 display.Visibility,
                 "编辑期间显示态保持可见（高度恒定不塌缩），由同度量的编辑器以卡片底色盖写。");
+            Assert.AreEqual(
+                display.Margin,
+                editor.Margin,
+                "编辑器与显示文本必须同宽度同位置（同样的操作列避让）。");
 
             editor.Text = "键入中的草稿";
             CompleteLayout(window);
