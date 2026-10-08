@@ -138,7 +138,7 @@ Mac 版已于 2026-10-08 停止开发并从仓库移除；历史 Mac 安装包�
 - 动态分类增删、快捷启动和常驻模式仍在路线图中；设置首版已提供主题、动效与开机自启，剪贴板采集开关等待收集更多使用场景。运行安装程序更新版本后，开机自启会重新开启，可在设置中再次关闭。
 - 每个编码图片表示或源文件最多 64 MiB、6,400 万像素；超限不会静默缩小原图。连续大量复制达到待处理容量上限时，会提示稍后重新复制。
 - 外部拖放基于 Windows 通用格式；不同软件实际提供的格式不同，因此不是所有来源都能接收。
-- B-005 图片分类反馈稍晚、B-006 微信复制图片偶发生成两份目前属于低优先级[现场观察](docs/observations.md)，自动测试环境未能稳定复现。
+- B-005 图片分类反馈稍晚、B-006 微信复制图片偶发生成两份目前属于低优先级现场观察（内部记录 B-005/B-006，维护者本地资料，不在仓库），自动测试环境未能稳定复现。
 
 遇到问题可以提交 [Bug 报告](https://github.com/Oiawlm/floating-transfer-station/issues/new?template=bug_report.yml)，有新想法可以提交 [功能建议](https://github.com/Oiawlm/floating-transfer-station/issues/new?template=feature_request.yml)。
 
@@ -162,7 +162,7 @@ Mac 版已于 2026-10-08 停止开发并从仓库移除；历史 Mac 安装包�
 
 默认构建允许 `CHANGELOG.md` 中保留未发布记录；正式发布使用 `build-release.ps1 -ForRelease`，检查步骤见[发布指南](docs/releasing.md)。开发运行不会登记开机自启，自启项由安装器统一管理。版本变化见[更新记录](CHANGELOG.md)。
 
-更完整的改动规则见 [贡献指南](CONTRIBUTING.md)，主要组件与数据流见 [架构说明](docs/architecture.md)，可复现的仓库检查命令见 [项目指南](PROJECT_GUIDE.md)。
+更完整的改动规则见 [贡献指南](CONTRIBUTING.md)，主要组件与数据流见 [架构说明](docs/architecture.md)。
 
 ## 参与贡献
 
