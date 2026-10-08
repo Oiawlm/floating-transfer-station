@@ -588,6 +588,13 @@ public sealed partial class MainWindowInteractionTests
         var screen = container.PointToScreen(positionInContainer);
         var client = new NativePoint((int)Math.Round(screen.X), (int)Math.Round(screen.Y));
         Assert.IsTrue(ScreenToClient(hwnd, ref client), "屏幕点到客户区换算必须成功。");
+        // SetCursorPos 到光标已在的位置不产生 WM_MOUSEMOVE：全量批跑中上一测试
+        // 恢复的光标位置可能与本测试点击点重合（窗口都在同一贴边位置生成），
+        // 悬停事件缺失会让 PumpUntilMouseOver 空等超时（单跑时起点随机故不触发）。
+        // 先强制一次位移再落到精确点击点，保证移动事件必然生成。
+        Assert.IsTrue(
+            SetCursorPos((int)Math.Round(screen.X) + 7, (int)Math.Round(screen.Y) + 5),
+            "真实光标必须可移动（强制位移预热）。");
         Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y)), "真实光标必须可移入窗口。");
         PumpUntilMouseOver(window);
         if (hoverSettleMilliseconds > 0)
