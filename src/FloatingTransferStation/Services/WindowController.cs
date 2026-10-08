@@ -34,8 +34,7 @@ public static class WindowController
     public static WindowPlacement Collapsed(
         WorkArea workArea,
         WindowSettings settings,
-        BoardCategory defaultCategory,
-        double edgeBleed = 0)
+        BoardCategory defaultCategory)
     {
         if (!BoardCategoryCatalog.IsDefined(defaultCategory))
         {
@@ -50,43 +49,39 @@ public static class WindowController
             rowIndex++;
         }
 
-        var visibleWidth = VisibleWidth(WindowSettings.TabWidth, workArea);
+        var width = VisibleWidth(WindowSettings.TabWidth, workArea);
         return new WindowPlacement(
-            workArea.Right - visibleWidth,
+            workArea.Right - width,
             workArea.Top + normalized.Top + (rowIndex * rowHeight),
-            visibleWidth + SanitizedBleed(edgeBleed),
+            width,
             rowHeight);
     }
 
-    public static WindowPlacement Expanded(WorkArea workArea, WindowSettings settings, double edgeBleed = 0)
+    public static WindowPlacement Expanded(WorkArea workArea, WindowSettings settings)
     {
         var normalized = settings.Normalize(workArea.Width, workArea.Height);
-        var visibleWidth = VisibleWidth(
-            WindowSettings.TabWidth + normalized.PanelWidth,
-            workArea);
+        var width = VisibleWidth(WindowSettings.TabWidth + normalized.PanelWidth, workArea);
         return new WindowPlacement(
-            workArea.Right - visibleWidth,
+            workArea.Right - width,
             workArea.Top + normalized.Top,
-            visibleWidth + SanitizedBleed(edgeBleed),
+            width,
             normalized.WindowHeight);
     }
 
-    public static WindowPlacement CategoryRail(WorkArea workArea, WindowSettings settings, double edgeBleed = 0)
+    public static WindowPlacement CategoryRail(WorkArea workArea, WindowSettings settings)
     {
         var normalized = settings.Normalize(workArea.Width, workArea.Height);
-        var visibleWidth = VisibleWidth(WindowSettings.TabWidth, workArea);
+        var width = VisibleWidth(WindowSettings.TabWidth, workArea);
         return new WindowPlacement(
-            workArea.Right - visibleWidth,
+            workArea.Right - width,
             workArea.Top + normalized.Top,
-            visibleWidth + SanitizedBleed(edgeBleed),
+            width,
             normalized.WindowHeight);
     }
 
-    // 可见宽度：窗口越出屏幕右缘的部分不占可见空间，且永远不把左缘推出工作区。
-    private static double VisibleWidth(double desiredVisibleWidth, WorkArea workArea) =>
-        Math.Min(Math.Max(0, desiredVisibleWidth), Math.Max(0, workArea.Width));
-
-    private static double SanitizedBleed(double edgeBleed) => Math.Max(0, edgeBleed);
+    // 窗口完整落在工作区内（可见态外形恒定）：宽度永不把左缘推出工作区。
+    private static double VisibleWidth(double desiredWidth, WorkArea workArea) =>
+        Math.Min(Math.Max(0, desiredWidth), Math.Max(0, workArea.Width));
 
     /// <summary>
     /// 一次性贴边隐藏的目标矩形（物理像素）：整窗平移到所有显示器右缘之外，

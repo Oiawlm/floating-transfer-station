@@ -79,7 +79,7 @@ public partial class MainWindow : Window
             return false;
         }
 
-        var monitors = ScreenEdgeGeometry.AllMonitors();
+        var monitors = MonitorBounds.AllMonitors();
         if (monitors.Count == 0 ||
             !_edgeHide.TryDock(_panelState.WouldCollapse))
         {

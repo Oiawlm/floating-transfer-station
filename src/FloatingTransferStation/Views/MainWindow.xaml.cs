@@ -66,10 +66,8 @@ public partial class MainWindow : Window
     private readonly BoardOperationGate? _operationGate;
     private readonly DataDirectoryChangeService? _dataDirectoryChangeService;
     private readonly string _dataDirectory;
-    private readonly Func<Window, double>? _rightEdgeBleedProvider;
     private AppPreferences _preferences = AppPreferences.Default;
     private SettingsWindow? _settingsWindow;
-    private double _rightEdgeBleed;
     private System.Windows.Interop.HwndSource? _windowSource;
     private (int Left, int Top, int Width, int Height)? _placementTargetRectangle;
     private CancellationTokenSource _windowOperationCancellation = new();
@@ -118,7 +116,6 @@ public partial class MainWindow : Window
         IPreferencesStore? preferencesStore = null,
         IStartupManager? startupManager = null,
         string? dataDirectory = null,
-        Func<Window, double>? rightEdgeBleedProvider = null,
         PluginCatalog? pluginCatalog = null,
         IGlobalHotkeySource? globalHotkeySource = null,
         BoardOperationGate? operationGate = null,
@@ -146,9 +143,6 @@ public partial class MainWindow : Window
         _dragPayload = dragPayload;
         _externalDropPayloadReader = externalDropPayloadReader;
         _externalDropImportService = externalDropImportService;
-        _rightEdgeBleedProvider = rightEdgeBleedProvider;
-        _rightEdgeBleed = rightEdgeBleedProvider?.Invoke(this) ?? 0d;
-        ApplyRightEdgeBleedInset();
         _dailyReviews = dailyReviewStore ?? store as IDailyReviewStore;
         var work = CurrentWorkArea();
         _settings = settings.Normalize(work.Width, work.Height);
@@ -173,8 +167,7 @@ public partial class MainWindow : Window
         ApplyPlacement(WindowController.Collapsed(
             work,
             _settings,
-            _viewModel.DefaultCapturePanel.Category,
-            _rightEdgeBleed));
+            _viewModel.DefaultCapturePanel.Category));
         Closing += MainWindow_Closing;
         Closed += (_, _) =>
         {
@@ -247,7 +240,7 @@ public partial class MainWindow : Window
         var category = _viewModel.DefaultCapturePanel.Category;
         _panelState.Switch(category);
         ActivatePanel(category);
-        ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings, _rightEdgeBleed));
+        ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings));
         _viewModel.SetPanelExpanded(true);
         UpdateStatusPresentation();
         CategoryRail.UpdateLayout();
@@ -301,7 +294,6 @@ public partial class MainWindow : Window
         }
 
         _windowSource.AddHook(WndProc);
-        RefreshEdgeBleed();
         ApplyWindowMaterial();
         StartClipboardListening();
 
@@ -367,7 +359,7 @@ public partial class MainWindow : Window
         if (!_isClosing && message == NativeMethods.WmSettingChange)
         {
             // 任务栏停靠侧等改变工作区的系统设置只广播 WM_SETTINGCHANGE（不伴随
-            // WM_DISPLAYCHANGE），右缘裁切判定会停在旧值；任何系统参数变化都重估。
+            // WM_DISPLAYCHANGE）；任何系统参数变化都重新贴齐，保证可见态窗口完整落在工作区内。
             Dispatcher.BeginInvoke(OnDisplayEnvironmentChanged);
 
             if (System.Runtime.InteropServices.Marshal.PtrToStringUni(lParam)
@@ -404,7 +396,7 @@ public partial class MainWindow : Window
     /// <summary>
     /// 显示器/工作区环境变化（WM_DISPLAYCHANGE、WM_SETTINGCHANGE）：贴边隐藏的
     /// 离屏窗口在新显示器布局下可能失去回位路径，立即恢复（防找不到窗口）；
-    /// 随后重估右缘裁切并按当前面板状态重新贴齐。
+    /// 工作区可能已改变，按当前面板状态重新贴齐，可见态外形不变。
     /// </summary>
     private void OnDisplayEnvironmentChanged()
     {
@@ -413,7 +405,7 @@ public partial class MainWindow : Window
             RestoreFromEdgeHide();
         }
 
-        RefreshEdgeBleed();
+        ReapplyCurrentPlacement();
     }
 
     /// <summary>
@@ -536,7 +528,7 @@ public partial class MainWindow : Window
         _panelState.Switch(category);
         ActivatePanel(category);
         _viewModel.SetPanelExpanded(true);
-        ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings, _rightEdgeBleed));
+        ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings));
         UpdateStatusPresentation();
         ScrollItemToTop(category, scrollTargetId);
         AnimatePanelContent(isCategorySwitch: true);
