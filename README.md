@@ -10,7 +10,7 @@
 
 ## 下载与安装
 
-在 [1.21.0 发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.21.0) 下载：
+在 [1.21.0 发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.21.0) 下载 Windows 安装程序：
 
 | 平台 | 下载 | 状态 |
 |---|---|---|

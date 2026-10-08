@@ -1,17 +1,19 @@
 # 设计规范（Design Tokens）
 
-> 唯一数值来源是共享核心 `src/FloatingTransferStation.Core/Design/DesignTokens.cs`。WPF 资源字典（`src/FloatingTransferStation/Resources/MainWindowStyles.xaml`）与 Mac 端常量（`src/FloatingTransferStation.Mac/MainWindow.cs`）镜像这些值；Windows 端 STA 测试（`MainWindowInteractionTests.DesignTokens.cs`）锁定 WPF 镜像与 Core 相等，Mac 端直接引用 Core 常量，编译期一致。修改任何值必须同步本文件、Core 与两端镜像。
+> 唯一数值来源是共享核心 `src/FloatingTransferStation.Core/Design/DesignTokens.cs`。WPF 资源字典（`src/FloatingTransferStation/Resources/MainWindowStyles.xaml`）引用这些值；Windows 端 STA 测试（`MainWindowInteractionTests.DesignTokens.cs`）锁定 WPF 镜像与 Core 相等。修改任何值必须同步本文件与 Core。
+>
+> 历史注记：2026-10-08 起 Mac 端已停止并从仓库移除，涉及另一端镜像的历史表述随之失效；带日期的历史记录不改写。
 
 设计基线为 Windows 11 Fluent（微软官方动效规范），参考调研见 [docs/research/2026-09-22-ui-motion-resources.md](research/2026-09-22-ui-motion-resources.md)。
 
 ## 一、色板（浅色主题）
 
-强调色两端统一为紫 `#6D5DFB` 及其派生色族（2026-09-22 决策：保留 Windows 既有识别度，Mac 放弃青绿 `#327A72`）。
+强调色为紫 `#6D5DFB` 及其派生色族（2026-09-22 决策：保留既有识别度）。
 
 | Token | 值 | 用途 |
 |---|---|---|
 | WindowShellHex | `#F7F8FA` | 窗壳背景 |
-| TabRailHex | `#EFF1F4` | 分类轨道背景、Mac 非活动分类底 |
+| TabRailHex | `#EFF1F4` | 分类轨道背景 |
 | CardHex | `#FFFFFF` | 卡片、编辑框背景 |
 | BorderHex | `#E2E5EA` | 通用描边、窗壳描边 |
 | PrimaryTextHex | `#1D1D1F` | 主文字 |
@@ -75,18 +77,17 @@
 
 ## 三、缓动曲线
 
-| 场景 | WPF KeySpline | Avalonia Easing |
-|---|---|---|
-| 入场（减速） | `0,0,0,1` | CubicEaseOut（现有实现等价） |
-| 出场（加速） | `1,0,1,1` | CubicEaseIn |
-| 减弱动效 | Linear | Linear |
+| 场景 | WPF KeySpline |
+|---|---|
+| 入场（减速） | `0,0,0,1` |
+| 出场（加速） | `1,0,1,1` |
+| 减弱动效 | Linear |
 
-## 四、圆角（按平台分裂）
+## 四、圆角
 
 | Token | 值 | 用途 |
 |---|---|---|
 | DwmCornerRadius（Windows） | 8 | Windows 窗壳：DWM 四角圆角与内容层自裁剪；可见态窗口完整落在工作区内，四角圆角恒定（2026-10-08 决策删除 1.8.0 的右缘越屏裁切，1.21.0 起） |
-| ShellCornerRadius（Mac） | 12（左上/左下，右贴边直角） | Mac 窗壳与描边（维持现状） |
 | HeaderSurfaceCornerRadius | 11（左上） | 头部表面 |
 | CardCornerRadius | 8 | 卡片、分类 Tab |
 | ControlCornerRadius | 7 | 头部按钮、状态弹层、活动层、徽标 |

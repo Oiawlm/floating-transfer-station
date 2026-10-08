@@ -7,7 +7,7 @@
 - `src/FloatingTransferStation.Core/`：共享数据模型、ViewModels、BoardService/BoardMutationService、LocalStore、原子写入、路径检查、图片输入限制与格式检查。
 - `LocalStore` 同时提供 `IDailyReviewStore`：按本地日期读写 `reviews/yyyy-MM-dd.md`，串行化原子保存，并通过目录监听向窗口报告外部变更。
 - `src/FloatingTransferStation/`：保留 WPF 窗口、Windows 剪贴板格式、注册表、安装器和系统集成；启动显式向共享 `AppPaths` 传入 Windows 数据目录设置。
-- `tests/FloatingTransferStation.Core.Tests/`：共享核心业务回归；额外覆盖 Unix 符号链接、大小写和数据恢复。
+- `tests/FloatingTransferStation.Core.Tests/`：共享核心业务回归；覆盖原子保存的损坏恢复、受管图片路径形状（正斜杠/反斜杠）与大小写语义。
 
 `board.json`、`settings.json` 与 `reviews/*.md` 格式保持稳定。复盘文件是普通 Markdown，可由 Obsidian 直接打开。
 
