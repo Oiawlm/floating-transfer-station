@@ -13,14 +13,10 @@ public sealed record AppPaths(
     public static AppPaths CreateDefault(IDataDirectorySettings? settings = null)
     {
         var configured = DataDirectorySettings.NormalizeManagedDataDirectory(settings?.ReadDataDirectory());
-        var dataDirectory = configured ?? (OperatingSystem.IsMacOS()
-            ? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "Library", "Application Support", "FloatingTransferStation", "Data")
-            : Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                ProductIdentity.DisplayName,
-                "Data"));
+        var dataDirectory = configured ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            ProductIdentity.DisplayName,
+            "Data");
         return FromDataDirectory(dataDirectory);
     }
 

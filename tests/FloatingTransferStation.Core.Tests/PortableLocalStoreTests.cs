@@ -94,156 +94,24 @@ public sealed class PortableLocalStoreTests
     }
 
     [TestMethod]
-    public void ManagedImagePath_UsesPlatformCaseSensitivityAndRequiresDirectoryBoundary()
+    public void ManagedImagePath_UsesCaseInsensitivePathsAndRequiresDirectoryBoundary()
     {
         using var directory = new TestDirectory();
         var root = Path.Combine(directory.Root, "images");
         Directory.CreateDirectory(root);
         var differentlyCasedPath = Path.Combine(directory.Root, "IMAGES", "sample.png");
 
-        Assert.AreEqual(OperatingSystem.IsWindows(), ManagedImagePath.IsAllowed(root, differentlyCasedPath));
+        Assert.IsTrue(ManagedImagePath.IsAllowed(root, differentlyCasedPath), "Windows 路径比较不区分大小写。");
         Assert.IsFalse(ManagedImagePath.IsAllowed(root, Path.Combine(directory.Root, "images-other", "sample.png")));
         Assert.IsFalse(ManagedImagePath.IsAllowed(root, root));
     }
 
     [TestMethod]
-    public async Task UnixCaseVariantDirectory_CannotLoadOrDeleteExternalFile()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Inconclusive("Unix path behavior is verified by the macOS test jobs.");
-        }
-
-        using var directory = new TestDirectory();
-        var paths = AppPaths.FromDataDirectory(directory.Root);
-        var variantRoot = Path.Combine(directory.Root, "IMAGES");
-        Directory.CreateDirectory(paths.ImagesDirectory);
-        Directory.CreateDirectory(variantRoot);
-        var externalImage = Path.Combine(variantRoot, "sentinel.png");
-        await File.WriteAllBytesAsync(externalImage, [7]);
-        var store = new LocalStore(paths, new AtomicTextWriter());
-        var snapshot = TextSnapshot("keep");
-        snapshot.Items.Add(BoardItem.CreateImage(Guid.NewGuid(), "IMAGES/sentinel.png", externalImage, DateTimeOffset.UtcNow));
-        await store.SaveBoardAsync(snapshot);
-
-        Assert.AreEqual("keep", (await store.LoadBoardAsync()).Items.Single().Text);
-        Assert.IsFalse(store.TryDeleteImage(externalImage));
-        CollectionAssert.AreEqual(new byte[] { 7 }, await File.ReadAllBytesAsync(externalImage));
-    }
-
-    [TestMethod]
-    [DataRow(true)]
-    [DataRow(false)]
-    public async Task UnixDirectorySymlink_CannotLoadOrDeleteTarget(bool replaceManagedRoot)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Inconclusive("Unix symbolic links are verified by the macOS test jobs.");
-        }
-
-        using var directory = new TestDirectory();
-        var paths = AppPaths.FromDataDirectory(Path.Combine(directory.Root, "data"));
-        var externalRoot = Path.Combine(directory.Root, "external");
-        Directory.CreateDirectory(externalRoot);
-        var externalImage = Path.Combine(externalRoot, "sentinel.png");
-        await File.WriteAllBytesAsync(externalImage, [3, 4]);
-        var link = replaceManagedRoot ? paths.ImagesDirectory : Path.Combine(paths.ImagesDirectory, "linked");
-        Directory.CreateDirectory(Path.GetDirectoryName(link)!);
-        Directory.CreateSymbolicLink(link, externalRoot);
-        try
-        {
-            var linkedImage = Path.Combine(link, "sentinel.png");
-            var relativePath = replaceManagedRoot ? "images/sentinel.png" : "images/linked/sentinel.png";
-            var store = new LocalStore(paths, new AtomicTextWriter());
-            var snapshot = TextSnapshot("keep");
-            snapshot.Items.Add(BoardItem.CreateImage(Guid.NewGuid(), relativePath, linkedImage, DateTimeOffset.UtcNow));
-            await store.SaveBoardAsync(snapshot);
-
-            Assert.AreEqual("keep", (await store.LoadBoardAsync()).Items.Single().Text);
-            Assert.IsFalse(store.TryDeleteImage(linkedImage));
-            CollectionAssert.AreEqual(new byte[] { 3, 4 }, await File.ReadAllBytesAsync(externalImage));
-        }
-        finally
-        {
-            Directory.Delete(link);
-        }
-    }
-
-    [TestMethod]
-    public async Task UnixFileSymlink_CannotLoadOrDeleteTarget()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Inconclusive("Unix symbolic links are verified by the macOS test jobs.");
-        }
-
-        using var directory = new TestDirectory();
-        var paths = AppPaths.FromDataDirectory(directory.Root);
-        Directory.CreateDirectory(paths.ImagesDirectory);
-        var externalImage = Path.Combine(directory.Root, "sentinel.png");
-        await File.WriteAllBytesAsync(externalImage, [5]);
-        var link = Path.Combine(paths.ImagesDirectory, "linked.png");
-        File.CreateSymbolicLink(link, externalImage);
-        try
-        {
-            var store = new LocalStore(paths, new AtomicTextWriter());
-            var snapshot = TextSnapshot("keep");
-            snapshot.Items.Add(BoardItem.CreateImage(Guid.NewGuid(), "images/linked.png", link, DateTimeOffset.UtcNow));
-            await store.SaveBoardAsync(snapshot);
-
-            Assert.AreEqual("keep", (await store.LoadBoardAsync()).Items.Single().Text);
-            Assert.IsFalse(store.TryDeleteImage(link));
-            CollectionAssert.AreEqual(new byte[] { 5 }, await File.ReadAllBytesAsync(externalImage));
-        }
-        finally
-        {
-            File.Delete(link);
-        }
-    }
-
-    [TestMethod]
-    public async Task UnixLinkedDataParent_PreservesManagedImageAccess()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Inconclusive("Unix symbolic links are verified by the macOS test jobs.");
-        }
-
-        using var directory = new TestDirectory();
-        var physicalData = Path.Combine(directory.Root, "physical");
-        var linkedData = Path.Combine(directory.Root, "configured");
-        Directory.CreateDirectory(physicalData);
-        Directory.CreateSymbolicLink(linkedData, physicalData);
-        try
-        {
-            var paths = AppPaths.FromDataDirectory(linkedData);
-            Directory.CreateDirectory(paths.ImagesDirectory);
-            var image = Path.Combine(paths.ImagesDirectory, "managed.png");
-            await File.WriteAllBytesAsync(image, [6]);
-            var store = new LocalStore(paths, new AtomicTextWriter());
-            await store.SaveBoardAsync(new BoardSnapshot
-            {
-                Items = [BoardItem.CreateImage(Guid.NewGuid(), "images/managed.png", image, DateTimeOffset.UtcNow)]
-            });
-
-            Assert.AreEqual(image, (await store.LoadBoardAsync()).Items.Single().ImageAbsolutePath);
-            Assert.IsTrue(store.TryDeleteImage(image));
-            Assert.IsFalse(File.Exists(Path.Combine(physicalData, "images", "managed.png")));
-        }
-        finally
-        {
-            Directory.Delete(linkedData);
-        }
-    }
-
-    [TestMethod]
     public void DefaultPaths_UsePlatformLocalDataDirectory()
     {
-        var expected = OperatingSystem.IsMacOS()
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "Library", "Application Support", "FloatingTransferStation", "Data")
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                ProductIdentity.DisplayName, "Data");
+        var expected = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            ProductIdentity.DisplayName, "Data");
 
         Assert.AreEqual(expected, AppPaths.CreateDefault().DataDirectory);
     }

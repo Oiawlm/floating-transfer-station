@@ -8,6 +8,5 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="悬浮中转站" />
-    <InternalsVisibleTo Include="FloatingTransferStation.Mac" />
   </ItemGroup>
 </Project>

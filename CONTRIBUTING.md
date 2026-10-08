@@ -16,7 +16,7 @@
 
 ## 开发环境
 
-Windows 正式版使用 .NET 10、WPF、MSTest 和 Inno Setup；Mac 候选版使用 .NET 10 与 Avalonia，最低 macOS 14。两端引用 `FloatingTransferStation.Core`。仓库脚本会把 Windows 开发工具准备在不提交的 `.tools/` 中；Mac 使用本机 .NET 10 SDK。
+Windows 正式版使用 .NET 10、WPF、MSTest 和 Inno Setup，引用 `FloatingTransferStation.Core`。仓库脚本会把 Windows 开发工具准备在不提交的 `.tools/` 中。2026-10-08 起 Mac 端永久停止开发并已从仓库移除，历史 Release 与 tag 原样保留。
 
 ```powershell
 & .\scripts\bootstrap-dotnet.ps1
@@ -35,9 +35,9 @@ Windows 正式版使用 .NET 10、WPF、MSTest 和 Inno Setup；Mac 候选版使
 & .\scripts\build-release.ps1
 ```
 
-该入口运行 Release 全量测试、工具路径契约、隔离的 Inno 清理行为测试，生成 Windows 安装包后继续生成两个 Mac 候选 ZIP。CI 的 Windows 分支用 `-WindowsOnly`，两个 Mac 分支各自执行原生测试、打包和窗口烟雾验证；最终“格式、测试与构建”必须等待三端通过。清理测试只操作 `TestResults` 中新建的合成目录，不执行产品安装或卸载。
+该入口运行 Release 全量测试、工具路径契约、隔离的 Inno 清理行为测试，并生成 Windows 安装包。CI 的质量门执行同一入口；最终“格式、测试与构建”等待其通过。清理测试只操作 `TestResults` 中新建的合成目录，不执行产品安装或卸载。
 
-后续功能和修复同步考虑 Windows / Mac：业务规则放共享核心，系统接口在各自项目适配；共同修改 `version.txt`，不维护分叉版本号。只影响单一系统时说明原因，但仍运行另一端适用的回归。Mac 上使用 `FloatingTransferStation.Mac.slnx` 进行格式、Release 测试和严格构建，避免加载 WPF 项目。
+后续功能和修复以 Windows 11 为目标：业务规则放共享核心，系统接口在 Windows 项目适配；共同修改 `version.txt`，不维护分叉版本号。
 
 日常改动写入 `CHANGELOG.md` 的“未发布”区。准备正式发布时，先整理目标版本记录，再运行 `build-release.ps1 -ForRelease`；完整流程见[发布指南](docs/releasing.md)。
 

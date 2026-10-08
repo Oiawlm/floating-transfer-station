@@ -42,7 +42,6 @@ $AllowedRootEntries = @(
     'CODE_OF_CONDUCT.md'
     'CONTRIBUTING.md'
     'Directory.Build.props'
-    'FloatingTransferStation.Mac.slnx'
     'FloatingTransferStation.slnx'
     'LICENSE'
     'PROJECT_GUIDE.md'
