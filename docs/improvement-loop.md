@@ -17,7 +17,7 @@
 自 2026-09-25 起夜间循环以"整点接力"机制运行：自动化 `悬浮中转站夜间持续改进整点接力` 在 23:00–08:00 每整点触发一次，同一会话尽量连续完成多个切片，整点触发只作为断电/崩溃后的接力兜底。以执行者手册为准；本节为机制摘要：
 
 1. **初始化与锁**：≥09:00 只写收尾日志；`.zcode/nightly/lock.json` 的 heartbeat 距今 <90 分钟则退出（另一会话在工作），否则接管并随阶段刷新；读 `.zcode/nightly/state.json` checkpoint，优先恢复进行中切片。
-2. **工作来源**：checkpoint 恢复 > 本文候选池 > wbx 双端提案 > README"当前限制"与 `docs/observations.md` 已知问题。
+2. **工作来源**：checkpoint 恢复 > 本文候选池 > wbx 提案 > README"当前限制"与 `docs/observations.md` 已知问题。
 3. **切片闭环**（单项 ≤90 分钟，08:30 后不开新片）：对照冻结清单选最小垂直切片 → 分支 `feature/nightly-<YYYYMMDD>-<slug>` → 可委派部分 wbx fanout（产出一律是草稿，逐行审查后才集成）→ 补自动回归（UI/交互变化以 `FTS_PREVIEW_DATA_DIR` 隔离实例取证）→ 质量门四连 → CHANGELOG 未发布区 + `version.txt`（修复=patch，新功能=minor）→ 提交、推送、PR、等 CI（Windows）绿 → 合并 main → 统一发行（GitHub Release 放 Windows 安装包，附 SHA256SUMS.txt）→ 本机优雅关闭、静默原地更新、重启验证版本与自启。
 4. **无人值守决策**：绝不提问；冻结冲突→换方向；越权操作→不做并记录；拿不准→选风险更小的做法；一切待用户裁决事项记入当月 loop 日志"待裁决"清单。
 5. **收尾**（09:00、无可用工作项或不可抗中断）：删 lock.json，checkpoint 写终态，loop 日志追加当晚汇总（切片数、合入与发版、失败与降级、待裁决）并提交推送。
