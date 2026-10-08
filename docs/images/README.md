@@ -90,4 +90,4 @@ ffprobe -v error -select_streams v:0 -count_frames -show_entries stream=width,he
 
 单项：01 ≤2.5MB、02/07/08 ≤200KB、03/04/06 ≤1.5MB、05 ≤2.0MB、10 ≤300KB、11 ≤1.2MB；总量目标 ≤11MB、硬上限 12MB。降级顺序（05 除外）：缩时长 → 缩宽度 → 降帧率（≥10fps）→ 改静态图 → 删除（仅限低优先级资产）。
 
-规划推导与选型调研见 [research/2026-09-25-readme-visual-plan.md](../research/2026-09-25-readme-visual-plan.md) 等三份材料；跨窗口交接见 [handoff/](../handoff/)。
+规划推导与选型调研见 `docs/research/` 相关材料、跨窗口交接见 `docs/handoff/`（均为维护者本地资料，不入库）。
