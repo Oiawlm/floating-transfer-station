@@ -305,7 +305,7 @@ public partial class MainWindow : Window
         e.Handled = true;
         var work = CurrentWorkArea();
         _settings = _settings.ResetToDefault(work.Width, work.Height);
-        ApplyPlacement(WindowController.Expanded(work, _settings, _rightEdgeBleed));
+        ApplyPlacement(WindowController.Expanded(work, _settings));
         try
         {
             await SaveSettingsAsync();

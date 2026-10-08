@@ -126,7 +126,6 @@ public partial class App : Application
                 preferencesStore: store,
                 startupManager: new WindowsStartupManager(),
                 dataDirectory: paths.DataDirectory,
-                rightEdgeBleedProvider: ScreenEdgeGeometry.GetRightEdgeBleed,
                 pluginCatalog: pluginCatalog,
                 operationGate: boardOperationGate,
                 dataDirectoryChangeService: string.IsNullOrWhiteSpace(previewDataDirectory)

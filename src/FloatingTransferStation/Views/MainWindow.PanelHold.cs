@@ -66,7 +66,7 @@ public partial class MainWindow : Window
         var category = _panelState.ActiveCategory ?? _viewModel.DefaultCapturePanel.Category;
         _panelState.Switch(category);
         ActivatePanel(category);
-        ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings, _rightEdgeBleed));
+        ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings));
         _viewModel.SetPanelExpanded(true);
         UpdateStatusPresentation();
         CategoryRail.UpdateLayout();

@@ -29,8 +29,6 @@ internal static class NativeMethods
     internal const int DwmcwpRound = 2;
     internal const int DwmbtMica = 2;
 
-    internal const uint MonitorDefaultToNearest = 2;
-
     // SetWindowPos 标志：迁移只用无 Z 序、无激活的矩形应用；守卫需清除忽略位置/尺寸的标志。
     internal const uint SwpNoSize = 0x0001;
     internal const uint SwpNoMove = 0x0002;
@@ -66,13 +64,6 @@ internal static class NativeMethods
     [DllImport("dwmapi.dll", PreserveSig = true)]
     internal static extern int DwmSetWindowAttribute(nint hwnd, int attribute, ref int value, int size);
 
-    [DllImport("user32.dll")]
-    internal static extern nint MonitorFromWindow(nint hwnd, uint flags);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    internal static extern bool GetMonitorInfoW(nint monitor, ref MonitorInfo info);
-
     [StructLayout(LayoutKind.Sequential)]
     internal struct Point
     {
@@ -107,15 +98,6 @@ internal static class NativeMethods
         public int Top;
         public int Right;
         public int Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct MonitorInfo
-    {
-        public int Size;
-        public NativeRect Monitor;
-        public NativeRect Work;
-        public int Flags;
     }
 
     [StructLayout(LayoutKind.Sequential)]

@@ -148,7 +148,7 @@ public partial class MainWindow : Window
         }
 
         ActivatePanel(category);
-        ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings, _rightEdgeBleed));
+        ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings));
         _viewModel.SetPanelExpanded(true);
         UpdateStatusPresentation();
         CategoryRail.UpdateLayout();
@@ -380,8 +380,7 @@ public partial class MainWindow : Window
         BeginCollapsedVisualHandoff(WindowController.Collapsed(
             CurrentWorkArea(),
             _settings,
-            _viewModel.DefaultCapturePanel.Category,
-            _rightEdgeBleed));
+            _viewModel.DefaultCapturePanel.Category));
     }
 
     private void CancelPanelCollapseExit()

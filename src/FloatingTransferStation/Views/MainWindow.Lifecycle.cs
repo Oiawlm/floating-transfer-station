@@ -22,7 +22,7 @@ public partial class MainWindow : Window
         var work = CurrentWorkArea();
         _settings = (_settings with { PanelWidth = _settings.PanelWidth - e.HorizontalChange })
             .Normalize(work.Width, work.Height);
-        Width = _settings.PanelWidth + WindowSettings.TabWidth + _rightEdgeBleed;
+        Width = _settings.PanelWidth + WindowSettings.TabWidth;
         DockRight();
     }
 
@@ -58,45 +58,27 @@ public partial class MainWindow : Window
     private void DockRight()
     {
         var work = CurrentWorkArea();
-        Left = work.Right - (ActualWidth - _rightEdgeBleed);
-    }
-
-    /// <summary>重估右缘裁切量（显示器/任务栏/邻接屏可能已变化），同步内缩内容层并按当前面板状态重新贴齐。</summary>
-    private void RefreshEdgeBleed()
-    {
-        if (_rightEdgeBleedProvider is null)
-        {
-            return;
-        }
-
-        _rightEdgeBleed = _rightEdgeBleedProvider.Invoke(this);
-        ApplyRightEdgeBleedInset();
-        ReapplyCurrentPlacement();
-    }
-
-    /// <summary>
-    /// 边缘裁切时窗口右缘越出屏幕；内容层按裁切量右内缩，使轨道与面板完整落在屏幕内。
-    /// </summary>
-    private void ApplyRightEdgeBleedInset()
-    {
-        if (LayoutRoot is null)
-        {
-            return;
-        }
-
-        LayoutRoot.Margin = new Thickness(0, 0, _rightEdgeBleed, 0);
+        Left = work.Right - ActualWidth;
     }
 
     private void ReapplyCurrentPlacement()
     {
         var work = CurrentWorkArea();
-        ApplyPlacement(_viewModel.IsPanelExpanded
-            ? WindowController.Expanded(work, _settings, _rightEdgeBleed)
-            : WindowController.Collapsed(
+        if (_viewModel.IsExternalDropRailVisible)
+        {
+            ApplyPlacement(WindowController.CategoryRail(work, _settings));
+        }
+        else if (_viewModel.IsPanelExpanded)
+        {
+            ApplyPlacement(WindowController.Expanded(work, _settings));
+        }
+        else
+        {
+            ApplyPlacement(WindowController.Collapsed(
                 work,
                 _settings,
-                _viewModel.DefaultCapturePanel.Category,
-                _rightEdgeBleed));
+                _viewModel.DefaultCapturePanel.Category));
+        }
     }
 
     private static WorkArea CurrentWorkArea()
@@ -157,7 +139,7 @@ public partial class MainWindow : Window
         }
 
         // DIP 数值为权威，仅在调用边界换算一次；两条锚定边各自取整后相减得到跨度，
-        // 保证右缘（含边缘裁切）与底缘换算后不因取整漂移。
+        // 保证右缘与底缘换算后不因取整漂移。
         var transform = source.CompositionTarget.TransformToDevice;
         var left = (int)Math.Round(placement.Left * transform.M11);
         var top = (int)Math.Round(placement.Top * transform.M22);

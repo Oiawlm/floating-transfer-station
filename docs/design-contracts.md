@@ -41,12 +41,12 @@
 - **锁定**：`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`、`tests/FloatingTransferStation.Tests/LifecycleTests.Runtime.cs`。
 - **关联**：[右缘裁切与设置设计](superpowers/specs/2026-09-23-edge-bleed-and-settings-design.md)。
 
-### 6. 贴边几何与裁切
+### 6. 面板外形恒定（可见态四角圆角）
 
-- **断言**：贴边一侧窗口边缘与屏幕平齐；右缘裁切（`WindowSettings.EdgeBleed` = DWM 圆角 token）、展开/收起节奏与既有动效开关语义不变；右贴任务栏或右邻显示器时回退贴齐，`WM_DISPLAYCHANGE`/`WM_SETTINGCHANGE` 后重估。
-- **由来**：1.8.0 右缘裁切（DWM 圆角落屏外）；1.11.1/1.14.1 重估时机补齐。
-- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.EdgeBleed.cs`、`tests/FloatingTransferStation.Tests/WindowControllerTests.cs`（`EdgeBleed_MatchesTheDwmCornerRadiusToken` 等）。
-- **关联**：[设计规范 §四/§五·C](design.md)、[右缘裁切设计](superpowers/specs/2026-09-23-edge-bleed-and-settings-design.md)。
+- **断言**：面板处于可见态（展开/收起/拖放轨道）时，窗口矩形完整落在工作区内、四角圆角恒定，窗口宽度恒等于可见宽度；不随任务栏停靠侧、多显示器布局、显示器插拔或系统广播改变外形；`WM_DISPLAYCHANGE`/`WM_SETTINGCHANGE` 只触发两件事——贴边隐藏离屏恢复兜底（见 #17）与按当前面板状态重新贴齐工作区右缘。内容层不得为任何"越屏区域"做右内缩。贴边隐藏离屏态不属本断言范围。
+- **由来**：1.8.0 曾引入右缘越屏裁切（`WindowSettings.EdgeBleed`：窗口右移一个 DWM 圆角半径，右侧两圆角落屏外贴平）换取收起态右缘平直，但其条件性使外形随环境漂移；2026-10-08 用户决策删除该机制本身——可见态外形恒定为四角圆角，1.21.0 落地。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.EdgeGeometry.cs`、`tests/FloatingTransferStation.Tests/WindowControllerTests.cs`（右缘贴齐与可见宽钳制）。
+- **关联**：[设计规范 §四/§五·C](design.md)、[右缘裁切历史设计](superpowers/specs/2026-09-23-edge-bleed-and-settings-design.md)（历史档案，机制已删除）。
 
 ### 7. 编辑器持有焦点期间不自动收起
 

@@ -47,7 +47,7 @@ public sealed partial class MainWindowInteractionTests
 
     private static void AssertIntersectsNoMonitor(in NativeRect rectangle)
     {
-        foreach (var monitor in ScreenEdgeGeometry.AllMonitors())
+        foreach (var monitor in MonitorBounds.AllMonitors())
         {
             Assert.IsTrue(
                 rectangle.Right <= monitor.Left || rectangle.Left >= monitor.Right,
