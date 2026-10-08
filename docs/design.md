@@ -4,7 +4,7 @@
 >
 > 历史注记：2026-10-08 起 Mac 端已停止并从仓库移除，涉及另一端镜像的历史表述随之失效；带日期的历史记录不改写。
 
-设计基线为 Windows 11 Fluent（微软官方动效规范），参考调研见 [docs/research/2026-09-22-ui-motion-resources.md](research/2026-09-22-ui-motion-resources.md)。
+设计基线为 Windows 11 Fluent（微软官方动效规范），参考调研见 `docs/research/2026-09-22-ui-motion-resources.md`（维护者本地资料，不入库）。
 
 ## 一、色板（浅色主题）
 

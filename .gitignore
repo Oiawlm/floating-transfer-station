@@ -11,3 +11,11 @@ TestResults/
 *.suo
 .zcode/
 .preview-data/
+/AGENTS.md
+/PROJECT_GUIDE.md
+/docs/handoff/
+/docs/research/
+/docs/superpowers/
+/docs/observations.md
+/docs/improvement-loop.md
+/图片/

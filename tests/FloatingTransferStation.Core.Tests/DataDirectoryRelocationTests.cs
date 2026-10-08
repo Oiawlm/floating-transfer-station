@@ -264,14 +264,21 @@ public sealed class DataDirectoryRelocationTests
             ("sub/b.txt", "bbbb"));
         var plan = _relocator.Plan(source, NewTargetParent());
         var updates = new List<DataDirectoryCopyProgress>();
-        var progress = new Progress<DataDirectoryCopyProgress>(updates.Add);
 
-        await _relocator.StageAsync(plan, progress);
-        await Task.Yield();
+        // 用同步收集器而非 Progress<T>：Progress 经 SynchronizationContext 异步
+        // 投递，单次 Task.Yield 在 CI 负载下排不干队列（曾致偶发假失败）；本测
+        // 试点是「逐文件上报」的契约，上报时序无关。
+        await _relocator.StageAsync(plan, new CollectingProgress(updates));
 
         Assert.AreEqual(2, updates.Count);
         Assert.AreEqual(7, updates[^1].TotalBytes);
         Assert.AreEqual(2, updates[^1].CopiedFiles);
+    }
+
+    private sealed class CollectingProgress(List<DataDirectoryCopyProgress> updates)
+        : IProgress<DataDirectoryCopyProgress>
+    {
+        public void Report(DataDirectoryCopyProgress update) => updates.Add(update);
     }
 
     [TestMethod]

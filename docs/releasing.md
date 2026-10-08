@@ -4,7 +4,7 @@
 
 版本交付采用 main 中的代码和 GitHub Release：上传 Windows 安装包与 `SHA256SUMS.txt`，README 顶部提供下载入口。功能分支推送不替代这个交付结果。
 
-1. 确定待发布版本，将对应条目归入新的版本段落。只在根目录 `version.txt` 设置生产版本；MSBuild、ProductIdentity、Inno 和打包脚本从它取得版本。同步 README 和 PROJECT_GUIDE 中的发布说明与安装包名称，历史设计和旧版本记录不改写。
+1. 确定待发布版本，将对应条目归入新的版本段落。只在根目录 `version.txt` 设置生产版本；MSBuild、ProductIdentity、Inno 和打包脚本从它取得版本。同步 README 中的发布说明与安装包名称，并同步更新本地维护文档（`PROJECT_GUIDE.md`，不入库）；历史设计和旧版本记录不改写。
 2. 在准备发布的代码上完成依赖还原和格式验证（命令见 CONTRIBUTING.md；WPF 设计时格式工具先预构建 Core 的 Debug 程序集），再执行包含 Release 全量测试的打包入口；无需在同一份未变化代码上先重复跑一次全量测试：
 
    ```powershell

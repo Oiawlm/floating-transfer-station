@@ -474,17 +474,44 @@
               </Grid.ColumnDefinitions>
               <Button x:Name="ReviewPreviousButton"
                       Grid.Column="0"
-                      Content="‹"
                       Style="{StaticResource ThemedNavButtonStyle}"
                       ToolTip="上一天"
-                      Click="ReviewPreviousButton_Click" />
+                      AutomationProperties.Name="上一天"
+                      Click="ReviewPreviousButton_Click">
+                <!-- 日期导航用矢量 chevron 替代字符 ‹ ›：文本 ContentPresenter 居中的是
+                     行框（ascent/descent 空白）与字宽，不是字形墨迹，符号必然偏离按钮
+                     中心。几何按最终尺寸绘制并让含描边墨迹贴住原点（墨迹盒恰为
+                     0,0–8,15，光学足印 15×8 DIP 与头部描边图标同量级）：WPF 对
+                     Stretch=None 的 Shape 不把几何重定位到元素原点（元素=几何右下角
+                     +半描边），墨迹贴原点时元素布局尺寸=墨迹盒且墨迹对称充满元素，
+                     ContentPresenter 居中的就是墨迹本身——几何居中=视觉居中；
+                     Stretch=Uniform 在纵横比与画布不一致时元素盒与墨迹盒不对称，弃用。
+                     右向为左向几何的镜像。 -->
+                <Path Data="M7.25,0.75 L0.75,7.5 L7.25,14.25"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                      StrokeThickness="1.5"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round" />
+              </Button>
               <Button x:Name="ReviewNextButton"
                       Grid.Column="1"
-                      Content="›"
                       Style="{StaticResource ThemedNavButtonStyle}"
                       Margin="4,0,0,0"
                       ToolTip="下一天"
-                      Click="ReviewNextButton_Click" />
+                      AutomationProperties.Name="下一天"
+                      Click="ReviewNextButton_Click">
+                <Path Data="M0.75,0.75 L7.25,7.5 L0.75,14.25"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                      StrokeThickness="1.5"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round" />
+              </Button>
               <TextBlock x:Name="ReviewDateState"
                          Grid.Column="2"
                          Margin="8,0,0,0"
