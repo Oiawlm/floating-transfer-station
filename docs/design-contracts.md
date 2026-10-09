@@ -131,6 +131,15 @@
 - **锁定**：`tests/FloatingTransferStation.Tests/EdgeHideStateMachineTests.cs`（相位机）、`tests/FloatingTransferStation.Tests/WindowControllerTests.cs`（`EdgeHidden_*`/`EdgeRecallZone_*` 纯几何）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.EdgeHide.cs`（窗口层全套）。
 - **关联**：同日设计规格：`docs/superpowers/specs/2026-10-07-text-ops-avoidance-and-edge-hide-design.md`。
 
+## 四、本次新增（18，1.23.0）
+
+### 18. 自动清理范围与调度基线（1.23.0 起）
+
+- **断言**：自动清理仅在设置开关开启时运行；只删除 `AutoCleanupSchedule.SweepCategories`（= 分类目录 `BoardCategoryCatalog.Ordered` 显式排除复盘分类的推导结果）内的非置顶条目，且无论卡片创建时间——间隔清扫语义（每到 24h 周期点删当时所有非置顶），不是年龄阈值；置顶条目与复盘内容（Reference 分类条目与 `reviews/*.md` 复盘文件）绝不触碰；调度时间戳 `AutoCleanupLastRunAtUtc` 为 null 或处于未来（时钟回拨/NTP 校正）时一律建立基线、绝不清扫（首次清扫发生在开启 24 小时后）；板面装载未成功本会话绝不清扫；跨分类清扫是单次原子操作——一次保存、一批撤销（可整批 Ctrl+Z，图片文件按撤销栈既有生命周期保留到驱逐/退出），保存失败整批恢复原内容与原顺序、不进撤销栈、不记账；记账时间戳与开关同在 preferences.json（原子写 + 备份回退），经内存权威副本与既有偏好保存门串行落盘。
+- **由来**：1.23.0 用户需求「每隔 24 小时自动清理所有非置顶内容，直接删除，绝不包括复盘」。null=建基线是设计评审修正：升级首启立即清空旧内容属静默不可逆删除事故（外部调研 Claude Code `cleanupPeriodDays` 反例）；pin 豁免必须测试锁定参照 Maccy #106 误删事故；间隔清扫应幂等且容忍延迟参照 Ditto「periodic, not immediate」；触发收敛为「装载成功补跑 + 1 小时常驻巡检」两处，明确拒绝在通用持久化 API（`ApplyPreferences`）内检测开关转变并触发清扫。
+- **锁定**：`tests/FloatingTransferStation.Core.Tests/AutoCleanupScheduleTests.cs`（周期边界与 SweepCategories 清单）、`tests/FloatingTransferStation.Tests/BoardServiceTests.cs`（`RemoveNonPinned_MultiCategory_*`）、`tests/FloatingTransferStation.Tests/BoardMutationServiceTests.cs`（`ClearNonPinned_MultiCategory_*`）、`tests/FloatingTransferStation.Tests/AutoCleanupIsolationTests.cs`（复盘文件字节不变全链路）、`tests/FloatingTransferStation.Tests/MainWindowAutoCleanupTests.cs`（漏斗闸门/建基线/到期清扫/关闭停表）、`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`（自动清理字段回落）、`tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs`（开关默认开启与立即持久化）。
+- **关联**：CHANGELOG 1.23.0（无独立 spec，如实标注）。
+
 ## 维护规则
 
 - 新契约入清单时机：行为定型的同一版本，随 CHANGELOG 与锁定测试一起落。

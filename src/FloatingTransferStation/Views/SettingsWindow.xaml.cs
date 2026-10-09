@@ -57,6 +57,7 @@ public partial class SettingsWindow : Window
         GlobalHotkeyToggle.IsChecked = host.CurrentPreferences.GlobalHotkeyEnabled;
         RightClickCopyToggle.IsChecked = host.CurrentPreferences.RightClickCardCopyEnabled;
         CtrlCCopyToggle.IsChecked = host.CurrentPreferences.CopySelectionWithCtrlCEnabled;
+        AutoCleanupToggle.IsChecked = host.CurrentPreferences.AutoCleanupEnabled;
         TrashLeftClickComboBox.ItemsSource = new[]
         {
             new ComboBoxItem { Content = "清空非置顶", Tag = TrashNoSelectionLeftClickAction.ClearNonPinned },
@@ -298,6 +299,25 @@ public partial class SettingsWindow : Window
         _host.ApplyPreferences(_host.CurrentPreferences with
         {
             CopySelectionWithCtrlCEnabled = enabled
+        });
+    }
+
+    private void AutoCleanupToggle_Checked(object sender, RoutedEventArgs e) =>
+        ApplyAutoCleanupPreference(enabled: true);
+
+    private void AutoCleanupToggle_Unchecked(object sender, RoutedEventArgs e) =>
+        ApplyAutoCleanupPreference(enabled: false);
+
+    private void ApplyAutoCleanupPreference(bool enabled)
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with
+        {
+            AutoCleanupEnabled = enabled
         });
     }
 

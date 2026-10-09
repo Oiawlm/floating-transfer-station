@@ -309,6 +309,25 @@
           <TextBlock Style="{StaticResource NoteCaptionStyle}"
                      Text="有选择时点击垃圾桶始终删除已选内容；两种清空都可 Ctrl+Z 整体撤销。" />
 
+          <TextBlock Text="自动清理" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+          <Grid Background="Transparent">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="自动清理非置顶卡片"
+                       Style="{StaticResource RowCaptionStyle}" />
+            <CheckBox x:Name="AutoCleanupToggle"
+                      Grid.Column="1"
+                      Style="{StaticResource ToggleSwitchStyle}"
+                      AutomationProperties.Name="自动清理非置顶卡片"
+                      Checked="AutoCleanupToggle_Checked"
+                      Unchecked="AutoCleanupToggle_Unchecked" />
+          </Grid>
+          <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                     Text="开启后每 24 小时自动清理一次各分类中非置顶的卡片（无论创建时间）；置顶卡片与「复盘」内容不受影响，清理后可 Ctrl+Z 撤销（仅本次运行内）。首次清理在开启 24 小时后进行。" />
+
           <TextBlock Text="数据目录" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
           <Grid Background="Transparent">
             <Grid.ColumnDefinitions>

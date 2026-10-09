@@ -159,6 +159,7 @@ public partial class MainWindow : Window
         _edgeHideRecallTimer = new DispatcherTimer { Interval = EdgeHideRecallPollInterval };
         _edgeHideRecallTimer.Tick += EdgeHideRecallTimer_Tick;
         InitializeDailyReviewEditing();
+        InitializeAutoCleanup();
         InitializeCategoryNameEditing();
         InitializePanelTextEditing();
         InitializeCardEditSessionTracking();
@@ -305,6 +306,7 @@ public partial class MainWindow : Window
 
         ReassertTopmost();
         _topmostTimer.Start();
+        _autoCleanupCheckTimer.Start();
     }
 
     /// <summary>注册剪贴板格式监听；已在监听时为 no-op。搬迁静默期停止后可由此恢复。</summary>

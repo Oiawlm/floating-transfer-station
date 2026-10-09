@@ -28,7 +28,11 @@ public enum TrashNoSelectionRightClickAction
 /// 1.15.0 起新增卡片复制手势与垃圾桶按钮无选择行为（默认右键卡片复制、
 /// Ctrl+C 复制选中、左键清空非置顶、右键清空全部）；
 /// 1.16.0 起新增插件目录覆盖（null = 默认数据目录下 plugins，插件目录是用户偏好
-/// 而非受管数据契约；启用状态 plugins-state.json 仍留在数据目录）。
+/// 而非受管数据契约；启用状态 plugins-state.json 仍留在数据目录）；
+/// 1.23.0 起新增自动清理开关（默认开启，每 24 小时清理各内容分类的非置顶卡片，
+/// 置顶与复盘内容不受影响）与成对的调度记账时间戳
+/// <see cref="AutoCleanupLastRunAtUtc"/>（UTC 上次清扫/建基线时刻；与开关同域读写
+/// 防互相覆盖，不是用户直接可感的偏好项，null = 尚未建立基线）。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -40,7 +44,9 @@ public sealed record AppPreferences(
     bool CopySelectionWithCtrlCEnabled = true,
     TrashNoSelectionLeftClickAction TrashNoSelectionLeftClick = TrashNoSelectionLeftClickAction.ClearNonPinned,
     TrashNoSelectionRightClickAction TrashNoSelectionRightClick = TrashNoSelectionRightClickAction.ClearAll,
-    string? PluginsDirectoryOverride = null)
+    string? PluginsDirectoryOverride = null,
+    bool AutoCleanupEnabled = true,
+    DateTimeOffset? AutoCleanupLastRunAtUtc = null)
 {
     public static AppPreferences Default { get; } = new();
 }

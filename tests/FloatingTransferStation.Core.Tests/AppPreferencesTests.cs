@@ -123,4 +123,45 @@ public sealed class AppPreferencesTests
         Assert.IsNotNull(restored);
         Assert.IsNull(restored.PluginsDirectoryOverride, "旧版 preferences.json 缺字段时必须回落到默认插件目录。");
     }
+
+    [TestMethod]
+    public void Default_EnablesAutoCleanupWithoutBaseline()
+    {
+        Assert.IsTrue(AppPreferences.Default.AutoCleanupEnabled, "自动清理必须默认开启（老用户升级即生效）。");
+        Assert.IsNull(AppPreferences.Default.AutoCleanupLastRunAtUtc, "默认无调度基线：首次清扫在首个周期之后。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesAutoCleanupPreferenceAndTimestamp()
+    {
+        var preferences = AppPreferences.Default with
+        {
+            AutoCleanupEnabled = false,
+            AutoCleanupLastRunAtUtc = new DateTimeOffset(2026, 10, 9, 8, 30, 0, TimeSpan.Zero)
+        };
+
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            JsonSerializer.Serialize(preferences));
+
+        Assert.AreEqual(preferences, restored);
+        Assert.IsFalse(restored!.AutoCleanupEnabled);
+        Assert.AreEqual(preferences.AutoCleanupLastRunAtUtc, restored.AutoCleanupLastRunAtUtc);
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutAutoCleanupFields_FallsBackToEnabledWithoutBaseline()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Dark","animationsEnabled":true,"globalHotkeyEnabled":true}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsTrue(restored.AutoCleanupEnabled, "1.23.0 之前的 preferences.json 必须回落到自动清理默认开启。");
+        Assert.IsNull(restored.AutoCleanupLastRunAtUtc, "缺记账字段时必须回落到未建基线。");
+    }
 }

@@ -214,6 +214,7 @@ public partial class MainWindow : Window
     {
         _topmostTimer.Stop();
         _edgeHideRecallTimer.Stop();
+        _autoCleanupCheckTimer.Stop();
         if (_allowClose)
         {
             StopClipboardListening();
