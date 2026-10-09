@@ -897,6 +897,42 @@ public sealed class SettingsWindowInteractionTests
         }
     }
 
+    [STATestMethod]
+    public void AutoCleanupToggle_DefaultsOnAndPersistsImmediately()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var toggle = settings.FindName("AutoCleanupToggle") as CheckBox;
+            Assert.IsNotNull(toggle);
+            Assert.IsTrue(toggle.IsChecked!.Value, "自动清理默认开启（升级老用户同样默认开启）。");
+
+            toggle.IsChecked = false;
+            CompleteLayout(window);
+
+            Assert.IsFalse(window.CurrentPreferences.AutoCleanupEnabled);
+            Assert.IsFalse(preferencesStore.LastSaved!.AutoCleanupEnabled, "改动必须立即落偏好文件。");
+
+            toggle.IsChecked = true;
+            CompleteLayout(window);
+
+            Assert.IsTrue(window.CurrentPreferences.AutoCleanupEnabled);
+            Assert.IsTrue(preferencesStore.LastSaved.AutoCleanupEnabled);
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
     private sealed class IdleClipboardReader : IClipboardReader
     {
         public Task<ClipboardSnapshot> ReadAsync(CancellationToken cancellationToken = default) =>

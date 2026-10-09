@@ -524,6 +524,48 @@ public sealed class BoardService
             removed);
     }
 
+    /// <summary>
+    /// 跨分类版本的 <see cref="RemoveNonPinned(BoardCategory)"/>：只移除所给分类内的
+    /// 非置顶条目（各分类置顶区在前、普通区原顺序），未给出的分类不动；组合为单个
+    /// <see cref="RemovedBoardItems"/>（与 RemoveMany 一致，只收录发生移除的分类），
+    /// 供调用方单次保存、失败整批回滚与整批撤销。没有非置顶条目时为空操作。
+    /// 同一分类重复出现天然幂等（第二遍已无非置顶可移）。
+    /// </summary>
+    public RemovedBoardItems RemoveNonPinned(IReadOnlyCollection<BoardCategory> categories)
+    {
+        ArgumentNullException.ThrowIfNull(categories);
+        foreach (var category in categories)
+        {
+            if (!BoardCategoryCatalog.IsDefined(category))
+            {
+                throw new ArgumentOutOfRangeException(nameof(categories));
+            }
+        }
+
+        var originals = new Dictionary<BoardCategory, IReadOnlyList<BoardItem>>();
+        var removedItems = new List<BoardItem>();
+        foreach (var category in categories)
+        {
+            if (originals.ContainsKey(category))
+            {
+                continue;
+            }
+
+            var original = _items[category].ToArray();
+            var removed = original.Where(item => !item.IsPinned).ToArray();
+            if (removed.Length == 0)
+            {
+                continue;
+            }
+
+            ReplaceCategory(category, original.Where(item => item.IsPinned));
+            originals[category] = original;
+            removedItems.AddRange(removed);
+        }
+
+        return new RemovedBoardItems(originals, removedItems);
+    }
+
     public void Restore(RemovedBoardCategory removed)
     {
         if (!BoardCategoryCatalog.IsDefined(removed.Category))

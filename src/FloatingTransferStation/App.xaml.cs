@@ -199,6 +199,10 @@ public partial class App : Application
                 await window.Dispatcher.InvokeAsync(() => window.AdoptMigratedSettings(migrated));
             }
 
+            // 板面装载成功：置闸门并补跑一次自动清理巡检（建基线或到期清扫）。
+            // 装载失败路径不调用 → 本会话绝不清扫（看不见内容时不删除）。
+            await window.Dispatcher.InvokeAsync(window.OnBoardLoadCompleted);
+
             var imagePaths = BoardCategoryCatalog.Ordered
                 .SelectMany(category => board.Items(category))
                 .Where(item => item.Kind == BoardItemKind.Image)

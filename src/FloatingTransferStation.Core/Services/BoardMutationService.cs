@@ -334,16 +334,33 @@ public sealed class BoardMutationService
     /// 保存失败整批回滚;没有非置顶条目时为空操作,返回 false。
     /// 契约风格与 <see cref="ClearCategoryAsync"/> 一致。
     /// </summary>
-    public Task<bool> ClearNonPinnedAsync(
+    public async Task<bool> ClearNonPinnedAsync(
         BoardCategory category,
+        CancellationToken cancellationToken = default)
+    {
+        var outcome = await ClearNonPinnedAsync([category], cancellationToken);
+        return outcome.Saved && outcome.RemovedCount > 0;
+    }
+
+    /// <summary>跨分类清扫结果：<see cref="Saved"/> 且 <see cref="RemovedCount"/> &gt; 0
+    /// 才有内容被移除并持久化；Saved=true 且 RemovedCount=0 是幂等空操作（未写盘）。</summary>
+    public readonly record struct ClearNonPinnedOutcome(bool Saved, int RemovedCount);
+
+    /// <summary>
+    /// 跨分类清空非置顶条目（单次原子操作）：一次移除、一次保存、一批撤销
+    /// （可整批 Ctrl+Z）；保存失败所有分类整批回滚并提示，不进撤销栈。
+    /// 全部分类无非置顶时不写盘，返回 Saved=true、RemovedCount=0。
+    /// </summary>
+    public Task<ClearNonPinnedOutcome> ClearNonPinnedAsync(
+        IReadOnlyCollection<BoardCategory> categories,
         CancellationToken cancellationToken = default)
     {
         return _operationGate.RunAsync(async () =>
         {
-            var removed = _board.RemoveNonPinned(category);
+            var removed = _board.RemoveNonPinned(categories);
             if (removed.RemovedItems.Count == 0)
             {
-                return false;
+                return new ClearNonPinnedOutcome(true, 0);
             }
 
             try
@@ -354,7 +371,7 @@ public sealed class BoardMutationService
             {
                 _board.Restore(removed);
                 _showStatus("清空未保存，内容已恢复。");
-                return false;
+                return new ClearNonPinnedOutcome(false, removed.RemovedItems.Count);
             }
             catch
             {
@@ -364,7 +381,7 @@ public sealed class BoardMutationService
 
             // 与清空全部分类同构:进入会话级撤销栈,图片文件按栈生命周期清理。
             EnqueueUndoableDelete(removed);
-            return true;
+            return new ClearNonPinnedOutcome(true, removed.RemovedItems.Count);
         }, cancellationToken);
     }
 

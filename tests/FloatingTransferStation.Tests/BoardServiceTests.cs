@@ -532,4 +532,88 @@ public sealed class BoardServiceTests
             board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray());
         Assert.IsTrue(normalFirst.StartsNormalRegion);
     }
+
+    [TestMethod]
+    public void RemoveNonPinned_MultiCategory_RemovesOnlyGivenCategoriesKeepingPinnedPrefixAndOrder()
+    {
+        var board = new BoardService();
+        // 图片分类:置顶一/置顶二 + 普通二/普通一（新卡插普通区顶部）。
+        var imagePinnedTop = board.AddText("图片置顶一", BoardCategory.CustomerOriginal);
+        var imagePinnedSecond = board.AddText("图片置顶二", BoardCategory.CustomerOriginal);
+        board.SetPinnedMany([imagePinnedTop.Id, imagePinnedSecond.Id], true);
+        var imageNormalFirst = board.AddText("图片普通一", BoardCategory.CustomerOriginal);
+        var imageNormalSecond = board.AddText("图片普通二", BoardCategory.CustomerOriginal);
+        // 待分类:普通二/普通一。
+        var inboxNormalFirst = board.AddText("收件普通一");
+        var inboxNormalSecond = board.AddText("收件普通二");
+        // 文本2:全部置顶,整分类不应被清掉任何条目。
+        var promptPinned = board.AddText("提示词置顶", BoardCategory.Prompt);
+        board.SetPinnedMany([promptPinned.Id], true);
+
+        var removed = board.RemoveNonPinned(
+            [BoardCategory.CustomerOriginal, BoardCategory.Inbox]);
+
+        // 批量置顶保持来源顺序(新卡在前):清空前 = [图片置顶二, 图片置顶一, 图片普通二, 图片普通一]。
+        CollectionAssert.AreEqual(
+            new[] { imagePinnedSecond.Id, imagePinnedTop.Id },
+            board.Items(BoardCategory.CustomerOriginal).Select(item => item.Id).ToArray());
+        Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
+        Assert.AreSame(promptPinned, board.Items(BoardCategory.Prompt).Single());
+        // 扁平移除列表 = 各分类普通区原顺序（图片先于待分类,普通区内新卡在上）。
+        CollectionAssert.AreEqual(
+            new[] { imageNormalSecond.Id, imageNormalFirst.Id, inboxNormalSecond.Id, inboxNormalFirst.Id },
+            removed.RemovedItems.Select(item => item.Id).ToArray());
+        // 字典只收录发生移除的分类,原分类完整顺序供失败整批回滚复用。
+        Assert.AreEqual(2, removed.OriginalCategories.Count);
+        CollectionAssert.AreEqual(
+            new[] { imagePinnedSecond.Id, imagePinnedTop.Id, imageNormalSecond.Id, imageNormalFirst.Id },
+            removed.OriginalCategories[BoardCategory.CustomerOriginal].Select(item => item.Id).ToArray());
+    }
+
+    [TestMethod]
+    public void RemoveNonPinned_MultiCategory_LeavesUntouchedCategoriesUnchanged()
+    {
+        var board = new BoardService();
+        var referenceNormal = board.AddText("复盘标签内容", BoardCategory.Reference);
+        var promptPinned = board.AddText("提示词置顶", BoardCategory.Prompt);
+        board.SetPinnedMany([promptPinned.Id], true);
+
+        board.RemoveNonPinned(
+            [BoardCategory.CustomerOriginal, BoardCategory.Prompt, BoardCategory.Inbox]);
+
+        Assert.AreSame(
+            referenceNormal,
+            board.Items(BoardCategory.Reference).Single(),
+            "未给出的分类（含复盘复用的 Reference）一个条目都不能动。");
+        Assert.AreSame(promptPinned, board.Items(BoardCategory.Prompt).Single());
+    }
+
+    [TestMethod]
+    public void RemoveNonPinned_MultiCategory_NothingToRemoveYieldsEmptyResultWithoutChanges()
+    {
+        var board = new BoardService();
+        var pinned = board.AddText("只有置顶");
+        board.SetPinnedMany([pinned.Id], true);
+
+        var removed = board.RemoveNonPinned(AutoCleanupSchedule.SweepCategories);
+
+        Assert.AreEqual(0, removed.RemovedItems.Count);
+        Assert.AreEqual(0, removed.OriginalCategories.Count);
+        Assert.AreSame(pinned, board.Items(BoardCategory.Inbox).Single());
+    }
+
+    [TestMethod]
+    public void RemoveNonPinned_MultiCategory_RestoresAllCategoriesOnRollback()
+    {
+        var board = new BoardService();
+        var inboxNormal = board.AddText("收件普通");
+        var promptNormal = board.AddText("提示词普通", BoardCategory.Prompt);
+        var removed = board.RemoveNonPinned(
+            [BoardCategory.Inbox, BoardCategory.Prompt]);
+
+        board.Restore(removed);
+
+        Assert.AreSame(inboxNormal, board.Items(BoardCategory.Inbox).Single());
+        Assert.AreSame(promptNormal, board.Items(BoardCategory.Prompt).Single());
+    }
 }

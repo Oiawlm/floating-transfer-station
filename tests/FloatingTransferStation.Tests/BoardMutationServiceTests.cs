@@ -694,6 +694,113 @@ public sealed class BoardMutationServiceTests
         Assert.AreEqual(2, store.SaveCount, "撤销必须再次持久化。");
     }
 
+    [TestMethod]
+    public async Task ClearNonPinned_MultiCategory_SavesOnceAndEnqueuesSingleUndoBatch()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var imagePinned = board.AddText("图片置顶", BoardCategory.CustomerOriginal);
+        board.SetPinnedMany([imagePinned.Id], true);
+        var imageNormal = board.AddText("图片普通", BoardCategory.CustomerOriginal);
+        var promptNormal = board.AddText("提示词普通", BoardCategory.Prompt);
+        var referenceNormal = board.AddText("复盘标签条目", BoardCategory.Reference);
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        var outcome = await service.ClearNonPinnedAsync(AutoCleanupSchedule.SweepCategories);
+
+        Assert.IsTrue(outcome.Saved);
+        Assert.AreEqual(2, outcome.RemovedCount);
+        Assert.AreEqual(1, store.SaveCount, "跨分类清扫必须单次原子保存。");
+        Assert.AreEqual(1, service.PendingUndoDeleteCount, "跨分类清扫必须进单批撤销（可整批 Ctrl+Z）。");
+        CollectionAssert.AreEqual(
+            new[] { imagePinned.Id },
+            store.LastPersistedSnapshot!.Items
+                .Where(item => item.Category != BoardCategory.Reference)
+                .Select(item => item.Id)
+                .ToArray(),
+            "保存的快照必须已不含被清扫条目(仅存活置顶项,复盘分类另计)。");
+        Assert.AreSame(imagePinned, board.Items(BoardCategory.CustomerOriginal).Single());
+        Assert.AreSame(referenceNormal, board.Items(BoardCategory.Reference).Single());
+    }
+
+    [TestMethod]
+    public async Task ClearNonPinned_MultiCategory_NothingToRemoveIsSuccessfulNoOpWithoutSaving()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var pinned = board.AddText("只有置顶");
+        board.SetPinnedMany([pinned.Id], true);
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        var outcome = await service.ClearNonPinnedAsync(AutoCleanupSchedule.SweepCategories);
+
+        Assert.IsTrue(outcome.Saved);
+        Assert.AreEqual(0, outcome.RemovedCount);
+        Assert.AreEqual(0, store.SaveCount, "幂等空操作不得写盘。");
+        Assert.AreEqual(0, service.PendingUndoDeleteCount);
+        Assert.AreSame(pinned, board.Items(BoardCategory.Inbox).Single());
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
+    public async Task ClearNonPinned_MultiCategory_SaveFailureRestoresEveryCategoryInExactOrderWithoutUndoBatch()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var inboxPinned = board.AddText("收件置顶");
+        var inboxNormal = board.AddText("收件普通");
+        board.SetPinnedMany([inboxPinned.Id], true);
+        var promptPinned = board.AddText("提示词置顶", BoardCategory.Prompt);
+        var promptNormal = board.AddText("提示词普通", BoardCategory.Prompt);
+        board.SetPinnedMany([promptPinned.Id], true);
+        var referenceNormal = board.AddText("复盘标签条目", BoardCategory.Reference);
+        var inboxBefore = board.Items(BoardCategory.Inbox).ToArray();
+        var promptBefore = board.Items(BoardCategory.Prompt).ToArray();
+        var store = new MutationStore(directory.Root) { FailSave = true };
+        var messages = new List<string>();
+        var service = new BoardMutationService(board, store, messages.Add);
+
+        var outcome = await service.ClearNonPinnedAsync(AutoCleanupSchedule.SweepCategories);
+
+        Assert.IsFalse(outcome.Saved);
+        Assert.AreEqual(2, outcome.RemovedCount);
+        CollectionAssert.AreEqual(
+            inboxBefore.Select(item => item.Id).ToArray(),
+            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
+        CollectionAssert.AreEqual(
+            promptBefore.Select(item => item.Id).ToArray(),
+            board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray());
+        Assert.AreSame(inboxPinned, board.Items(BoardCategory.Inbox)[0]);
+        Assert.AreSame(inboxNormal, board.Items(BoardCategory.Inbox)[1]);
+        Assert.AreSame(promptPinned, board.Items(BoardCategory.Prompt)[0]);
+        Assert.AreSame(promptNormal, board.Items(BoardCategory.Prompt)[1]);
+        Assert.AreSame(referenceNormal, board.Items(BoardCategory.Reference).Single());
+        Assert.AreEqual(0, service.PendingUndoDeleteCount, "保存失败不得进入撤销栈。");
+        Assert.AreEqual(0, store.SaveCount);
+        CollectionAssert.AreEqual(new[] { "清空未保存，内容已恢复。" }, messages);
+    }
+
+    [TestMethod]
+    public async Task ClearNonPinned_MultiCategory_UndoRestoresWholeBatchAcrossCategories()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var imageNormal = board.AddText("图片普通", BoardCategory.CustomerOriginal);
+        var promptNormal = board.AddText("提示词普通", BoardCategory.Prompt);
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        var outcome = await service.ClearNonPinnedAsync(AutoCleanupSchedule.SweepCategories);
+
+        Assert.IsTrue(outcome.Saved);
+        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.AreSame(imageNormal, board.Items(BoardCategory.CustomerOriginal).Single());
+        Assert.AreSame(promptNormal, board.Items(BoardCategory.Prompt).Single());
+        Assert.AreEqual(0, service.PendingUndoDeleteCount);
+    }
+
     private sealed class MutationStore(string root) : IBoardStore
     {
         public bool FailSave { get; set; }
