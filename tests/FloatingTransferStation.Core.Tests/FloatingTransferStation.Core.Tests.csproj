@@ -16,6 +16,7 @@
     <Compile Include="..\FloatingTransferStation.Tests\GlobalUsings.cs" Link="Shared\GlobalUsings.cs" />
     <Compile Include="..\FloatingTransferStation.Tests\TestDirectory.cs" Link="Shared\TestDirectory.cs" />
     <Compile Include="..\FloatingTransferStation.Tests\FailingFirstSaveBoardStore.cs" Link="Shared\FailingFirstSaveBoardStore.cs" />
+    <Compile Include="..\FloatingTransferStation.Tests\BoardCreatedAtTestHelpers.cs" Link="Shared\BoardCreatedAtTestHelpers.cs" />
     <Compile Include="..\FloatingTransferStation.Tests\BoardServiceTests.cs" Link="Shared\BoardServiceTests.cs" />
     <Compile Include="..\FloatingTransferStation.Tests\BoardMutationServiceTests.cs" Link="Shared\BoardMutationServiceTests.cs" />
     <Compile Include="..\FloatingTransferStation.Tests\BoardOperationGateTests.cs" Link="Shared\BoardOperationGateTests.cs" />

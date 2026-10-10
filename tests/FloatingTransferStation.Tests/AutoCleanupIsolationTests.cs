@@ -11,21 +11,25 @@ public sealed class AutoCleanupIsolationTests
     {
         // 契约 #18 复盘隔离:走 LocalStore + BoardMutationService 全链路清扫,
         // reviews/yyyy-MM-dd.md 字节不变,Reference(复盘标签)条目原样保留。
+        // 卡片全部做旧超 24h：隔离必须在真实到期（而非仅因 cutoff=null）下成立。
         using var directory = new TestDirectory();
         var paths = AppPaths.ForTests(directory.Root);
         using LocalStore store = new LocalStore(paths, new AtomicTextWriter());
         var board = new BoardService();
         board.AddText("图片内容", BoardCategory.CustomerOriginal);
-        board.AddText("文本2内容", BoardCategory.Prompt);
+        board.AddText("文本内容", BoardCategory.Prompt);
         board.AddText("待分类内容", BoardCategory.Inbox);
         var referenceEntry = board.AddText("复盘标签条目", DailyReviewMigration.ReviewCategory);
+        board.AgeAllItems(DateTimeOffset.UtcNow, hoursOld: 25);
         var reviewDate = new DateOnly(2026, 10, 9);
         await store.SaveAsync(reviewDate, "# 复盘\n\n今天的内容");
         var reviewPath = Path.Combine(paths.ReviewsDirectory, "2026-10-09.md");
         var reviewBytesBefore = await File.ReadAllBytesAsync(reviewPath);
 
         var mutations = new BoardMutationService(board, store, _ => { });
-        var outcome = await mutations.ClearNonPinnedAsync(AutoCleanupSchedule.SweepCategories);
+        var outcome = await mutations.ClearNonPinnedAsync(
+            AutoCleanupSchedule.SweepCategories,
+            AutoCleanupSchedule.GetExpiryCutoff(DateTimeOffset.UtcNow));
 
         Assert.IsTrue(outcome.Saved);
         Assert.AreEqual(3, outcome.RemovedCount);
@@ -33,9 +37,10 @@ public sealed class AutoCleanupIsolationTests
             reviewBytesBefore,
             await File.ReadAllBytesAsync(reviewPath),
             "清扫不得改动复盘 Markdown 文件的任何字节。");
-        Assert.AreSame(
-            referenceEntry,
-            board.Items(DailyReviewMigration.ReviewCategory).Single());
+        // 卡片已做旧（快照回合重建实例），按 Id 断言复盘条目原样保留。
+        CollectionAssert.AreEqual(
+            new[] { referenceEntry.Id },
+            board.Items(DailyReviewMigration.ReviewCategory).Select(item => item.Id).ToArray());
         var persisted = await store.LoadBoardAsync();
         Assert.IsTrue(persisted.Items.Any(item =>
             item.Category == DailyReviewMigration.ReviewCategory &&

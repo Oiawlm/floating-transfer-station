@@ -186,16 +186,16 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 采纳后台装载期间完成的复盘迁移结果：同步退出保存用的设置基准与
-    /// 复盘分类的显示名，使迁移无需在窗口构造前完成（启动先显示收起态）。
+    /// 采纳后台装载期间完成的设置迁移结果（复盘迁移、分类默认名迁移）：同步退出保存用的
+    /// 设置基准与全部分类显示名，使迁移无需在窗口构造前完成（启动先显示收起态）。
     /// </summary>
     internal void AdoptMigratedSettings(WindowSettings settings)
     {
         _settings = settings;
-        _viewModel.ApplyCategoryName(
-            _viewModel.Categories.Single(
-                panel => panel.Category == DailyReviewMigration.ReviewCategory),
-            settings.CategoryName(DailyReviewMigration.ReviewCategory));
+        foreach (var panel in _viewModel.Categories)
+        {
+            _viewModel.ApplyCategoryName(panel, settings.CategoryName(panel.Category));
+        }
     }
 
     private void StatusTimer_Tick(object? sender, EventArgs e)

@@ -2066,6 +2066,9 @@ public sealed partial class MainWindowInteractionTests
         try
         {
             window.Show();
+            // 本测试隐含「指针在窗外」前提（真实 MouseEnter 会取消进行中的收起）：
+            // 先把真实光标移到窗口左侧中性空域，不依赖 runner 光标泊位。
+            MoveRealCursorAwayFromWindow(window);
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var viewModel = (MainWindowViewModel)window.DataContext;

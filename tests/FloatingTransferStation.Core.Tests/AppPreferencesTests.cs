@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FloatingTransferStation.Models;
+using FloatingTransferStation.Services;
 
 namespace FloatingTransferStation.Tests;
 
@@ -125,31 +126,25 @@ public sealed class AppPreferencesTests
     }
 
     [TestMethod]
-    public void Default_EnablesAutoCleanupWithoutBaseline()
+    public void Default_EnablesAutoCleanup()
     {
         Assert.IsTrue(AppPreferences.Default.AutoCleanupEnabled, "自动清理必须默认开启（老用户升级即生效）。");
-        Assert.IsNull(AppPreferences.Default.AutoCleanupLastRunAtUtc, "默认无调度基线：首次清扫在首个周期之后。");
     }
 
     [TestMethod]
-    public void JsonRoundTrip_PreservesAutoCleanupPreferenceAndTimestamp()
+    public void JsonRoundTrip_PreservesAutoCleanupPreference()
     {
-        var preferences = AppPreferences.Default with
-        {
-            AutoCleanupEnabled = false,
-            AutoCleanupLastRunAtUtc = new DateTimeOffset(2026, 10, 9, 8, 30, 0, TimeSpan.Zero)
-        };
+        var preferences = AppPreferences.Default with { AutoCleanupEnabled = false };
 
         var restored = JsonSerializer.Deserialize<AppPreferences>(
             JsonSerializer.Serialize(preferences));
 
         Assert.AreEqual(preferences, restored);
         Assert.IsFalse(restored!.AutoCleanupEnabled);
-        Assert.AreEqual(preferences.AutoCleanupLastRunAtUtc, restored.AutoCleanupLastRunAtUtc);
     }
 
     [TestMethod]
-    public void OlderJson_WithoutAutoCleanupFields_FallsBackToEnabledWithoutBaseline()
+    public void OlderJson_WithoutAutoCleanupFields_FallsBackToEnabled()
     {
         var storeOptions = new JsonSerializerOptions
         {
@@ -162,6 +157,24 @@ public sealed class AppPreferencesTests
 
         Assert.IsNotNull(restored);
         Assert.IsTrue(restored.AutoCleanupEnabled, "1.23.0 之前的 preferences.json 必须回落到自动清理默认开启。");
-        Assert.IsNull(restored.AutoCleanupLastRunAtUtc, "缺记账字段时必须回落到未建基线。");
+    }
+
+    [TestMethod]
+    public async Task LegacyPreferencesFile_WithRetiredAutoCleanupTimestamp_LoadsViaProductionStore()
+    {
+        // 1.25.0 删除了间隔清扫记账字段 autoCleanupLastRunAtUtc；老 preferences.json
+        // 里的残留字段必须被生产读取路径（LocalStore 的 JsonOptions，未映射成员跳过）
+        // 忽略，不得让加载失败或回落到损坏兜底。
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        Directory.CreateDirectory(Path.GetDirectoryName(paths.PreferencesFile)!);
+        await File.WriteAllTextAsync(
+            paths.PreferencesFile,
+            """{"themeMode":"Dark","autoCleanupEnabled":false,"autoCleanupLastRunAtUtc":"2026-10-09T08:30:00+00:00"}""");
+        using var store = new LocalStore(paths, new AtomicTextWriter());
+
+        var loaded = await store.LoadPreferencesAsync();
+
+        Assert.IsFalse(loaded.AutoCleanupEnabled, "开关字段必须照常读取。");
     }
 }

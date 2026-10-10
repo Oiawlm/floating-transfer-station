@@ -40,6 +40,48 @@ public sealed class WindowControllerTests
     }
 
     [TestMethod]
+    public void CollapsedPlacement_FollowsCustomCategoryDisplayOrder()
+    {
+        // 1.25.0 标签顺序：收起把手行号 = 分类在显示顺序（settings.DisplayOrder）中的
+        // 位置，不再假设目录默认序。
+        var workArea = new WorkArea(0, 0, 1920, 1040);
+        var settings = new WindowSettings(360, 640, 80)
+        {
+            CategoryOrder = new[]
+            {
+                BoardCategory.CustomerOriginal,
+                BoardCategory.Inbox,
+                BoardCategory.Reference,
+                BoardCategory.Prompt
+            }
+        };
+
+        Assert.AreEqual(80d, WindowController.Collapsed(workArea, settings, BoardCategory.CustomerOriginal).Top);
+        Assert.AreEqual(80d + 160, WindowController.Collapsed(workArea, settings, BoardCategory.Inbox).Top);
+        Assert.AreEqual(80d + (2 * 160), WindowController.Collapsed(workArea, settings, BoardCategory.Reference).Top);
+        Assert.AreEqual(80d + (3 * 160), WindowController.Collapsed(workArea, settings, BoardCategory.Prompt).Top);
+    }
+
+    [TestMethod]
+    public void CollapsedPlacement_InvalidCategoryOrderFallsBackToCatalogRows()
+    {
+        var workArea = new WorkArea(0, 0, 1920, 1040);
+        var settings = new WindowSettings(360, 640, 80)
+        {
+            CategoryOrder = new[]
+            {
+                BoardCategory.Prompt,
+                BoardCategory.Prompt,
+                BoardCategory.Reference,
+                BoardCategory.Inbox
+            }
+        };
+
+        Assert.AreEqual(240d, WindowController.Collapsed(workArea, settings, BoardCategory.Reference).Top);
+        Assert.AreEqual(400d, WindowController.Collapsed(workArea, settings, BoardCategory.Prompt).Top);
+    }
+
+    [TestMethod]
     public void ExpandedPlacement_GrowsLeftAndKeepsRightEdgeFixed()
     {
         var placement = WindowController.Expanded(

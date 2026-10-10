@@ -8,59 +8,67 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 自动清理调度漏斗（1.23.0）：装载闸门、启动补跑建基线、到期清扫+状态条+记账、
-/// 未到期/关闭/在途无动作，以及关闭序列停表。时间一律显式传参,不依赖真实时钟。
+/// 自动清理漏斗（1.25.0，逐卡 24 小时 TTL 语义）：装载闸门、装载补跑与巡检即删
+/// 存量超龄卡（边界含等于）、未满期/未来时间戳保留、复盘条目永不触碰、关闭/在途/
+/// 开关关闭无动作，以及关闭序列停表。时间一律显式传参,不依赖真实时钟。
 /// 漏斗与生产一致地驱动在窗口 Dispatcher 上（ShowStatus 触碰依赖属性）。
 /// </summary>
 [TestClass]
 public sealed class MainWindowAutoCleanupTests
 {
     [STATestMethod]
-    public void CheckAutoCleanup_BeforeBoardLoadCompletes_DoesNotSweepAndSkipsBaseline()
+    public void CheckAutoCleanup_BeforeBoardLoadCompletes_DoesNotSweep()
     {
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
         var window = CreateWindow(directory, preferencesStore);
         var now = DateTimeOffset.UtcNow;
-        AddNonPinnedItems(window);
+        var board = GetBoard(window);
+        AddNonPinnedItems(board);
+        board.AgeAllItems(now, hoursOld: 25);
 
         InvokeCheck(window, now);
 
-        Assert.IsNull(
-            GetPreference(window).AutoCleanupLastRunAtUtc,
-            "板未装载成功时连基线都不得建立,否则一次真实到期会被空板记账推迟 24 小时。");
-        Assert.IsNull(preferencesStore.LastSaved);
-        AssertNonPinnedItemsIntact(window);
+        Assert.IsNull(preferencesStore.LastSaved, "TTL 清扫幂等，无记账落盘。");
+        Assert.AreEqual(0, GetStore(window).SaveCount);
+        AssertNonPinnedItemsIntact(board);
     }
 
     [STATestMethod]
-    public void CheckAutoCleanup_FirstRunAfterLoad_EstablishesBaselineWithoutSweep()
+    public void CheckAutoCleanup_FirstRunAfterLoad_SweepsExpiredCardsImmediately()
     {
+        // 存量立即生效：升级后首次检查即删除所有入库已超 24h 的非置顶卡（用户裁决）。
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
         var window = CreateWindow(directory, preferencesStore);
-        AddNonPinnedItems(window);
+        var board = GetBoard(window);
+        AddNonPinnedItems(board);
+        board.AgeAllItems(DateTimeOffset.UtcNow, hoursOld: 25);
         SetField(window, "_boardLoadSucceeded", true);
         var now = DateTimeOffset.UtcNow;
 
         InvokeCheck(window, now);
 
         Assert.AreEqual(
-            now,
-            GetPreference(window).AutoCleanupLastRunAtUtc,
-            "null 基线只记账不清扫,首次清扫在开启 24 小时后。");
-        Assert.AreEqual(now, preferencesStore.LastSaved!.AutoCleanupLastRunAtUtc);
-        AssertNonPinnedItemsIntact(window);
-        Assert.IsEmpty(((MainWindowViewModel)window.DataContext).StatusText);
+            "已自动清理 3 张到期卡片，可 Ctrl+Z 撤销（仅本次运行内）",
+            ((MainWindowViewModel)window.DataContext).StatusText);
+        Assert.IsNull(preferencesStore.LastSaved, "TTL 判定幂等，清扫成功无需记账落盘。");
+        Assert.AreEqual(1, GetStore(window).SaveCount, "清扫必须单次原子保存。");
+        Assert.AreEqual(1, GetMutations(window).PendingUndoDeleteCount, "清扫必须单批可撤销。");
+        Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count);
+        Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
+        Assert.AreEqual(1, board.Items(BoardCategory.Inbox).Count, "置顶卡超龄也绝不清理。");
     }
 
     [STATestMethod]
-    public void OnBoardLoadCompleted_RunsBaselineCheckImmediately()
+    public void OnBoardLoadCompleted_SweepsExpiredCardsImmediately()
     {
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
         var window = CreateWindow(directory, preferencesStore);
-        AddNonPinnedItems(window);
+        var board = GetBoard(window);
+        AddNonPinnedItems(board);
+        board.AgeAllItems(DateTimeOffset.UtcNow, hoursOld: 25);
         var before = DateTimeOffset.UtcNow.AddSeconds(-1);
 
         RunOnDispatcher(window, window.OnBoardLoadCompleted);
@@ -68,67 +76,110 @@ public sealed class MainWindowAutoCleanupTests
         FlushDispatcher(window);
 
         Assert.IsTrue(GetField<bool>(window, "_boardLoadSucceeded"));
-        var baseline = GetPreference(window).AutoCleanupLastRunAtUtc;
-        Assert.IsNotNull(baseline, "装载成功回调必须立即补跑一次漏斗并建立基线。");
-        Assert.IsTrue(baseline >= before, "基线应为补跑时刻,不得早于回调前。");
-        AssertNonPinnedItemsIntact(window);
+        Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count);
+        Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
+        Assert.AreEqual(1, board.Items(BoardCategory.Inbox).Count);
+        Assert.IsTrue(
+            ((MainWindowViewModel)window.DataContext).StatusText.Contains("到期卡片"),
+            "装载补跑必须真实执行清扫并提示。");
     }
 
     [STATestMethod]
-    public void CheckAutoCleanup_Due_SweepsShowsStatusAndRecordsOnce()
+    public void CheckAutoCleanup_CardsYoungerThan24h_AreKept()
     {
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
-        var window = CreateWindow(directory, preferencesStore, CreatePreferences(true, hoursAgo: 25));
-        var now = DateTimeOffset.UtcNow;
+        var window = CreateWindow(directory, preferencesStore);
         SetField(window, "_boardLoadSucceeded", true);
-        var inboxPinned = AddNonPinnedItems(window);
-
-        InvokeCheck(window, now);
-
-        Assert.AreEqual(
-            "已自动清理非置顶内容 3 项（可 Ctrl+Z 撤销）",
-            ((MainWindowViewModel)window.DataContext).StatusText);
-        Assert.AreEqual(now, GetPreference(window).AutoCleanupLastRunAtUtc);
-        Assert.AreEqual(now, preferencesStore.LastSaved!.AutoCleanupLastRunAtUtc, "记账必须落盘。");
-        Assert.AreEqual(1, GetStore(window).SaveCount, "清扫必须单次原子保存。");
-        Assert.AreEqual(1, GetMutations(window).PendingUndoDeleteCount, "清扫必须单批可撤销。");
-        Assert.AreSame(inboxPinned, GetBoard(window).Items(BoardCategory.Inbox).Single());
-    }
-
-    [STATestMethod]
-    public void CheckAutoCleanup_NotDue_DoesNothing()
-    {
-        using var directory = new TestDirectory();
-        var preferencesStore = new RecordingPreferencesStore();
-        var window = CreateWindow(directory, preferencesStore, CreatePreferences(true, hoursAgo: 23));
-        SetField(window, "_boardLoadSucceeded", true);
-        AddNonPinnedItems(window);
+        var board = GetBoard(window);
+        AddNonPinnedItems(board);
         var now = DateTimeOffset.UtcNow;
 
         InvokeCheck(window, now);
 
         Assert.IsNull(preferencesStore.LastSaved);
         Assert.AreEqual(0, GetStore(window).SaveCount);
-        AssertNonPinnedItemsIntact(window);
+        AssertNonPinnedItemsIntact(board);
         Assert.IsEmpty(((MainWindowViewModel)window.DataContext).StatusText);
     }
 
     [STATestMethod]
-    public void CheckAutoCleanup_Disabled_DoesNothingEvenWhenDue()
+    public void CheckAutoCleanup_ExactlyAt24hBoundary_IsExpired()
     {
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
-        var window = CreateWindow(directory, preferencesStore, CreatePreferences(false, hoursAgo: 25));
+        var window = CreateWindow(directory, preferencesStore);
+        var board = GetBoard(window);
+        AddNonPinnedItems(board);
         SetField(window, "_boardLoadSucceeded", true);
-        AddNonPinnedItems(window);
+        var now = DateTimeOffset.UtcNow;
+        board.SetAllItemsCreatedAt(now - AutoCleanupSchedule.CleanupInterval);
+
+        InvokeCheck(window, now);
+
+        Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count, "恰满 24h 即到期（边界含等于）。");
+        Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
+        Assert.AreEqual(1, board.Items(BoardCategory.Inbox).Count);
+    }
+
+    [STATestMethod]
+    public void CheckAutoCleanup_FutureCreatedAt_IsKept()
+    {
+        // 时钟回拨/NTP 校正导致卡片时间戳在未来：年龄为负，自然不到期。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        var board = GetBoard(window);
+        AddNonPinnedItems(board);
+        SetField(window, "_boardLoadSucceeded", true);
+        var now = DateTimeOffset.UtcNow;
+        board.SetAllItemsCreatedAt(now + TimeSpan.FromHours(2));
+
+        InvokeCheck(window, now);
+
+        Assert.AreEqual(0, GetStore(window).SaveCount);
+        AssertNonPinnedItemsIntact(board);
+    }
+
+    [STATestMethod]
+    public void CheckAutoCleanup_ExpiredReviewEntries_AreNeverSwept()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        var board = GetBoard(window);
+        var reviewEntry = board.AddText("复盘标签条目", DailyReviewMigration.ReviewCategory);
+        AddNonPinnedItems(board);
+        board.AgeAllItems(DateTimeOffset.UtcNow, hoursOld: 25);
+        SetField(window, "_boardLoadSucceeded", true);
+        var now = DateTimeOffset.UtcNow;
+
+        InvokeCheck(window, now);
+
+        // 做旧经快照回合重建条目实例，按 Id 断言而非实例同一。
+        CollectionAssert.AreEqual(
+            new[] { reviewEntry.Id },
+            board.Items(DailyReviewMigration.ReviewCategory).Select(item => item.Id).ToArray(),
+            "复盘复用的 Reference 分类不在清扫范围（SweepCategories 结构性排除）。");
+    }
+
+    [STATestMethod]
+    public void CheckAutoCleanup_Disabled_DoesNothing()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, CreatePreferences(enabled: false));
+        var board = GetBoard(window);
+        AddNonPinnedItems(board);
+        board.AgeAllItems(DateTimeOffset.UtcNow, hoursOld: 25);
+        SetField(window, "_boardLoadSucceeded", true);
         var now = DateTimeOffset.UtcNow;
 
         InvokeCheck(window, now);
 
         Assert.IsNull(preferencesStore.LastSaved);
         Assert.AreEqual(0, GetStore(window).SaveCount);
-        AssertNonPinnedItemsIntact(window);
+        AssertNonPinnedItemsIntact(board);
     }
 
     [STATestMethod]
@@ -136,17 +187,19 @@ public sealed class MainWindowAutoCleanupTests
     {
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
-        var window = CreateWindow(directory, preferencesStore, CreatePreferences(true, hoursAgo: 25));
+        var window = CreateWindow(directory, preferencesStore);
+        var board = GetBoard(window);
+        AddNonPinnedItems(board);
+        board.AgeAllItems(DateTimeOffset.UtcNow, hoursOld: 25);
         SetField(window, "_boardLoadSucceeded", true);
         SetField(window, "_isClosing", true);
-        AddNonPinnedItems(window);
         var now = DateTimeOffset.UtcNow;
 
         InvokeCheck(window, now);
 
         Assert.IsNull(preferencesStore.LastSaved);
         Assert.AreEqual(0, GetStore(window).SaveCount);
-        AssertNonPinnedItemsIntact(window);
+        AssertNonPinnedItemsIntact(board);
     }
 
     [STATestMethod]
@@ -154,31 +207,34 @@ public sealed class MainWindowAutoCleanupTests
     {
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
-        var window = CreateWindow(directory, preferencesStore, CreatePreferences(true, hoursAgo: 25));
+        var window = CreateWindow(directory, preferencesStore);
+        var board = GetBoard(window);
+        AddNonPinnedItems(board);
+        board.AgeAllItems(DateTimeOffset.UtcNow, hoursOld: 25);
         SetField(window, "_boardLoadSucceeded", true);
         SetField(window, "_isAutoCleanupCheckInFlight", true);
-        AddNonPinnedItems(window);
         var now = DateTimeOffset.UtcNow;
 
         InvokeCheck(window, now);
 
         Assert.IsNull(preferencesStore.LastSaved);
         Assert.AreEqual(0, GetStore(window).SaveCount);
-        AssertNonPinnedItemsIntact(window);
+        AssertNonPinnedItemsIntact(board);
     }
 
     [STATestMethod]
-    public void CheckAutoCleanup_DueWithImageCard_KeepsImageFileForUndoLifecycle()
+    public void CheckAutoCleanup_ExpiredImageCard_KeepsImageFileForUndoLifecycle()
     {
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
-        var window = CreateWindow(directory, preferencesStore, CreatePreferences(true, hoursAgo: 25));
+        var window = CreateWindow(directory, preferencesStore);
         SetField(window, "_boardLoadSucceeded", true);
         var imagePath = Path.Combine(directory.Root, "sweep.png");
         File.WriteAllBytes(imagePath, [0x89, 0x50, 0x4E, 0x47]);
         var board = GetBoard(window);
         board.AddImage(Guid.NewGuid(), "images/sweep.png", imagePath, BoardCategory.Inbox);
         var now = DateTimeOffset.UtcNow;
+        board.AgeAllItems(now, hoursOld: 25);
 
         InvokeCheck(window, now);
 
@@ -342,27 +398,21 @@ public sealed class MainWindowAutoCleanupTests
         return window;
     }
 
-    private static AppPreferences CreatePreferences(bool enabled, double hoursAgo) =>
-        AppPreferences.Default with
-        {
-            AutoCleanupEnabled = enabled,
-            AutoCleanupLastRunAtUtc = DateTimeOffset.UtcNow - TimeSpan.FromHours(hoursAgo)
-        };
+    private static AppPreferences CreatePreferences(bool enabled) =>
+        AppPreferences.Default with { AutoCleanupEnabled = enabled };
 
-    private static BoardItem AddNonPinnedItems(MainWindow window)
+    private static BoardItem AddNonPinnedItems(BoardService board)
     {
-        var board = GetBoard(window);
         board.AddText("图片内容", BoardCategory.CustomerOriginal);
-        board.AddText("文本2内容", BoardCategory.Prompt);
+        board.AddText("文本内容", BoardCategory.Prompt);
         var inboxPinned = board.AddText("置顶保留");
         board.SetPinnedMany([inboxPinned.Id], true);
         board.AddText("待分类内容");
         return inboxPinned;
     }
 
-    private static void AssertNonPinnedItemsIntact(MainWindow window)
+    private static void AssertNonPinnedItemsIntact(BoardService board)
     {
-        var board = GetBoard(window);
         Assert.AreEqual(1, board.Items(BoardCategory.CustomerOriginal).Count);
         Assert.AreEqual(1, board.Items(BoardCategory.Prompt).Count);
         Assert.AreEqual(2, board.Items(BoardCategory.Inbox).Count);
@@ -373,9 +423,6 @@ public sealed class MainWindowAutoCleanupTests
 
     private static FakeBoardStore GetStore(MainWindow window) =>
         (FakeBoardStore)GetField<IBoardStore>(window, "_store");
-
-    private static AppPreferences GetPreference(MainWindow window) =>
-        GetField<AppPreferences>(window, "_preferences");
 
     private static DispatcherTimer GetTimer(MainWindow window) =>
         GetField<DispatcherTimer>(window, "_autoCleanupCheckTimer");

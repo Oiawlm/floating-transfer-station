@@ -18,6 +18,48 @@ public partial class MainWindow : Window, ISettingsHost
 
     public PluginCatalog? PluginCatalog => _pluginCatalog;
 
+    public IReadOnlyList<BoardCategory> CurrentDisplayOrder =>
+        _viewModel.Categories.Select(panel => panel.Category).ToArray();
+
+    public string CategoryDisplayName(BoardCategory category) => _settings.CategoryName(category);
+
+    /// <summary>
+    /// 采纳新的标签显示顺序：设置窗口「标签顺序」节提交（拖拽/上移下移）即重排
+    /// 面板标签轨并走分类改名同一条 settings.json 原子保存链路（契约 #5 设置改动
+    /// 即时生效并自动保存）；保存失败恢复内存原顺序并经状态条提示。
+    /// </summary>
+    public async Task ApplyCategoryOrderAsync(IReadOnlyList<BoardCategory> displayOrder)
+    {
+        ArgumentNullException.ThrowIfNull(displayOrder);
+        var operation = ApplyCategoryOrderCoreAsync(displayOrder);
+        TrackPendingOperation(operation);
+        await operation;
+    }
+
+    private async Task ApplyCategoryOrderCoreAsync(IReadOnlyList<BoardCategory> displayOrder)
+    {
+        await _settingsSaveGate.WaitAsync();
+        try
+        {
+            var originalOrder = _settings.CategoryOrder;
+            _settings = _settings.WithCategoryOrder(displayOrder);
+            try
+            {
+                await _store.SaveSettingsAsync(_settings);
+                _viewModel.ApplyCategoryOrder(_settings.DisplayOrder);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _settings = _settings with { CategoryOrder = originalOrder };
+                ShowStatus("标签顺序暂未保存。");
+            }
+        }
+        finally
+        {
+            _settingsSaveGate.Release();
+        }
+    }
+
     /// <summary>
     /// 启用/禁用插件：立即重建采集管线并异步原子持久化；
     /// 持久化失败经状态条提示，界面开关状态保持本次选择。

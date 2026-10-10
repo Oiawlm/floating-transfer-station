@@ -133,12 +133,12 @@
 
 ## 四、本次新增（18，1.23.0）
 
-### 18. 自动清理范围与调度基线（1.23.0 起）
+### 18. 自动清理范围与逐卡 TTL 语义（1.23.0 起；1.25.0 修订为逐卡 24 小时 TTL）
 
-- **断言**：自动清理仅在设置开关开启时运行；只删除 `AutoCleanupSchedule.SweepCategories`（= 分类目录 `BoardCategoryCatalog.Ordered` 显式排除复盘分类的推导结果）内的非置顶条目，且无论卡片创建时间——间隔清扫语义（每到 24h 周期点删当时所有非置顶），不是年龄阈值；置顶条目与复盘内容（Reference 分类条目与 `reviews/*.md` 复盘文件）绝不触碰；调度时间戳 `AutoCleanupLastRunAtUtc` 为 null 或处于未来（时钟回拨/NTP 校正）时一律建立基线、绝不清扫（首次清扫发生在开启 24 小时后）；板面装载未成功本会话绝不清扫；跨分类清扫是单次原子操作——一次保存、一批撤销（可整批 Ctrl+Z，图片文件按撤销栈既有生命周期保留到驱逐/退出），保存失败整批恢复原内容与原顺序、不进撤销栈、不记账；记账时间戳与开关同在 preferences.json（原子写 + 备份回退），经内存权威副本与既有偏好保存门串行落盘。
-- **由来**：1.23.0 用户需求「每隔 24 小时自动清理所有非置顶内容，直接删除，绝不包括复盘」。null=建基线是设计评审修正：升级首启立即清空旧内容属静默不可逆删除事故（外部调研 Claude Code `cleanupPeriodDays` 反例）；pin 豁免必须测试锁定参照 Maccy #106 误删事故；间隔清扫应幂等且容忍延迟参照 Ditto「periodic, not immediate」；触发收敛为「装载成功补跑 + 1 小时常驻巡检」两处，明确拒绝在通用持久化 API（`ApplyPreferences`）内检测开关转变并触发清扫。
-- **锁定**：`tests/FloatingTransferStation.Core.Tests/AutoCleanupScheduleTests.cs`（周期边界与 SweepCategories 清单）、`tests/FloatingTransferStation.Tests/BoardServiceTests.cs`（`RemoveNonPinned_MultiCategory_*`）、`tests/FloatingTransferStation.Tests/BoardMutationServiceTests.cs`（`ClearNonPinned_MultiCategory_*`）、`tests/FloatingTransferStation.Tests/AutoCleanupIsolationTests.cs`（复盘文件字节不变全链路）、`tests/FloatingTransferStation.Tests/MainWindowAutoCleanupTests.cs`（漏斗闸门/建基线/到期清扫/关闭停表）、`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`（自动清理字段回落）、`tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs`（开关默认开启与立即持久化）。
-- **关联**：CHANGELOG 1.23.0（无独立 spec，如实标注）。
+- **断言**：自动清理仅在设置开关开启时运行；只删除 `AutoCleanupSchedule.SweepCategories`（= 分类目录 `BoardCategoryCatalog.Ordered` 显式排除复盘分类的推导结果）内的非置顶条目；删除判据是**逐卡年龄阈值（TTL）**——条目自身 `CreatedAt` ≤ `AutoCleanupSchedule.GetExpiryCutoff(now)`（= now − 24h，边界含等于；CreatedAt 在未来自然不到期），即每张非置顶卡入库满 24 小时（固定值，不配置）即删，与检查时刻无关、清扫幂等、无「上次运行」记账（1.23.0 的间隔清扫记账与建基线机制已随之删除，旧 preferences.json 残留的 `autoCleanupLastRunAtUtc` 字段按未知成员忽略、不影响加载）；**存量立即生效**（用户 2026-10-10 裁决）：升级后首次检查即删除所有已超 24h 的非置顶卡；置顶条目与复盘内容（Reference 分类条目与 `reviews/*.md` 复盘文件）绝不触碰（即使超龄）；板面装载未成功本会话绝不清扫；跨分类清扫是单次原子操作——一次保存、一批撤销（可整批 Ctrl+Z，图片文件按撤销栈既有生命周期保留到驱逐/退出），保存失败整批恢复原内容与原顺序、不进撤销栈；偏好原子落盘。手工「清空非置顶」（垃圾桶无选择左键等）与自动清扫共用 `BoardService.RemoveNonPinned` 唯一移除管线，前者不带 cutoff（删全部非置顶，语义不变）。
+- **由来**：1.23.0 用户需求「每隔 24 小时自动清理所有非置顶内容，直接删除，绝不包括复盘」，当时实现为间隔清扫 + 记账基线（null=建基线防升级首启静默清空）。1.25.0 用户澄清真实语义是**逐卡 TTL**（「当一个东西存储满 24 小时，就把它删掉」）并裁决「纯 TTL，存量立即生效」——间隔清扫会让新入库卡存活近两个周期、存量卡超期不受清理，都不是用户心智；TTL 判定幂等使记账机制失去存在理由（外部调研 Ditto/Maccy/CopyQ/ClipClip：业界主流=规则对存量一视同仁 + 置顶豁免，无存量宽限先例；本项目「整批 Ctrl+Z」强于业界不可撤销基线）。触发保留「装载成功补跑 + 1 小时常驻巡检」，拒绝在 `ApplyPreferences` 内检测开关转变触发清扫（既有裁决不变）。
+- **锁定**：`tests/FloatingTransferStation.Core.Tests/AutoCleanupScheduleTests.cs`（TTL 截止时刻推导与 SweepCategories 清单）、`tests/FloatingTransferStation.Tests/BoardServiceTests.cs`（`RemoveNonPinned_WithExpiryCutoff_*`/`RemoveNonPinned_WithoutCutoff_*`/`RemoveNonPinned_MultiCategory_*`）、`tests/FloatingTransferStation.Tests/BoardMutationServiceTests.cs`（`ClearNonPinned_WithExpiryCutoff_*`、保存失败整批恢复不进撤销栈、`ClearNonPinned_MultiCategory_*`）、`tests/FloatingTransferStation.Tests/AutoCleanupIsolationTests.cs`（超龄卡清扫下复盘文件字节不变全链路）、`tests/FloatingTransferStation.Tests/MainWindowAutoCleanupTests.cs`（漏斗闸门/存量立即生效/边界含等于/未来时间戳保留/超龄图片卡撤销栈生命周期/关闭停表）、`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`（自动清理字段回落、旧 JSON 残留时间戳字段可加载）、`tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs`（开关默认开启与立即持久化）。
+- **关联**：CHANGELOG 1.23.0/1.25.0；1.25.0 语义修订记录 Issue（Oiawlm/floating-transfer-station#90，无独立 spec）。
 
 ## 五、本次新增（19，1.24.0）
 
@@ -148,6 +148,22 @@
 - **由来**：1.24.0 用户需求「卡片级删除按钮 + 选中态卡片操作规则」（两轮对齐确认）。行内悬停操作逐条生效 + 批量走顶部工具栏与桌面邮件类（Gmail/Outlook）及 Fluent/Material「行内次级操作 × 选择模式」正交维度一致（调研 job `20261010-160927-oa3`）；「选择模式=批量模式」下隐藏行内按钮是文件管理器与移动端主流。矩阵替代 1.20.0 前的隐式规则时同步修订了两处现状：选中+未置顶卡片的置顶钮由「悬停可见可点」收紧为隐藏（R2 表格明确选中卡片一律走顶部批量）；选中+已置顶置顶钮由「可点=就地取消置顶」改为纯状态徽章。
 - **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardDeleteButton.cs`（矩阵四状态 + Win32 消息直驱的单卡删除保留选择滚动与撤销、徽章真实点击无效、滑离取消、操作条内右键复制）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardOperationAvoidance.cs`（三列派生内缩）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.VisualLifecycle.cs`（`TextCard_ReservesFixedPinSelectionAndDeleteColumns`）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.SelectionAndDeletion.cs` 与 `RangeSelection.cs`（矩阵化的单卡置顶用例：置顶单击只作用于未选中卡片）、批量置顶语义锁定测试（SelectionAndDeletion 批量用例）继续全绿。
 - **关联**：CHANGELOG 1.24.0；契约 #16 三列修订记录 Issue（Oiawlm/floating-transfer-station#88）。
+
+## 六、本次新增（20–21，1.25.0）
+
+### 20. 复盘编辑器 Esc 退出编辑态（1.25.0 起）
+
+- **断言**：复盘编辑器持有键盘焦点时按 Esc 释放键盘焦点并标记按键已处理；焦点去向是宿主 Window 本身（必须先清空焦点域记录再聚焦——WPF 会把「聚焦焦点域本体」重定向回域内 `FocusedElement`，即编辑器自身），绝不把焦点塞给隐藏的 BoardList；面板去留交给既有焦点链（`Root_PreviewLostKeyboardFocus` 统一清算编辑保持原因并重估表面）——指针在面板内时维持展开（与 #7 同源），否则恢复收起节奏；IME 组合期的 Esc 属输入法操作（取消候选）不触发退出（组合标记守卫，与卡片就地编辑/分类改名框同族，标记在编辑器失焦时清理）；不引入提交/取消会话（复盘是 700ms 防抖自动保存，无「取消」概念）；卡片就地编辑、分类改名、搜索框的既有 Esc 语义不变。
+- **由来**：1.25.0 用户需求「复盘界面打字时按 Esc 退出可输入状态，但鼠标还在界面里所以保持展开」。此前复盘编辑器对 Esc 彻底无操作——窗口级 PreviewKeyDown 的搜索分支在复盘页不可达（搜索排除复盘），清选择分支被 `is not TextBoxBase` 守卫挡住；「保持展开」机制（焦点链 + 表面重估）现成，缺的只是 ESC 断焦点这一环。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.ReviewEditorEscape.cs`（焦点释放到宿主窗口且编辑保持清算、真实光标在面板内时保持展开且不启动收起计时、组合标记存在时守卫不触发且焦点不移交）；`tests/FloatingTransferStation.Tests/PanelStateMachineTests.cs`（#7）与既有 ESC 路径用例继续全绿。
+- **关联**：CHANGELOG 1.25.0（无独立 spec，如实标注）。
+
+### 21. 标签显示顺序（1.25.0 起）
+
+- **断言**：四个标签（三个板卡分类 + 复盘）的显示顺序是独立持久化状态（settings.json `CategoryOrder`，原子写；与分类名零耦合、与 board.json 条目序/`SweepCategories`/`WithCategoryName` 全量快照序解耦——后三者按目录默认序继续）；只调顺序、不能增删分类；读取端唯一收敛于 `WindowSettings.DisplayOrder`——null（未定制）或非法（成员未定义、数量不符、重复）一律回落目录默认序，校验一次做齐；消费面=面板标签轨（`MainWindowViewModel.Categories` 按显示顺序重排，只复用既有 `CategoryViewModel` 实例、绝不新建——实例身份被 ActivePanel/默认接收/复盘表面切换依赖）与收起把手几何（行号=分类在显示顺序中的位置）；排序入口只在设置窗口「标签顺序」节（面板标签轨本身不提供拖拽）；节内拖拽自研零依赖（把手按下捕获鼠标 → 拖起原位行半透明跟随 → 其余行 TranslateTransform 让位 → 2px 强调色插入指示线；动效只用既有 DesignTokens 档，「界面动效」关闭退化为瞬时换位；浅/深主题用主题字典画刷）并必须同时提供上移/下移按钮（WCAG 2.5.7 单指针等价操作）；拖拽会话中的 Esc 由顺序节优先消费（回弹原序不提交，处理顺序在设置窗口既有 Esc 关窗路径之前），捕获丢失/失焦同样回弹；拖拽与按钮提交都走宿主 `ApplyCategoryOrderAsync` → settings.json 原子保存 + 标签轨即时重排（契约 #5），保存失败恢复内存原顺序；`ResetToDefault` 保留顺序定制（与 CategoryNames 同口径）。
+- **由来**：1.25.0 用户需求「设置界面可以调整『图片、复盘、文本、待分类』这几个东西的顺序和位置……希望可以变成那种可以拖动的」。顺序与目录解耦使显示序成为纯 UI 偏好，不触碰任何数据语义（清扫范围、拖放、搜索、默认接收全部按分类身份工作）。
+- **锁定**：`tests/FloatingTransferStation.Core.Tests/CategoryDisplayOrderTests.cs`（非法回落、JSON 往返、ResetToDefault 保留、ViewModel 重排复用实例并通知）、`tests/FloatingTransferStation.Tests/LocalStoreTests.cs`（CategoryOrder 经 LocalStore 原子往返）、`tests/FloatingTransferStation.Tests/WindowControllerTests.cs`（自定义序收起行号与非法回落）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CategoryOrder.cs`（rail 按显示顺序渲染、收起把手行号、宿主采纳即重排并持久化）、`tests/FloatingTransferStation.Tests/SettingsWindowCategoryOrderTests.cs`（节渲染与端点禁用、上移/下移提交即落盘、真实消息直驱拖拽提交、拖拽中 Esc 优先消费不关窗、捕获丢失回弹不提交）。
+- **关联**：CHANGELOG 1.25.0（无独立 spec，如实标注）。
 
 ## 维护规则
 

@@ -12,7 +12,7 @@
 | `multi-select-batch-pin.gif` | 600×1054 | 503 KB | Ctrl 多选三卡 → 批量置顶 → 拖到「文本2」 | 成组区「整理内容」 |
 | `edge-collapse-hold.gif` | 600×1054 | 288 KB | 移开收起 → 移入展开 → 保持展开开/关，原速 11.0s | 成组区「不挡工作区」 |
 | `review-tab.gif` | 600×1054 | 156 KB | 复盘标签输入 → 切前一天 → 切回，内容仍在 | 复盘段落之后 |
-| `settings-window.png` | 570×1166 | 90 KB | 设置窗口一屏（中性数据目录） | 成组区「设置」 |
+| `settings-window.png` | 384×976 | - | 设置窗口一屏（含 1.25.0「标签顺序」节与 TTL 自动清理说明；由真实 WPF 控件渲染的测试证据再生，`FTS_RELEASE_125_EVIDENCE_DIR`） | 成组区「设置」 |
 | `plugins-section.png` | 570×265 | 27 KB | 插件区块（「整理空白」默认关闭） | 成组区「插件」 |
 | `theme-light-dark.png` | 900×790 | 160 KB | 同一展开态面板的浅色/深色双联 | 成组区「主题」 |
 | `batch-copy-images.gif` | 680×546 | 77 KB | 资源管理器 Ctrl 多选三张复制，面板按来源顺序出卡 | 成组区「批量复制」 |
@@ -35,7 +35,7 @@ $env:FTS_PREVIEW_THEME   = 'light'
 & "$env:LocalAppData\Programs\悬浮中转站\悬浮中转站.exe"
 ```
 
-种子目录 `D:\fts-demo\seed\`：`board.json`（三个分类各 3–6 张中性卡片，部分置顶；短示例文字 + `seed-images\a1..a4.png` 低饱和渐变占位图）、`reviews\`（预置 ≥3 天 Markdown）、`settings.json`（分类名用 README 默认名「图片/复盘/文本2/待分类」，固定窗口位置）。资源管理器侧源图 `D:\fts-demo\assets\demo-01..05.png`（480×360 渐变 PNG，System.Drawing `LinearGradientBrush` 生成，无文字无个人信息）。演示拖放目标用本地页 `D:\fts-demo\drop-target.html`（浏览器接受文字拖放；Win11 记事本拒收 OLE 文字拖放）。
+种子目录 `D:\fts-demo\seed\`：`board.json`（三个分类各 3–6 张中性卡片，部分置顶；短示例文字 + `seed-images\a1..a4.png` 低饱和渐变占位图）、`reviews\`（预置 ≥3 天 Markdown）、`settings.json`（分类名用 README 默认名「图片/复盘/文本/待分类」，固定窗口位置）。资源管理器侧源图 `D:\fts-demo\assets\demo-01..05.png`（480×360 渐变 PNG，System.Drawing `LinearGradientBrush` 生成，无文字无个人信息）。演示拖放目标用本地页 `D:\fts-demo\drop-target.html`（浏览器接受文字拖放；Win11 记事本拒收 OLE 文字拖放）。
 
 **每条资产开拍前一键重置**：`D:\fts-demo\reset-working.ps1`（robocopy `/MIR` 从 seed 镜像到 data）后重启预览实例。重录同一段文案间隔 >5 秒（产品有 5 秒去重规则）。
 

@@ -79,6 +79,7 @@ public partial class SettingsWindow : Window
         AppNameRun.Text = ProductIdentity.DisplayName;
         VersionRun.Text = $"版本 {ProductIdentity.Version}";
         PopulatePluginSection();
+        PopulateCategoryOrderSection();
         Owner = host.HostWindow;
         // 安全网钳位必须挂在构造函数：SizeToContent 的测量与尺寸变化事件在
         // SourceInitialized 之前就已全部发生（探针实测 Loaded 先于 SourceInitialized），
@@ -137,6 +138,14 @@ public partial class SettingsWindow : Window
 
     private void SettingsWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Escape && _categoryOrderDrag is not null)
+        {
+            // 拖拽会话中的 Esc 属「标签顺序」节：回弹原序不提交，优先于关窗路径消费。
+            e.Handled = true;
+            CancelCategoryOrderDrag();
+            return;
+        }
+
         if (e.Key == Key.Escape && !_isChangingDataDirectory)
         {
             e.Handled = true;

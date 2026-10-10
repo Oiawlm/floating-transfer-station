@@ -14,7 +14,7 @@ public sealed class BoardServiceTests
         Assert.IsNotNull(displayNameField);
         Assert.AreEqual("悬浮中转站", displayNameField.GetValue(null));
         CollectionAssert.AreEqual(
-            new[] { "图片", "文本1", "文本2", "待分类" },
+            new[] { "图片", "文本1", "文本", "待分类" },
             BoardCategoryCatalog.Ordered.Select(BoardCategoryCatalog.DisplayName).ToArray());
     }
 
@@ -546,7 +546,7 @@ public sealed class BoardServiceTests
         // 待分类:普通二/普通一。
         var inboxNormalFirst = board.AddText("收件普通一");
         var inboxNormalSecond = board.AddText("收件普通二");
-        // 文本2:全部置顶,整分类不应被清掉任何条目。
+        // 文本(第三栏):全部置顶,整分类不应被清掉任何条目。
         var promptPinned = board.AddText("提示词置顶", BoardCategory.Prompt);
         board.SetPinnedMany([promptPinned.Id], true);
 
@@ -615,5 +615,65 @@ public sealed class BoardServiceTests
 
         Assert.AreSame(inboxNormal, board.Items(BoardCategory.Inbox).Single());
         Assert.AreSame(promptNormal, board.Items(BoardCategory.Prompt).Single());
+    }
+
+    [TestMethod]
+    public void RemoveNonPinned_WithExpiryCutoff_RemovesOnlyExpiredNonPinnedItems()
+    {
+        // 逐卡 24h TTL（1.25.0）：判据是条目自身 CreatedAt ≤ now−24h（边界含等于），
+        // 超龄置顶项绝不进入移除列表，未满期普通项保留。
+        var board = new BoardService();
+        var now = DateTimeOffset.UtcNow;
+        var expiredPinned = board.AddText("超龄置顶", BoardCategory.Prompt);
+        var expiredNormal = board.AddText("超龄普通", BoardCategory.Prompt);
+        var freshNormal = board.AddText("新鲜普通", BoardCategory.Prompt);
+        board.SetPinnedMany([expiredPinned.Id], true);
+        var cutoff = now - AutoCleanupSchedule.CleanupInterval;
+        board.SetItemCreatedAt(expiredPinned.Id, cutoff);
+        board.SetItemCreatedAt(expiredNormal.Id, cutoff);
+        board.SetItemCreatedAt(freshNormal.Id, cutoff.AddSeconds(1));
+
+        var removed = board.RemoveNonPinned([BoardCategory.Prompt], cutoff);
+
+        CollectionAssert.AreEqual(
+            new[] { expiredNormal.Id },
+            removed.RemovedItems.Select(item => item.Id).ToArray(),
+            "恰满 24h 即到期，未满期保留，置顶豁免。");
+        CollectionAssert.AreEqual(
+            new[] { expiredPinned.Id, freshNormal.Id },
+            board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray());
+    }
+
+    [TestMethod]
+    public void RemoveNonPinned_FutureCreatedAt_WithCutoff_IsNeverExpired()
+    {
+        var board = new BoardService();
+        var now = DateTimeOffset.UtcNow;
+        var future = board.AddText("未来时间戳", BoardCategory.Prompt);
+        var cutoff = now - AutoCleanupSchedule.CleanupInterval;
+        board.SetItemCreatedAt(future.Id, now.AddHours(2));
+
+        var removed = board.RemoveNonPinned([BoardCategory.Prompt], cutoff);
+
+        Assert.AreEqual(0, removed.RemovedItems.Count, "CreatedAt 在未来（年龄为负）不到期。");
+        // 做旧经快照回合重建条目实例，按 Id 断言而非实例同一。
+        CollectionAssert.AreEqual(
+            new[] { future.Id },
+            board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray());
+    }
+
+    [TestMethod]
+    public void RemoveNonPinned_WithoutCutoff_RemovesAllNonPinnedItems()
+    {
+        // 手工「清空非置顶」路径语义不变：不给 cutoff 时无论多新全部移除。
+        var board = new BoardService();
+        var freshNormal = board.AddText("刚刚入库", BoardCategory.Prompt);
+
+        var removed = board.RemoveNonPinned([BoardCategory.Prompt]);
+
+        CollectionAssert.AreEqual(
+            new[] { freshNormal.Id },
+            removed.RemovedItems.Select(item => item.Id).ToArray());
+        Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
     }
 }

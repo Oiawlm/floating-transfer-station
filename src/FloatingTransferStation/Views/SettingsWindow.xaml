@@ -191,6 +191,20 @@
                       Unchecked="AnimationsToggle_Unchecked" />
           </Grid>
 
+          <TextBlock Text="标签顺序" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+          <Grid x:Name="CategoryOrderHost" ClipToBounds="True">
+            <StackPanel x:Name="CategoryOrderList" />
+            <Border x:Name="CategoryOrderInsertionIndicator"
+                    Height="2"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Top"
+                    Background="{DynamicResource AccentBrush}"
+                    Visibility="Collapsed"
+                    IsHitTestVisible="False" />
+          </Grid>
+          <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                     Text="拖动行或用上移/下移按钮调整四个标签的显示顺序；改动立即生效并自动保存。" />
+
           <TextBlock Text="开机自启" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
           <Grid Background="Transparent">
             <Grid.ColumnDefinitions>
@@ -326,7 +340,7 @@
                       Unchecked="AutoCleanupToggle_Unchecked" />
           </Grid>
           <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                     Text="开启后每 24 小时自动清理一次各分类中非置顶的卡片（无论创建时间）；置顶卡片与「复盘」内容不受影响，清理后可 Ctrl+Z 撤销（仅本次运行内）。首次清理在开启 24 小时后进行。" />
+                     Text="每张非置顶卡片入库满 24 小时自动删除（升级后首次检查即清理已超龄的存量卡片）；置顶卡片与「复盘」内容不受影响；可 Ctrl+Z 撤销（仅本次运行内）；每小时检查一次。" />
 
           <TextBlock Text="数据目录" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
           <Grid Background="Transparent">

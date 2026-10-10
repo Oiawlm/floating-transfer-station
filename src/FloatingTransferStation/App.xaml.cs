@@ -192,7 +192,8 @@ public partial class App : Application
             {
                 var snapshot = await store.LoadBoardAsync();
                 board.Restore(snapshot);
-                return await new DailyReviewMigration(store).EnsureAsync(board, settings);
+                var afterReview = await new DailyReviewMigration(store).EnsureAsync(board, settings);
+                return await new CategoryNameMigration(store).EnsureAsync(afterReview);
             });
             if (!ReferenceEquals(migrated, settings))
             {

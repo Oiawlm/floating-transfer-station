@@ -36,18 +36,43 @@ public sealed class MainWindowViewModel : ObservableObject
         DefaultCaptureCategoryState? defaultCaptureCategory = null)
     {
         _defaultCaptureCategory = defaultCaptureCategory ?? new DefaultCaptureCategoryState();
-        Categories = BoardCategoryCatalog.Ordered
+        _categories = BoardCategoryCatalog.Ordered
             .Select(category => new CategoryViewModel(
                 category,
                 board.Items(category),
                 settings.CategoryName(category)))
             .ToArray();
+        ApplyCategoryOrder(settings.DisplayOrder);
         _defaultCapturePanel = Categories.Single(
             category => category.Category == _defaultCaptureCategory.Current);
         _defaultCapturePanel.IsDefaultCapture = true;
     }
 
-    public IReadOnlyList<CategoryViewModel> Categories { get; }
+    private CategoryViewModel[] _categories;
+
+    public IReadOnlyList<CategoryViewModel> Categories => _categories;
+
+    /// <summary>
+    /// 按显示顺序重排标签集合（1.25.0 设置页标签顺序）：复用既有
+    /// <see cref="CategoryViewModel"/> 实例（实例身份被 ActivePanel/默认接收/复盘
+    /// 表面切换依赖，绝不新建）；数组实例随重排替换并通知标签轨刷新。非法顺序
+    /// （数量/成员/重复不符）拒绝重排、保持现状。
+    /// </summary>
+    public void ApplyCategoryOrder(IReadOnlyList<BoardCategory> displayOrder)
+    {
+        ArgumentNullException.ThrowIfNull(displayOrder);
+        if (displayOrder.Count != _categories.Length ||
+            displayOrder.Distinct().Count() != displayOrder.Count ||
+            displayOrder.Any(category => !BoardCategoryCatalog.IsDefined(category)))
+        {
+            return;
+        }
+
+        _categories = displayOrder
+            .Select(category => _categories.Single(panel => panel.Category == category))
+            .ToArray();
+        OnPropertyChanged(nameof(Categories));
+    }
 
     public CategoryViewModel DefaultCapturePanel
     {

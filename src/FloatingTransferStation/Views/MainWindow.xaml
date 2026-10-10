@@ -530,9 +530,11 @@
                      VerticalContentAlignment="Top"
                      Padding="12"
                      FontSize="14"
-                     TextOptions.TextFormattingMode="Display"
-                     TextChanged="ReviewEditor_TextChanged"
-                     AutomationProperties.Name="每日复盘编辑器" />
+                 TextOptions.TextFormattingMode="Display"
+                 TextChanged="ReviewEditor_TextChanged"
+                 KeyDown="ReviewEditor_KeyDown"
+                 LostKeyboardFocus="ReviewEditor_LostKeyboardFocus"
+                 AutomationProperties.Name="每日复盘编辑器" />
             <TextBlock x:Name="ReviewStatus"
                        Grid.Row="2"
                        Margin="2,8,2,0"

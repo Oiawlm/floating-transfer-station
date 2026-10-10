@@ -167,7 +167,7 @@ public sealed class LocalStoreTests
 
         Assert.AreEqual(string.Empty, loaded.CategoryName(BoardCategory.CustomerOriginal));
         Assert.AreEqual("参考", loaded.CategoryName(BoardCategory.Reference));
-        Assert.AreEqual("文本2", loaded.CategoryName(BoardCategory.Prompt));
+        Assert.AreEqual("文本", loaded.CategoryName(BoardCategory.Prompt));
         Assert.AreEqual("待分类", loaded.CategoryName(BoardCategory.Inbox));
     }
 
@@ -188,7 +188,7 @@ public sealed class LocalStoreTests
         var loaded = await new LocalStore(paths, new AtomicTextWriter()).LoadSettingsAsync();
 
         CollectionAssert.AreEqual(
-            new[] { "图片", "文本1", "文本2", "待分类" },
+            new[] { "图片", "文本1", "文本", "待分类" },
             BoardCategoryCatalog.Ordered.Select(loaded.CategoryName).ToArray());
         if (hasLegacySettings)
         {
@@ -196,6 +196,28 @@ public sealed class LocalStoreTests
             Assert.AreEqual(700, loaded.WindowHeight);
             Assert.AreEqual(120, loaded.Top);
         }
+    }
+
+    [TestMethod]
+    public async Task SaveSettings_CategoryOrderRoundTripsThroughLocalStore()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        var settings = WindowSettings.Default.WithCategoryOrder(
+        [
+            BoardCategory.Inbox,
+            BoardCategory.Prompt,
+            BoardCategory.Reference,
+            BoardCategory.CustomerOriginal
+        ]);
+
+        await new LocalStore(paths, new AtomicTextWriter()).SaveSettingsAsync(settings);
+        var loaded = await new LocalStore(paths, new AtomicTextWriter()).LoadSettingsAsync();
+
+        CollectionAssert.AreEqual(
+            settings.DisplayOrder.ToArray(),
+            loaded.DisplayOrder.ToArray(),
+            "标签顺序必须随 settings.json 原子持久化往返。");
     }
 
     [TestMethod]
