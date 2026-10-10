@@ -35,7 +35,7 @@ $env:FTS_PREVIEW_THEME   = 'light'
 & "$env:LocalAppData\Programs\悬浮中转站\悬浮中转站.exe"
 ```
 
-种子目录 `D:\fts-demo\seed\`：`board.json`（三个分类各 3–6 张中性卡片，部分置顶；短示例文字 + `seed-images\a1..a4.png` 低饱和渐变占位图）、`reviews\`（预置 ≥3 天 Markdown）、`settings.json`（分类名用 README 默认名「图片/复盘/文本2/待分类」，固定窗口位置）。资源管理器侧源图 `D:\fts-demo\assets\demo-01..05.png`（480×360 渐变 PNG，System.Drawing `LinearGradientBrush` 生成，无文字无个人信息）。演示拖放目标用本地页 `D:\fts-demo\drop-target.html`（浏览器接受文字拖放；Win11 记事本拒收 OLE 文字拖放）。
+种子目录 `D:\fts-demo\seed\`：`board.json`（三个分类各 3–6 张中性卡片，部分置顶；短示例文字 + `seed-images\a1..a4.png` 低饱和渐变占位图）、`reviews\`（预置 ≥3 天 Markdown）、`settings.json`（分类名用 README 默认名「图片/复盘/文本/待分类」，固定窗口位置）。资源管理器侧源图 `D:\fts-demo\assets\demo-01..05.png`（480×360 渐变 PNG，System.Drawing `LinearGradientBrush` 生成，无文字无个人信息）。演示拖放目标用本地页 `D:\fts-demo\drop-target.html`（浏览器接受文字拖放；Win11 记事本拒收 OLE 文字拖放）。
 
 **每条资产开拍前一键重置**：`D:\fts-demo\reset-working.ps1`（robocopy `/MIR` 从 seed 镜像到 data）后重启预览实例。重录同一段文案间隔 >5 秒（产品有 5 秒去重规则）。
 

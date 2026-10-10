@@ -27,7 +27,7 @@ public static class BoardCategoryCatalog
     {
         BoardCategory.CustomerOriginal => "图片",
         BoardCategory.Reference => "文本1",
-        BoardCategory.Prompt => "文本2",
+        BoardCategory.Prompt => "文本",
         BoardCategory.Inbox => "待分类",
         _ => throw new ArgumentOutOfRangeException(nameof(category), category, null)
     };

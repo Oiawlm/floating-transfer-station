@@ -14,7 +14,7 @@ public sealed class BoardServiceTests
         Assert.IsNotNull(displayNameField);
         Assert.AreEqual("悬浮中转站", displayNameField.GetValue(null));
         CollectionAssert.AreEqual(
-            new[] { "图片", "文本1", "文本2", "待分类" },
+            new[] { "图片", "文本1", "文本", "待分类" },
             BoardCategoryCatalog.Ordered.Select(BoardCategoryCatalog.DisplayName).ToArray());
     }
 
@@ -546,7 +546,7 @@ public sealed class BoardServiceTests
         // 待分类:普通二/普通一。
         var inboxNormalFirst = board.AddText("收件普通一");
         var inboxNormalSecond = board.AddText("收件普通二");
-        // 文本2:全部置顶,整分类不应被清掉任何条目。
+        // 文本(第三栏):全部置顶,整分类不应被清掉任何条目。
         var promptPinned = board.AddText("提示词置顶", BoardCategory.Prompt);
         board.SetPinnedMany([promptPinned.Id], true);
 
