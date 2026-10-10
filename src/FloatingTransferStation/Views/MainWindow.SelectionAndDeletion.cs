@@ -100,13 +100,19 @@ public partial class MainWindow : Window
         }
 
         e.Handled = true;
-        if (Equals(button.CommandParameter, "ToggleSelection"))
+        if (Equals(button.CommandParameter, CardGestureZones.ToggleSelectionCommand))
         {
             ToggleSelection(item);
             return;
         }
 
-        if (!Equals(button.CommandParameter, "TogglePin"))
+        if (Equals(button.CommandParameter, CardGestureZones.DeleteCardCommand))
+        {
+            await DeleteSingleCardAsync(item);
+            return;
+        }
+
+        if (!Equals(button.CommandParameter, CardGestureZones.TogglePinCommand))
         {
             return;
         }
@@ -118,9 +124,16 @@ public partial class MainWindow : Window
     /// 单卡置顶/取消置顶（含选择与滚动位置恢复）。由两条入口共用：
     /// BoardList_ButtonClick（合成与 UIA 自动化路径）与卡片手势层
     /// （真实输入路径，见 MainWindow.CardGestures.cs）。
+    /// 状态矩阵（契约 #19）：选中卡片的置顶操作一律走顶部批量按钮——真实
+    /// 输入下徽章已被 IsEnabled 拦截，此守卫使合成/UIA 路径同样无效。
     /// </summary>
     private async Task ToggleCardPinAsync(BoardItem item)
     {
+        if (BoardList.SelectedItems.Contains(item))
+        {
+            return;
+        }
+
         var selectedBefore = CaptureSelectedItemIds();
         var selectionVersion = _selectionChangeVersion;
         var category = item.Category;
@@ -418,7 +431,8 @@ public partial class MainWindow : Window
     private async Task DeleteContentAsync(
         Guid[] selectedBefore,
         BoardCategory targetCategory,
-        TrashClearMode clearMode = TrashClearMode.None)
+        TrashClearMode clearMode = TrashClearMode.None,
+        IReadOnlyList<Guid>? selectionToRestore = null)
     {
         if (_isClosing ||
             _isDeletePending ||
@@ -488,7 +502,14 @@ public partial class MainWindow : Window
                         return;
                     }
 
-                    RestoreSelectionAfterSave(success ? [] : selectedBefore, selectionVersion);
+                    // 既有垃圾桶/键盘删除路径保存成功后清空选择（selectionToRestore
+                    // 为 null）；单卡删除传入删除前选择快照，成功与失败路径都
+                    // 原样还原——失败分支不能用 selectedBefore（单卡路径里它是
+                    // 被删卡本身，会把选择改成刚回滚的那张卡）。
+                    IReadOnlyCollection<Guid> selectionAfterSave = success
+                        ? selectionToRestore ?? []
+                        : selectionToRestore ?? selectedBefore;
+                    RestoreSelectionAfterSave(selectionAfterSave, selectionVersion);
                 },
                 DispatcherPriority.Send);
         }
@@ -503,6 +524,27 @@ public partial class MainWindow : Window
                 },
                 DispatcherPriority.Send);
         }
+    }
+
+    /// <summary>
+    /// 单卡删除（卡片操作条删除按钮，1.24.0，契约 #19）：只删这一张卡，复用
+    /// 既有删除路径 <see cref="DeleteContentAsync"/> → DeleteManyAsync（撤销栈、
+    /// 原子持久化、保存失败整卡恢复），不改当前选中集合、不滚动列表。
+    /// 分类取自条目本身（与单卡置顶 <see cref="ToggleCardPinAsync"/> 同源）。
+    /// 状态矩阵下选中卡片的删除按钮隐藏（真实输入不可达）；此处守卫使
+    /// 合成/UIA 等非视觉路径同样收敛到「选中卡片的删除一律走顶部批量按钮」。
+    /// </summary>
+    private async Task DeleteSingleCardAsync(BoardItem item)
+    {
+        if (BoardList.SelectedItems.Contains(item))
+        {
+            return;
+        }
+
+        await DeleteContentAsync(
+            [item.Id],
+            item.Category,
+            selectionToRestore: CaptureSelectedItemIds());
     }
 
     private void BeginDeletedCardFade(

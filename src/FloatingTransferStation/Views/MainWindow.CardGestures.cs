@@ -9,12 +9,12 @@ using FloatingTransferStation.Models;
 namespace FloatingTransferStation.Views;
 
 /// <summary>
-/// 卡片指针手势状态机（1.17.0 左右分区重构，1.18.0 对半修正）。卡片指针输入
-/// 收敛为单一模型：Down 记录按压会话（命中条目、命中区域、修饰键、起点与
-/// 按下时刻）→ Move 判拖拽 → Up 按「区域 × 双击窗 × 修饰键」分发意图
-/// （编辑 / 选择 / 置顶 / 复制），意图实现（BeginCardTextEditing、
-/// ToggleSelection、SelectRange、ToggleCardPinAsync、CopyBoardItemsToClipboard）
-/// 保持与手势判定解耦。
+/// 卡片指针手势状态机（1.17.0 左右分区重构，1.18.0 对半修正，1.24.0 删除钮）。
+/// 卡片指针输入收敛为单一模型：Down 记录按压会话（命中条目、命中区域、修饰键、
+/// 起点与按下时刻）→ Move 判拖拽 → Up 按「区域 × 双击窗 × 修饰键」分发意图
+/// （编辑 / 选择 / 置顶 / 删除 / 复制），意图实现（BeginCardTextEditing、
+/// ToggleSelection、SelectRange、ToggleCardPinAsync、DeleteSingleCardAsync、
+/// CopyBoardItemsToClipboard）保持与手势判定解耦。
 /// 分区契约（对半）：卡片内容左右两半——左半（命中层左列）承载双击编辑与
 /// 拖拽起点，无选择语义；右半（命中层右列，置顶/选择按钮所在半区）承载单击
 /// 选择与右键复制，置顶按钮为右半内的独立置顶意图；卡片 12px 边缘环带不经
@@ -36,11 +36,15 @@ public partial class MainWindow
         /// <summary>左半：承载双击编辑与拖拽起点。</summary>
         Content,
 
-        /// <summary>右半：承载单击选择与右键复制（置顶/选择按钮所在半区）。</summary>
+        /// <summary>右半：承载单击选择与右键复制（置顶/选择/删除按钮所在半区）。</summary>
         Operations,
 
         /// <summary>右半·置顶按钮：单击置顶/取消置顶，与右半选择手势不同的独立意图。</summary>
         OperationsPin,
+
+        /// <summary>右半·删除按钮（1.24.0）：单击只删这一张卡（走单卡撤销管线），
+        /// 与右半选择手势不同的独立意图；模式照抄 OperationsPin。</summary>
+        OperationsDelete,
     }
 
     /// <summary>
@@ -93,11 +97,14 @@ public partial class MainWindow
             CommitCardTextEditing();
         }
 
-        // 右半操作按钮（置顶/选择）与卡片一样由手势层接管：真实输入下
+        // 右半操作按钮（置顶/选择/删除）与卡片一样由手势层接管：真实输入下
         // 原生按钮的 Click 会先被 ListBox 默认单击选择对冒泡按下的处理与捕获
         // 吞掉（实机上 BoardList_ButtonClick 不可达，B-007 同族的「合成可达、
         // 实机不可达」缺陷，1.16.0 起即存在）；合成与 UIA 自动化路径仍走
         // BoardList_ButtonClick。列表外的按钮不经过本处理器，原生行为不变。
+        // 状态矩阵（契约 #19）下按钮永不禁用——选中已置顶卡片的置顶徽章
+        // 必须保持可命中以吞掉点击（禁用元素在 WPF 下不可命中，会穿透成
+        // 右半选择手势）；其点击失效由 ToggleCardPinAsync 守卫统一实现。
         if (FindAncestor<Button>(source) is { } hitButton)
         {
             if (FindAncestor<ListBoxItem>(hitButton) is not { } buttonContainer)
@@ -109,9 +116,11 @@ public partial class MainWindow
             _pressStartPosition = e.GetPosition(this);
             _pressTimestamp = e.Timestamp;
             _pressItem = buttonContainer.DataContext as BoardItem;
-            _pressZone = Equals(hitButton.CommandParameter, "TogglePin")
+            _pressZone = Equals(hitButton.CommandParameter, CardGestureZones.TogglePinCommand)
                 ? CardHitZone.OperationsPin
-                : CardHitZone.Operations;
+                : Equals(hitButton.CommandParameter, CardGestureZones.DeleteCardCommand)
+                    ? CardHitZone.OperationsDelete
+                    : CardHitZone.Operations;
             _pressButton = hitButton;
             _dragThresholdCrossed = false;
             _pressModifiers = Keyboard.Modifiers;
@@ -192,6 +201,13 @@ public partial class MainWindow
             // 语义与 BoardList_ButtonClick 的 TogglePin 分支共用同一实现。
             _ = ToggleCardPinAsync(item);
         }
+        else if (_pressZone == CardHitZone.OperationsDelete)
+        {
+            // 删除按钮是右半内的独立意图（1.24.0）：单击只删这一张卡，走既有
+            // 单卡删除管线（撤销栈、原子持久化、失败整卡恢复），不改选择集合；
+            // 语义与 BoardList_ButtonClick 的 DeleteCard 分支共用同一实现。
+            _ = DeleteSingleCardAsync(item);
+        }
         else if (_pressZone == CardHitZone.Operations)
         {
             // 选择手势只属于右半：Shift 走锚点范围选择，裸单击与 Ctrl+单击
@@ -206,8 +222,10 @@ public partial class MainWindow
             }
         }
 
-        // 痕迹只记左半与右半点击：置顶按钮是独立意图不参与双击窗——连点
-        // 置顶必须每击都 toggle（否则第二击被双击窗吞掉，按钮像坏的）。
+        // 痕迹只记左半与右半点击：置顶/删除按钮是独立意图不参与双击窗——
+        // 连点置顶必须每击都 toggle（否则第二击被双击窗吞掉，按钮像坏的）；
+        // 连点删除的意图分发同样逐击发生，删除保存期间的重入由
+        // DeleteContentAsync 的 _isDeletePending 保护丢弃（与顶部垃圾桶一致）。
         if (_pressZone is CardHitZone.Content or CardHitZone.Operations)
         {
             _lastCardClick = new CardClickTrace(
