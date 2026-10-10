@@ -36,6 +36,10 @@ public sealed partial class MainWindowInteractionTests
             var state = GetPrivateField<PanelStateMachine>(window, "_panelState");
             Assert.IsTrue(state.IsTextEditingActive);
             CompleteLayout(window);
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "review-editor-esc-before.png",
+                "FTS_RELEASE_125_EVIDENCE_DIR");
 
             var escape = NewEditorKeyDown(editor, Key.Escape);
             editor.RaiseEvent(escape);
@@ -44,7 +48,12 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(
                 window,
                 Keyboard.FocusedElement,
-                $"handled={escape.Handled}, focused={Keyboard.FocusedElement?.GetType().Name ?? "null"}");            Assert.IsFalse(state.IsTextEditingActive, "焦点释放后编辑保持原因应由既有链清算。");
+                $"handled={escape.Handled}, focused={Keyboard.FocusedElement?.GetType().Name ?? "null"}");
+            Assert.IsFalse(state.IsTextEditingActive, "焦点释放后编辑保持原因应由既有链清算。");
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "review-editor-esc-after.png",
+                "FTS_RELEASE_125_EVIDENCE_DIR");
         }
         finally
         {

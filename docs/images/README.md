@@ -12,7 +12,7 @@
 | `multi-select-batch-pin.gif` | 600×1054 | 503 KB | Ctrl 多选三卡 → 批量置顶 → 拖到「文本2」 | 成组区「整理内容」 |
 | `edge-collapse-hold.gif` | 600×1054 | 288 KB | 移开收起 → 移入展开 → 保持展开开/关，原速 11.0s | 成组区「不挡工作区」 |
 | `review-tab.gif` | 600×1054 | 156 KB | 复盘标签输入 → 切前一天 → 切回，内容仍在 | 复盘段落之后 |
-| `settings-window.png` | 570×1166 | 90 KB | 设置窗口一屏（中性数据目录） | 成组区「设置」 |
+| `settings-window.png` | 384×976 | - | 设置窗口一屏（含 1.25.0「标签顺序」节与 TTL 自动清理说明；由真实 WPF 控件渲染的测试证据再生，`FTS_RELEASE_125_EVIDENCE_DIR`） | 成组区「设置」 |
 | `plugins-section.png` | 570×265 | 27 KB | 插件区块（「整理空白」默认关闭） | 成组区「插件」 |
 | `theme-light-dark.png` | 900×790 | 160 KB | 同一展开态面板的浅色/深色双联 | 成组区「主题」 |
 | `batch-copy-images.gif` | 680×546 | 77 KB | 资源管理器 Ctrl 多选三张复制，面板按来源顺序出卡 | 成组区「批量复制」 |

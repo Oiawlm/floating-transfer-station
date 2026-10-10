@@ -10,11 +10,11 @@
 
 ## 下载与安装
 
-在 [1.24.0 发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.24.0) 下载 Windows 安装程序：
+在 [1.25.0 发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.25.0) 下载 Windows 安装程序：
 
 | 平台 | 下载 | 状态 |
 |---|---|---|
-| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.24.0/FloatingTransferStation-Setup-1.24.0.exe) | 正式版 |
+| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.25.0/FloatingTransferStation-Setup-1.25.0.exe) | 正式版 |
 
 发行页同时提供 `SHA256SUMS.txt`。Windows 无需另装 .NET。
 
@@ -77,9 +77,9 @@ Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自
 
 **设置**
 
-<img src="docs/images/settings-window.png" width="550" alt="设置窗口：主题、界面动效、开机自启、全局快捷键、内容复制、垃圾桶按钮、自动清理、数据目录、插件与关于">
+<img src="docs/images/settings-window.png" width="550" alt="设置窗口：主题、界面动效、标签顺序、开机自启、全局快捷键、内容复制、垃圾桶按钮、自动清理、数据目录、插件与关于">
 
-*设置窗口一屏：主题、动效、自启、快捷键、自动清理、数据目录*
+*设置窗口一屏：主题、动效、标签顺序、自启、快捷键、自动清理、数据目录*
 
 **主题**
 

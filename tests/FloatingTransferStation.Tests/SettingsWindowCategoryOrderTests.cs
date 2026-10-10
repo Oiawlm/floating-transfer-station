@@ -423,6 +423,83 @@ public sealed class SettingsWindowCategoryOrderTests
         PumpUntil(dispatcher, done.Task);
     }
 
+    /// <summary>1.25.0 发布证据（FTS_RELEASE_125_EVIDENCE_DIR 设置时产出真实 WPF
+    /// 渲染截图）：展开态主窗默认标签名（F4 默认名「文本」）+ 设置窗口（F2 TTL
+    /// 说明行与 F3 标签顺序节）+ 上移后的顺序变化（F3）。</summary>
+    [STATestMethod]
+    public void Evidence_CaptureRelease125Screens()
+    {
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_RELEASE_125_EVIDENCE_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_RELEASE_125_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        using var directory = new TestDirectory();
+        var (window, store) = CreateContext(directory, s => s);
+
+        try
+        {
+            window.Show();
+            ExpandDefaultCapture(window);
+            CompleteLayout(window);
+            SaveShell(window, "release125-main-window-default-names.png");
+
+            var settings = OpenSettingsWindow(window);
+            CompleteLayout(window);
+            SaveSettingsShell(settings, "release125-settings-window.png");
+
+            var secondRow = GetOrderRows(settings)[1];
+            FindDescendants<Button>(secondRow).Single(b => Equals(b.Content, "↑"))
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            PumpUntilCompleted(window.Dispatcher).GetAwaiter().GetResult();
+            CompleteLayout(window);
+            SaveSettingsShell(settings, "release125-settings-after-move-up.png");
+            _ = store;
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    private static void ExpandDefaultCapture(MainWindow window)
+    {
+        // 直接驱动视图模型展开默认接收分类（布局定稿后截壳层）。
+        var viewModel = (MainWindowViewModel)window.DataContext;
+        viewModel.Activate(viewModel.DefaultCapturePanel.Category);
+        viewModel.SetPanelExpanded(true);
+        window.UpdateLayout();
+    }
+
+    private static void SaveShell(MainWindow window, string fileName) =>
+        SaveWindowVisual((Border)window.FindName("WindowShell")!, fileName);
+
+    private static void SaveSettingsShell(SettingsWindow settings, string fileName) =>
+        SaveWindowVisual((Border)settings.FindName("WindowShell")!, fileName);
+
+    private static void SaveWindowVisual(Border shell, string fileName)
+    {
+        var directory = Environment.GetEnvironmentVariable("FTS_RELEASE_125_EVIDENCE_DIR");
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(directory);
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            (int)Math.Ceiling(shell.ActualWidth),
+            (int)Math.Ceiling(shell.ActualHeight),
+            96,
+            96,
+            System.Windows.Media.PixelFormats.Pbgra32);
+        bitmap.Render(shell);
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using var stream = File.Create(Path.Combine(directory, fileName));
+        encoder.Save(stream);
+    }
+
     [STATestMethod]
     public void DragCommit_PureClickWithoutMove_DoesNotReorder()
     {
