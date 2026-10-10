@@ -103,7 +103,10 @@ public partial class SettingsWindow
         {
             Style = TryFindResource("ThemedActionButtonStyle") as Style,
             Content = "↑",
-            Width = 32,
+            Width = 30,
+            Height = 24,
+            Padding = new Thickness(0),
+            FontSize = 14,
             Margin = new Thickness(0, 0, 4, 0),
             IsEnabled = index > 0,
             Tag = category
@@ -117,7 +120,10 @@ public partial class SettingsWindow
         {
             Style = TryFindResource("ThemedActionButtonStyle") as Style,
             Content = "↓",
-            Width = 32,
+            Width = 30,
+            Height = 24,
+            Padding = new Thickness(0),
+            FontSize = 14,
             IsEnabled = index < count - 1,
             Tag = category
         };
