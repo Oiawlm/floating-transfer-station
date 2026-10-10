@@ -1099,7 +1099,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void TextCard_ReservesFixedPinAndSelectionColumns()
+    public void TextCard_ReservesFixedPinSelectionAndDeleteColumns()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -1119,17 +1119,17 @@ public sealed partial class MainWindowInteractionTests
             var buttons = FindDescendants<Button>(container)
                 .Where(candidate => ReferenceEquals(candidate.Tag, item))
                 .ToArray();
-            Assert.HasCount(2, buttons);
+            Assert.HasCount(3, buttons);
             var pinButton = buttons.Single(
-                candidate => Equals(candidate.CommandParameter, "TogglePin"));
+                candidate => Equals(candidate.CommandParameter, CardGestureZones.TogglePinCommand));
             var selectionButton = buttons.Single(
-                candidate => Equals(candidate.CommandParameter, "ToggleSelection"));
+                candidate => Equals(candidate.CommandParameter, CardGestureZones.ToggleSelectionCommand));
+            var deleteButton = buttons.Single(
+                candidate => Equals(candidate.CommandParameter, CardGestureZones.DeleteCardCommand));
             var contentGrid = pinButton.Parent as Grid;
             var text = FindDescendants<TextBlock>(container)
                 .Single(candidate => candidate.Text == item.Text);
 
-            Assert.IsFalse(buttons.Any(
-                candidate => Equals(candidate.CommandParameter, "Delete")));
             Assert.AreEqual(30d, pinButton.Width);
             Assert.AreEqual(30d, pinButton.Height);
             Assert.AreEqual(0d, pinButton.Opacity);
@@ -1139,16 +1139,23 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsNotNull(FindDescendant<System.Windows.Shapes.Path>(pinButton));
             Assert.AreEqual(30d, selectionButton.Width);
             Assert.AreEqual(30d, selectionButton.Height);
+            Assert.AreEqual(30d, deleteButton.Width);
+            Assert.AreEqual(30d, deleteButton.Height);
+            Assert.AreEqual(0d, deleteButton.Opacity);
+            Assert.IsFalse(deleteButton.IsHitTestVisible);
+            Assert.AreEqual("删除", deleteButton.ToolTip);
             Assert.IsNotNull(contentGrid);
             // 1.18.0 对半分区：命中层两列 * /* 各占一半；右半（Tag=
-            // CardGestureZones.OperationsZone）右上角保留按钮包（仍各占
-            // 固定 30px 列、右对齐）；内容视觉层全宽在命中层之下（无 Tag，
-            // 指针命中总落在命中层上）。
-            Assert.AreEqual(2, contentGrid.ColumnDefinitions.Count);
+            // CardGestureZones.OperationsZone）右上角保留按钮包（1.24.0 起三枚
+            // 按钮、各占固定 30px 列、右对齐）；内容视觉层全宽在命中层之下
+            // （无 Tag，指针命中总落在命中层上）。
+            Assert.AreEqual(3, contentGrid.ColumnDefinitions.Count);
             Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[0].Width);
             Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[1].Width);
+            Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[2].Width);
             Assert.AreEqual(0, Grid.GetColumn(pinButton));
             Assert.AreEqual(1, Grid.GetColumn(selectionButton));
+            Assert.AreEqual(2, Grid.GetColumn(deleteButton));
             Assert.AreEqual(HorizontalAlignment.Right, contentGrid.HorizontalAlignment);
             Assert.AreEqual(VerticalAlignment.Top, contentGrid.VerticalAlignment);
             var operationsZone = contentGrid.Parent as Grid;

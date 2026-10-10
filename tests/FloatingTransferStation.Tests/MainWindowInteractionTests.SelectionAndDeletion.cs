@@ -795,6 +795,7 @@ public sealed partial class MainWindowInteractionTests
         var board = new BoardService();
         var selectedOther = board.AddText("selected other");
         var clicked = board.AddText("clicked");
+        var pinTarget = board.AddText("pin target");
         var store = new BlockingFirstSuccessfulSaveBoardStore(directory.Root);
         var window = CreateWindow(board, store, WindowSettings.Default);
 
@@ -806,10 +807,12 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
             list.SelectedItems.Add(clicked);
             list.SelectedItems.Add(selectedOther);
-            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(clicked);
+            // 状态矩阵（契约 #19）：单卡置顶只作用于未选中卡片——慢保存用例
+            // 改为置顶未选中的 pinTarget，选择集合作为背景保持。
+            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(pinTarget);
             Assert.IsNotNull(container);
             var pin = FindDescendants<Button>(container)
-                .Single(button => Equals(button.CommandParameter, "TogglePin"));
+                .Single(button => Equals(button.CommandParameter, CardGestureZones.TogglePinCommand));
 
             pin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, pin));
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
@@ -826,6 +829,7 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
 
             Assert.AreEqual(0, list.SelectedItems.Count);
+            Assert.IsTrue(pinTarget.IsPinned);
             Assert.AreEqual(
                 Visibility.Collapsed,
                 ((Border)window.FindName("SelectedCountBadge")).Visibility);
@@ -1671,12 +1675,13 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsNotNull(viewer);
             ScrollTo(window, viewer, 120);
             var offset = viewer.VerticalOffset;
-            list.SelectedItems.Add(clicked);
+            // 状态矩阵（契约 #19）：选中卡片的置顶操作走顶部批量按钮——单击置顶
+            // 只作用于未选中的被点卡片，同时保留既有选择。
             list.SelectedItems.Add(other);
             var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(clicked);
             Assert.IsNotNull(container);
             var pin = FindDescendants<Button>(container)
-                .Single(button => Equals(button.CommandParameter, "TogglePin"));
+                .Single(button => Equals(button.CommandParameter, CardGestureZones.TogglePinCommand));
 
             pin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, pin));
             PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
@@ -1686,7 +1691,7 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsFalse(other.IsPinned);
             Assert.AreSame(clicked, board.Items(BoardCategory.Inbox)[0]);
             CollectionAssert.AreEquivalent(
-                new[] { clicked, other },
+                new[] { other },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
             Assert.AreEqual(offset, viewer.VerticalOffset, 0.5);
         }
@@ -1703,7 +1708,7 @@ public sealed partial class MainWindowInteractionTests
         var board = new BoardService();
         var unselected = board.AddText("unselected");
         var selectedOther = board.AddText("selected other");
-        var clicked = board.AddText("clicked");
+        var pinTarget = board.AddText("pin target");
         var store = new BlockingFirstSuccessfulSaveBoardStore(directory.Root);
         var window = CreateWindow(board, store, WindowSettings.Default);
 
@@ -1713,36 +1718,38 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
-            list.SelectedItems.Add(clicked);
             list.SelectedItems.Add(selectedOther);
-            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(clicked);
+            // 状态矩阵（契约 #19）：置顶单击只作用于未选中卡片；保存期间既有
+            // 选择与头部删除作用域保持。
+            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(pinTarget);
             Assert.IsNotNull(container);
             var pin = FindDescendants<Button>(container)
-                .Single(button => Equals(button.CommandParameter, "TogglePin"));
+                .Single(button => Equals(button.CommandParameter, CardGestureZones.TogglePinCommand));
 
             pin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, pin));
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
             CompleteLayout(window);
 
             CollectionAssert.AreEquivalent(
-                new[] { clicked, selectedOther },
+                new[] { selectedOther },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
             Assert.AreEqual(
                 Visibility.Visible,
                 ((Border)window.FindName("SelectedCountBadge")).Visibility);
-            Assert.AreEqual("2", ((TextBlock)window.FindName("SelectedCountText")).Text);
+            Assert.AreEqual("1", ((TextBlock)window.FindName("SelectedCountText")).Text);
             var delete = (Button)window.FindName("DeleteContentButton");
-            Assert.AreEqual("删除已选 2 项", delete.ToolTip);
+            Assert.AreEqual("删除已选 1 项", delete.ToolTip);
 
             store.ReleaseFirstSave();
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveCompleted.Task);
             CompleteLayout(window);
 
             CollectionAssert.AreEquivalent(
-                new[] { clicked, selectedOther },
+                new[] { selectedOther },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
+            Assert.IsTrue(pinTarget.IsPinned);
             CollectionAssert.AreEquivalent(
-                new[] { clicked, selectedOther, unselected },
+                new[] { selectedOther, unselected, pinTarget },
                 board.Items(BoardCategory.Inbox).ToArray());
         }
         finally
@@ -1757,7 +1764,7 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
-        var clicked = board.AddText("待分类中正在置顶的内容");
+        var pinTarget = board.AddText("待分类中正在置顶的内容");
         var selected = board.AddText("资料分类中已选的内容", BoardCategory.Reference);
         var keep = board.AddText("资料分类中保留的内容", BoardCategory.Reference);
         var store = new BlockingFirstSuccessfulSaveBoardStore(directory.Root);
@@ -1773,11 +1780,12 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
-            list.SelectedItems.Add(clicked);
-            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(clicked);
+            // 状态矩阵（契约 #19）：单卡置顶只作用于未选中卡片；本用例锁定
+            // 慢保存横跨分类切换时另一分类的选择与头部删除作用域不受影响。
+            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(pinTarget);
             Assert.IsNotNull(container);
             var pin = FindDescendants<Button>(container)
-                .Single(button => Equals(button.CommandParameter, "TogglePin"));
+                .Single(button => Equals(button.CommandParameter, CardGestureZones.TogglePinCommand));
 
             pin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, pin));
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
@@ -1814,7 +1822,7 @@ public sealed partial class MainWindowInteractionTests
                 list.SelectedItems.Cast<BoardItem>().ToArray());
             Assert.AreEqual("删除已选 1 项", delete.ToolTip);
             Assert.AreEqual("删除已选 1 项", AutomationProperties.GetName(delete));
-            Assert.IsTrue(clicked.IsPinned);
+            Assert.IsTrue(pinTarget.IsPinned);
             CollectionAssert.AreEquivalent(
                 new[] { selected, keep },
                 board.Items(BoardCategory.Reference).ToArray());
@@ -1858,12 +1866,13 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsNotNull(viewer);
             ScrollTo(window, viewer, 120);
             var offset = viewer.VerticalOffset;
-            list.SelectedItems.Add(clicked);
+            // 状态矩阵（契约 #19）：单卡置顶只作用于未选中卡片——失败恢复用例
+            // 置顶未选中的 clicked，既有选择作为背景在保存失败后原样保持。
             list.SelectedItems.Add(other);
             var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(clicked);
             Assert.IsNotNull(container);
             var pin = FindDescendants<Button>(container)
-                .Single(button => Equals(button.CommandParameter, "TogglePin"));
+                .Single(button => Equals(button.CommandParameter, CardGestureZones.TogglePinCommand));
 
             pin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, pin));
             CompleteLayout(window);
@@ -1871,7 +1880,7 @@ public sealed partial class MainWindowInteractionTests
             CollectionAssert.AreEqual(before, board.Items(BoardCategory.Inbox).ToArray());
             Assert.IsFalse(clicked.IsPinned);
             CollectionAssert.AreEquivalent(
-                new[] { clicked, other },
+                new[] { other },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
             Assert.AreEqual(offset, viewer.VerticalOffset, 0.5);
             Assert.AreEqual(
