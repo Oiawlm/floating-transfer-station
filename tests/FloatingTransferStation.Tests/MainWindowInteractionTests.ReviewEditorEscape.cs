@@ -75,22 +75,36 @@ public sealed partial class MainWindowInteractionTests
             LoadReview(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
             var editor = (TextBox)window.FindName("ReviewEditor");
-            HoverRealAt(
-                window,
-                editor,
-                new Point(editor.ActualWidth / 2, editor.ActualHeight / 2),
-                settleMilliseconds: 0);
-            Assert.IsTrue(window.IsMouseOver, "前置条件：真实光标已悬停在复盘编辑器上。");
-            Assert.IsTrue(editor.Focus());
-            CompleteLayout(window);
+            try
+            {
+                HoverRealAt(
+                    window,
+                    editor,
+                    new Point(editor.ActualWidth / 2, editor.ActualHeight / 2),
+                    settleMilliseconds: 0);
+                Assert.IsTrue(window.IsMouseOver, "前置条件：真实光标已悬停在复盘编辑器上。");
+                Assert.IsTrue(editor.Focus());
+                CompleteLayout(window);
 
-            editor.RaiseEvent(NewEditorKeyDown(editor, Key.Escape));
-            CompleteLayout(window);
+                editor.RaiseEvent(NewEditorKeyDown(editor, Key.Escape));
+                CompleteLayout(window);
 
-            Assert.AreNotEqual(editor, Keyboard.FocusedElement);
-            Assert.IsTrue(viewModel.IsPanelExpanded, "指针在面板内时，退出编辑态不得收起面板。");
-            var collapseTimer = GetPrivateField<DispatcherTimer>(window, "_collapseTimer");
-            Assert.IsFalse(collapseTimer.IsEnabled, "指针在面板内时不得启动收起计时。");
+                Assert.AreNotEqual(editor, Keyboard.FocusedElement);
+                Assert.IsTrue(viewModel.IsPanelExpanded, "指针在面板内时，退出编辑态不得收起面板。");
+                var collapseTimer = GetPrivateField<DispatcherTimer>(window, "_collapseTimer");
+                Assert.IsFalse(collapseTimer.IsEnabled, "指针在面板内时不得启动收起计时。");
+            }
+            finally
+            {
+                // 真实光标移出本窗贴边落位区（与既有约定一致：不恢复原位——原位
+                // 可能恰在窗口贴边落位区内，残留会让后续测试的真实 MouseEnter
+                // 取消其进行中的收起，重入取消是生产行为，跨测试污染必须避免）。
+                var away = window.PointToScreen(new Point(-160, 160));
+                Assert.IsTrue(SetCursorPos(
+                    Math.Max((int)Math.Round(away.X), 8),
+                    (int)Math.Round(away.Y) + 4));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+            }
         }
         finally
         {
