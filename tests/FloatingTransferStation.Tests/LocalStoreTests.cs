@@ -199,6 +199,28 @@ public sealed class LocalStoreTests
     }
 
     [TestMethod]
+    public async Task SaveSettings_CategoryOrderRoundTripsThroughLocalStore()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        var settings = WindowSettings.Default.WithCategoryOrder(
+        [
+            BoardCategory.Inbox,
+            BoardCategory.Prompt,
+            BoardCategory.Reference,
+            BoardCategory.CustomerOriginal
+        ]);
+
+        await new LocalStore(paths, new AtomicTextWriter()).SaveSettingsAsync(settings);
+        var loaded = await new LocalStore(paths, new AtomicTextWriter()).LoadSettingsAsync();
+
+        CollectionAssert.AreEqual(
+            settings.DisplayOrder.ToArray(),
+            loaded.DisplayOrder.ToArray(),
+            "标签顺序必须随 settings.json 原子持久化往返。");
+    }
+
+    [TestMethod]
     public async Task LoadSettings_LegacySavedCategoryNamesSurviveSaveAndReload()
     {
         using var directory = new TestDirectory();

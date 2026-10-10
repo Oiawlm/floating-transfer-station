@@ -191,6 +191,20 @@
                       Unchecked="AnimationsToggle_Unchecked" />
           </Grid>
 
+          <TextBlock Text="标签顺序" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+          <Grid x:Name="CategoryOrderHost" ClipToBounds="True">
+            <StackPanel x:Name="CategoryOrderList" />
+            <Border x:Name="CategoryOrderInsertionIndicator"
+                    Height="2"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Top"
+                    Background="{DynamicResource AccentBrush}"
+                    Visibility="Collapsed"
+                    IsHitTestVisible="False" />
+          </Grid>
+          <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                     Text="拖动行或用上移/下移按钮调整四个标签的显示顺序；改动立即生效并自动保存。" />
+
           <TextBlock Text="开机自启" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
           <Grid Background="Transparent">
             <Grid.ColumnDefinitions>

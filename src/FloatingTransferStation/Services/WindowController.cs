@@ -42,9 +42,11 @@ public static class WindowController
         }
 
         var normalized = settings.Normalize(workArea.Width, workArea.Height);
-        var rowHeight = normalized.WindowHeight / BoardCategoryCatalog.Ordered.Count;
+        // 收起把手行号按显示顺序（1.25.0 标签顺序可定制）而非目录默认序。
+        var displayOrder = settings.DisplayOrder;
+        var rowHeight = normalized.WindowHeight / displayOrder.Count;
         var rowIndex = 0;
-        while (BoardCategoryCatalog.Ordered[rowIndex] != defaultCategory)
+        while (displayOrder[rowIndex] != defaultCategory)
         {
             rowIndex++;
         }

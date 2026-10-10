@@ -149,6 +149,22 @@
 - **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardDeleteButton.cs`（矩阵四状态 + Win32 消息直驱的单卡删除保留选择滚动与撤销、徽章真实点击无效、滑离取消、操作条内右键复制）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardOperationAvoidance.cs`（三列派生内缩）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.VisualLifecycle.cs`（`TextCard_ReservesFixedPinSelectionAndDeleteColumns`）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.SelectionAndDeletion.cs` 与 `RangeSelection.cs`（矩阵化的单卡置顶用例：置顶单击只作用于未选中卡片）、批量置顶语义锁定测试（SelectionAndDeletion 批量用例）继续全绿。
 - **关联**：CHANGELOG 1.24.0；契约 #16 三列修订记录 Issue（Oiawlm/floating-transfer-station#88）。
 
+## 六、本次新增（20–21，1.25.0）
+
+### 20. 复盘编辑器 Esc 退出编辑态（1.25.0 起）
+
+- **断言**：复盘编辑器持有键盘焦点时按 Esc 释放键盘焦点并标记按键已处理；焦点去向是宿主 Window 本身（必须先清空焦点域记录再聚焦——WPF 会把「聚焦焦点域本体」重定向回域内 `FocusedElement`，即编辑器自身），绝不把焦点塞给隐藏的 BoardList；面板去留交给既有焦点链（`Root_PreviewLostKeyboardFocus` 统一清算编辑保持原因并重估表面）——指针在面板内时维持展开（与 #7 同源），否则恢复收起节奏；IME 组合期的 Esc 属输入法操作（取消候选）不触发退出（组合标记守卫，与卡片就地编辑/分类改名框同族，标记在编辑器失焦时清理）；不引入提交/取消会话（复盘是 700ms 防抖自动保存，无「取消」概念）；卡片就地编辑、分类改名、搜索框的既有 Esc 语义不变。
+- **由来**：1.25.0 用户需求「复盘界面打字时按 Esc 退出可输入状态，但鼠标还在界面里所以保持展开」。此前复盘编辑器对 Esc 彻底无操作——窗口级 PreviewKeyDown 的搜索分支在复盘页不可达（搜索排除复盘），清选择分支被 `is not TextBoxBase` 守卫挡住；「保持展开」机制（焦点链 + 表面重估）现成，缺的只是 ESC 断焦点这一环。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.ReviewEditorEscape.cs`（焦点释放到宿主窗口且编辑保持清算、真实光标在面板内时保持展开且不启动收起计时、组合标记存在时守卫不触发且焦点不移交）；`tests/FloatingTransferStation.Tests/PanelStateMachineTests.cs`（#7）与既有 ESC 路径用例继续全绿。
+- **关联**：CHANGELOG 1.25.0（无独立 spec，如实标注）。
+
+### 21. 标签显示顺序（1.25.0 起）
+
+- **断言**：四个标签（三个板卡分类 + 复盘）的显示顺序是独立持久化状态（settings.json `CategoryOrder`，原子写；与分类名零耦合、与 board.json 条目序/`SweepCategories`/`WithCategoryName` 全量快照序解耦——后三者按目录默认序继续）；只调顺序、不能增删分类；读取端唯一收敛于 `WindowSettings.DisplayOrder`——null（未定制）或非法（成员未定义、数量不符、重复）一律回落目录默认序，校验一次做齐；消费面=面板标签轨（`MainWindowViewModel.Categories` 按显示顺序重排，只复用既有 `CategoryViewModel` 实例、绝不新建——实例身份被 ActivePanel/默认接收/复盘表面切换依赖）与收起把手几何（行号=分类在显示顺序中的位置）；排序入口只在设置窗口「标签顺序」节（面板标签轨本身不提供拖拽）；节内拖拽自研零依赖（把手按下捕获鼠标 → 拖起原位行半透明跟随 → 其余行 TranslateTransform 让位 → 2px 强调色插入指示线；动效只用既有 DesignTokens 档，「界面动效」关闭退化为瞬时换位；浅/深主题用主题字典画刷）并必须同时提供上移/下移按钮（WCAG 2.5.7 单指针等价操作）；拖拽会话中的 Esc 由顺序节优先消费（回弹原序不提交，处理顺序在设置窗口既有 Esc 关窗路径之前），捕获丢失/失焦同样回弹；拖拽与按钮提交都走宿主 `ApplyCategoryOrderAsync` → settings.json 原子保存 + 标签轨即时重排（契约 #5），保存失败恢复内存原顺序；`ResetToDefault` 保留顺序定制（与 CategoryNames 同口径）。
+- **由来**：1.25.0 用户需求「设置界面可以调整『图片、复盘、文本、待分类』这几个东西的顺序和位置……希望可以变成那种可以拖动的」。顺序与目录解耦使显示序成为纯 UI 偏好，不触碰任何数据语义（清扫范围、拖放、搜索、默认接收全部按分类身份工作）。
+- **锁定**：`tests/FloatingTransferStation.Core.Tests/CategoryDisplayOrderTests.cs`（非法回落、JSON 往返、ResetToDefault 保留、ViewModel 重排复用实例并通知）、`tests/FloatingTransferStation.Tests/LocalStoreTests.cs`（CategoryOrder 经 LocalStore 原子往返）、`tests/FloatingTransferStation.Tests/WindowControllerTests.cs`（自定义序收起行号与非法回落）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CategoryOrder.cs`（rail 按显示顺序渲染、收起把手行号、宿主采纳即重排并持久化）、`tests/FloatingTransferStation.Tests/SettingsWindowCategoryOrderTests.cs`（节渲染与端点禁用、上移/下移提交即落盘、真实消息直驱拖拽提交、拖拽中 Esc 优先消费不关窗、捕获丢失回弹不提交）。
+- **关联**：CHANGELOG 1.25.0（无独立 spec，如实标注）。
+
 ## 维护规则
 
 - 新契约入清单时机：行为定型的同一版本，随 CHANGELOG 与锁定测试一起落。

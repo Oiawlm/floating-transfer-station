@@ -28,4 +28,16 @@ public interface ISettingsHost
     string EffectivePluginsDirectory { get; }
     bool PluginsDirectoryIsDefault { get; }
     Task<string?> ApplyPluginsDirectoryAsync(string? directoryOverride);
+
+    /// <summary>当前标签显示顺序（1.25.0）：设置页「标签顺序」节的渲染来源。</summary>
+    IReadOnlyList<BoardCategory> CurrentDisplayOrder { get; }
+
+    /// <summary>标签显示名（含用户自定义与迁移改名），设置页顺序列表按它呈现。</summary>
+    string CategoryDisplayName(BoardCategory category);
+
+    /// <summary>
+    /// 采纳新的标签显示顺序：立即重排面板标签轨并异步原子持久化到 settings.json；
+    /// 持久化失败经状态条提示并恢复原顺序。
+    /// </summary>
+    Task ApplyCategoryOrderAsync(IReadOnlyList<BoardCategory> displayOrder);
 }
