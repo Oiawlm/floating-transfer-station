@@ -130,9 +130,15 @@ public sealed partial class MainWindowInteractionTests
                 content.GetAnimationBaseValue(UIElement.OpacityProperty));
             Assert.AreEqual(1d, shell.Opacity);
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            var state = GetPrivateField<PanelStateMachine>(window, "_panelState");
+            var hold = (bool)typeof(MainWindow)
+                .GetMethod("IsPanelEditHoldActive", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(window, null)!;
             Assert.IsTrue(
                 content.Opacity > 0d && content.Opacity < 1d,
-                "出场动画应正在进行中。");
+                $"出场动画应正在进行中。diag: hold={hold} " +
+                $"wouldCollapse={state.WouldCollapse} textEditing={state.IsTextEditingActive} " +
+                $"focused={Keyboard.FocusedElement?.GetType().Name ?? "null"} opacity={content.Opacity:F3}");
 
             InvokePrivate(window, "Root_MouseEnter", window, NewMouseEventArgs());
             CompleteLayout(window);
