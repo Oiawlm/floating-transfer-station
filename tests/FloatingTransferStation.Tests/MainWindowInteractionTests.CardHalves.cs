@@ -145,11 +145,14 @@ public sealed partial class MainWindowInteractionTests
             window.Topmost = true;
             CompleteLayout(window);
 
-            // 右半中央（远离右上角按钮）：旧实现落在内容列，单击无反应（Bug B）。
+            // 右半左缘内侧（远离右上角按钮条）：旧实现落在内容列，单击无反应
+            // （Bug B）。1.24.0 起按钮条扩为三列（右对齐 90px），右半中央已可
+            // 落进图钉列——裸单击语义的取样点固定在右半左缘 +12，任何面板宽度
+            // 下都几何远离按钮条。
             var operationsZone = HalvesZoneOf(container, CardGestureZones.OperationsZone);
             var zoneOrigin = operationsZone.TranslatePoint(new Point(), container);
             var clickPoint = new Point(
-                zoneOrigin.X + operationsZone.ActualWidth / 2,
+                zoneOrigin.X + 12,
                 zoneOrigin.Y + operationsZone.ActualHeight * 0.6);
             var savedCursor = SaveCursorPosition();
 

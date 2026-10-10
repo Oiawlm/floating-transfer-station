@@ -11,6 +11,19 @@ public static class CardGestureZones
     /// <summary>左半：承载双击编辑与拖拽起点，无选择语义。</summary>
     public const string ContentZone = "CardContentZone";
 
-    /// <summary>右半（置顶/选择按钮所在半区）：承载单击选择与右键复制。</summary>
+    /// <summary>右半（置顶/选择/删除按钮所在半区）：承载单击选择与右键复制。</summary>
     public const string OperationsZone = "CardOperationsZone";
+
+    /// <summary>
+    /// 右半操作按钮的 CommandParameter 标记（XAML 与手势层共用单一来源）：
+    /// 手势层按压会话据此把按钮命中分类为独立意图（区别于右半区域的
+    /// 选择/复制手势）；操作按钮的可见性矩阵见 docs/design-contracts.md。
+    /// </summary>
+    public const string TogglePinCommand = "TogglePin";
+
+    /// <summary>选择按钮：单击 toggle 该卡选中（矩阵：选中卡片常显可点）。</summary>
+    public const string ToggleSelectionCommand = "ToggleSelection";
+
+    /// <summary>删除按钮：单击只删这一张卡，走撤销管线（矩阵：选中卡片一律隐藏）。</summary>
+    public const string DeleteCardCommand = "DeleteCard";
 }

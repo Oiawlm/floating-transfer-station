@@ -369,7 +369,7 @@ public sealed partial class MainWindowInteractionTests
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.IsNotNull(method);
 
-            var task = (Task)method.Invoke(window, [new[] { item.Id }, BoardCategory.Inbox, MainWindow.TrashClearMode.None])!;
+            var task = (Task)method.Invoke(window, [new[] { item.Id }, BoardCategory.Inbox, MainWindow.TrashClearMode.None, null])!;
             Assert.IsTrue(container.HasAnimatedProperties);
             Assert.AreEqual(
                 0d,
@@ -410,7 +410,7 @@ public sealed partial class MainWindowInteractionTests
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.IsNotNull(method);
 
-            var task = (Task)method.Invoke(window, [new[] { item.Id }, BoardCategory.Inbox, MainWindow.TrashClearMode.None])!;
+            var task = (Task)method.Invoke(window, [new[] { item.Id }, BoardCategory.Inbox, MainWindow.TrashClearMode.None, null])!;
             Assert.IsFalse(container.HasAnimatedProperties);
             Assert.AreEqual(1d, container.Opacity);
 
@@ -449,7 +449,7 @@ public sealed partial class MainWindowInteractionTests
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.IsNotNull(method);
 
-            var task = (Task)method.Invoke(window, [new[] { item.Id }, BoardCategory.Inbox, MainWindow.TrashClearMode.None])!;
+            var task = (Task)method.Invoke(window, [new[] { item.Id }, BoardCategory.Inbox, MainWindow.TrashClearMode.None, null])!;
             PumpDispatcherUntil(window.Dispatcher, task);
             CompleteLayout(window);
 

@@ -293,10 +293,12 @@ public sealed partial class MainWindowInteractionTests
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             ClickSelectionButton(window, items[0]);
-            var container = RealizeCard(window, items[0]);
+            // 状态矩阵（契约 #19）：单卡置顶只作用于未选中卡片——非批量路径
+            // 置顶未选中的 items[4]，批量路径仍置顶已选集合。
             var pin = batch
                 ? (Button)window.FindName("BatchPinButton")
-                : FindDescendants<Button>(container).Single(button => Equals(button.CommandParameter, "TogglePin"));
+                : FindDescendants<Button>(RealizeCard(window, items[4]))
+                    .Single(button => Equals(button.CommandParameter, CardGestureZones.TogglePinCommand));
             pin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, pin));
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
             ClickCard(window, items[3], ModifierKeys.Shift);
@@ -341,10 +343,12 @@ public sealed partial class MainWindowInteractionTests
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             ClickSelectionButton(window, items[0]);
-            var container = RealizeCard(window, items[0]);
+            // 状态矩阵（契约 #19）：单卡置顶只作用于未选中卡片——非批量路径
+            // 置顶未选中的 items[4]，批量路径仍置顶已选集合。
             var pin = batch
                 ? (Button)window.FindName("BatchPinButton")
-                : FindDescendants<Button>(container).Single(button => Equals(button.CommandParameter, "TogglePin"));
+                : FindDescendants<Button>(RealizeCard(window, items[4]))
+                    .Single(button => Equals(button.CommandParameter, CardGestureZones.TogglePinCommand));
             pin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, pin));
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
             ClickCard(window, items[3], ModifierKeys.Shift);
@@ -353,6 +357,7 @@ public sealed partial class MainWindowInteractionTests
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
             CompleteLayout(window);
             Assert.IsFalse(items[0].IsPinned);
+            Assert.IsFalse(items[4].IsPinned);
             CollectionAssert.AreEqual(items, board.Items(BoardCategory.Inbox).ToArray());
             var list = (ListBox)window.FindName("BoardList");
             CollectionAssert.AreEquivalent(items[..4], list.SelectedItems.Cast<BoardItem>().ToArray());

@@ -9,10 +9,11 @@
        由 DesignThemeManager 在运行时整体替换；本字典内一律以 DynamicResource 引用。 -->
   <FontFamily x:Key="InterfaceFontFamily">Segoe UI Variable, Segoe UI</FontFamily>
   <GridLength x:Key="CardOperationColumnWidth">30</GridLength>
-  <!-- 文字卡正文右侧排他内缩（派生资源，唯一数值来源）：两列 CardOperationColumnWidth
-       （置顶/选择按钮条）+ 4 DIP 间隙。对半分区的内容视觉层全宽、按钮悬停才淡入，
-       正文不内缩就会与角按钮条争用同一批像素（1.20.0）；命中层与图片卡不受影响。 -->
-  <Thickness x:Key="CardTextReservedRightInset" Left="0" Top="0" Right="64" Bottom="0" />
+  <!-- 文字卡正文右侧排他内缩（派生资源，唯一数值来源）：三列 CardOperationColumnWidth
+       （置顶/选择/删除按钮条）+ 4 DIP 间隙。对半分区的内容视觉层全宽、按钮悬停才淡入，
+       正文不内缩就会与角按钮条争用同一批像素（1.20.0 两列，1.24.0 随卡片删除按钮扩为
+       三列）；命中层与图片卡不受影响。 -->
+  <Thickness x:Key="CardTextReservedRightInset" Left="0" Top="0" Right="94" Bottom="0" />
   <CornerRadius x:Key="ShellCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="HeaderActionCornerRadius">7</CornerRadius>
@@ -667,6 +668,66 @@
     </Style.Triggers>
   </Style>
 
+  <!-- 卡片操作条图标按钮的共享模板（1.24.0 自置顶按钮模板提取，删除按钮共用）：
+       悬停表面/按压表面/悬停强调色为通用交互反馈，可见性由各样式层的状态矩阵
+       触发器（FadeAnimation.IsActive + IsHitTestVisible）驱动。 -->
+  <ControlTemplate x:Key="CardIconButtonTemplate" TargetType="Button">
+    <Border x:Name="CardIconButtonSurface"
+            Background="{TemplateBinding Background}"
+            BorderBrush="{TemplateBinding BorderBrush}"
+            BorderThickness="{TemplateBinding BorderThickness}"
+            CornerRadius="{StaticResource PinButtonCornerRadius}">
+      <Grid>
+        <Border x:Name="HoverLayer"
+                Background="{DynamicResource HoverSurfaceBrush}"
+                CornerRadius="{StaticResource PinButtonCornerRadius}"
+                Opacity="0"
+                IsHitTestVisible="False"
+                views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}"
+                views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+        <Border x:Name="PressedLayer"
+                Background="{DynamicResource ActiveCategoryBrush}"
+                CornerRadius="{StaticResource PinButtonCornerRadius}"
+                Opacity="0"
+                IsHitTestVisible="False"
+                views:FadeAnimation.IsActive="{Binding IsPressed, RelativeSource={RelativeSource TemplatedParent}}"
+                views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.PressFeedbackMs}" />
+        <ContentPresenter HorizontalAlignment="Center"
+                          VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+    <ControlTemplate.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      </Trigger>
+      <Trigger Property="IsPressed" Value="True">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      </Trigger>
+    </ControlTemplate.Triggers>
+  </ControlTemplate>
+
+  <!-- 状态徽章模板（1.24.0，契约 #19）：选中已置顶卡片的置顶钮换用本模板——
+       纯展示、无悬停/按压反馈；按钮保持启用且可命中（禁用元素在 WPF 下不可
+       命中，点击会穿透到右半选择手势），点击的语义失效由
+       ToggleCardPinAsync 的状态矩阵守卫统一实现（真实输入与合成/UIA 路径
+       共用同一条守卫）。 -->
+  <ControlTemplate x:Key="CardStatusBadgeTemplate" TargetType="Button">
+    <Border Background="Transparent"
+            CornerRadius="{StaticResource PinButtonCornerRadius}">
+      <ContentPresenter HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+    </Border>
+  </ControlTemplate>
+
+  <!-- 卡片操作按钮可见性状态矩阵（契约 #19，唯一权威=docs/design-contracts.md）：
+       信号 = (悬停 IsMouseOver, 选中 IsSelected, 置顶 IsPinned)。
+       置顶钮：可见/可命中 = IsPinned ∨ (悬停 ∧ 未选中)；
+               选中时换纯展示徽章模板并以次文字色呈现（点击由
+               ToggleCardPinAsync 守卫失效——不改置顶、不改选中）；
+               ToolTip 随选中态指向批量入口（触发器排在 IsPinned 之后，
+               徽章态文案生效）。 -->
   <Style x:Key="PinButtonStyle" TargetType="Button">
     <Setter Property="Width" Value="30" />
     <Setter Property="Height" Value="30" />
@@ -681,68 +742,69 @@
     <Setter Property="Focusable" Value="False" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="ToolTip" Value="置顶" />
-    <Setter Property="views:FadeAnimation.IsActive">
-      <Setter.Value>
-        <MultiBinding Converter="{StaticResource BooleanOrConverter}">
-          <Binding Path="IsMouseOver" RelativeSource="{RelativeSource AncestorType={x:Type ListBoxItem}}" />
-          <Binding Path="IsPinned" />
-        </MultiBinding>
-      </Setter.Value>
-    </Setter>
+    <Setter Property="AutomationProperties.Name" Value="置顶或取消置顶" />
+    <Setter Property="Template" Value="{StaticResource CardIconButtonTemplate}" />
+    <Setter Property="views:FadeAnimation.IsActive" Value="False" />
     <Setter Property="views:FadeAnimation.AnimationsEnabled"
             Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
     <Setter Property="views:FadeAnimation.DurationMs"
             Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
-    <Setter Property="Template">
-      <Setter.Value>
-        <ControlTemplate TargetType="Button">
-          <Border x:Name="PinSurface"
-                  Background="{TemplateBinding Background}"
-                  BorderBrush="{TemplateBinding BorderBrush}"
-                  BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="{StaticResource PinButtonCornerRadius}">
-            <Grid>
-              <Border x:Name="HoverLayer"
-                      Background="{DynamicResource HoverSurfaceBrush}"
-                      CornerRadius="{StaticResource PinButtonCornerRadius}"
-                      Opacity="0"
-                      IsHitTestVisible="False"
-                      views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}"
-                      views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
-                      views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
-              <Border x:Name="PressedLayer"
-                      Background="{DynamicResource ActiveCategoryBrush}"
-                      CornerRadius="{StaticResource PinButtonCornerRadius}"
-                      Opacity="0"
-                      IsHitTestVisible="False"
-                      views:FadeAnimation.IsActive="{Binding IsPressed, RelativeSource={RelativeSource TemplatedParent}}"
-                      views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
-                      views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.PressFeedbackMs}" />
-              <ContentPresenter HorizontalAlignment="Center"
-                                VerticalAlignment="Center" />
-            </Grid>
-          </Border>
-          <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True">
-              <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
-            </Trigger>
-            <Trigger Property="IsPressed" Value="True">
-              <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
-            </Trigger>
-          </ControlTemplate.Triggers>
-        </ControlTemplate>
-      </Setter.Value>
-    </Setter>
     <Style.Triggers>
-      <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=IsMouseOver}"
-                   Value="True">
-        <Setter Property="IsHitTestVisible" Value="True" />
-      </DataTrigger>
       <DataTrigger Binding="{Binding IsPinned}" Value="True">
+        <Setter Property="views:FadeAnimation.IsActive" Value="True" />
         <Setter Property="IsHitTestVisible" Value="True" />
         <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         <Setter Property="ToolTip" Value="取消置顶" />
       </DataTrigger>
+      <MultiDataTrigger>
+        <MultiDataTrigger.Conditions>
+          <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True" />
+          <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="False" />
+        </MultiDataTrigger.Conditions>
+        <Setter Property="views:FadeAnimation.IsActive" Value="True" />
+        <Setter Property="IsHitTestVisible" Value="True" />
+      </MultiDataTrigger>
+      <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True">
+        <Setter Property="Template" Value="{StaticResource CardStatusBadgeTemplate}" />
+        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+        <Setter Property="ToolTip" Value="多选中，用顶部按钮操作" />
+        <Setter Property="AutomationProperties.Name" Value="已置顶状态徽章（多选中，用顶部按钮操作）" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+
+  <!-- 删除钮（1.24.0 新增）：可见/可命中 = 悬停 ∧ 未选中——仅未选中卡片悬停时
+       淡入，选中卡片一律隐藏（含悬停时），删除走单卡撤销管线；语义实现见
+       MainWindow.CardGestures 的 OperationsDelete 会话与 DeleteSingleCardAsync。 -->
+  <Style x:Key="DeleteButtonStyle" TargetType="Button">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="Visibility" Value="Visible" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="6" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="ToolTip" Value="删除" />
+    <Setter Property="Template" Value="{StaticResource CardIconButtonTemplate}" />
+    <Setter Property="views:FadeAnimation.IsActive" Value="False" />
+    <Setter Property="views:FadeAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
+    <Setter Property="views:FadeAnimation.DurationMs"
+            Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+    <Style.Triggers>
+      <MultiDataTrigger>
+        <MultiDataTrigger.Conditions>
+          <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True" />
+          <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="False" />
+        </MultiDataTrigger.Conditions>
+        <Setter Property="views:FadeAnimation.IsActive" Value="True" />
+        <Setter Property="IsHitTestVisible" Value="True" />
+      </MultiDataTrigger>
     </Style.Triggers>
   </Style>
 
@@ -1008,13 +1070,13 @@
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
                     <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
+                    <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
                   </Grid.ColumnDefinitions>
 
                   <Button Grid.Column="0"
                           Style="{StaticResource PinButtonStyle}"
                           Tag="{Binding}"
-                          CommandParameter="TogglePin"
-                          AutomationProperties.Name="置顶或取消置顶">
+                          CommandParameter="{x:Static views:CardGestureZones.TogglePinCommand}">
                     <Viewbox Width="16" Height="16">
                       <Path Data="M10.1221,3.13715 C10.7326,1.91616 12.3599,1.65208 13.3251,2.61737 L17.382,6.67419 C18.3472,7.63947 18.0832,9.26676 16.8622,9.87726 L13.4037,11.6065 C13.0751,11.7708 12.8183,12.0499 12.6818,12.391 L11.2459,15.981 C10.9792,16.6476 10.1179,16.8244 9.61027,16.3167 L7,13.7064 L3.70711,16.9993 L3,17 L3,16.2922 L6.29289,12.9993 L3.68262,10.3891 C3.17498,9.88142 3.35177,9.02011 4.01834,8.75348 L7.60829,7.3175 C7.94939,7.18106 8.22855,6.92419 8.39285,6.5956 L10.1221,3.13715 Z M12.618,3.32447 C12.1354,2.84183 11.3167,2.97387 11.0165,3.58437 L9.28727,7.04282 C9.01345,7.59046 8.54818,8.01858 7.97968,8.24598 L4.38973,9.68196 L10.3174,15.6096 L11.7534,12.0197 C11.9808,11.4512 12.4028,10.9859 12.9565,10.7121 L16.415,8.98283 C17.1575,8.67758 17.2895,7.86394 16.6749,7.3813 L12.618,3.32447 Z"
                             Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
@@ -1025,9 +1087,23 @@
                   <Button Grid.Column="1"
                           Style="{StaticResource SelectionButtonStyle}"
                           Tag="{Binding}"
-                          CommandParameter="ToggleSelection"
+                          CommandParameter="{x:Static views:CardGestureZones.ToggleSelectionCommand}"
                           ToolTip="选择"
                           AutomationProperties.Name="选择" />
+
+                  <!-- 删除钮（1.24.0）：垃圾桶图标与头部垃圾桶按钮同一几何（16×16 网格
+                       规范），前景随共享模板的悬停强调色；可见性矩阵见 DeleteButtonStyle。 -->
+                  <Button Grid.Column="2"
+                          Style="{StaticResource DeleteButtonStyle}"
+                          Tag="{Binding}"
+                          CommandParameter="{x:Static views:CardGestureZones.DeleteCardCommand}"
+                          AutomationProperties.Name="删除">
+                    <Viewbox Width="16" Height="16">
+                      <Path Data="M8.5,4 L11.5,4 C11.5,3.17157 10.8284,2.5 10,2.5 C9.17157,2.5 8.5,3.17157 8.5,4 Z M7.5,4 C7.5,2.61929 8.61929,1.5 10,1.5 C11.3807,1.5 12.5,2.61929 12.5,4 L17.5,4 C17.7761,4 18,4.22386 18,4.5 C18,4.77614 17.7761,5 17.5,5 L16.4456,5 L15.2521,15.3439 C15.0774,16.8576 13.7957,18 12.2719,18 L7.72813,18 C6.20431,18 4.92256,16.8576 4.7479,15.3439 L3.55437,5 L2.5,5 C2.22386,5 2,4.77614 2,4.5 C2,4.22386 2.22386,4 2.5,4 L7.5,4 Z M5.74131,15.2292 C5.85775,16.2384 6.71225,17 7.72813,17 L12.2719,17 C13.2878,17 14.1422,16.2384 14.2587,15.2292 L15.439,5 L4.56101,5 Z M8.5,7.5 C8.77614,7.5 9,7.72386 9,8 L9,14 C9,14.2761 8.77614,14.5 8.5,14.5 C8.22386,14.5 8,14.2761 8,14 L8,8 C8,7.72386 8.22386,7.5 8.5,7.5 Z M12,8 C12,7.72386 11.7761,7.5 11.5,7.5 C11.2239,7.5 11,7.72386 11,8 L11,14 C11,14.2239 11.2239,14.5 11.5,14.5 C11.7761,14.5 12,14.2761 12,14 L12,8 Z"
+                            Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                            Stretch="Uniform" />
+                    </Viewbox>
+                  </Button>
                 </Grid>
               </Grid>
             </Grid>

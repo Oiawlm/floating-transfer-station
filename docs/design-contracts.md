@@ -117,12 +117,12 @@
 
 ## 三、本次新增（16–17，1.20.0）
 
-### 16. 文字卡避让操作列（1.20.0 起）
+### 16. 文字卡避让操作列（1.20.0 起；1.24.0 修订为三列）
 
-- **断言**：文字卡正文右侧为右上角操作按钮条预留排他空间，任何时刻（悬停/非悬停）零像素争用；内缩量唯一来源是派生资源 `CardTextReservedRightInset`（两列 `CardOperationColumnWidth` + 4 DIP 间隙），不得在别处写死第二个数值；命中层对半分区、图片卡全幅与角按钮契约不变。
-- **由来**：1.18.0 对半分区分层解决了命中歧义但视觉层没有为按钮预留空间——悬停淡入的按钮压在正文第一、二行右上角（实测 60px 全额争用）。
-- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardOperationAvoidance.cs`（零交集 + 派生关系）。
-- **关联**：同日设计规格：`docs/superpowers/specs/2026-10-07-text-ops-avoidance-and-edge-hide-design.md`、[设计规范 §五](design.md)。
+- **断言**：文字卡正文右侧为右上角操作按钮条预留排他空间，任何时刻（悬停/非悬停）零像素争用；内缩量唯一来源是派生资源 `CardTextReservedRightInset`（操作列 `CardOperationColumnWidth` 总宽 + 4 DIP 间隙；1.20.0 为两列按钮计 64，1.24.0 随卡片删除按钮修订为三列计 94，见 #19），不得在别处写死第二个数值；命中层对半分区、图片卡全幅与角按钮契约不变。
+- **由来**：1.18.0 对半分区分层解决了命中歧义但视觉层没有为按钮预留空间——悬停淡入的按钮压在正文第一、二行右上角（实测 60px 全额争用）；1.24.0 操作条扩为三列（新增删除按钮），派生内缩同步加宽一列。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardOperationAvoidance.cs`（零交集 + 派生关系）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.VisualLifecycle.cs`（`TextCard_ReservesFixedPinSelectionAndDeleteColumns`）。
+- **关联**：同日设计规格：`docs/superpowers/specs/2026-10-07-text-ops-avoidance-and-edge-hide-design.md`、[设计规范 §五](design.md)；1.24.0 修订 Issue 见 #19 关联。
 
 ### 17. 一次性贴边隐藏（1.20.0 起）
 
@@ -139,6 +139,15 @@
 - **由来**：1.23.0 用户需求「每隔 24 小时自动清理所有非置顶内容，直接删除，绝不包括复盘」。null=建基线是设计评审修正：升级首启立即清空旧内容属静默不可逆删除事故（外部调研 Claude Code `cleanupPeriodDays` 反例）；pin 豁免必须测试锁定参照 Maccy #106 误删事故；间隔清扫应幂等且容忍延迟参照 Ditto「periodic, not immediate」；触发收敛为「装载成功补跑 + 1 小时常驻巡检」两处，明确拒绝在通用持久化 API（`ApplyPreferences`）内检测开关转变并触发清扫。
 - **锁定**：`tests/FloatingTransferStation.Core.Tests/AutoCleanupScheduleTests.cs`（周期边界与 SweepCategories 清单）、`tests/FloatingTransferStation.Tests/BoardServiceTests.cs`（`RemoveNonPinned_MultiCategory_*`）、`tests/FloatingTransferStation.Tests/BoardMutationServiceTests.cs`（`ClearNonPinned_MultiCategory_*`）、`tests/FloatingTransferStation.Tests/AutoCleanupIsolationTests.cs`（复盘文件字节不变全链路）、`tests/FloatingTransferStation.Tests/MainWindowAutoCleanupTests.cs`（漏斗闸门/建基线/到期清扫/关闭停表）、`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`（自动清理字段回落）、`tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs`（开关默认开启与立即持久化）。
 - **关联**：CHANGELOG 1.23.0（无独立 spec，如实标注）。
+
+## 五、本次新增（19，1.24.0）
+
+### 19. 卡片操作按钮状态矩阵与单卡删除（1.24.0 起）
+
+- **断言**：卡片右上操作条三枚按钮（选择/置顶/删除）的可见性与可点性由 (悬停 `IsMouseOver`, 选中 `IsSelected`, 置顶 `IsPinned`) 三信号的状态矩阵唯一派生，集中实现在卡片样式触发器层：**未选中+悬停**三钮全部显示可点；**未选中+未悬停**仅已置顶卡片的置顶钮常显可点（=取消置顶），其余隐藏；**选中（无论悬停）**选择钮常显可点，置顶钮未置顶隐藏、已置顶常显为纯状态徽章（换纯展示模板、以次文字色呈现，点击不改置顶、不改选中），删除钮一律隐藏；选中卡片的置顶/删除操作一律走顶部批量按钮。徽章的「点击无任何效果」由 `ToggleCardPinAsync` 入口守卫统一实现（按钮保持启用且可命中以吞掉点击——WPF 禁用元素不可命中，`IsEnabled=false` 会让点击穿透为右半选择手势误改选中），真实输入（手势层 OperationsPin 会话）与合成/UIA 路径（`BoardList_ButtonClick`）共用同一条守卫。删除钮单击只删该卡：手势层新增 `OperationsDelete` 会话（模式同 OperationsPin，按钮点击不进双击窗、滑离释放取消意图），经窗口层既有删除路径 `DeleteContentAsync → BoardMutationService.DeleteManyAsync` 执行——撤销栈（Ctrl+Z 锚点插回）、原子持久化、保存失败整卡恢复、删除淡出与重入保护全复用；不改当前选中集合（保存成功后原样还原删除前选择，`DeleteContentAsync` 以可选 `selectionToRestore` 参数化，垃圾桶/键盘删除路径行为不变）、不滚动列表；操作条内右键复制不受三列扩展影响。文字卡避让内缩随三列派生（`CardTextReservedRightInset` = 三列 `CardOperationColumnWidth` + 4 DIP 间隙，见 #16）。
+- **由来**：1.24.0 用户需求「卡片级删除按钮 + 选中态卡片操作规则」（两轮对齐确认）。行内悬停操作逐条生效 + 批量走顶部工具栏与桌面邮件类（Gmail/Outlook）及 Fluent/Material「行内次级操作 × 选择模式」正交维度一致（调研 job `20261010-160927-oa3`）；「选择模式=批量模式」下隐藏行内按钮是文件管理器与移动端主流。矩阵替代 1.20.0 前的隐式规则时同步修订了两处现状：选中+未置顶卡片的置顶钮由「悬停可见可点」收紧为隐藏（R2 表格明确选中卡片一律走顶部批量）；选中+已置顶置顶钮由「可点=就地取消置顶」改为纯状态徽章。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardDeleteButton.cs`（矩阵四状态 + Win32 消息直驱的单卡删除保留选择滚动与撤销、徽章真实点击无效、滑离取消、操作条内右键复制）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardOperationAvoidance.cs`（三列派生内缩）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.VisualLifecycle.cs`（`TextCard_ReservesFixedPinSelectionAndDeleteColumns`）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.SelectionAndDeletion.cs` 与 `RangeSelection.cs`（矩阵化的单卡置顶用例：置顶单击只作用于未选中卡片）、批量置顶语义锁定测试（SelectionAndDeletion 批量用例）继续全绿。
+- **关联**：CHANGELOG 1.24.0；契约 #16 三列修订记录 Issue（Oiawlm/floating-transfer-station#88）。
 
 ## 维护规则
 
