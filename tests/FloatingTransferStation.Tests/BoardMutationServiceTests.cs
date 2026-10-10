@@ -801,6 +801,83 @@ public sealed class BoardMutationServiceTests
         Assert.AreEqual(0, service.PendingUndoDeleteCount);
     }
 
+    [TestMethod]
+    public async Task ClearNonPinned_WithExpiryCutoff_RemovesOnlyExpiredSavesOnceAndUndoRestoresBatch()
+    {
+        // 逐卡 24h TTL（1.25.0）自动清扫路径：cutoff 经同一移除管线传递，
+        // 未满期普通项保留；被移除批次仍可整批 Ctrl+Z 恢复（跨分类）。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var expiredNormal = board.AddText("超龄普通", BoardCategory.CustomerOriginal);
+        var freshNormal = board.AddText("新鲜普通", BoardCategory.CustomerOriginal);
+        var expiredPromptNormal = board.AddText("超龄提示词", BoardCategory.Prompt);
+        var expiredPinned = board.AddText("超龄置顶", BoardCategory.Prompt);
+        board.SetPinnedMany([expiredPinned.Id], true);
+        var now = DateTimeOffset.UtcNow;
+        var cutoff = now - AutoCleanupSchedule.CleanupInterval;
+        board.SetItemCreatedAt(expiredNormal.Id, cutoff);
+        board.SetItemCreatedAt(freshNormal.Id, cutoff.AddSeconds(1));
+        board.SetItemCreatedAt(expiredPromptNormal.Id, cutoff);
+        board.SetItemCreatedAt(expiredPinned.Id, cutoff);
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        var outcome = await service.ClearNonPinnedAsync(
+            AutoCleanupSchedule.SweepCategories,
+            cutoff);
+
+        Assert.IsTrue(outcome.Saved);
+        Assert.AreEqual(2, outcome.RemovedCount, "只有超龄普通项到期；超龄置顶与未满期保留。");
+        Assert.AreEqual(1, store.SaveCount, "清扫必须单次原子保存。");
+        Assert.AreEqual(1, service.PendingUndoDeleteCount, "清扫必须单批可撤销。");
+        // 做旧经快照回合重建条目实例，按 Id 断言而非实例同一。
+        CollectionAssert.AreEqual(
+            new[] { expiredPinned.Id },
+            board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { freshNormal.Id },
+            board.Items(BoardCategory.CustomerOriginal).Select(item => item.Id).ToArray());
+
+        Assert.IsTrue(await service.UndoLastDeleteAsync(), "被清扫批次必须可整批撤销恢复。");
+        // 锚点插回（契约 #11）：新卡插普通区顶部，删除时显示序为 [新鲜, 超龄]，
+        // 撤销按删除时显示序插回原位，不重排其余内容。
+        CollectionAssert.AreEqual(
+            new[] { freshNormal.Id, expiredNormal.Id },
+            board.Items(BoardCategory.CustomerOriginal).Select(item => item.Id).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { expiredPromptNormal.Id },
+            board.Items(BoardCategory.Prompt).Where(item => !item.IsPinned).Select(item => item.Id).ToArray());
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
+    public async Task ClearNonPinned_SaveFailure_WithExpiryCutoff_RestoresEveryCategoryWithoutUndoBatch()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var expiredNormal = board.AddText("超龄普通", BoardCategory.Inbox);
+        var now = DateTimeOffset.UtcNow;
+        var cutoff = now - AutoCleanupSchedule.CleanupInterval;
+        board.SetItemCreatedAt(expiredNormal.Id, cutoff);
+        var store = new MutationStore(directory.Root) { FailSave = true };
+        var messages = new List<string>();
+        var service = new BoardMutationService(board, store, messages.Add);
+
+        var outcome = await service.ClearNonPinnedAsync(
+            AutoCleanupSchedule.SweepCategories,
+            cutoff);
+
+        Assert.IsFalse(outcome.Saved);
+        Assert.AreEqual(1, outcome.RemovedCount);
+        CollectionAssert.AreEqual(
+            new[] { expiredNormal.Id },
+            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
+            "保存失败整批恢复原内容。");
+        Assert.AreEqual(0, service.PendingUndoDeleteCount, "保存失败不得进入撤销栈。");
+        Assert.AreEqual(0, store.SaveCount);
+        CollectionAssert.AreEqual(new[] { "清空未保存，内容已恢复。" }, messages);
+    }
+
     private sealed class MutationStore(string root) : IBoardStore
     {
         public bool FailSave { get; set; }

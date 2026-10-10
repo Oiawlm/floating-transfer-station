@@ -2,25 +2,17 @@ using FloatingTransferStation.Models;
 
 namespace FloatingTransferStation.Services;
 
-/// <summary>自动清理巡检的分派结果。</summary>
-public enum AutoCleanupDecision
-{
-    /// <summary>基线未建立（null）或时间戳在未来（时钟被回拨）：只记账不清扫。</summary>
-    EstablishBaseline,
-
-    /// <summary>距上次清扫不足一个周期：无动作。</summary>
-    Wait,
-
-    /// <summary>距上次清扫已满一个周期：执行清扫，成功后记账。</summary>
-    Due
-}
-
 /// <summary>
-/// 自动清理调度策略（1.23.0）：纯逻辑、零依赖，时间由调用方显式传入。
-/// 到期判断基于 preferences.json 里的 UTC 绝对时间戳而非长定时器——进程重启、
-/// 休眠与系统时钟校正都不会让清扫漂移或永不触发，补跑语义天然成立。
-/// null 一律建立基线、绝不清扫：升级首启立即清空旧内容是静默不可逆删除事故，
-/// 首扫必须发生在开启（含默认开启的升级）之后一个完整周期。
+/// 自动清理策略（1.25.0 起为逐卡 24 小时 TTL 语义）：纯逻辑、零依赖。
+/// 每张非置顶卡片入库满 <see cref="CleanupInterval"/>（24 小时，固定值不配置）即到期，
+/// 判据只看卡片自身 <see cref="BoardItem.CreatedAt"/> 与检查时刻的差——对给定时刻
+/// 重复检查结果一致（幂等），且不依赖任何历史记录，因此没有「上次运行」记账与
+/// 基线：1.23.0 的间隔清扫调度机制（<c>AutoCleanupLastRunAtUtc</c> + 建基线三态）
+/// 随语义改版删除，旧 preferences.json 里残留的时间戳字段按未知成员忽略、不影响
+/// 加载。到期比较点唯一落在 <see cref="BoardService.RemoveNonPinned"/> 的移除谓词
+/// （截止时刻由 <see cref="GetExpiryCutoff"/> 推导），触发节奏仍是「装载成功补跑 +
+/// 1 小时巡检」，休眠、重启与时钟校正下的延迟收敛为最长约 1 小时；存量超龄卡在
+/// 升级后首次检查即删。
 /// </summary>
 public static class AutoCleanupSchedule
 {
@@ -36,15 +28,8 @@ public static class AutoCleanupSchedule
             .Where(category => category != DailyReviewMigration.ReviewCategory)
             .ToArray();
 
-    public static AutoCleanupDecision Evaluate(DateTimeOffset? lastRunAtUtc, DateTimeOffset nowUtc)
-    {
-        if (lastRunAtUtc is not { } lastRun || nowUtc < lastRun)
-        {
-            return AutoCleanupDecision.EstablishBaseline;
-        }
-
-        return nowUtc - lastRun < CleanupInterval
-            ? AutoCleanupDecision.Wait
-            : AutoCleanupDecision.Due;
-    }
+    /// <summary>到期截止时刻 = now − 24 小时：CreatedAt ≤ 截止即到期（边界含等于，
+    /// 与既有「恰在 24 小时边界为到期」口径一致）；CreatedAt 在未来（时钟回拨、
+    /// 导入时间戳漂移）年龄为负，自然不到期，无需特判。</summary>
+    public static DateTimeOffset GetExpiryCutoff(DateTimeOffset nowUtc) => nowUtc - CleanupInterval;
 }

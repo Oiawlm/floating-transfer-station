@@ -10,46 +10,17 @@ public sealed class AutoCleanupScheduleTests
         new(2026, 10, 9, 12, 0, 0, TimeSpan.Zero);
 
     [TestMethod]
-    public void Evaluate_NullLastRun_EstablishesBaselineWithoutSweep()
+    public void GetExpiryCutoff_IsExactlyNowMinusCleanupInterval()
     {
         Assert.AreEqual(
-            AutoCleanupDecision.EstablishBaseline,
-            AutoCleanupSchedule.Evaluate(null, Now));
+            Now - TimeSpan.FromHours(24),
+            AutoCleanupSchedule.GetExpiryCutoff(Now));
     }
 
     [TestMethod]
-    public void Evaluate_LastRunInFuture_ReanchorsInsteadOfSweeping()
+    public void CleanupInterval_IsExactlyTwentyFourHoursAndFixed()
     {
-        // 时钟被回拨/NTP 校正导致时间戳在未来:必须重锚定,不能永久卡死也不能补扫。
-        Assert.AreEqual(
-            AutoCleanupDecision.EstablishBaseline,
-            AutoCleanupSchedule.Evaluate(Now + TimeSpan.FromHours(1), Now));
-    }
-
-    [TestMethod]
-    public void Evaluate_ExactlyAtInterval_IsDue()
-    {
-        Assert.AreEqual(
-            AutoCleanupDecision.Due,
-            AutoCleanupSchedule.Evaluate(Now - AutoCleanupSchedule.CleanupInterval, Now));
-    }
-
-    [TestMethod]
-    public void Evaluate_JustBeforeInterval_Waits()
-    {
-        Assert.AreEqual(
-            AutoCleanupDecision.Wait,
-            AutoCleanupSchedule.Evaluate(
-                Now - AutoCleanupSchedule.CleanupInterval + TimeSpan.FromSeconds(1),
-                Now));
-    }
-
-    [TestMethod]
-    public void Evaluate_BeyondInterval_IsDue()
-    {
-        Assert.AreEqual(
-            AutoCleanupDecision.Due,
-            AutoCleanupSchedule.Evaluate(Now - TimeSpan.FromHours(25), Now));
+        Assert.AreEqual(TimeSpan.FromHours(24), AutoCleanupSchedule.CleanupInterval);
     }
 
     [TestMethod]
@@ -66,11 +37,5 @@ public sealed class AutoCleanupScheduleTests
         Assert.IsFalse(
             AutoCleanupSchedule.SweepCategories.Contains(DailyReviewMigration.ReviewCategory),
             "复盘复用的分类绝不能进入清扫范围。");
-    }
-
-    [TestMethod]
-    public void CleanupInterval_IsExactlyTwentyFourHours()
-    {
-        Assert.AreEqual(TimeSpan.FromHours(24), AutoCleanupSchedule.CleanupInterval);
     }
 }

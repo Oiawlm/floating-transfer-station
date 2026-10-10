@@ -498,40 +498,15 @@ public sealed class BoardService
     }
 
     /// <summary>
-    /// 只移除分类内的非置顶条目,置顶区顺序原样保留;返回被移除内容与原分类完整
-    /// 顺序(供保存失败整批回滚与延迟恢复复用)。没有非置顶条目时为空操作,
-    /// 返回 RemovedItems 为空的记录,不触发任何集合变更。
+    /// 清除非置顶条目的唯一移除管线（手工清空与自动清扫共用）：置顶区顺序原样保留；
+    /// 给出 <paramref name="expiryCutoffUtc"/> 时只移除入库满期（CreatedAt ≤ 截止）
+    /// 的非置顶条目（逐卡 24h TTL，自动清扫语义），为 null 时移除全部非置顶条目
+    /// （手工「清空非置顶」语义）。返回被移除内容与各分类完整顺序（供保存失败整批
+    /// 回滚与整批撤销复用）；没有可移除条目时为空操作。同一分类重复出现天然幂等。
     /// </summary>
-    public RemovedBoardItems RemoveNonPinned(BoardCategory category)
-    {
-        if (!BoardCategoryCatalog.IsDefined(category))
-        {
-            throw new ArgumentOutOfRangeException(nameof(category));
-        }
-
-        var original = _items[category].ToArray();
-        var removed = original.Where(item => !item.IsPinned).ToArray();
-        if (removed.Length > 0)
-        {
-            ReplaceCategory(category, original.Where(item => item.IsPinned));
-        }
-
-        return new RemovedBoardItems(
-            new Dictionary<BoardCategory, IReadOnlyList<BoardItem>>
-            {
-                [category] = original
-            },
-            removed);
-    }
-
-    /// <summary>
-    /// 跨分类版本的 <see cref="RemoveNonPinned(BoardCategory)"/>：只移除所给分类内的
-    /// 非置顶条目（各分类置顶区在前、普通区原顺序），未给出的分类不动；组合为单个
-    /// <see cref="RemovedBoardItems"/>（与 RemoveMany 一致，只收录发生移除的分类），
-    /// 供调用方单次保存、失败整批回滚与整批撤销。没有非置顶条目时为空操作。
-    /// 同一分类重复出现天然幂等（第二遍已无非置顶可移）。
-    /// </summary>
-    public RemovedBoardItems RemoveNonPinned(IReadOnlyCollection<BoardCategory> categories)
+    public RemovedBoardItems RemoveNonPinned(
+        IReadOnlyCollection<BoardCategory> categories,
+        DateTimeOffset? expiryCutoffUtc = null)
     {
         ArgumentNullException.ThrowIfNull(categories);
         foreach (var category in categories)
@@ -552,13 +527,19 @@ public sealed class BoardService
             }
 
             var original = _items[category].ToArray();
-            var removed = original.Where(item => !item.IsPinned).ToArray();
+            var removed = original
+                .Where(item => !item.IsPinned &&
+                    (expiryCutoffUtc is not { } cutoff || item.CreatedAt <= cutoff))
+                .ToArray();
             if (removed.Length == 0)
             {
                 continue;
             }
 
-            ReplaceCategory(category, original.Where(item => item.IsPinned));
+            // 保留集合 = 原顺序中未被移除的全部条目（置顶区原样 + 未到期普通区），
+            // 不得假设「留下的只有置顶」——TTL cutoff 下未满期普通项同样保留。
+            var removedIds = removed.Select(item => item.Id).ToHashSet();
+            ReplaceCategory(category, original.Where(item => !removedIds.Contains(item.Id)));
             originals[category] = original;
             removedItems.AddRange(removed);
         }

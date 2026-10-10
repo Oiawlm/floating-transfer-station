@@ -133,12 +133,12 @@
 
 ## 四、本次新增（18，1.23.0）
 
-### 18. 自动清理范围与调度基线（1.23.0 起）
+### 18. 自动清理范围与逐卡 TTL 语义（1.23.0 起；1.25.0 修订为逐卡 24 小时 TTL）
 
-- **断言**：自动清理仅在设置开关开启时运行；只删除 `AutoCleanupSchedule.SweepCategories`（= 分类目录 `BoardCategoryCatalog.Ordered` 显式排除复盘分类的推导结果）内的非置顶条目，且无论卡片创建时间——间隔清扫语义（每到 24h 周期点删当时所有非置顶），不是年龄阈值；置顶条目与复盘内容（Reference 分类条目与 `reviews/*.md` 复盘文件）绝不触碰；调度时间戳 `AutoCleanupLastRunAtUtc` 为 null 或处于未来（时钟回拨/NTP 校正）时一律建立基线、绝不清扫（首次清扫发生在开启 24 小时后）；板面装载未成功本会话绝不清扫；跨分类清扫是单次原子操作——一次保存、一批撤销（可整批 Ctrl+Z，图片文件按撤销栈既有生命周期保留到驱逐/退出），保存失败整批恢复原内容与原顺序、不进撤销栈、不记账；记账时间戳与开关同在 preferences.json（原子写 + 备份回退），经内存权威副本与既有偏好保存门串行落盘。
-- **由来**：1.23.0 用户需求「每隔 24 小时自动清理所有非置顶内容，直接删除，绝不包括复盘」。null=建基线是设计评审修正：升级首启立即清空旧内容属静默不可逆删除事故（外部调研 Claude Code `cleanupPeriodDays` 反例）；pin 豁免必须测试锁定参照 Maccy #106 误删事故；间隔清扫应幂等且容忍延迟参照 Ditto「periodic, not immediate」；触发收敛为「装载成功补跑 + 1 小时常驻巡检」两处，明确拒绝在通用持久化 API（`ApplyPreferences`）内检测开关转变并触发清扫。
-- **锁定**：`tests/FloatingTransferStation.Core.Tests/AutoCleanupScheduleTests.cs`（周期边界与 SweepCategories 清单）、`tests/FloatingTransferStation.Tests/BoardServiceTests.cs`（`RemoveNonPinned_MultiCategory_*`）、`tests/FloatingTransferStation.Tests/BoardMutationServiceTests.cs`（`ClearNonPinned_MultiCategory_*`）、`tests/FloatingTransferStation.Tests/AutoCleanupIsolationTests.cs`（复盘文件字节不变全链路）、`tests/FloatingTransferStation.Tests/MainWindowAutoCleanupTests.cs`（漏斗闸门/建基线/到期清扫/关闭停表）、`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`（自动清理字段回落）、`tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs`（开关默认开启与立即持久化）。
-- **关联**：CHANGELOG 1.23.0（无独立 spec，如实标注）。
+- **断言**：自动清理仅在设置开关开启时运行；只删除 `AutoCleanupSchedule.SweepCategories`（= 分类目录 `BoardCategoryCatalog.Ordered` 显式排除复盘分类的推导结果）内的非置顶条目；删除判据是**逐卡年龄阈值（TTL）**——条目自身 `CreatedAt` ≤ `AutoCleanupSchedule.GetExpiryCutoff(now)`（= now − 24h，边界含等于；CreatedAt 在未来自然不到期），即每张非置顶卡入库满 24 小时（固定值，不配置）即删，与检查时刻无关、清扫幂等、无「上次运行」记账（1.23.0 的间隔清扫记账与建基线机制已随之删除，旧 preferences.json 残留的 `autoCleanupLastRunAtUtc` 字段按未知成员忽略、不影响加载）；**存量立即生效**（用户 2026-10-10 裁决）：升级后首次检查即删除所有已超 24h 的非置顶卡；置顶条目与复盘内容（Reference 分类条目与 `reviews/*.md` 复盘文件）绝不触碰（即使超龄）；板面装载未成功本会话绝不清扫；跨分类清扫是单次原子操作——一次保存、一批撤销（可整批 Ctrl+Z，图片文件按撤销栈既有生命周期保留到驱逐/退出），保存失败整批恢复原内容与原顺序、不进撤销栈；偏好原子落盘。手工「清空非置顶」（垃圾桶无选择左键等）与自动清扫共用 `BoardService.RemoveNonPinned` 唯一移除管线，前者不带 cutoff（删全部非置顶，语义不变）。
+- **由来**：1.23.0 用户需求「每隔 24 小时自动清理所有非置顶内容，直接删除，绝不包括复盘」，当时实现为间隔清扫 + 记账基线（null=建基线防升级首启静默清空）。1.25.0 用户澄清真实语义是**逐卡 TTL**（「当一个东西存储满 24 小时，就把它删掉」）并裁决「纯 TTL，存量立即生效」——间隔清扫会让新入库卡存活近两个周期、存量卡超期不受清理，都不是用户心智；TTL 判定幂等使记账机制失去存在理由（外部调研 Ditto/Maccy/CopyQ/ClipClip：业界主流=规则对存量一视同仁 + 置顶豁免，无存量宽限先例；本项目「整批 Ctrl+Z」强于业界不可撤销基线）。触发保留「装载成功补跑 + 1 小时常驻巡检」，拒绝在 `ApplyPreferences` 内检测开关转变触发清扫（既有裁决不变）。
+- **锁定**：`tests/FloatingTransferStation.Core.Tests/AutoCleanupScheduleTests.cs`（TTL 截止时刻推导与 SweepCategories 清单）、`tests/FloatingTransferStation.Tests/BoardServiceTests.cs`（`RemoveNonPinned_WithExpiryCutoff_*`/`RemoveNonPinned_WithoutCutoff_*`/`RemoveNonPinned_MultiCategory_*`）、`tests/FloatingTransferStation.Tests/BoardMutationServiceTests.cs`（`ClearNonPinned_WithExpiryCutoff_*`、保存失败整批恢复不进撤销栈、`ClearNonPinned_MultiCategory_*`）、`tests/FloatingTransferStation.Tests/AutoCleanupIsolationTests.cs`（超龄卡清扫下复盘文件字节不变全链路）、`tests/FloatingTransferStation.Tests/MainWindowAutoCleanupTests.cs`（漏斗闸门/存量立即生效/边界含等于/未来时间戳保留/超龄图片卡撤销栈生命周期/关闭停表）、`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`（自动清理字段回落、旧 JSON 残留时间戳字段可加载）、`tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs`（开关默认开启与立即持久化）。
+- **关联**：CHANGELOG 1.23.0/1.25.0；1.25.0 语义修订记录 Issue（Oiawlm/floating-transfer-station#90，无独立 spec）。
 
 ## 五、本次新增（19，1.24.0）
 
