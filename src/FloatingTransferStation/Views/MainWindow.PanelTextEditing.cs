@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -7,6 +8,9 @@ namespace FloatingTransferStation.Views;
 
 public partial class MainWindow : Window
 {
+    // 复盘编辑器的 IME 组合标记：组合期的 Esc 属输入法操作（取消候选），不触发退出编辑。
+    private bool _isReviewEditorComposing;
+
     private void InitializePanelTextEditing()
     {
         AddHandler(
@@ -15,8 +19,65 @@ public partial class MainWindow : Window
         AddHandler(
             Keyboard.PreviewLostKeyboardFocusEvent,
             new KeyboardFocusChangedEventHandler(Root_PreviewLostKeyboardFocus));
+        AddHandler(
+            TextCompositionManager.PreviewTextInputStartEvent,
+            new TextCompositionEventHandler(ReviewEditor_CompositionStartedOrUpdated),
+            true);
+        AddHandler(
+            TextCompositionManager.PreviewTextInputUpdateEvent,
+            new TextCompositionEventHandler(ReviewEditor_CompositionStartedOrUpdated),
+            true);
+        AddHandler(
+            TextCompositionManager.PreviewTextInputEvent,
+            new TextCompositionEventHandler(ReviewEditor_CompositionCompleted),
+            true);
         Deactivated += MainWindow_Deactivated;
         Activated += MainWindow_Activated;
+    }
+
+    // 复盘编辑器内按 Esc 退出编辑态：释放键盘焦点（移交宿主窗口），面板去留交给
+    // 既有焦点链（Root_PreviewLostKeyboardFocus 统一清算保持原因并重估表面——
+    // 指针在面板内时维持展开，否则按既有节奏收起）。复盘是防抖自动保存，
+    // 没有取消语义，因此这里不引入提交/取消会话。
+    private void ReviewEditor_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape)
+        {
+            return;
+        }
+
+        if (_isReviewEditorComposing)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        // WPF 会把「聚焦焦点域本体」重定向回域内 FocusedElement（此处即编辑器），
+        // 先清掉域内记录再聚焦宿主窗口，键盘焦点才会真正离开编辑器；
+        // 随后的 PreviewLostKeyboardFocus 由既有链清算编辑保持原因并重估表面。
+        FocusManager.SetFocusedElement(this, null);
+        Focus();
+    }
+
+    private void ReviewEditor_CompositionStartedOrUpdated(object sender, TextCompositionEventArgs e)
+    {
+        if (e.OriginalSource == ReviewEditor)
+        {
+            _isReviewEditorComposing = true;
+        }
+    }
+
+    private void ReviewEditor_CompositionCompleted(object sender, TextCompositionEventArgs e)
+    {
+        if (e.OriginalSource == ReviewEditor)
+        {
+            _isReviewEditorComposing = false;
+        }
+    }
+
+    private void ReviewEditor_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        _isReviewEditorComposing = false;
     }
 
     private void Root_PreviewGotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
