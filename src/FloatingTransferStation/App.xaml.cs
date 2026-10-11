@@ -112,6 +112,9 @@ public partial class App : Application
                 ShowStatus,
                 boardOperationGate,
                 pluginCatalog);
+            // DeepSeek 接入地基（1.27.0）：显式装配，别处不做隐藏加密调用或请求构造。
+            var secretProtector = new DpapiSecretProtector();
+            var deepSeekClient = new DeepSeekClient();
             window = new MainWindow(
                 board,
                 store,
@@ -130,7 +133,9 @@ public partial class App : Application
                 operationGate: boardOperationGate,
                 dataDirectoryChangeService: string.IsNullOrWhiteSpace(previewDataDirectory)
                     ? DataDirectoryChangeService.CreateDefault(new WindowsDataDirectorySettings())
-                    : null);
+                    : null,
+                secretProtector: secretProtector,
+                deepSeekClient: deepSeekClient);
             MainWindow = window;
             // 先显示收起态窗口：分类轨只依赖已装载的偏好与设置，板面数据转入
             // 后台装载，大数据量不再拖住启动到可见的时间（见 LoadBoardInBackgroundAsync）。

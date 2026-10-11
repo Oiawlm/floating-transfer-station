@@ -177,4 +177,49 @@ public sealed class AppPreferencesTests
 
         Assert.IsFalse(loaded.AutoCleanupEnabled, "开关字段必须照常读取。");
     }
+
+    [TestMethod]
+    public void Default_HasNoDeepSeekKeyAndUsesClientDefaultModel()
+    {
+        Assert.IsNull(AppPreferences.Default.DeepSeekApiKeyProtected, "默认不得携带任何 API Key（密文或明文）。");
+        Assert.AreEqual("deepseek-v4-flash", AppPreferences.Default.DeepSeekModel);
+        Assert.AreEqual(
+            DeepSeekClient.DefaultModel,
+            AppPreferences.Default.DeepSeekModel,
+            "偏好默认模型必须与客户端默认模型一致。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesDeepSeekKeyAndModel()
+    {
+        var preferences = AppPreferences.Default with
+        {
+            DeepSeekApiKeyProtected = "AQAAANCMnd8BFdERjHoAwGiClCAABFAKE-CIPHER",
+            DeepSeekModel = "deepseek-v4-pro"
+        };
+
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            JsonSerializer.Serialize(preferences));
+
+        Assert.AreEqual(preferences, restored);
+        Assert.AreEqual("AQAAANCMnd8BFdERjHoAwGiClCAABFAKE-CIPHER", restored!.DeepSeekApiKeyProtected);
+        Assert.AreEqual("deepseek-v4-pro", restored.DeepSeekModel);
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutDeepSeekFields_FallsBackToUnconfigured()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Dark","animationsEnabled":true}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsNull(restored.DeepSeekApiKeyProtected, "1.27.0 之前的 preferences.json 必须回落到未配置。");
+        Assert.AreEqual("deepseek-v4-flash", restored.DeepSeekModel, "缺模型字段必须回落默认模型。");
+    }
 }

@@ -36,6 +36,21 @@ public interface ISettingsHost
     string CategoryDisplayName(BoardCategory category);
 
     /// <summary>
+    /// 机密保护器（1.27.0）：设置页「AI 设置」节读写 DeepSeek API Key 密文时使用；
+    /// 明文只在内存中出现，持久化侧只保存密文。
+    /// </summary>
+    ISecretProtector SecretProtector { get; }
+
+    /// <summary>
+    /// DeepSeek 连接测试（1.27.0）：以传入的 key 与模型发起最小 chat completion
+    /// （按后台任务惯例追踪，退出冲刷会等待），结果含就地反馈的中文文案。
+    /// </summary>
+    Task<DeepSeekConnectionTestResult> TestDeepSeekConnectionAsync(
+        string apiKey,
+        string model,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 采纳新的标签显示顺序：立即重排面板标签轨并异步原子持久化到 settings.json；
     /// 持久化失败经状态条提示并恢复原顺序。
     /// </summary>
