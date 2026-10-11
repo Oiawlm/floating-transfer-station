@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$ChangelogPath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'CHANGELOG.md'),
+    [string]$ChangelogPath,
     # Explicit release context only: build-release.ps1 passes this in -ForRelease runs.
     # Never enabled by default so steady-state main (version.txt == latest tag) stays green in CI.
     [switch]$RequireVersionAhead,
@@ -9,6 +9,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Defaults resolve in the body, not the param block: under Windows PowerShell 5.1
+# `powershell -File` leaves $PSScriptRoot empty while evaluating advanced-script
+# parameter defaults (call-operator invocation is unaffected; body use always works).
+if ([string]::IsNullOrWhiteSpace($ChangelogPath)) {
+    $ChangelogPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'CHANGELOG.md'
+}
 $changelog = Get-Content -LiteralPath $ChangelogPath -Raw -Encoding UTF8
 # Keep this script readable by Windows PowerShell 5.1 as well as pwsh.
 $unreleasedHeading = -join ([char[]]@(0x672A, 0x53D1, 0x5E03))
