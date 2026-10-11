@@ -27,7 +27,7 @@ if ($version -notmatch '\A[0-9]+\.[0-9]+\.[0-9]+\z') {
 }
 
 if ($ForRelease) {
-    & (Join-Path $PSScriptRoot 'test-release-readiness.ps1') | Out-Host
+    & (Join-Path $PSScriptRoot 'test-release-readiness.ps1') -RequireVersionAhead -RepoRoot $repoRoot | Out-Host
 }
 
 function Reset-WorkspaceDirectory([string]$path) {
