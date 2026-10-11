@@ -112,6 +112,18 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 备注交互条（1.26.0）：合成与 UIA 自动化路径的备注编辑入口，与手势层
+        // OperationsNote 会话共用 BeginCardNoteEditing；不触碰选择集合。
+        if (Equals(button.CommandParameter, CardGestureZones.NoteStripCommand))
+        {
+            if (BoardList.ItemContainerGenerator.ContainerFromItem(item) is ListBoxItem noteContainer)
+            {
+                BeginCardNoteEditing(item, noteContainer);
+            }
+
+            return;
+        }
+
         if (!Equals(button.CommandParameter, CardGestureZones.TogglePinCommand))
         {
             return;

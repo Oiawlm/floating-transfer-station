@@ -128,13 +128,21 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
             var body = FindDescendants<TextBlock>(list)
                 .Single(candidate => candidate.Text == "行高修正后的卡片正文");
+            // 1.26.0 起正文由 TrimAwareTextBlock 承载（TextBlock.MeasureOverride
+            // 密封不可子类化）：限高 MaxHeight 上移到承载元素（唯一来源），
+            // 子 TextBlock 只承载文字排版度量。
+            var host = FindDescendants<TrimAwareTextBlock>(list)
+                .Single(candidate => ReferenceEquals(candidate.Child, body));
 
             Assert.AreEqual(20d, body.LineHeight, 0d, "正文行高应为 20 DIP（14px 字号的自然行高）。");
             Assert.AreEqual(
                 LineStackingStrategy.BlockLineHeight,
                 body.LineStackingStrategy,
                 "正文行距语义应保持 BlockLineHeight。");
-            Assert.AreEqual(100d, body.MaxHeight, 0d, "正文最大高度应为 100 DIP（5 行 × 20）。");
+            Assert.AreEqual(100d, host.MaxHeight, 0d, "正文最大高度应为 100 DIP（5 行 × 20）。");
+            Assert.IsFalse(
+                double.IsFinite(body.MaxHeight) && body.MaxHeight < double.PositiveInfinity,
+                "限高 MaxHeight 不得在子 TextBlock 上重复声明（双来源漂移）。");
         }
         finally
         {

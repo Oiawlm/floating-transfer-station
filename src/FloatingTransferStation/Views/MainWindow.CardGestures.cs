@@ -47,6 +47,11 @@ public partial class MainWindow
         /// <summary>右半·删除按钮（1.24.0）：单击只删这一张卡（走单卡撤销管线），
         /// 与右半选择手势不同的独立意图；模式照抄 OperationsPin。</summary>
         OperationsDelete,
+
+        /// <summary>备注交互条（1.26.0）：单击进入备注就地编辑（仅文字卡），
+        /// 与右半选择手势不同的独立意图；模式照抄 OperationsPin——不参与
+        /// 双击窗、不记双击痕迹、滑离释放取消意图。</summary>
+        OperationsNote,
     }
 
     /// <summary>
@@ -122,7 +127,9 @@ public partial class MainWindow
                 ? CardHitZone.OperationsPin
                 : Equals(hitButton.CommandParameter, CardGestureZones.DeleteCardCommand)
                     ? CardHitZone.OperationsDelete
-                    : CardHitZone.Operations;
+                    : Equals(hitButton.CommandParameter, CardGestureZones.NoteStripCommand)
+                        ? CardHitZone.OperationsNote
+                        : CardHitZone.Operations;
             _pressButton = hitButton;
             _dragThresholdCrossed = false;
             _pressModifiers = Keyboard.Modifiers;
@@ -211,6 +218,16 @@ public partial class MainWindow
             // 语义与 BoardList_ButtonClick 的 DeleteCard 分支共用同一实现。
             _ = DeleteSingleCardAsync(item);
         }
+        else if (_pressZone == CardHitZone.OperationsNote)
+        {
+            // 备注交互条是独立意图（1.26.0）：单击进入备注就地编辑，绝不 toggle
+            // 选中；语义与 BoardList_ButtonClick 的 NoteStrip 分支共用同一实现
+            // （合成与 UIA 自动化路径），真实输入路径在此分发。
+            if (BoardList.ItemContainerGenerator.ContainerFromItem(item) is ListBoxItem noteContainer)
+            {
+                BeginCardNoteEditing(item, noteContainer);
+            }
+        }
         else if (_pressZone == CardHitZone.Operations)
         {
             // 选择手势只属于右半：Shift 走锚点范围选择，裸单击与 Ctrl+单击
@@ -227,9 +244,9 @@ public partial class MainWindow
 
         // 痕迹只记左半与右半点击（1.26.0）：右半痕迹的职责是重置左半双击窗
         // ——快速 左→右→左 同位点击不得被拼成伪双击误开编辑（右半自身已无
-        // 双击窗，每击都 toggle）。置顶/删除按钮是独立意图不参与双击窗，不记
-        // 痕迹——连点置顶必须每击都 toggle（否则第二击被双击窗吞掉，按钮像
-        // 坏的）；连点删除的意图分发同样逐击发生，删除保存期间的重入由
+        // 双击窗，每击都 toggle）。置顶/删除/备注交互条是独立意图不参与双击窗，
+        // 不记痕迹——连点每击都生效（否则第二击被双击窗吞掉，按钮像坏的）；
+        // 连点删除的意图分发同样逐击发生，删除保存期间的重入由
         // DeleteContentAsync 的 _isDeletePending 保护丢弃（与顶部垃圾桶一致）。
         if (_pressZone is CardHitZone.Content or CardHitZone.Operations)
         {

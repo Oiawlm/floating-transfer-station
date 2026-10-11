@@ -199,24 +199,72 @@ public sealed class BoardMutationService
                 return true;
             }
 
-            _board.UpdateText(itemId, text);
-            try
+            return await SaveItemFieldChangeAsync(
+                cancellationToken,
+                apply: () => _board.UpdateText(itemId, text),
+                restore: () => _board.UpdateText(itemId, original),
+                failureStatus: "内容未保存，已还原原文本。");
+        }, cancellationToken);
+
+    /// <summary>
+    /// 就地更新文字卡片备注并原子持久化(1.26.0):备注是元数据,卡片内容语义
+    /// 零变化;note 传 null=删除备注(「空白提交=删除已有备注」的归一由调用方
+    /// 完成),无备注时传 null 等值短路、不动磁盘;保存失败时还原原备注并提示。
+    /// </summary>
+    public Task<bool> UpdateItemNoteAsync(
+        Guid itemId,
+        string? note,
+        CancellationToken cancellationToken = default) =>
+        _operationGate.RunAsync(async () =>
+        {
+            var item = _board.FindItem(itemId);
+            if (item is not { Kind: BoardItemKind.Text })
             {
-                await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
-                return true;
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                _board.UpdateText(itemId, original);
-                _showStatus("内容未保存，已还原原文本。");
                 return false;
             }
-            catch
+
+            var original = item.Note;
+            if (string.Equals(original, note, StringComparison.Ordinal))
             {
-                _board.UpdateText(itemId, original);
-                throw;
+                return true;
             }
+
+            return await SaveItemFieldChangeAsync(
+                cancellationToken,
+                apply: () => _board.UpdateNote(itemId, note),
+                restore: () => _board.UpdateNote(itemId, original),
+                failureStatus: "备注未保存，已还原原备注。");
         }, cancellationToken);
+
+    /// <summary>
+    /// 单条目字段变更的共享保存路径：应用变更→原子快照→保存失败还原变更并
+    /// 提示（正文与备注更新的唯一持久化实现，不平行复制两套保存管线）。其他
+    /// 异常同样先还原再抛出，不把半变更状态留给调用方。
+    /// </summary>
+    private async Task<bool> SaveItemFieldChangeAsync(
+        CancellationToken cancellationToken,
+        Action apply,
+        Action restore,
+        string failureStatus)
+    {
+        apply();
+        try
+        {
+            await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            restore();
+            _showStatus(failureStatus);
+            return false;
+        }
+        catch
+        {
+            restore();
+            throw;
+        }
+    }
 
     /// <summary>
     /// 撤销最近一次成功删除(单条、批量或清空):按锚点插回原分类(不回退删除后的

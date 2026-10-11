@@ -18,6 +18,9 @@ public sealed class BoardItem : INotifyPropertyChanged
     private bool _startsNormalRegion;
     private bool _isEditing;
     private string? _draftText;
+    private bool _isEditingNote;
+    private string? _draftNote;
+    private string? _note;
     private string? _text;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -94,7 +97,9 @@ public sealed class BoardItem : INotifyPropertyChanged
         set => SetProperty(ref _draftText, value);
     }
 
-    /// <summary>进入编辑：草稿种子为全文（与显示用的有界预览无关）。</summary>
+    /// <summary>
+    /// 进入编辑：草稿种子为全文（与显示用的有界预览无关）。
+    /// </summary>
     public void BeginTextEdit()
     {
         DraftText = Text ?? string.Empty;
@@ -109,6 +114,52 @@ public sealed class BoardItem : INotifyPropertyChanged
     {
         IsEditing = false;
         DraftText = null;
+    }
+
+    /// <summary>
+    /// 用户手写的短备注（1.26.0，仅文字卡的元数据）：帮助一眼识别长卡内容，
+    /// 不参与搜索、复制、拖出，卡片内容语义零变化。null=无备注；空串一律
+    /// 归一为 null（「空白提交=删除已有备注」的模型侧落点）。
+    /// </summary>
+    public string? Note
+    {
+        get => _note;
+        set => SetProperty(ref _note, string.IsNullOrEmpty(value) ? null : value);
+    }
+
+    /// <summary>
+    /// 备注就地编辑会话标志（与 <see cref="IsEditing"/> 同族：状态挂条目，
+    /// 虚拟化回收不错乱；与正文编辑双向互斥，单会话语义由窗口层保证）。
+    /// 会话状态不持久化，草稿以 <see cref="DraftNote"/> 承载，提交前绝不
+    /// 进入 <see cref="Note"/>。
+    /// </summary>
+    [JsonIgnore]
+    public bool IsEditingNote
+    {
+        get => _isEditingNote;
+        private set => SetProperty(ref _isEditingNote, value);
+    }
+
+    /// <summary>备注编辑中的草稿（编辑器双向绑定源）。非编辑态恒为 null。</summary>
+    [JsonIgnore]
+    public string? DraftNote
+    {
+        get => _draftNote;
+        set => SetProperty(ref _draftNote, value);
+    }
+
+    /// <summary>进入备注编辑：草稿种子为现备注（预填防「失焦即误删」）。</summary>
+    public void BeginNoteEdit()
+    {
+        DraftNote = Note ?? string.Empty;
+        IsEditingNote = true;
+    }
+
+    /// <summary>结束备注编辑（提交与取消共用的状态清理），非编辑态不残留草稿。</summary>
+    public void EndNoteEdit()
+    {
+        IsEditingNote = false;
+        DraftNote = null;
     }
 
     public static BoardItem CreateText(string text, Guid id, DateTimeOffset createdAt) => new()
@@ -144,6 +195,7 @@ public sealed class BoardItem : INotifyPropertyChanged
         Order = Order,
         CreatedAt = CreatedAt,
         Text = Text,
+        Note = Note,
         ImageRelativePath = ImageRelativePath,
         IsPinned = IsPinned,
         ImageAbsolutePath = ImageAbsolutePath
