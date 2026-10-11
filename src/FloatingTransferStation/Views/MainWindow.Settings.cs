@@ -23,6 +23,22 @@ public partial class MainWindow : Window, ISettingsHost
 
     public string CategoryDisplayName(BoardCategory category) => _settings.CategoryName(category);
 
+    public ISecretProtector SecretProtector => _secretProtector;
+
+    /// <summary>
+    /// DeepSeek 连接测试：客户端无状态，key 与模型按设置页当前输入传入；
+    /// 按后台任务惯例追踪，退出冲刷会等待本次请求（受客户端 30 秒超时约束）。
+    /// </summary>
+    public Task<DeepSeekConnectionTestResult> TestDeepSeekConnectionAsync(
+        string apiKey,
+        string model,
+        CancellationToken cancellationToken = default)
+    {
+        var operation = _deepSeekClient.TestConnectionAsync(apiKey, model, cancellationToken);
+        TrackPendingOperation(operation);
+        return operation;
+    }
+
     /// <summary>
     /// 采纳新的标签显示顺序：设置窗口「标签顺序」节提交（拖拽/上移下移）即重排
     /// 面板标签轨并走分类改名同一条 settings.json 原子保存链路（契约 #5 设置改动

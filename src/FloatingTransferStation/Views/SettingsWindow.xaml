@@ -120,6 +120,28 @@
         <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
         <Setter Property="Height" Value="34" />
       </Style>
+
+      <!-- 密码输入框（AI 设置的 API Key 行）：与 ThemedTextBoxStyle 同法的纯 Setter 版，
+           默认模板自带掩码显示，颜色一律走主题键。 -->
+      <Style x:Key="ThemedPasswordBoxStyle" TargetType="PasswordBox">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource PrimaryTextBrush}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Style.Triggers>
+          <Trigger Property="IsEnabled" Value="False">
+            <Setter Property="Opacity" Value="0.5" />
+          </Trigger>
+          <Trigger Property="IsKeyboardFocusWithin" Value="True">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+          </Trigger>
+        </Style.Triggers>
+      </Style>
     </ResourceDictionary>
   </Window.Resources>
 
@@ -427,6 +449,64 @@
           <TextBlock x:Name="PluginDirectoryNoteText"
                      Style="{StaticResource NoteCaptionStyle}"
                      Text="插件目录可改为任意文件夹，保存后重启生效；插件的启用状态仍保存在数据目录。" />
+
+          <TextBlock Text="AI 设置" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
+          <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                     Text="配置 DeepSeek 官方 API，供后续 AI 功能整理剪贴板与卡片内容。API Key 经系统加密后仅保存在本机，不会随内容导出。" />
+          <Grid Background="Transparent" Margin="0,6,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <PasswordBox x:Name="DeepSeekKeyBox"
+                         Grid.Column="0"
+                         Style="{StaticResource ThemedPasswordBoxStyle}"
+                         Margin="0,0,8,0"
+                         ToolTip="DeepSeek API Key，输入后焦点离开即自动保存"
+                         AutomationProperties.Name="DeepSeek API Key"
+                         LostFocus="DeepSeekKeyBox_LostFocus" />
+            <TextBox x:Name="DeepSeekKeyPlainBox"
+                     Grid.Column="0"
+                     Style="{StaticResource ThemedTextBoxStyle}"
+                     Margin="0,0,8,0"
+                     Visibility="Collapsed"
+                     ToolTip="DeepSeek API Key，输入后焦点离开即自动保存"
+                     AutomationProperties.Name="DeepSeek API Key"
+                     LostFocus="DeepSeekKeyPlainBox_LostFocus" />
+            <Button x:Name="DeepSeekKeyVisibilityButton"
+                    Grid.Column="1"
+                    Style="{StaticResource ThemedActionButtonStyle}"
+                    Content="显示"
+                    ToolTip="显示或隐藏 API Key"
+                    AutomationProperties.Name="显示或隐藏 API Key"
+                    Click="DeepSeekKeyVisibilityButton_Click" />
+          </Grid>
+          <TextBlock Style="{StaticResource NoteCaptionStyle}">
+            <Run Text="API Key 在" /><Hyperlink x:Name="DeepSeekKeyPortalLink"
+                       NavigateUri="https://platform.deepseek.com/api_keys"
+                       Foreground="{DynamicResource AccentBrush}"
+                       RequestNavigate="RepoLink_RequestNavigate">platform.deepseek.com/api_keys</Hyperlink><Run Text=" 创建；焦点离开输入框即自动保存，清空后失焦即删除已存 Key。" />
+          </TextBlock>
+          <TextBlock Text="模型" Style="{StaticResource RowCaptionStyle}" Margin="0,6,0,4" />
+          <ComboBox x:Name="DeepSeekModelComboBox"
+                    Style="{StaticResource ThemedComboBoxStyle}"
+                    AutomationProperties.Name="DeepSeek 模型"
+                    SelectionChanged="DeepSeekModelComboBox_SelectionChanged" />
+          <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                     Text="deepseek-v4-flash 快速省钱，适合日常文本整理；deepseek-v4-pro 更强，适合复杂任务。" />
+          <Button x:Name="DeepSeekTestButton"
+                  Style="{StaticResource ThemedActionButtonStyle}"
+                  Content="测试连接"
+                  Margin="0,8,0,0"
+                  HorizontalAlignment="Left"
+                  ToolTip="用当前输入的 API Key 与模型发起一次最小请求"
+                  AutomationProperties.Name="测试 DeepSeek 连接"
+                  Click="DeepSeekTestButton_Click" />
+          <TextBlock x:Name="DeepSeekStatusText"
+                     Style="{StaticResource NoteCaptionStyle}"
+                     Foreground="{DynamicResource DangerBrush}"
+                     Text=""
+                     Visibility="Collapsed" />
 
           <TextBlock Text="关于" Style="{StaticResource SectionTitleStyle}" Margin="0,16,0,6" />
           <TextBlock Foreground="{DynamicResource PrimaryTextBrush}" FontSize="13">
