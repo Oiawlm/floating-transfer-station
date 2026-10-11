@@ -75,6 +75,6 @@ if ($null -eq $latestTag) {
 
 Write-Host ('Latest remote version tag: ' + $latestTag)
 if ($localVersion -le $latestRemoteVersion) {
-    throw ('Release readiness failed: version.txt (' + $localVersion.ToString() + ') is not ahead of the latest remote tag ' + $latestTag + '. Another train already claimed this version: replay on the latest main and advance the version (see docs/releasing.md, 发行列车).')
+    throw ('Release readiness failed: version.txt (' + $localVersion.ToString() + ') is not ahead of the latest remote tag ' + $latestTag + '. Another train already claimed this version: replay on the latest main and advance the version (see docs/releasing.md, the release-train section).')
 }
 Write-Host ('Release readiness passed: version.txt ' + $localVersion.ToString() + ' is strictly ahead of ' + $latestTag + '.')
