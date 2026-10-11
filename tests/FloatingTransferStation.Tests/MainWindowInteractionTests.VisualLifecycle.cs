@@ -1119,8 +1119,8 @@ public sealed partial class MainWindowInteractionTests
             var buttons = FindDescendants<Button>(container)
                 .Where(candidate => ReferenceEquals(candidate.Tag, item))
                 .ToArray();
-            // 1.28.0 起备注交互条两枚按钮（点击面/幽灵入口）同以条目为 Tag；
-            // 右上操作条仍恰好三枚（契约 #19 三钮矩阵不动）。
+            // 1.28.0 起备注交互条两枚按钮（点击面/添加备注钮）同以条目为 Tag；
+            // 右上操作条 1.29.0 起四枚（备注/置顶/选择/删除，#19 矩阵扩展备注钮行）。
             Assert.HasCount(5, buttons);
             var pinButton = buttons.Single(
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.TogglePinCommand));
@@ -1130,10 +1130,24 @@ public sealed partial class MainWindowInteractionTests
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.DeleteCardCommand));
             Assert.HasCount(2, buttons.Where(
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.NoteStripCommand)));
+            var noteButton = buttons.Single(candidate => candidate.Name == "CardOperationNoteButton");
             var contentGrid = pinButton.Parent as Grid;
             var text = FindDescendants<TextBlock>(container)
                 .Single(candidate => candidate.Text == item.Text);
 
+            // 1.29.0 添加备注钮（右侧操作条最左列）：聊天气泡图标、30×30、基态塌缩
+            //（Visibility=Collapsed——布局塌缩语义，Auto 列宽归零）、未悬停不可命中。
+            Assert.AreEqual(30d, noteButton.Width);
+            Assert.AreEqual(30d, noteButton.Height);
+            Assert.AreEqual(0d, noteButton.Opacity);
+            Assert.IsFalse(noteButton.IsHitTestVisible);
+            Assert.AreEqual(Visibility.Collapsed, noteButton.Visibility, "备注钮基态必须塌缩（非纯 Opacity 隐藏）。");
+            Assert.IsInstanceOfType(noteButton.Content, typeof(Viewbox));
+            // 基态 Collapsed 不参与 Measure、模板未展开——图标几何走逻辑树断言
+            //（Viewbox.Child），模板展开后的视觉断言由激活态测试覆盖。
+            Assert.IsInstanceOfType(((Viewbox)noteButton.Content).Child, typeof(System.Windows.Shapes.Path));
+            Assert.AreEqual("添加备注", noteButton.ToolTip);
+            Assert.AreEqual("备注", System.Windows.Automation.AutomationProperties.GetName(noteButton));
             Assert.AreEqual(30d, pinButton.Width);
             Assert.AreEqual(30d, pinButton.Height);
             Assert.AreEqual(0d, pinButton.Opacity);
@@ -1150,16 +1164,18 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual("删除", deleteButton.ToolTip);
             Assert.IsNotNull(contentGrid);
             // 1.18.0 对半分区：命中层两列 * /* 各占一半；右半（Tag=
-            // CardGestureZones.OperationsZone）右上角保留按钮包（1.24.0 起三枚
-            // 按钮、各占固定 30px 列、右对齐）；内容视觉层全宽在命中层之下
-            // （无 Tag，指针命中总落在命中层上）。
-            Assert.AreEqual(3, contentGrid.ColumnDefinitions.Count);
-            Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[0].Width);
+            // CardGestureZones.OperationsZone）右上角保留按钮包（1.29.0 起四枚
+            // 按钮——备注列 Auto（塌缩时归零），置顶/选择/删除各占固定 30px 列、
+            // 右对齐）；内容视觉层全宽在命中层之下（无 Tag，指针命中总落在命中层上）。
+            Assert.AreEqual(4, contentGrid.ColumnDefinitions.Count);
             Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[1].Width);
             Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[2].Width);
-            Assert.AreEqual(0, Grid.GetColumn(pinButton));
-            Assert.AreEqual(1, Grid.GetColumn(selectionButton));
-            Assert.AreEqual(2, Grid.GetColumn(deleteButton));
+            Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[3].Width);
+            Assert.AreEqual(GridUnitType.Auto, contentGrid.ColumnDefinitions[0].Width.GridUnitType, "备注列必须 Auto（塌缩语义）。");
+            Assert.AreEqual(0, Grid.GetColumn(noteButton));
+            Assert.AreEqual(1, Grid.GetColumn(pinButton));
+            Assert.AreEqual(2, Grid.GetColumn(selectionButton));
+            Assert.AreEqual(3, Grid.GetColumn(deleteButton));
             Assert.AreEqual(HorizontalAlignment.Right, contentGrid.HorizontalAlignment);
             Assert.AreEqual(VerticalAlignment.Top, contentGrid.VerticalAlignment);
             var operationsZone = contentGrid.Parent as Grid;
@@ -1195,6 +1211,56 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(1d, pinButton.Opacity, 0.001);
             Assert.IsTrue(pinButton.IsHitTestVisible);
             Assert.AreSame(window.FindResource("AccentBrush"), pinButton.Foreground);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void TextCard_MinPanelWidthFitsFourOperationColumns()
+    {
+        // 1.29.0 守卫（MinPanelWidth 280→310 的存在理由）：最小面板宽度下右半区
+        // 必须完整容纳四列按钮条（4×30），备注钮激活时不得侵入左半手势区。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText(new string('x', 240));
+        var store = new LocalStore(AppPaths.ForTests(directory.Root), new AtomicTextWriter());
+        var window = CreateWindow(
+            board,
+            store,
+            new WindowSettings(WindowSettings.MinPanelWidth, 640, 80));
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(item);
+            Assert.IsNotNull(container);
+            var noteButton = FindDescendants<Button>(container)
+                .Single(candidate => candidate.Name == "CardOperationNoteButton");
+            FadeAnimation.SetIsActive(noteButton, true);
+            CompleteLayout(window);
+            var columns = (GridLength)window.FindResource("CardOperationColumnWidth");
+            var zone = HalvesZoneOf(container, CardGestureZones.OperationsZone);
+            var buttons = FindDescendants<Button>(container)
+                .Where(candidate => ReferenceEquals(candidate.Tag, item) &&
+                    candidate.Visibility != Visibility.Collapsed)
+                .Select(button => new Rect(
+                    button.TranslatePoint(new Point(), container),
+                    new Size(button.ActualWidth, button.ActualHeight)));
+            var strip = buttons.Aggregate((left, right) => Rect.Union(left, right));
+
+            Assert.IsTrue(
+                zone.ActualWidth >= 4 * columns.Value,
+                $"最小面板宽度 {WindowSettings.MinPanelWidth} 下右半区 {zone.ActualWidth:0.#} 必须容纳四列按钮条 {4 * columns.Value:0.#}。");
+            Assert.IsTrue(
+                zone.TranslatePoint(new Point(), container).X <= strip.Left + 0.5,
+                $"四钮条左缘 {strip.Left:0.#} 不得越过右半区左缘 {zone.TranslatePoint(new Point(), container).X:0.#}（不侵入左半手势区）。");
         }
         finally
         {
