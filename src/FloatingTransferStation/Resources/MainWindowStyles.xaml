@@ -506,6 +506,143 @@
     </Style.Triggers>
   </Style>
 
+  <!-- 备注编辑器（1.28.0，契约 #22）：度量与备注显示行同族（字号 12、行高 20、
+       最多 2 行 MaxHeight=40），MaxLength=120 是备注上限唯一来源（模型侧不重复
+       钳制）。CardBrush 不透明衬底=编辑器盖写先例：覆盖正文前 1-2 行（备注编辑
+       由交互条进入），卡片高度不变（截断卡正文区 DesiredHeight=100 ≥ 40）。
+       可见性由条目 IsEditingNote 驱动（状态挂条目，虚拟化回收不错乱），键位与
+       失焦经窗口级路由事件挂接，与正文编辑器共用同一会话机器。 -->
+  <Style x:Key="CardNoteEditorStyle" TargetType="TextBox">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="AcceptsReturn" Value="False" />
+    <Setter Property="MaxLength" Value="120" />
+    <Setter Property="VerticalScrollBarVisibility" Value="Hidden" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="MaxHeight" Value="40" />
+    <Setter Property="Visibility" Value="Collapsed" />
+    <Setter Property="AutomationProperties.Name" Value="备注" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsEditingNote}" Value="True">
+        <Setter Property="Visibility" Value="Visible" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+
+  <!-- 备注点击面（1.28.0，契约 #22）：已有备注的卡片上覆盖备注行左半的透明
+       命中面（卡片模板命中层之上=真实输入可点，契约 #13；命中层让位会顶下
+       右上三钮破坏 #19 几何，故在按钮层实现）。唯一备注编辑入口：左键绝不
+       toggle 选中；右键语义与既有命中层分区一致（面只出现在左半位置）。无
+       视觉（备注文本由下方显示行承载，ToolTip=全文借面显示——显示行自身
+       IsHitTestVisible=false 承载不了悬停）。仅备注存在且无会话进行中可命中。 -->
+  <Style x:Key="CardNoteEntryHitStyle" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Cursor" Value="Arrow" />
+    <Setter Property="Visibility" Value="Collapsed" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border Background="{TemplateBinding Background}" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <MultiDataTrigger>
+        <MultiDataTrigger.Conditions>
+          <Condition Binding="{Binding Note, Converter={StaticResource NonEmptyTextConverter}}" Value="True" />
+          <Condition Binding="{Binding IsEditingNote}" Value="False" />
+          <Condition Binding="{Binding IsEditing}" Value="False" />
+          <Condition Binding="{Binding DataContext.IsSearchActive, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False" />
+        </MultiDataTrigger.Conditions>
+        <Setter Property="Visibility" Value="Visible" />
+        <Setter Property="IsHitTestVisible" Value="True" />
+      </MultiDataTrigger>
+    </Style.Triggers>
+  </Style>
+
+  <!-- 备注幽灵入口（1.28.0，契约 #22）：「添加备注」只对正文被截断的无备注
+       文字卡悬停淡入（判据=TrimAwareTextBlock.IsTruncated 渲染布局事实，非
+       字符数）。透明度两档：卡片悬停淡入至 0.55、入口自身悬停升满（经
+       FadeAnimation 体系，尊重「界面动效」设置）；不可见时不可命中。覆盖
+       正文第一行的左上区域（auto 宽度，几何远离右上按钮条）。 -->
+  <Style x:Key="CardNoteGhostStyle" TargetType="Button">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Cursor" Value="Arrow" />
+    <Setter Property="ToolTip" Value="添加备注" />
+    <Setter Property="AutomationProperties.Name" Value="备注" />
+    <Setter Property="views:FadeAnimation.IsActive" Value="False" />
+    <Setter Property="views:FadeAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
+    <Setter Property="views:FadeAnimation.DurationMs"
+            Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+    <Setter Property="views:FadeAnimation.ManageVisibility" Value="True" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border Background="{TemplateBinding Background}">
+            <StackPanel x:Name="NoteGhostLabel"
+                        Orientation="Horizontal"
+                        Opacity="0.55">
+              <Viewbox Width="14" Height="14" Margin="0,3,5,0" VerticalAlignment="Top">
+                <Path Data="M3,2.75 L13,2.75 C13.9665,2.75 14.75,3.5335 14.75,4.5 L14.75,9.5 C14.75,10.4665 13.9665,11.25 13,11.25 L8.2,11.25 L5.35,13.9 C5.05,14.18 4.75,14.06 4.75,13.6 L4.75,11.25 L3,11.25 C2.0335,11.25 1.25,10.4665 1.25,9.5 L1.25,4.5 C1.25,3.5335 2.0335,2.75 3,2.75 Z"
+                      Stroke="{DynamicResource SecondaryTextBrush}"
+                      StrokeThickness="1.3"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round" />
+              </Viewbox>
+              <TextBlock Text="添加备注"
+                         FontFamily="{StaticResource InterfaceFontFamily}"
+                         FontSize="12"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         TextOptions.TextFormattingMode="Display" />
+            </StackPanel>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="NoteGhostLabel" Property="Opacity" Value="1" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <MultiDataTrigger>
+        <MultiDataTrigger.Conditions>
+          <Condition Binding="{Binding Note, Converter={StaticResource NonEmptyTextConverter}}" Value="False" />
+          <Condition Binding="{Binding IsTruncated, ElementName=CardPreviewText}" Value="True" />
+          <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True" />
+          <Condition Binding="{Binding IsEditing}" Value="False" />
+          <Condition Binding="{Binding IsEditingNote}" Value="False" />
+          <Condition Binding="{Binding Kind}" Value="{x:Static models:BoardItemKind.Text}" />
+          <Condition Binding="{Binding DataContext.IsSearchActive, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False" />
+        </MultiDataTrigger.Conditions>
+        <Setter Property="views:FadeAnimation.IsActive" Value="True" />
+        <Setter Property="IsHitTestVisible" Value="True" />
+      </MultiDataTrigger>
+    </Style.Triggers>
+  </Style>
+
   <Style x:Key="BoardListStyle" TargetType="ListBox">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
@@ -1002,9 +1139,70 @@
                其上叠加两列 * /* 的命中层（CardGestureZones）承载左右对半的
                手势判定——区域=元素身份，星号布局自动对半实际宽度（DPI 无关）。
                右半右上角保留既有置顶/选择按钮（命中层子元素，按钮命中走按钮分支）。
-               卡片 12px 边缘环带不经过命中层，仍按默认归左半（贴边点击承载拖拽）。 -->
+               卡片 12px 边缘环带不经过命中层，仍按默认归左半（贴边点击承载拖拽）。
+               1.28.0 起网格分两行：行 0=备注显示行（Note 非空时占行撑高卡片），
+               行 1=内容视觉层；命中层与备注可点元素跨两行（备注行区域手势
+               分区不变：左半无选择语义、右半 toggle/复制）。 -->
           <Grid Margin="12" Background="Transparent">
-            <Grid Background="Transparent">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- 备注显示行（1.28.0，契约 #22）：在流纯展示（IsHitTestVisible=false，
+                 点击由上方备注交互条承接）——Note 非空时占行撑高卡片，常显不随
+                 hover 变化、无高度跳变；正文后来变短仍常显（备注是用户数据，不随
+                 正文变短而消失）。次级文字色、字号 12、最多 2 行（MaxHeight=40 +
+                 省略号，与正文同一限高机制）；右让位复用 CardTextReservedRightInset
+                 （#16 派生资源，不发明第二个数值）；浅/深主题走主题字典画刷。
+                 布局必须是 Grid（Auto 图标列 + * 文本列）：水平 StackPanel 会给
+                 子元素无限宽度约束，Wrap/省略号/MaxHeight 全部失效（T7 评审 B1）。 -->
+            <Grid x:Name="NoteDisplayRow"
+                  Grid.Row="0"
+                  Margin="{StaticResource CardTextReservedRightInset}"
+                  IsHitTestVisible="False">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Grid.Style>
+                <Style TargetType="Grid">
+                  <Setter Property="Visibility" Value="Collapsed" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Note, Converter={StaticResource NonEmptyTextConverter}}"
+                                 Value="True">
+                      <Setter Property="Visibility" Value="Visible" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Grid.Style>
+              <Viewbox Grid.Column="0"
+                       Width="16"
+                       Height="16"
+                       Margin="0,2,5,0"
+                       VerticalAlignment="Top">
+                <Path Data="M3,2.75 L13,2.75 C13.9665,2.75 14.75,3.5335 14.75,4.5 L14.75,9.5 C14.75,10.4665 13.9665,11.25 13,11.25 L8.2,11.25 L5.35,13.9 C5.05,14.18 4.75,14.06 4.75,13.6 L4.75,11.25 L3,11.25 C2.0335,11.25 1.25,10.4665 1.25,9.5 L1.25,4.5 C1.25,3.5335 2.0335,2.75 3,2.75 Z"
+                      Stroke="{DynamicResource SecondaryTextBrush}"
+                      StrokeThickness="1.3"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round" />
+              </Viewbox>
+              <TextBlock Grid.Column="1"
+                         Text="{Binding Note}"
+                         FontFamily="{StaticResource InterfaceFontFamily}"
+                         FontSize="12"
+                         FontWeight="Normal"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         TextOptions.TextFormattingMode="Display"
+                         TextWrapping="Wrap"
+                         TextTrimming="CharacterEllipsis"
+                         LineHeight="20"
+                         LineStackingStrategy="BlockLineHeight"
+                         MaxHeight="40" />
+            </Grid>
+
+            <Grid Grid.Row="1" Background="Transparent">
               <controls:AsyncThumbnailImage Height="120"
                      SourcePath="{Binding ImageAbsolutePath}"
                      Stretch="Uniform">
@@ -1021,19 +1219,14 @@
                 </Image.Style>
               </controls:AsyncThumbnailImage>
 
-              <TextBlock Text="{Binding PreviewText}"
-                         FontFamily="{StaticResource InterfaceFontFamily}"
-                         FontSize="14"
-                         FontWeight="Normal"
-                         Foreground="{DynamicResource PrimaryTextBrush}"
-                         TextOptions.TextFormattingMode="Display"
-                         TextWrapping="Wrap"
-                         TextTrimming="CharacterEllipsis"
-                         LineHeight="20"
-                         LineStackingStrategy="BlockLineHeight"
-                         MaxHeight="100">
-                <TextBlock.Style>
-                  <Style TargetType="TextBlock">
+              <!-- 1.28.0：TrimAwareTextBlock（Decorator 承载——TextBlock.MeasureOverride
+                   密封不可子类化，见控件实现）暴露 IsTruncated（渲染布局事实），是
+                   「添加备注」幽灵入口的唯一判据；MaxHeight=100 只声明在承载元素上
+                   （限高唯一来源，子元素不得重复声明）。文字卡可见性与右让位触发器
+                   上移到承载元素（布局属性），子 TextBlock 只承载文字排版。 -->
+              <controls:TrimAwareTextBlock x:Name="CardPreviewText" MaxHeight="100">
+                <controls:TrimAwareTextBlock.Style>
+                  <Style TargetType="controls:TrimAwareTextBlock">
                     <Setter Property="Visibility" Value="Collapsed" />
                     <Style.Triggers>
                       <DataTrigger Binding="{Binding Kind}"
@@ -1048,11 +1241,21 @@
                            不透明盖写同一区域，两态像素重合，卡片高度不随草稿塌缩。 -->
                     </Style.Triggers>
                   </Style>
-                </TextBlock.Style>
-              </TextBlock>
+                </controls:TrimAwareTextBlock.Style>
+                <TextBlock Text="{Binding PreviewText}"
+                           FontFamily="{StaticResource InterfaceFontFamily}"
+                           FontSize="14"
+                           FontWeight="Normal"
+                           Foreground="{DynamicResource PrimaryTextBrush}"
+                           TextOptions.TextFormattingMode="Display"
+                           TextWrapping="Wrap"
+                           TextTrimming="CharacterEllipsis"
+                           LineHeight="20"
+                           LineStackingStrategy="BlockLineHeight" />
+              </controls:TrimAwareTextBlock>
             </Grid>
 
-            <Grid>
+            <Grid Grid.RowSpan="2">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
@@ -1108,16 +1311,57 @@
               </Grid>
             </Grid>
 
-            <!-- 就地编辑器（1.22.0）：内容 Grid 的最后子元素=命中层之上，可见性由
+            <!-- 就地编辑器（1.22.0）：位于命中层之上（声明序在其后），可见性由
                  条目 IsEditing 驱动（Collapsed 时不参与命中，手势层不受影响）。
                  卡面底色不透明盖写同区域显示文本（放置光标/选择即点编辑器；卡面
                  底色为常量 CardBrush，选中着色来自独立叠加层）。样式与显示态
                  TextBlock 同度量，见 CardTextEditorStyle。键位与失焦处理经窗口级
                  路由事件挂接（ResourceDictionary 不能声明事件处理器，
-                 MainWindow.CardTextEditing 按 OriginalSource 过滤）。 -->
-            <TextBox Style="{StaticResource CardTextEditorStyle}"
+                 MainWindow.CardTextEditing 按 OriginalSource 过滤）。1.28.0 起
+                 模板内有正文/备注两个编辑器，定位按模板名（FindCardEditor）。 -->
+            <TextBox x:Name="CardTextEditor"
+                     Grid.Row="1"
+                     Style="{StaticResource CardTextEditorStyle}"
                      Margin="{StaticResource CardTextReservedRightInset}"
                      Text="{Binding DraftText, UpdateSourceTrigger=PropertyChanged}" />
+
+            <!-- 备注交互条（1.28.0，契约 #22）：三个元素全部位于命中层之上
+                 （声明序在其后——命中陷阱红线：备注可点元素若在透明命中层之下，
+                  真实鼠标点击会被拦截、只有合成/UIA 可达）。按态互斥：
+                 ① 点击面（行 0 左半容器内拉伸=恰好盖住备注显示行左半）：已有
+                    备注的编辑入口，左键绝不 toggle 选中（独立意图 OperationsNote，
+                    滑离释放取消，不进双击窗）；ToolTip 借面显示备注全文。
+                 ② 幽灵入口（行 1 左上，覆盖正文第一行左上区域）：无备注∧正文
+                    截断∧卡片悬停∧无会话进行中才淡入可点，CardNoteGhostStyle。
+                 ③ 备注编辑器（行 1 顶部盖写正文前 1-2 行，CardBrush 衬底）：
+                    IsEditingNote 驱动，CardNoteEditorStyle。
+                 右键语义零改动：备注元素只承接左键会话（Down 沿 OriginalSource
+                 祖先链识别 NoteStripCommand），右键按既有命中层分区——点击面
+                 只在左半位置、幽灵入口为左上小标签，右半穿透到既有命中层。 -->
+            <Grid Grid.Row="0" Background="{x:Null}">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Button x:Name="CardNoteEntryButton"
+                      Grid.Column="0"
+                      Style="{StaticResource CardNoteEntryHitStyle}"
+                      Tag="{Binding}"
+                      CommandParameter="{x:Static views:CardGestureZones.NoteStripCommand}"
+                      ToolTip="{Binding Note}" />
+            </Grid>
+            <Button x:Name="CardNoteGhostButton"
+                    Grid.Row="1"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Style="{StaticResource CardNoteGhostStyle}"
+                    Tag="{Binding}"
+                    CommandParameter="{x:Static views:CardGestureZones.NoteStripCommand}" />
+            <TextBox x:Name="CardNoteEditor"
+                     Grid.Row="1"
+                     Style="{StaticResource CardNoteEditorStyle}"
+                     Margin="{StaticResource CardTextReservedRightInset}"
+                     Text="{Binding DraftNote, UpdateSourceTrigger=PropertyChanged}" />
           </Grid>
         </Grid>
       </Border>

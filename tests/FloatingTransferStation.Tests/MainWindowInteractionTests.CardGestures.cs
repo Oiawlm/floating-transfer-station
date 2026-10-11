@@ -226,12 +226,11 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CardGestures_OperationsZoneDoubleClickTogglesExactlyOnce()
+    public void CardGestures_OperationsZoneRapidRepeatClicksToggleEachTime()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
-        var item = board.AddText("右半双击");
-        var other = board.AddText("另一张");
+        var item = board.AddText("右半连点", BoardCategory.Inbox);
         var window = CreateWindow(directory, board);
 
         try
@@ -239,21 +238,61 @@ public sealed partial class MainWindowInteractionTests
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
-            var list = (ListBox)window.FindName("BoardList");
+            var container = ContainerOf(window, item);
+            // 先稳定窗口几何（置顶与贴边重排定稿），三击的同一物理点才不会
+            // 因窗口移动而在双击位置容差内漂移。
+            window.Topmost = true;
+            CompleteLayout(window);
+            // 右半左缘内侧（远离右上角按钮条，任何面板宽度下几何安全；正文
+            // 极短，悬停不产生备注幽灵入口）。
+            var operationsZone = HalvesZoneOf(container, CardGestureZones.OperationsZone);
+            var zoneOrigin = operationsZone.TranslatePoint(new Point(), container);
+            var clickPoint = new Point(
+                zoneOrigin.X + 12,
+                zoneOrigin.Y + operationsZone.ActualHeight * 0.6);
+            var savedCursor = SaveCursorPosition();
 
-            // 右半双击净效果等同一次单击：第一击 toggle，第二击识别为双击不再
-            // toggle（避免选中态闪烁）。
-            RaiseCardDoubleClick(ZoneHitSource(window, item, CardGestureZones.OperationsZone));
-            CollectionAssert.AreEqual(
-                new[] { item },
-                list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "右半双击只 toggle 一次。");
+            try
+            {
+                // 预热一击（打在左半，无选择语义）让几何定稿，并拉开双击窗——
+                // 正式三击必须构成同位置快速连点（两击间隔落在系统双击时限内）。
+                ClickRealAt(window, container, new Point(24, container.ActualHeight / 2));
+                PumpDispatcherFor(
+                    window.Dispatcher,
+                    TimeSpan.FromMilliseconds(GetDoubleClickTime() + 100));
+
+                // 端到端守护（1.28.0 修订，Win32 消息直驱）：右半同一位置连点，
+                // 每一击都 toggle——两击=选中→取消，三击=净选中。旧实现把第二击
+                // 当双击吞掉（双击窗分支对 Operations 无分发路径且被吞点击仍
+                // 刷新痕迹），必须挪动鼠标或等超时才能再次 toggle。
+                var list = (ListBox)window.FindName("BoardList");
+                ClickRealAt(window, container, clickPoint);
+                CollectionAssert.AreEquivalent(
+                    new[] { item },
+                    list.SelectedItems.Cast<BoardItem>().ToArray(),
+                    "右半第一击选中。");
+
+                ClickRealAt(window, container, clickPoint);
+                Assert.AreEqual(
+                    0,
+                    list.SelectedItems.Count,
+                    "右半第二击（同位置快速连点）必须取消选中，不得被双击窗吞掉。");
+
+                ClickRealAt(window, container, clickPoint);
+                CollectionAssert.AreEquivalent(
+                    new[] { item },
+                    list.SelectedItems.Cast<BoardItem>().ToArray(),
+                    "右半第三击重新选中（三连击=选中→取消→选中）。");
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
 
             Assert.AreEqual(
                 string.Empty,
                 StatusOf(window),
-                "右半双击不触发编辑或复制等其他意图。");
-            _ = other;
+                "右半连点不触发编辑或复制等其他意图。");
         }
         finally
         {
@@ -567,6 +606,116 @@ public sealed partial class MainWindowInteractionTests
     private const int WmLeftButtonDown = 0x0201;
     private const int WmLeftButtonUp = 0x0202;
     private const int MkLbutton = 0x0001;
+
+    /// <summary>
+    /// F1 交互证据（1.28.0，契约 #14 修订；环境变量 FTS_GESTURE_EVIDENCE_DIR
+    /// 设置时在目录下输出 <c>operations-rapid-repeat-clicks-N.png</c> 关键帧
+    /// 序列）：真实输入管线（Win32 消息直驱）的右半原地快速连点，逐状态捕获
+    /// 真实 UI——选中→取消→选中，每击都生效。未设置环境变量时仍作为守护运行。
+    /// </summary>
+    [STATestMethod]
+    public void CardGestures_OperationsZoneRapidRepeatClicksRecording()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("右半连点", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var operationsZone = HalvesZoneOf(container, CardGestureZones.OperationsZone);
+            var zoneOrigin = operationsZone.TranslatePoint(new Point(), container);
+            var clickPoint = new Point(
+                zoneOrigin.X + 12,
+                zoneOrigin.Y + operationsZone.ActualHeight * 0.6);
+            var list = (ListBox)window.FindName("BoardList");
+            var savedCursor = SaveCursorPosition();
+            var frames = new List<byte[]>();
+
+            try
+            {
+                // 预热（左半，无选择语义）并拉开双击窗；帧 0=未选中基线。
+                ClickRealAt(window, container, new Point(24, container.ActualHeight / 2));
+                PumpDispatcherFor(
+                    window.Dispatcher,
+                    TimeSpan.FromMilliseconds(GetDoubleClickTime() + 100));
+                frames.Add(RenderFrame(container));
+
+                ClickRealAt(window, container, clickPoint);
+                Assert.AreEqual(1, list.SelectedItems.Count, "第一击选中（帧 1 前置）。");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                frames.Add(RenderFrame(container));
+
+                ClickRealAt(window, container, clickPoint);
+                Assert.AreEqual(0, list.SelectedItems.Count, "第二击取消（帧 2 前置）。");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                frames.Add(RenderFrame(container));
+
+                ClickRealAt(window, container, clickPoint);
+                Assert.AreEqual(1, list.SelectedItems.Count, "第三击净选中（帧 3 前置）。");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                frames.Add(RenderFrame(container));
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+
+            SaveFrameSequenceRecording(container, frames, "operations-rapid-repeat-clicks");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>把当前视觉渲染为 PNG 字节（真实 UI 帧捕获）。</summary>
+    private static byte[] RenderFrame(FrameworkElement visual)
+    {
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            (int)Math.Ceiling(visual.ActualWidth),
+            (int)Math.Ceiling(visual.ActualHeight),
+            96,
+            96,
+            System.Windows.Media.PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// 帧序列落盘（真实 UI 关键帧 PNG 序列；环境变量未设置时不产出——本地证据，
+    /// 不入库）。GIF 组装需要 ImageSharp.Formats.Gif 附加包，受「无新依赖」
+    /// 边界约束不引入，故以逐帧 PNG 序列交付交互证据。
+    /// </summary>
+    private static void SaveFrameSequenceRecording(
+        FrameworkElement visual,
+        IReadOnlyList<byte[]> pngFrames,
+        string fileNamePrefix,
+        string environmentVariable = "FTS_GESTURE_EVIDENCE_DIR")
+    {
+        var directory = Environment.GetEnvironmentVariable(environmentVariable);
+        if (string.IsNullOrWhiteSpace(directory) || pngFrames.Count == 0)
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(directory);
+        for (var index = 0; index < pngFrames.Count; index++)
+        {
+            var path = Path.Combine(directory, $"{fileNamePrefix}-{index + 1}.png");
+            File.WriteAllBytes(path, pngFrames[index]);
+        }
+    }
 
     /// <summary>
     /// 真实输入管线点击：把真实光标移入窗口（HwndMouseInputProvider 对光标

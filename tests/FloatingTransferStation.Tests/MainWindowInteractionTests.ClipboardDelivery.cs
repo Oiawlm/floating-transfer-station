@@ -396,7 +396,8 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsNotNull(container);
             EnterCardEditingWithDoubleClick(window, item);
             CompleteLayout(window);
-            var editor = FindDescendants<TextBox>(container).Single();
+            var editor = FindDescendants<TextBox>(container)
+                .Single(candidate => candidate.Name == "CardTextEditor");
             Assert.IsTrue(editor.IsKeyboardFocused, "前置条件：文字编辑器持有键盘焦点。");
             editor.SelectionStart = 0;
             editor.SelectionLength = editor.Text.Length;

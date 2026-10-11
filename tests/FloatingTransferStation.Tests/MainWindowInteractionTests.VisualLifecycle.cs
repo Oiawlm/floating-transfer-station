@@ -1119,13 +1119,17 @@ public sealed partial class MainWindowInteractionTests
             var buttons = FindDescendants<Button>(container)
                 .Where(candidate => ReferenceEquals(candidate.Tag, item))
                 .ToArray();
-            Assert.HasCount(3, buttons);
+            // 1.28.0 起备注交互条两枚按钮（点击面/幽灵入口）同以条目为 Tag；
+            // 右上操作条仍恰好三枚（契约 #19 三钮矩阵不动）。
+            Assert.HasCount(5, buttons);
             var pinButton = buttons.Single(
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.TogglePinCommand));
             var selectionButton = buttons.Single(
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.ToggleSelectionCommand));
             var deleteButton = buttons.Single(
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.DeleteCardCommand));
+            Assert.HasCount(2, buttons.Where(
+                candidate => Equals(candidate.CommandParameter, CardGestureZones.NoteStripCommand)));
             var contentGrid = pinButton.Parent as Grid;
             var text = FindDescendants<TextBlock>(container)
                 .Single(candidate => candidate.Text == item.Text);
@@ -1173,7 +1177,12 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsNull((text.Parent as Grid)?.Tag, "内容视觉层不得携带命中标记（命中总落在命中层）。");
             Assert.AreEqual(14d, text.FontSize);
             Assert.AreEqual(20d, text.LineHeight);
-            Assert.AreEqual(100d, text.MaxHeight);
+            // 1.28.0 起限高 MaxHeight 上移到 TrimAwareTextBlock 承载元素（唯一来源）。
+            Assert.AreEqual(
+                100d,
+                text.Parent is FloatingTransferStation.Controls.TrimAwareTextBlock host
+                    ? host.MaxHeight
+                    : double.NaN);
             Assert.AreEqual(TextTrimming.CharacterEllipsis, text.TextTrimming);
 
             item.IsPinned = true;

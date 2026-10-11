@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FloatingTransferStation.Controls;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -29,14 +30,18 @@ public sealed partial class MainWindowInteractionTests
 
     /// <summary>
     /// 1.22.0 起编辑器在卡片模板内原位切换（覆盖层已删除）：按条目容器查找
-    /// 编辑 TextBox（模板内唯一 TextBox，可见性由条目 IsEditing 驱动）。
+    /// 编辑 TextBox（1.28.0 起模板内有正文/备注两个编辑器，按模板名定位正文）。
     /// </summary>
     private static TextBox EditorInput(MainWindow window, BoardItem item)
     {
-        var editor = FindDescendants<TextBox>(ContainerOf(window, item)).Single();
+        var editor = CardTextEditorOf(ContainerOf(window, item));
         Assert.IsNotNull(editor);
         return editor;
     }
+
+    /// <summary>按模板名取条目容器内的正文编辑器（备注编辑器名为 CardNoteEditor）。</summary>
+    private static TextBox CardTextEditorOf(ListBoxItem container) =>
+        FindDescendants<TextBox>(container).Single(editor => editor.Name == "CardTextEditor");
 
     /// <summary>断言没有任何卡片编辑器处于可见状态（图片卡/搜索态不进入编辑）。</summary>
     private static void AssertNoVisibleCardEditor(MainWindow window)
@@ -296,7 +301,7 @@ public sealed partial class MainWindowInteractionTests
             EnterCardEditingWithDoubleClick(window, item);
             CompleteLayout(window);
 
-            var editor = FindDescendants<TextBox>(container).Single();
+            var editor = CardTextEditorOf(container);
             Assert.IsTrue(
                 container.IsAncestorOf(editor),
                 "编辑器必须在卡片容器内原位出现（禁止浮层回归）。");
@@ -311,14 +316,18 @@ public sealed partial class MainWindowInteractionTests
                 editor.Text,
                 "编辑器草稿必须种子为全文而非有界预览。");
 
-            var display = FindDescendants<TextBlock>(container)
+            // 1.28.0 起正文由 TrimAwareTextBlock 承载（备注显示行是另一个绑定
+            // 条目的 TextBlock，按承载元素定位正文显示层）；右让位内缩也随
+            // 触发器上移到承载元素。
+            var displayHost = FindDescendants<TrimAwareTextBlock>(container)
                 .Single(candidate => ReferenceEquals(candidate.DataContext, item));
+            var display = (TextBlock)displayHost.Child;
             Assert.AreEqual(
                 Visibility.Visible,
                 display.Visibility,
                 "编辑期间显示态保持可见（高度恒定不塌缩），由同度量的编辑器以卡片底色盖写。");
             Assert.AreEqual(
-                display.Margin,
+                displayHost.Margin,
                 editor.Margin,
                 "编辑器与显示文本必须同宽度同位置（同样的操作列避让）。");
             var editorOrigin = editor.TransformToAncestor(container).Transform(new Point(0, 0));

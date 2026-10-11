@@ -342,6 +342,23 @@ public sealed class BoardService
         return true;
     }
 
+    /// <summary>
+    /// 就地更新文字卡片备注(1.28.0,用户显式编辑;null=删除备注)。仅改备注
+    /// 元数据,不动内容、分类、顺序与置顶;备注不参与搜索/复制/拖出。找不到
+    /// 条目或条目不是文字卡(图片卡无备注)时返回 false。
+    /// </summary>
+    public bool UpdateNote(Guid itemId, string? note)
+    {
+        var item = FindItem(itemId);
+        if (item is not { Kind: BoardItemKind.Text })
+        {
+            return false;
+        }
+
+        item.Note = note;
+        return true;
+    }
+
     public BoardItem? FindItem(Guid itemId)
     {
         foreach (var collection in _items.Values)

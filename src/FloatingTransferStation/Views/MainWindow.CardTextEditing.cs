@@ -2,23 +2,34 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using FloatingTransferStation.Models;
 
 namespace FloatingTransferStation.Views;
 
 /// <summary>
-/// 卡片内容就地编辑（1.22.0 重构：编辑器移入卡片 DataTemplate，显示态与编辑态
-/// 由条目级 <see cref="BoardItem.IsEditing"/> 原位切换）：Enter 保存、Esc 取消、
-/// 失焦保存；空白视为取消（不允许把内容编辑为空，与插件「不得清空」精神一致）。
-/// 保存走原子持久化，失败还原原文本并提示。草稿在条目模型上（双向绑定），容器
-/// 被虚拟化回收后冲刷路径仍拿得到全文。会话生命周期由锚点有效性单点驱动：
-/// 锚点条目仍在当前 <c>ActivePanel.Items</c> 且容器已实现且未滚出视口，否则终结
-/// 并提交（换面板、过滤、集合变化、滚动、窗口尺寸变化共用同一判定）。
+/// 卡片就地编辑（1.22.0 重构：编辑器移入卡片 DataTemplate，显示态与编辑态
+/// 由条目级状态原位切换；1.28.0 起机器参数化为（条目, 目标 {正文, 备注}），
+/// IME 组合守卫、Enter/Esc、失焦提交、锚点终结全量共用，单会话语义=同卡
+/// 同时只有正文或备注一个编辑会话）：正文 Enter 保存、Esc 取消、失焦保存、
+/// 空白视为取消（不允许把内容编辑为空）；备注 Enter 保存、Esc 取消、失焦
+/// 保存、空白提交=删除已有备注（无备注空白=无操作）。保存走原子持久化，
+/// 失败还原原值并提示。草稿在条目模型上（双向绑定），容器被虚拟化回收后
+/// 冲刷路径仍拿得到全文。会话生命周期由锚点有效性单点驱动：锚点条目仍在
+/// 当前 <c>ActivePanel.Items</c> 且容器已实现且未滚出视口，否则终结并提交
+/// （换面板、过滤、集合变化、滚动、窗口尺寸变化共用同一判定）。
 /// </summary>
 public partial class MainWindow
 {
     private Guid? _editingCardItemId;
+
+    /// <summary>就地编辑目标：正文（左半双击进入）或备注（备注交互条进入）。</summary>
+    private enum CardEditTarget
+    {
+        Text,
+        Note
+    }
 
     /// <summary>IME 组合中的编辑器：组合期 Enter/Esc 属输入法操作，不触发提交/取消。</summary>
     private readonly HashSet<BoardItem> _activeCardTextCompositions = [];
@@ -74,10 +85,8 @@ public partial class MainWindow
         object sender,
         TextCompositionEventArgs e)
     {
-        if (e.OriginalSource is TextBox
-            {
-                DataContext: BoardItem { IsEditing: true } item
-            })
+        if (e.OriginalSource is TextBox { DataContext: BoardItem item } &&
+            (item.IsEditing || item.IsEditingNote))
         {
             _activeCardTextCompositions.Add(item);
         }
@@ -96,7 +105,7 @@ public partial class MainWindow
     private void CardTextEditor_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.OriginalSource is not TextBox { DataContext: BoardItem item } ||
-            !item.IsEditing ||
+            (!item.IsEditing && !item.IsEditingNote) ||
             _activeCardTextCompositions.Contains(item))
         {
             return;
@@ -134,11 +143,21 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 双击进入编辑：草稿种子为全文，可见性由条目状态驱动原位切换。已有会话时
-    /// 先同步完成上一提交（接续编辑另一张卡），顺序必须严格同步，防止新会话被
-    /// 旧会话的焦点回调提前提交。
+    /// 双击进入正文编辑：草稿种子为全文，可见性由条目状态驱动原位切换。已有
+    /// 会话时先同步完成上一提交（接续编辑另一张卡），顺序必须严格同步，防止
+    /// 新会话被旧会话的焦点回调提前提交。
     /// </summary>
-    private void BeginCardTextEditing(BoardItem item, ListBoxItem container)
+    private void BeginCardTextEditing(BoardItem item, ListBoxItem container) =>
+        BeginCardEditing(item, container, CardEditTarget.Text);
+
+    /// <summary>
+    /// 备注交互条进入备注编辑（1.28.0）：守卫、会话互斥与焦点注入与正文编辑
+    /// 同一机器；双击进入正文编辑时同样先终结未完备注会话（既有单会话语义）。
+    /// </summary>
+    private void BeginCardNoteEditing(BoardItem item, ListBoxItem container) =>
+        BeginCardEditing(item, container, CardEditTarget.Note);
+
+    private void BeginCardEditing(BoardItem item, ListBoxItem container, CardEditTarget target)
     {
         if (_isClosing ||
             _viewModel.IsSearchActive ||
@@ -155,15 +174,29 @@ public partial class MainWindow
         _editingCardItemId = item.Id;
         // 组合标记按会话重置：上次会话被中断残留的标记不得让本次 Enter/Esc 失效。
         _activeCardTextCompositions.Remove(item);
-        item.BeginTextEdit();
+        if (target == CardEditTarget.Note)
+        {
+            item.BeginNoteEdit();
+        }
+        else
+        {
+            item.BeginTextEdit();
+        }
+
         // 焦点在模板应用后注入（照分类改名范式）；失败不回滚——可见性已由
         // 条目状态驱动，稍后的点击仍可把焦点送入编辑器。
         Dispatcher.BeginInvoke(
             DispatcherPriority.Input,
             new Action(() =>
             {
-                if (!item.IsEditing ||
-                    FindDescendant<TextBox>(container) is not { } editor ||
+                if (target == CardEditTarget.Note
+                    ? !item.IsEditingNote
+                    : !item.IsEditing)
+                {
+                    return;
+                }
+
+                if (FindCardEditor(container, target) is not { } editor ||
                     !ReferenceEquals(editor.DataContext, item))
                 {
                     return;
@@ -172,6 +205,31 @@ public partial class MainWindow
                 editor.Focus();
                 editor.SelectAll();
             }));
+    }
+
+    /// <summary>
+    /// 卡片模板内目标编辑器的定位：正文与备注编辑器以模板名区分（模板
+    /// namescope 每实例独立，虚拟化回收安全）。备注编辑器入模板后「第一个
+    /// TextBox」的隐式约定不再成立，两个入口都按名取编辑器。
+    /// </summary>
+    private static TextBox? FindCardEditor(DependencyObject parent, CardEditTarget target)
+    {
+        var editorName = target == CardEditTarget.Note ? "CardNoteEditor" : "CardTextEditor";
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is TextBox { Name: { } name } match && name == editorName)
+            {
+                return match;
+            }
+
+            if (FindCardEditor(child, target) is { } descendant)
+            {
+                return descendant;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -238,20 +296,26 @@ public partial class MainWindow
         }
 
         // 提交顺序锁定（T7 评审修正）：先取草稿，再清锚点防二次提交（折叠引发
-        // 焦点回调重入时锚点已空、直接返回），最后 EndTextEdit 收起编辑态——
-        // 草稿读取必须在 EndTextEdit 之前（它会清掉 DraftText）。IME 组合标记
-        // 一并清理（组合中会话被终结时组合完成事件可能不再到来，残留会使同卡
-        // 下次编辑的 Enter/Esc 失效）。编辑器折叠前先把焦点显式还给列表：折叠
-        // 持有键盘焦点的元素时 WPF 会在列表内重选焦点并 BringIntoView（滚动
-        // 跳变）；列表本身不承载滚动语义。焦点迁移与 EndTextEdit 的顺序不可换。
-        // UpdateItemTextAsync 的同步段（等值短路、内存更新、操作门注册）在返回
-        // 前完成；关闭序列依赖这一点在封门前排队（BoardOperationGate.
-        // SealAndRunAsync 会先排空已注册操作再执行最终保存），因此 async void
-        // 不丢最后一笔编辑。
+        // 焦点回调重入时锚点已空、直接返回），最后收起编辑态——草稿读取必须在
+        // 收起之前（EndTextEdit/EndNoteEdit 会清掉草稿）。会话目标由条目状态
+        // 派生（正文/备注单会话互斥）：备注空白提交=删除已有备注（无备注空白
+        // =无操作，等值短路在服务内），正文空白=取消。IME 组合标记一并清理
+        // （组合中会话被终结时组合完成事件可能不再到来，残留会使同卡下次编辑
+        // 的 Enter/Esc 失效）。编辑器折叠前先把焦点显式还给列表：折叠持有键盘
+        // 焦点的元素时 WPF 会在列表内重选焦点并 BringIntoView（滚动跳变）；
+        // 列表本身不承载滚动语义。焦点迁移与会话收起的顺序不可换。
+        // UpdateItemTextAsync/UpdateItemNoteAsync 的同步段（等值短路、内存更新、
+        // 操作门注册）在返回前完成；关闭序列依赖这一点在封门前排队
+        // （BoardOperationGate.SealAndRunAsync 会先排空已注册操作再执行最终
+        // 保存），因此 async void 不丢最后一笔编辑。
         var editingItem = FindEditingItem(itemId);
+        var isNoteSession = editingItem is { IsEditingNote: true };
+        var newNote = editingItem?.DraftNote;
         var newText = editingItem?.DraftText ?? string.Empty;
         var editorHoldsFocus = TryGetEditingCardContainer() is { } container &&
-            FindDescendant<TextBox>(container) is { } editor &&
+            FindCardEditor(
+                container,
+                isNoteSession ? CardEditTarget.Note : CardEditTarget.Text) is { } editor &&
             editor.IsKeyboardFocused;
         _editingCardItemId = null;
         if (editingItem is not null)
@@ -264,10 +328,18 @@ public partial class MainWindow
             BoardList.Focus();
         }
 
-        editingItem?.EndTextEdit();
+        EndCardEditSession(editingItem);
         if (editingItem is null)
         {
             // 锚点条目已不在板卡上（删除竞态）：会话直接结束，无内容可存。
+            return;
+        }
+
+        if (isNoteSession)
+        {
+            await _mutations.UpdateItemNoteAsync(
+                itemId,
+                string.IsNullOrWhiteSpace(newNote) ? null : newNote);
             return;
         }
 
@@ -278,6 +350,24 @@ public partial class MainWindow
         }
 
         await _mutations.UpdateItemTextAsync(itemId, newText);
+    }
+
+    /// <summary>会话收起（提交与取消共用）：按条目上的会话目标清理草稿与标志。</summary>
+    private static void EndCardEditSession(BoardItem? editingItem)
+    {
+        if (editingItem is null)
+        {
+            return;
+        }
+
+        if (editingItem.IsEditingNote)
+        {
+            editingItem.EndNoteEdit();
+        }
+        else
+        {
+            editingItem.EndTextEdit();
+        }
     }
 
     /// <summary>锚点条目优先取当前面板（虚拟化回收后仍是同一实例），跨面板兜底查全板；
@@ -316,7 +406,10 @@ public partial class MainWindow
 
         var editingItem = FindEditingItem(itemId);
         var editorHoldsFocus = TryGetEditingCardContainer() is { } container &&
-            FindDescendant<TextBox>(container) is { } editor &&
+            FindCardEditor(
+                container,
+                editingItem is { IsEditingNote: true } ? CardEditTarget.Note : CardEditTarget.Text)
+                is { } editor &&
             editor.IsKeyboardFocused;
         _editingCardItemId = null;
         if (editingItem is not null)
@@ -329,6 +422,6 @@ public partial class MainWindow
             BoardList.Focus();
         }
 
-        editingItem?.EndTextEdit();
+        EndCardEditSession(editingItem);
     }
 }
