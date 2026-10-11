@@ -207,7 +207,7 @@ public sealed class BoardMutationService
         }, cancellationToken);
 
     /// <summary>
-    /// 就地更新文字卡片备注并原子持久化(1.26.0):备注是元数据,卡片内容语义
+    /// 就地更新文字卡片备注并原子持久化(1.28.0):备注是元数据,卡片内容语义
     /// 零变化;note 传 null=删除备注(「空白提交=删除已有备注」的归一由调用方
     /// 完成),无备注时传 null 等值短路、不动磁盘;保存失败时还原原备注并提示。
     /// </summary>

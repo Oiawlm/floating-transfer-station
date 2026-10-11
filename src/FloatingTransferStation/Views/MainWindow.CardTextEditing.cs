@@ -10,7 +10,7 @@ namespace FloatingTransferStation.Views;
 
 /// <summary>
 /// 卡片就地编辑（1.22.0 重构：编辑器移入卡片 DataTemplate，显示态与编辑态
-/// 由条目级状态原位切换；1.26.0 起机器参数化为（条目, 目标 {正文, 备注}），
+/// 由条目级状态原位切换；1.28.0 起机器参数化为（条目, 目标 {正文, 备注}），
 /// IME 组合守卫、Enter/Esc、失焦提交、锚点终结全量共用，单会话语义=同卡
 /// 同时只有正文或备注一个编辑会话）：正文 Enter 保存、Esc 取消、失焦保存、
 /// 空白视为取消（不允许把内容编辑为空）；备注 Enter 保存、Esc 取消、失焦
@@ -151,7 +151,7 @@ public partial class MainWindow
         BeginCardEditing(item, container, CardEditTarget.Text);
 
     /// <summary>
-    /// 备注交互条进入备注编辑（1.26.0）：守卫、会话互斥与焦点注入与正文编辑
+    /// 备注交互条进入备注编辑（1.28.0）：守卫、会话互斥与焦点注入与正文编辑
     /// 同一机器；双击进入正文编辑时同样先终结未完备注会话（既有单会话语义）。
     /// </summary>
     private void BeginCardNoteEditing(BoardItem item, ListBoxItem container) =>

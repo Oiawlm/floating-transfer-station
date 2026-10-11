@@ -30,7 +30,7 @@ public sealed partial class MainWindowInteractionTests
 
     /// <summary>
     /// 1.22.0 起编辑器在卡片模板内原位切换（覆盖层已删除）：按条目容器查找
-    /// 编辑 TextBox（1.26.0 起模板内有正文/备注两个编辑器，按模板名定位正文）。
+    /// 编辑 TextBox（1.28.0 起模板内有正文/备注两个编辑器，按模板名定位正文）。
     /// </summary>
     private static TextBox EditorInput(MainWindow window, BoardItem item)
     {
@@ -316,7 +316,7 @@ public sealed partial class MainWindowInteractionTests
                 editor.Text,
                 "编辑器草稿必须种子为全文而非有界预览。");
 
-            // 1.26.0 起正文由 TrimAwareTextBlock 承载（备注显示行是另一个绑定
+            // 1.28.0 起正文由 TrimAwareTextBlock 承载（备注显示行是另一个绑定
             // 条目的 TextBlock，按承载元素定位正文显示层）；右让位内缩也随
             // 触发器上移到承载元素。
             var displayHost = FindDescendants<TrimAwareTextBlock>(container)

@@ -4,7 +4,7 @@ using System.Windows.Controls;
 namespace FloatingTransferStation.Controls;
 
 /// <summary>
-/// 暴露「文本是否被限高截断」的承载容器（1.26.0，长卡片备注的添加门槛判据）。
+/// 暴露「文本是否被限高截断」的承载容器（1.28.0，长卡片备注的添加门槛判据）。
 /// 判据是渲染布局事实而非字符数：直接比较 DesiredSize/ActualHeight 不可靠——
 /// 两者恒被 MaxHeight 钳制，CharacterEllipsis 也只在受高度约束的那次测量中
 /// 产生。因此 MeasureOverride 双次测量：先不限高取自然高度，再以

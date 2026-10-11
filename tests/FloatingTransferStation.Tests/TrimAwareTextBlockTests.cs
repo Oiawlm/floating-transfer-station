@@ -6,7 +6,7 @@ using FloatingTransferStation.Controls;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// TrimAwareTextBlock（1.26.0，契约 #22）的截断信号守护：判据是渲染布局事实
+/// TrimAwareTextBlock（1.28.0，契约 #22）的截断信号守护：判据是渲染布局事实
 /// （MeasureOverride 双次测量：先 ∞ 高取自然高度，再 min(约束高, MaxHeight)
 /// 限高收尾），不是字符数。恰好整行数（自然高度 == 限高）不得误判截断
 /// （0.5 DIP 容差语义）。限高 MaxHeight 是唯一来源，随宽度/限高变化的翻转

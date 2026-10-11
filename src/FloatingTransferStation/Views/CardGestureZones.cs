@@ -28,7 +28,7 @@ public static class CardGestureZones
     public const string DeleteCardCommand = "DeleteCard";
 
     /// <summary>
-    /// 备注交互条（1.26.0）：单击进入备注就地编辑（仅文字卡）。独立意图会话，
+    /// 备注交互条（1.28.0）：单击进入备注就地编辑（仅文字卡）。独立意图会话，
     /// 模式同置顶/删除按钮——不参与双击窗、不记双击痕迹、滑离释放取消意图；
     /// 备注交互条左键绝不 toggle 选中，右键语义与既有命中层分区一致。
     /// </summary>

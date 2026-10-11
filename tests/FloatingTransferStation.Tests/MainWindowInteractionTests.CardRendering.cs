@@ -128,7 +128,7 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
             var body = FindDescendants<TextBlock>(list)
                 .Single(candidate => candidate.Text == "行高修正后的卡片正文");
-            // 1.26.0 起正文由 TrimAwareTextBlock 承载（TextBlock.MeasureOverride
+            // 1.28.0 起正文由 TrimAwareTextBlock 承载（TextBlock.MeasureOverride
             // 密封不可子类化）：限高 MaxHeight 上移到承载元素（唯一来源），
             // 子 TextBlock 只承载文字排版度量。
             var host = FindDescendants<TrimAwareTextBlock>(list)

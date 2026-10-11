@@ -261,7 +261,7 @@ public sealed partial class MainWindowInteractionTests
                     window.Dispatcher,
                     TimeSpan.FromMilliseconds(GetDoubleClickTime() + 100));
 
-                // 端到端守护（1.26.0 修订，Win32 消息直驱）：右半同一位置连点，
+                // 端到端守护（1.28.0 修订，Win32 消息直驱）：右半同一位置连点，
                 // 每一击都 toggle——两击=选中→取消，三击=净选中。旧实现把第二击
                 // 当双击吞掉（双击窗分支对 Operations 无分发路径且被吞点击仍
                 // 刷新痕迹），必须挪动鼠标或等超时才能再次 toggle。
@@ -608,7 +608,7 @@ public sealed partial class MainWindowInteractionTests
     private const int MkLbutton = 0x0001;
 
     /// <summary>
-    /// F1 交互证据（1.26.0，契约 #14 修订；环境变量 FTS_GESTURE_EVIDENCE_DIR
+    /// F1 交互证据（1.28.0，契约 #14 修订；环境变量 FTS_GESTURE_EVIDENCE_DIR
     /// 设置时在目录下输出 <c>operations-rapid-repeat-clicks-N.png</c> 关键帧
     /// 序列）：真实输入管线（Win32 消息直驱）的右半原地快速连点，逐状态捕获
     /// 真实 UI——选中→取消→选中，每击都生效。未设置环境变量时仍作为守护运行。

@@ -52,7 +52,7 @@
 
 ### 7. 编辑器持有焦点期间不自动收起
 
-- **断言**：编辑器（含分类改名、卡片就地编辑与 1.26.0 起的卡片备注编辑）持有键盘焦点期间面板不自动收起；IME 候选窗补发的假指针离开不得引发收起。
+- **断言**：编辑器（含分类改名、卡片就地编辑与 1.28.0 起的卡片备注编辑）持有键盘焦点期间面板不自动收起；IME 候选窗补发的假指针离开不得引发收起。
 - **由来**：1.7.x 编辑期面板「自己收起来」的报障根因。
 - **锁定**：`tests/FloatingTransferStation.Tests/PanelStateMachineTests.cs`（`TextEditing_KeepsPanelOpenAcrossPointerLeaveUntilEditingEnds`）。
 - **关联**：`PROJECT_GUIDE.md`「必须保持的契约」。
@@ -101,12 +101,12 @@
 - **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardGestures.cs`（Win32 消息直驱用例）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardHalves.cs`（`CardHalves_RealInput*` 系列）。
 - **关联**：`docs/observations.md` B-007、CHANGELOG 1.17.0/1.17.1。
 
-### 14. 卡片对半分区（1.18.0 起；1.26.0 修订右半连点逐击 toggle）
+### 14. 卡片对半分区（1.18.0 起；1.28.0 修订右半连点逐击 toggle）
 
-- **断言**：卡片命中层左右对半（两列 `*`/`*`，区域=元素身份，DPI 无关）：左半双击编辑、按住拖拽、单击无选择语义；右半裸/`Ctrl` 单击 toggle、`Shift` 范围选择、右键复制（不改选择）；右半每击都 toggle——双击窗只适用于左半文字卡的就地编辑判定，双击=两次 toggle=净零，原地快速连点每击都生效（1.26.0 修订）；卡片 12px 边缘环带归左半。内容视觉层全宽独立（图片/文字横贯整卡），与命中层解耦。
-- **由来**：1.17.0「内容列 + 60px 操作列」表达不了用户心智的「同一元素左右对半」（Bug B）；1.18.0 改为独立叠加命中层。1.26.0 用户报障「右半同一位置快速连点第二击被吞」——双击窗分支对右半无分发路径且被吞点击仍刷新痕迹，修订为窗限定左半（`_pressZone == Content` 外层守卫）；右半 Operations 痕迹保留，职责改为重置左半双击窗（防快速 左→右→左 同位点击拼成伪双击误开编辑）。
+- **断言**：卡片命中层左右对半（两列 `*`/`*`，区域=元素身份，DPI 无关）：左半双击编辑、按住拖拽、单击无选择语义；右半裸/`Ctrl` 单击 toggle、`Shift` 范围选择、右键复制（不改选择）；右半每击都 toggle——双击窗只适用于左半文字卡的就地编辑判定，双击=两次 toggle=净零，原地快速连点每击都生效（1.28.0 修订）；卡片 12px 边缘环带归左半。内容视觉层全宽独立（图片/文字横贯整卡），与命中层解耦。
+- **由来**：1.17.0「内容列 + 60px 操作列」表达不了用户心智的「同一元素左右对半」（Bug B）；1.18.0 改为独立叠加命中层。1.28.0 用户报障「右半同一位置快速连点第二击被吞」——双击窗分支对右半无分发路径且被吞点击仍刷新痕迹，修订为窗限定左半（`_pressZone == Content` 外层守卫）；右半 Operations 痕迹保留，职责改为重置左半双击窗（防快速 左→右→左 同位点击拼成伪双击误开编辑）。
 - **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardHalves.cs`（`CardHalves_HitLayerSplitsCardContentIntoEqualHalves` 等）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardGestures.cs`（含 `CardGestures_OperationsZoneRapidRepeatClicksToggleEachTime`，Win32 消息直驱）。
-- **关联**：CHANGELOG 1.18.0/1.26.0（无独立 spec，如实标注）；1.26.0 修订 Issue Oiawlm/floating-transfer-station#93。
+- **关联**：CHANGELOG 1.18.0/1.28.0（无独立 spec，如实标注）；1.28.0 修订 Issue Oiawlm/floating-transfer-station#93。
 
 ### 15. 大数据量显示根因契约（1.19.0 起）
 
@@ -119,7 +119,7 @@
 
 ### 16. 文字卡避让操作列（1.20.0 起；1.24.0 修订为三列）
 
-- **断言**：文字卡正文**与备注显示行/备注交互条（1.26.0 起，见 #22）**右侧为右上角操作按钮条预留排他空间，任何时刻（悬停/非悬停）零像素争用；内缩量唯一来源是派生资源 `CardTextReservedRightInset`（操作列 `CardOperationColumnWidth` 总宽 + 4 DIP 间隙；1.20.0 为两列按钮计 64，1.24.0 随卡片删除按钮修订为三列计 94，见 #19），不得在别处写死第二个数值；命中层对半分区、图片卡全幅与角按钮契约不变。
+- **断言**：文字卡正文**与备注显示行/备注交互条（1.28.0 起，见 #22）**右侧为右上角操作按钮条预留排他空间，任何时刻（悬停/非悬停）零像素争用；内缩量唯一来源是派生资源 `CardTextReservedRightInset`（操作列 `CardOperationColumnWidth` 总宽 + 4 DIP 间隙；1.20.0 为两列按钮计 64，1.24.0 随卡片删除按钮修订为三列计 94，见 #19），不得在别处写死第二个数值；命中层对半分区、图片卡全幅与角按钮契约不变。
 - **由来**：1.18.0 对半分区分层解决了命中歧义但视觉层没有为按钮预留空间——悬停淡入的按钮压在正文第一、二行右上角（实测 60px 全额争用）；1.24.0 操作条扩为三列（新增删除按钮），派生内缩同步加宽一列。
 - **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardOperationAvoidance.cs`（零交集 + 派生关系）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.VisualLifecycle.cs`（`TextCard_ReservesFixedPinSelectionAndDeleteColumns`）。
 - **关联**：同日设计规格：`docs/superpowers/specs/2026-10-07-text-ops-avoidance-and-edge-hide-design.md`、[设计规范 §五](design.md)；1.24.0 修订 Issue 见 #19 关联。
@@ -165,14 +165,14 @@
 - **锁定**：`tests/FloatingTransferStation.Core.Tests/CategoryDisplayOrderTests.cs`（非法回落、JSON 往返、ResetToDefault 保留、ViewModel 重排复用实例并通知）、`tests/FloatingTransferStation.Tests/LocalStoreTests.cs`（CategoryOrder 经 LocalStore 原子往返）、`tests/FloatingTransferStation.Tests/WindowControllerTests.cs`（自定义序收起行号与非法回落）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CategoryOrder.cs`（rail 按显示顺序渲染、收起把手行号、宿主采纳即重排并持久化）、`tests/FloatingTransferStation.Tests/SettingsWindowCategoryOrderTests.cs`（节渲染与端点禁用、上移/下移提交即落盘、真实消息直驱拖拽提交、拖拽中 Esc 优先消费不关窗、捕获丢失回弹不提交）。
 - **关联**：CHANGELOG 1.25.0（无独立 spec，如实标注）。
 
-## 七、本次新增（22，1.26.0）
+## 七、本次新增（22，1.28.0）
 
-### 22. 长卡片备注（1.26.0 起）
+### 22. 长卡片备注（1.28.0 起）
 
 - **断言**：备注是用户手写的短摘要元数据，**仅文字卡**（图片卡无备注），目的是一眼识别长卡内容——不参与搜索、复制、拖出（卡片内容语义零变化），不加设置开关、不做自动摘要。**添加入口有门槛、判据是渲染布局事实**：「添加备注」幽灵入口只对 `Note` 为空 ∧ 正文被截断 ∧ 卡片悬停 ∧ 无编辑会话进行中的文字卡出现——截断判据唯一权威实现是 `TrimAwareTextBlock`（Decorator 承载 TextBlock，`TextBlock.MeasureOverride` 密封不可子类化；`MeasureOverride` 双次测量：先不限高取自然高度、再以 `min(约束高, MaxHeight)` 限高收尾，比较带 0.5 DIP 容差）产出的只读 `IsTruncated`（非 `AffectsMeasure`）；`MaxHeight` 是限高唯一来源（正文仍 100=5 行×LineHeight 20）；禁止字符数启发式、反射内部截断状态与 `LayoutUpdated` 兜底。**编辑入口无门槛**：已写入的备注无论卡片当前是否仍截断，备注行常显（在流、纯展示 `IsHitTestVisible=false`、不随 hover 变化、无高度跳变）且随时可点入编辑或清空——备注是用户数据，不随正文变短而消失。备注上限 120 字符由编辑器 `MaxLength` 承载（单一来源，模型侧不重复钳制）；打开编辑必须预填现值；空白提交=删除已有备注（无备注时空白提交=无操作），`Esc` 取消；备注编辑不进撤销栈（与正文就地编辑一致）。备注可点元素（点击面/幽灵入口/备注编辑器）在卡片模板命中层**之上**（契约 #13：真实输入可点，不只合成可达；命中层让位会顶下右上三钮破坏 #19 几何，故在按钮层实现）；备注交互条左键绝不 toggle 选中（独立意图 `OperationsNote` 会话，模式同置顶/删除按钮：按下记会话、滑离释放取消、不进双击窗、不写 `_lastCardClick` 痕迹），右键语义零改动（按既有命中层分区：右半复制、左半无操作，备注判定只作用于左键）；搜索态下备注入口隐藏（与搜索态不进入就地编辑同族守卫）。备注编辑与正文编辑共用同一会话机器（IME 组合守卫、Enter/Esc、失焦提交、锚点终结、`PanelStateMachine` 编辑保持——契约 #7），双向互斥单会话；提交路由到 `BoardMutationService.UpdateItemNoteAsync`，与正文更新共享同一条「字段变更→原子快照→失败还原+状态条」保存实现（不平行复制两套持久化路径），保存失败提示「备注未保存，已还原原备注。」；`board.json` SchemaVersion 保持 1（旧文件缺字段读为 null、空串归一 null，`CloneForSnapshot` 同步复制 `Note`）。备注显示行/交互条纳入 #16 避让（复用 `CardTextReservedRightInset`，与右上操作按钮条零像素争用）。
-- **由来**：1.26.0 用户需求「内容比较长的卡片希望备注一下写的是什么，简短几句就够；没超过卡片可见高度的短卡不需要备注」（门槛判据由执行设计落定为截断这一渲染事实——业界剪贴板管理器（CopyQ/EcoPaste 等）的备注功能均对全部条目开放、无「按长度给入口」先例，门槛是用户明确要求的产品决策；备注置顶作次级标题行 + 悬停幽灵入口的形态取 Apple HIG/Fluent 列表行与 Trello/Notion 悬停入口先例，调研 job `20261011-111718-c9m`）。
+- **由来**：1.28.0 用户需求「内容比较长的卡片希望备注一下写的是什么，简短几句就够；没超过卡片可见高度的短卡不需要备注」（门槛判据由执行设计落定为截断这一渲染事实——业界剪贴板管理器（CopyQ/EcoPaste 等）的备注功能均对全部条目开放、无「按长度给入口」先例，门槛是用户明确要求的产品决策；备注置顶作次级标题行 + 悬停幽灵入口的形态取 Apple HIG/Fluent 列表行与 Trello/Notion 悬停入口先例，调研 job `20261011-111718-c9m`）。
 - **锁定**：`tests/FloatingTransferStation.Tests/TrimAwareTextBlockTests.cs`（截断判据与翻转）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardNote.cs`（门槛/常显/高度稳定/真实输入/键盘语义/空白删除/失败还原/持焦不收起/回收终结/右键零改动/避让零争用/持久化往返/缺字段免迁移/合成路径）。
-- **关联**：CHANGELOG 1.26.0（无独立 spec，如实标注）；契约记录 Issue Oiawlm/floating-transfer-station#94；#7/#16 的 1.26.0 扩展同 Issue。
+- **关联**：CHANGELOG 1.28.0（无独立 spec，如实标注）；契约记录 Issue Oiawlm/floating-transfer-station#94；#7/#16 的 1.28.0 扩展同 Issue。
 
 ## 维护规则
 

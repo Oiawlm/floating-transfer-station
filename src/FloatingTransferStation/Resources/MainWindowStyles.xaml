@@ -506,7 +506,7 @@
     </Style.Triggers>
   </Style>
 
-  <!-- 备注编辑器（1.26.0，契约 #22）：度量与备注显示行同族（字号 12、行高 20、
+  <!-- 备注编辑器（1.28.0，契约 #22）：度量与备注显示行同族（字号 12、行高 20、
        最多 2 行 MaxHeight=40），MaxLength=120 是备注上限唯一来源（模型侧不重复
        钳制）。CardBrush 不透明衬底=编辑器盖写先例：覆盖正文前 1-2 行（备注编辑
        由交互条进入），卡片高度不变（截断卡正文区 DesiredHeight=100 ≥ 40）。
@@ -538,7 +538,7 @@
     </Style.Triggers>
   </Style>
 
-  <!-- 备注点击面（1.26.0，契约 #22）：已有备注的卡片上覆盖备注行左半的透明
+  <!-- 备注点击面（1.28.0，契约 #22）：已有备注的卡片上覆盖备注行左半的透明
        命中面（卡片模板命中层之上=真实输入可点，契约 #13；命中层让位会顶下
        右上三钮破坏 #19 几何，故在按钮层实现）。唯一备注编辑入口：左键绝不
        toggle 选中；右键语义与既有命中层分区一致（面只出现在左半位置）。无
@@ -574,7 +574,7 @@
     </Style.Triggers>
   </Style>
 
-  <!-- 备注幽灵入口（1.26.0，契约 #22）：「添加备注」只对正文被截断的无备注
+  <!-- 备注幽灵入口（1.28.0，契约 #22）：「添加备注」只对正文被截断的无备注
        文字卡悬停淡入（判据=TrimAwareTextBlock.IsTruncated 渲染布局事实，非
        字符数）。透明度两档：卡片悬停淡入至 0.55、入口自身悬停升满（经
        FadeAnimation 体系，尊重「界面动效」设置）；不可见时不可命中。覆盖
@@ -1140,7 +1140,7 @@
                手势判定——区域=元素身份，星号布局自动对半实际宽度（DPI 无关）。
                右半右上角保留既有置顶/选择按钮（命中层子元素，按钮命中走按钮分支）。
                卡片 12px 边缘环带不经过命中层，仍按默认归左半（贴边点击承载拖拽）。
-               1.26.0 起网格分两行：行 0=备注显示行（Note 非空时占行撑高卡片），
+               1.28.0 起网格分两行：行 0=备注显示行（Note 非空时占行撑高卡片），
                行 1=内容视觉层；命中层与备注可点元素跨两行（备注行区域手势
                分区不变：左半无选择语义、右半 toggle/复制）。 -->
           <Grid Margin="12" Background="Transparent">
@@ -1149,7 +1149,7 @@
               <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <!-- 备注显示行（1.26.0，契约 #22）：在流纯展示（IsHitTestVisible=false，
+            <!-- 备注显示行（1.28.0，契约 #22）：在流纯展示（IsHitTestVisible=false，
                  点击由上方备注交互条承接）——Note 非空时占行撑高卡片，常显不随
                  hover 变化、无高度跳变；正文后来变短仍常显（备注是用户数据，不随
                  正文变短而消失）。次级文字色、字号 12、最多 2 行（MaxHeight=40 +
@@ -1219,7 +1219,7 @@
                 </Image.Style>
               </controls:AsyncThumbnailImage>
 
-              <!-- 1.26.0：TrimAwareTextBlock（Decorator 承载——TextBlock.MeasureOverride
+              <!-- 1.28.0：TrimAwareTextBlock（Decorator 承载——TextBlock.MeasureOverride
                    密封不可子类化，见控件实现）暴露 IsTruncated（渲染布局事实），是
                    「添加备注」幽灵入口的唯一判据；MaxHeight=100 只声明在承载元素上
                    （限高唯一来源，子元素不得重复声明）。文字卡可见性与右让位触发器
@@ -1317,7 +1317,7 @@
                  底色为常量 CardBrush，选中着色来自独立叠加层）。样式与显示态
                  TextBlock 同度量，见 CardTextEditorStyle。键位与失焦处理经窗口级
                  路由事件挂接（ResourceDictionary 不能声明事件处理器，
-                 MainWindow.CardTextEditing 按 OriginalSource 过滤）。1.26.0 起
+                 MainWindow.CardTextEditing 按 OriginalSource 过滤）。1.28.0 起
                  模板内有正文/备注两个编辑器，定位按模板名（FindCardEditor）。 -->
             <TextBox x:Name="CardTextEditor"
                      Grid.Row="1"
@@ -1325,7 +1325,7 @@
                      Margin="{StaticResource CardTextReservedRightInset}"
                      Text="{Binding DraftText, UpdateSourceTrigger=PropertyChanged}" />
 
-            <!-- 备注交互条（1.26.0，契约 #22）：三个元素全部位于命中层之上
+            <!-- 备注交互条（1.28.0，契约 #22）：三个元素全部位于命中层之上
                  （声明序在其后——命中陷阱红线：备注可点元素若在透明命中层之下，
                   真实鼠标点击会被拦截、只有合成/UIA 可达）。按态互斥：
                  ① 点击面（行 0 左半容器内拉伸=恰好盖住备注显示行左半）：已有

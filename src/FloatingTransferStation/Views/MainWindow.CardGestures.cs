@@ -23,7 +23,7 @@ namespace FloatingTransferStation.Views;
 /// 与系统语义一致按 Down 判定，不依赖 Control.MouseDoubleClick——其系统触发
 /// 链会被预览层为压制 ListBox 默认选择而设置的 Handled 阻断
 /// （docs/observations.md B-007 的实机根因）。双击窗只对左半文字卡的
-/// 就地编辑生效（1.26.0 修订）：右半无双击窗，单击逐击 toggle 选择，
+/// 就地编辑生效（1.28.0 修订）：右半无双击窗，单击逐击 toggle 选择，
 /// 原地快速连点每击都生效。
 /// 右半操作按钮同样由手势层接管：真实输入下原生按钮 Click 会先被 ListBox
 /// 默认单击选择吞掉（合成/UIA 可达、实机不可达，1.16.0 起的隐性缺陷，
@@ -48,7 +48,7 @@ public partial class MainWindow
         /// 与右半选择手势不同的独立意图；模式照抄 OperationsPin。</summary>
         OperationsDelete,
 
-        /// <summary>备注交互条（1.26.0）：单击进入备注就地编辑（仅文字卡），
+        /// <summary>备注交互条（1.28.0）：单击进入备注就地编辑（仅文字卡），
         /// 与右半选择手势不同的独立意图；模式照抄 OperationsPin——不参与
         /// 双击窗、不记双击痕迹、滑离释放取消意图。</summary>
         OperationsNote,
@@ -188,7 +188,7 @@ public partial class MainWindow
     {
         // 系统双击语义按两击的按下时刻与按下位置判定（长按后快速单击不得
         // 拼成伪双击）；痕迹与判定均取 Down 值，Up 不参与。
-        // 双击窗只属于有双击语义的区域（1.26.0 修订，Issue #93）：只有左半
+        // 双击窗只属于有双击语义的区域（1.28.0 修订，Issue #93）：只有左半
         // 文字卡的双击进入就地编辑；右半不再有双击窗——裸单击与 Ctrl+单击
         // 逐击 toggle，原地快速连点每击都生效（点一下选中、再点一下取消，
         // 双击=两次 toggle=净零），Shift 逐击重算区间。双击要求两击同区：
@@ -220,7 +220,7 @@ public partial class MainWindow
         }
         else if (_pressZone == CardHitZone.OperationsNote)
         {
-            // 备注交互条是独立意图（1.26.0）：单击进入备注就地编辑，绝不 toggle
+            // 备注交互条是独立意图（1.28.0）：单击进入备注就地编辑，绝不 toggle
             // 选中；语义与 BoardList_ButtonClick 的 NoteStrip 分支共用同一实现
             // （合成与 UIA 自动化路径），真实输入路径在此分发。
             if (BoardList.ItemContainerGenerator.ContainerFromItem(item) is ListBoxItem noteContainer)
@@ -242,7 +242,7 @@ public partial class MainWindow
             }
         }
 
-        // 痕迹只记左半与右半点击（1.26.0）：右半痕迹的职责是重置左半双击窗
+        // 痕迹只记左半与右半点击（1.28.0）：右半痕迹的职责是重置左半双击窗
         // ——快速 左→右→左 同位点击不得被拼成伪双击误开编辑（右半自身已无
         // 双击窗，每击都 toggle）。置顶/删除/备注交互条是独立意图不参与双击窗，
         // 不记痕迹——连点每击都生效（否则第二击被双击窗吞掉，按钮像坏的）；
@@ -259,7 +259,7 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 双击窗口判定（1.26.0 起只对左半文字卡的就地编辑生效，调用方先判区域）：
+    /// 双击窗口判定（1.28.0 起只对左半文字卡的就地编辑生效，调用方先判区域）：
     /// 同一卡片、两击同区、系统双击时限内、按下位置在系统双击容差内。时限与
     /// 容差取系统双击设置，与拖拽阈值一样尊重用户的鼠标配置。
     /// </summary>

@@ -11,7 +11,7 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 长卡片备注（1.26.0，契约 #22）交互守护：添加门槛=渲染布局事实（正文截断，
+/// 长卡片备注（1.28.0，契约 #22）交互守护：添加门槛=渲染布局事实（正文截断，
 /// TrimAwareTextBlock.IsTruncated）、编辑入口无门槛（已有备注常显随时可点）、
 /// 空白提交=删除、备注是元数据（不参与选择/复制/拖出/搜索）、备注编辑复用
 /// 正文编辑会话机器（Enter/Esc/失焦/锚点终结/编辑持焦面板不收起）、原子持久化
