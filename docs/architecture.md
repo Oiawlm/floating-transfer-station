@@ -17,6 +17,7 @@
 
 - `Core/Models/` 与 Windows `Models/`：分别存放共享板模型，以及 Windows 剪贴板快照/外部拖入载荷。
 - `Services/`：剪贴板采集、图片规范化、板内容变更、原子保存、拖放载荷、窗口状态机和生命周期。
+- `Core/Services/DeepSeekClient.cs` 与 `ISecretProtector`（1.27.0）：DeepSeek 官方国内 API 的无状态 HTTP 客户端（key/model 按调用参数传入）与机密保护契约——Windows 主工程的 `DpapiSecretProtector` 实现 DPAPI（CurrentUser）加密，设置页「AI 设置」节经宿主读写。
 - `ViewModels/`：分类与主窗口的可绑定状态。
 - `Views/`：WPF 视觉树、指针交互、选择删除、拖放、动画和窗口生命周期。
 - `Views/MainWindow.CategoryEditing.cs`：分类名称编辑、中文输入法组合、提交与设置保存；保持与主窗口同一 partial 类型。

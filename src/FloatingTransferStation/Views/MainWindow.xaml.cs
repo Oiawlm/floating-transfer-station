@@ -63,6 +63,8 @@ public partial class MainWindow : Window
     private readonly IStartupManager _startupManager;
     private readonly PluginCatalog? _pluginCatalog;
     private readonly IGlobalHotkeySource _globalHotkeySource;
+    private readonly ISecretProtector _secretProtector;
+    private readonly DeepSeekClient _deepSeekClient;
     private readonly BoardOperationGate? _operationGate;
     private readonly DataDirectoryChangeService? _dataDirectoryChangeService;
     private readonly string _dataDirectory;
@@ -119,7 +121,9 @@ public partial class MainWindow : Window
         PluginCatalog? pluginCatalog = null,
         IGlobalHotkeySource? globalHotkeySource = null,
         BoardOperationGate? operationGate = null,
-        DataDirectoryChangeService? dataDirectoryChangeService = null)
+        DataDirectoryChangeService? dataDirectoryChangeService = null,
+        ISecretProtector? secretProtector = null,
+        DeepSeekClient? deepSeekClient = null)
     {
         InitializeComponent();
         _preferences = preferences ?? AppPreferences.Default;
@@ -127,6 +131,10 @@ public partial class MainWindow : Window
         _startupManager = startupManager ?? new WindowsStartupManager();
         _pluginCatalog = pluginCatalog;
         _globalHotkeySource = globalHotkeySource ?? new Win32GlobalHotkeySource();
+        // 1.27.0 DeepSeek 接入地基：保护器与客户端可注入（测试用假实现），
+        // 未注入时用真实实现兜底（与 _startupManager/_globalHotkeySource 同法）。
+        _secretProtector = secretProtector ?? new DpapiSecretProtector();
+        _deepSeekClient = deepSeekClient ?? new DeepSeekClient();
         _operationGate = operationGate;
         _dataDirectoryChangeService = dataDirectoryChangeService;
         _dataDirectory = dataDirectory ?? string.Empty;

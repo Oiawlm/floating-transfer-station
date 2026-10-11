@@ -31,7 +31,10 @@ public enum TrashNoSelectionRightClickAction
 /// 而非受管数据契约；启用状态 plugins-state.json 仍留在数据目录）；
 /// 1.23.0 起新增自动清理开关（默认开启）；1.25.0 起清理语义为逐卡 24 小时 TTL
 /// （入库满期即删、判据幂等），原成对的调度记账时间戳字段随间隔清扫语义删除，
-/// 旧文件残留的时间戳成员按未知成员忽略、不影响加载。
+/// 旧文件残留的时间戳成员按未知成员忽略、不影响加载；
+/// 1.27.0 起新增 DeepSeek 接入地基：DeepSeekApiKeyProtected 存 DPAPI（CurrentUser）
+/// 加密后的 API Key 密文（base64；null = 未配置，明文绝不落盘），DeepSeekModel 为
+/// 模型 ID 自由字符串（默认轻量模型，官方日后改 ID 不破坏旧配置）。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -44,7 +47,9 @@ public sealed record AppPreferences(
     TrashNoSelectionLeftClickAction TrashNoSelectionLeftClick = TrashNoSelectionLeftClickAction.ClearNonPinned,
     TrashNoSelectionRightClickAction TrashNoSelectionRightClick = TrashNoSelectionRightClickAction.ClearAll,
     string? PluginsDirectoryOverride = null,
-    bool AutoCleanupEnabled = true)
+    bool AutoCleanupEnabled = true,
+    string? DeepSeekApiKeyProtected = null,
+    string DeepSeekModel = "deepseek-v4-flash")
 {
     public static AppPreferences Default { get; } = new();
 }

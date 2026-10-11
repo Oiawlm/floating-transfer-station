@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -28,6 +29,8 @@ public partial class SettingsWindow : Window
     private bool _isSynchronizingControls;
     private bool _micaApplied;
     private bool _isChangingDataDirectory;
+    private bool _isDeepSeekKeyVisible;
+    private bool _isTestingDeepSeekConnection;
 
     public SettingsWindow(ISettingsHost host)
     {
@@ -73,6 +76,42 @@ public partial class SettingsWindow : Window
         };
         TrashRightClickComboBox.SelectedItem = ((ComboBoxItem[])TrashRightClickComboBox.ItemsSource)
             .Single(item => Equals(item.Tag, host.CurrentPreferences.TrashNoSelectionRightClick));
+
+        // AI 设置（1.27.0）：模型候选以官方当前 ID 为先，存储值为自由字符串，
+        // 旧配置或官方新增 ID 原样呈现为一项，不破坏。
+        var deepSeekModelItems = new List<ComboBoxItem>
+        {
+            new() { Content = "deepseek-v4-flash", Tag = "deepseek-v4-flash" },
+            new() { Content = "deepseek-v4-pro", Tag = "deepseek-v4-pro" }
+        };
+        var storedDeepSeekModel = host.CurrentPreferences.DeepSeekModel;
+        if (!string.IsNullOrEmpty(storedDeepSeekModel) &&
+            deepSeekModelItems.All(item =>
+                !string.Equals((string)item.Tag, storedDeepSeekModel, StringComparison.Ordinal)))
+        {
+            deepSeekModelItems.Add(new ComboBoxItem { Content = storedDeepSeekModel, Tag = storedDeepSeekModel });
+        }
+
+        DeepSeekModelComboBox.ItemsSource = deepSeekModelItems;
+        DeepSeekModelComboBox.SelectedItem = deepSeekModelItems.FirstOrDefault(
+            item => string.Equals((string)item.Tag, storedDeepSeekModel, StringComparison.Ordinal))
+            ?? deepSeekModelItems[0];
+
+        // 存量 Key 解密后入框（明文只在内存）；解密失败按未配置降级并就地提示。
+        var storedDeepSeekKey = host.CurrentPreferences.DeepSeekApiKeyProtected;
+        if (!string.IsNullOrEmpty(storedDeepSeekKey))
+        {
+            var decryptedKey = _host.SecretProtector.Unprotect(storedDeepSeekKey);
+            if (decryptedKey is not null)
+            {
+                DeepSeekKeyBox.Password = decryptedKey;
+            }
+            else
+            {
+                ShowDeepSeekStatus("API Key 无法解密，请重新填写。");
+            }
+        }
+
         _isSynchronizingControls = false;
 
         DataDirectoryText.Text = host.DataDirectory;
@@ -350,6 +389,125 @@ public partial class SettingsWindow : Window
         }
 
         _host.ApplyPreferences(_host.CurrentPreferences with { TrashNoSelectionRightClick = action });
+    }
+
+    // ---- AI 设置（1.27.0，DeepSeek 接入地基）----
+
+    private void DeepSeekKeyBox_LostFocus(object sender, RoutedEventArgs e) => CommitDeepSeekKey();
+
+    private void DeepSeekKeyPlainBox_LostFocus(object sender, RoutedEventArgs e) => CommitDeepSeekKey();
+
+    /// <summary>
+    /// Key 的生效点是失焦（对齐卡片就地编辑失焦提交先例）：非空提交密文，空输入清除（存 null）；
+    /// 明文只在内存中出现，存储侧只落密文。加密失败（DPAPI 异常）就地提示且不落任何值。
+    /// </summary>
+    private void CommitDeepSeekKey()
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        var plaintext = ReadDeepSeekKeyInput();
+        string? protectedKey;
+        try
+        {
+            protectedKey = string.IsNullOrEmpty(plaintext)
+                ? null
+                : _host.SecretProtector.Protect(plaintext);
+        }
+        catch (Exception exception) when (exception is CryptographicException or IOException)
+        {
+            ShowDeepSeekStatus("API Key 加密失败，本次未保存，请重试。");
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with { DeepSeekApiKeyProtected = protectedKey });
+    }
+
+    private void DeepSeekKeyVisibilityButton_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (_isDeepSeekKeyVisible)
+        {
+            DeepSeekKeyBox.Password = DeepSeekKeyPlainBox.Text;
+            DeepSeekKeyPlainBox.Visibility = Visibility.Collapsed;
+            DeepSeekKeyBox.Visibility = Visibility.Visible;
+            DeepSeekKeyVisibilityButton.Content = "显示";
+        }
+        else
+        {
+            DeepSeekKeyPlainBox.Text = DeepSeekKeyBox.Password;
+            DeepSeekKeyBox.Visibility = Visibility.Collapsed;
+            DeepSeekKeyPlainBox.Visibility = Visibility.Visible;
+            DeepSeekKeyVisibilityButton.Content = "隐藏";
+        }
+
+        _isDeepSeekKeyVisible = !_isDeepSeekKeyVisible;
+    }
+
+    private void DeepSeekModelComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isSynchronizingControls ||
+            DeepSeekModelComboBox.SelectedItem is not ComboBoxItem { Tag: string model })
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with { DeepSeekModel = model });
+    }
+
+    private async void DeepSeekTestButton_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (_isTestingDeepSeekConnection)
+        {
+            return;
+        }
+
+        _isTestingDeepSeekConnection = true;
+        DeepSeekTestButton.IsEnabled = false;
+        DeepSeekTestButton.Content = "测试中…";
+        try
+        {
+            // 直接测当前输入框内容（含未保存的新输入），模型取当前选中项。
+            var result = await _host.TestDeepSeekConnectionAsync(
+                ReadDeepSeekKeyInput(),
+                ResolveDeepSeekModel());
+            ShowDeepSeekStatus(result.Message, isError: !result.IsSuccess);
+        }
+        catch (OperationCanceledException)
+        {
+            // 宿主/客户端未来若引入可取消令牌：取消不按失败反馈，只恢复按钮。
+        }
+        catch (Exception)
+        {
+            // async void 的未知异常会击穿为进程崩溃；就地反馈且不带任何请求细节。
+            ShowDeepSeekStatus("测试失败，请重试。");
+        }
+        finally
+        {
+            _isTestingDeepSeekConnection = false;
+            DeepSeekTestButton.IsEnabled = true;
+            DeepSeekTestButton.Content = "测试连接";
+        }
+    }
+
+    private string ReadDeepSeekKeyInput() => (_isDeepSeekKeyVisible
+        ? DeepSeekKeyPlainBox.Text
+        : DeepSeekKeyBox.Password).Trim();
+
+    private string ResolveDeepSeekModel() =>
+        DeepSeekModelComboBox.SelectedItem is ComboBoxItem { Tag: string model }
+            ? model
+            : DeepSeekClient.DefaultModel;
+
+    private void ShowDeepSeekStatus(string message, bool isError = true)
+    {
+        DeepSeekStatusText.Text = message;
+        DeepSeekStatusText.Foreground = (System.Windows.Media.Brush)FindResource(
+            isError ? "DangerBrush" : "AccentBrush");
+        DeepSeekStatusText.Visibility = Visibility.Visible;
     }
 
     private void OpenDataDirectoryButton_Click(object sender, RoutedEventArgs e)
