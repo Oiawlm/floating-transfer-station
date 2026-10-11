@@ -41,6 +41,17 @@ Windows 正式版使用 .NET 10、WPF、MSTest 和 Inno Setup，引用 `Floating
 
 日常改动写入 `CHANGELOG.md` 的“未发布”区。准备正式发布时，先整理目标版本记录，再运行 `build-release.ps1 -ForRelease`；完整流程见[发布指南](docs/releasing.md)。
 
+## 并行开发与分支纪律
+
+多个窗口/会话并行开发时，按下面的纪律工作。原则：**版本是发行属性，不是分支属性**——版本号、README「下载」段、GitHub Release 与 tag 只由发布指南定义的「发行列车」从 main 串行赋值，功能分支永不触碰。
+
+- **分支命名**：`<类型>/<slug>`（如 `feat/note-entry-strip-button`、`fix/undo-anchor`），**不带版本号**。版本在发行时才赋值，分支名里写版本会诱导把版本当作分支属性。
+- **创建即推送**：分支创建后立即 `git push -u origin <分支>`，此后每个提交都推送。会话中断（窗口被关、机器断电）不丢任何工作。
+- **合并走 PR**：合并进 main 必须经 PR 与 `quality` 质量门；**合并前把最新 `origin/main` 同步进分支**（merge 或 rebase 由你决定）。PR 合并被 GitHub 串行化，这是并行窗口之间唯一的合并点。
+- **轨道文件冲突约定**：`CHANGELOG.md`「未发布」区冲突=**保留双方条目**（两类改动都该被发行列车消费）；`version.txt` 与 README「下载」段冲突=说明有并行发行，按「以远端 main 为准重放」处理（功能分支本不该改这两个文件——出现即流程违规信号）。
+- **合并后归位**：切回 main、`git pull --ff-only`、删除本地与远端功能分支、`git fetch --prune --tags`。
+- **工作区隔离**：并行窗口**默认各自独立 clone**（refs、config、stash 全独立，是真隔离）；`git worktree` 为可选轻量方案，但它共享 config/stash/hooks，且 **gitignored 本地文档不随 worktree 复制**——用 worktree 必须手动拷贝 `AGENTS.md`/`PROJECT_GUIDE.md` 等本地指令文件。多个窗口**不得共享同一个 checkout**（分支切换互踩、暂存区互相污染）。
+
 ## 提交 PR 前
 
 - 一个 PR 只解决一个清楚的问题，避免顺手重构无关代码。

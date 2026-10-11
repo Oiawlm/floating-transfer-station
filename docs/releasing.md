@@ -4,14 +4,55 @@
 
 版本交付采用 main 中的代码和 GitHub Release：上传 Windows 安装包与 `SHA256SUMS.txt`，README 顶部提供下载入口。功能分支推送不替代这个交付结果。
 
-1. 确定待发布版本，将对应条目归入新的版本段落。只在根目录 `version.txt` 设置生产版本；MSBuild、ProductIdentity、Inno 和打包脚本从它取得版本。同步 README 中的发布说明与安装包名称，并同步更新本地维护文档（`PROJECT_GUIDE.md`，不入库）；历史设计和旧版本记录不改写。
-2. 在准备发布的代码上完成依赖还原和格式验证（命令见 CONTRIBUTING.md；WPF 设计时格式工具先预构建 Core 的 Debug 程序集），再执行包含 Release 全量测试的打包入口；无需在同一份未变化代码上先重复跑一次全量测试：
+**版本是发行属性，不是分支属性。**版本号、README「下载」段、GitHub Release 与 tag 只在发行时刻由「发行列车」从 main 统一赋值；功能分支永不触碰这些轨道。并行开发的竞态根因不是合并动作本身，而是多个分支都把“下一个版本”当作自己的属性、同时改写同一批轨道文件——把版本赋值和发行收尾从功能分支剥离、由发行列车串行完成，配合 PR 合并被 GitHub 天然串行化，竞态从流程上消除。
+
+## 功能分支职责
+
+功能分支只包含：
+
+- 代码与测试。
+- `CHANGELOG.md`「未发布」区的新条目。
+- README 中描述功能本身的正文段落。
+
+功能分支**永不修改**：
+
+- `version.txt`——版本在发行列车切出时才赋值。
+- README 的「下载」段（发行链接与安装包名称）——只在发行列车同步。
+
+这两类文件出现合并冲突即流程违规信号：说明有并行发行，按「以远端 main 为准重放」处理（见 [CONTRIBUTING.md](../CONTRIBUTING.md)「并行开发与分支纪律」）。
+
+## 发行列车
+
+发行是从 main 串行出发的短分支流程（分支名 `release/vX.Y.Z`），一次只跑一列。四条互斥防线防止并行发行互踩：
+
+1. **分支名即锁**：`release/vX.Y.Z` 推送时若远端已存在同名分支（推送被拒），即“被抢先”信号——禁止 force push；正确动作是基于最新 main 重放、版本顺延、重跑门禁。
+2. **readiness 机器断言**：`build-release.ps1 -ForRelease` 会以 `-RequireVersionAhead` 调用 `scripts/test-release-readiness.ps1`，机器断言 `version.txt` 严格大于远端最新 `v*` tag，否则报错并给出版本顺延指引。该断言只在显式发行上下文运行，绝不进入常规 CI/quality 路径（否则发布后 main 上 `version.txt` 等于最新 tag 会永久红灯）。
+3. **发布前复查**：创建 Release 与 tag 前再核一次 `gh release view vX.Y.Z` 不存在。
+4. **轨道冲突兜底**：发行列车一律以远端 main 为准重放；`CHANGELOG.md`「未发布」区同一条目只能被一次发行消费（重放后未发布区为空且无本列车专属变更=取消发行）。互斥主防线是前三条；轨道冲突只作兜底信号，不当作锁依赖。
+
+**冻结语义**：`release/vX.Y.Z` 分支切出即冻结本版内容；其后合入 main 的新「未发布」条目一律顺延下一版（重放时移回「未发布」区，不得静默并入或丢失）。
+
+列车顺序（先核对后定版）：
+
+1. `git fetch --tags` 并核对远端最新版本（tag 清单与 `gh release list`）；远端已 ≥ 意图版本则重放顺延。
+2. 从最新 `origin/main` 切 `release/vX.Y.Z`，创建后立即推送（分支名即锁在推送时生效）。
+3. 整理版本段：`CHANGELOG.md`「未发布」条目归入新版本段、`version.txt` 设生产版本、README「下载」段同步发布说明与安装包名称，并同步更新本地维护文档（`PROJECT_GUIDE.md`，不入库）；历史设计和旧版本记录不改写。
+4. 在准备发布的代码上完成依赖还原和格式验证（命令见 CONTRIBUTING.md；WPF 设计时格式工具先预构建 Core 的 Debug 程序集），再执行包含 Release 全量测试的打包入口；无需在同一份未变化代码上先重复跑一次全量测试：
 
    ```powershell
    & .\scripts\build-release.ps1 -ForRelease
    ```
 
-3. 执行 `dotnet build FloatingTransferStation.slnx -c Release --no-restore -warnaserror`，检查真实交互截图、安装包版本与 SHA256，并完成所需的隔离安装态验证。打包成功仅证明编译与自动检查通过；公开发布、上传资产和更新远端标签是后续独立操作。
+5. 执行严格构建 `dotnet build FloatingTransferStation.slnx -c Release --no-restore -warnaserror`，检查真实交互截图、安装包版本与 SHA256，并完成所需的隔离安装态验证。打包成功仅证明编译与自动检查通过；公开发布、上传资产和更新远端标签是后续独立操作。
+6. PR 合并 main（合并前把最新 main 同步进分支，质量门“格式、测试与构建”绿）。
+7. 正式资产取合并后 main 提交对应 CI 绿跑的 `release-candidate` 产物；列车分支上的 `-ForRelease` 产物仅作门禁证据，不直接上传。
+8. 复查 `gh release view vX.Y.Z` 不存在后，发布 Release：tag 指向合并提交，上传安装包与 `SHA256SUMS.txt`，记录运行链接与 SHA256，避免上传未经过该次验证的重建包。
+9. 装机：先核对目标版本**大于**本机已装版本（防旧覆盖新；已装版本可从卸载登记或安装目录 exe 的版本信息读取），再优雅关闭运行中的实例、静默原地更新、重启并验证版本与自启。装机动作全局串行——同一时刻只允许一个窗口执行，版本核对作兜底。
+10. 归位：切 main、`pull --ff-only`、删除本地与远端 release 分支、`git fetch --prune --tags`。
+
+回顾触发器：若实践中出现“同窗多 PR 反复重放/合并冲突抖动”，再评估 GitHub merge queue（需要仓库设置级变更，须另行授权；引入前不采用）。
+
+## 构建入口
 
 打包入口依次验证工具路径、Inno 清理行为、安装脚本约束和 Release 全量测试，然后生成 Windows 自包含程序与安装包。任一步失败则入口失败。Inno 清理测试只在 `TestResults/installer-cleanup-*` 合成目录中执行生产清理函数；不调用产品安装或卸载事件。失败时保留证据，成功时默认清理，单独复查可运行：
 
@@ -46,4 +87,6 @@ CI 还在一次性的 GitHub-hosted Windows 虚机运行 `scripts/test-installed
 
 质量门通过后，CI 保存 Windows 候选包附件 `release-candidate`。汇总 `quality`（检查名称仍为“格式、测试与构建”）成功才算整次质量门通过；它使用 `always()` 检查 Windows 分支结果，失败、取消或跳过都会失败。候选包附件存在不代表已完成同步验证。正式发布应使用合并后 main 提交对应的成功运行产物，记录运行链接与 SHA256；发布标签指向同一提交，避免上传未经过该次验证的重建包。
 
-单独检查发布记录可运行 `scripts/test-release-readiness.ps1`。已有待发布内容时它应失败，不应为通过检查而删除尚未发布的变更说明。
+## 发布记录检查
+
+单独检查发布记录可运行 `scripts/test-release-readiness.ps1`。已有待发布内容时它应失败，不应为通过检查而删除尚未发布的变更说明。传入 `-RequireVersionAhead` 时（仅由 `build-release.ps1 -ForRelease` 传入，单独运行默认不启用）还会断言 `version.txt` 严格大于远端最新 `v*` tag——远端已存在更高版本即“被抢先”，应基于最新 main 重放并顺延版本。
