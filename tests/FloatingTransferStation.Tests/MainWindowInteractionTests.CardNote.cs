@@ -1,0 +1,888 @@
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using FloatingTransferStation.Controls;
+using FloatingTransferStation.Models;
+using FloatingTransferStation.Services;
+using FloatingTransferStation.ViewModels;
+using FloatingTransferStation.Views;
+
+namespace FloatingTransferStation.Tests;
+
+/// <summary>
+/// 长卡片备注（1.26.0，契约 #22）交互守护：添加门槛=渲染布局事实（正文截断，
+/// TrimAwareTextBlock.IsTruncated）、编辑入口无门槛（已有备注常显随时可点）、
+/// 空白提交=删除、备注是元数据（不参与选择/复制/拖出/搜索）、备注编辑复用
+/// 正文编辑会话机器（Enter/Esc/失焦/锚点终结/编辑持焦面板不收起）、原子持久化
+/// 与失败还原、右键语义零改动、#16 避让零争用。指针路径用 Win32 消息直驱
+/// （契约 #13 口径）；持久化用 LocalStore 真实文件往返。
+/// </summary>
+public sealed partial class MainWindowInteractionTests
+{
+    /// <summary>8 行正文（换行定行，行数与宽度无关）：自然高度 160 &gt; 限高 100。</summary>
+    private const string LongCardText = "字\n字\n字\n字\n字\n字\n字\n字";
+
+    private static TextBox CardNoteEditorOf(ListBoxItem container) =>
+        FindDescendants<TextBox>(container).Single(editor => editor.Name == "CardNoteEditor");
+
+    private static Button CardNoteGhostButtonOf(ListBoxItem container) =>
+        FindDescendants<Button>(container).Single(button => button.Name == "CardNoteGhostButton");
+
+    private static Button CardNoteEntryButtonOf(ListBoxItem container) =>
+        FindDescendants<Button>(container).Single(button => button.Name == "CardNoteEntryButton");
+
+    /// <summary>备注显示行（在流、纯展示）。</summary>
+    private static FrameworkElement NoteRowOf(ListBoxItem container) =>
+        FindDescendants<FrameworkElement>(container).Single(element => element.Name == "NoteDisplayRow");
+
+    /// <summary>手势层合成入口：在备注交互条按钮上发出一对预览按下/抬起。</summary>
+    private static void RaiseNoteStripClick(MainWindow window, BoardItem item, string buttonName)
+    {
+        var button = FindDescendants<Button>(ContainerOf(window, item))
+            .Single(candidate => candidate.Name == buttonName);
+        RaiseCardPressAndRelease(button, NextIsolatedClickTimestamp());
+    }
+
+    /// <summary>真实光标悬停（无点击）：强制位移预热后移入目标点并泵到容器悬停。</summary>
+    private static void HoverRealAt(
+        MainWindow window,
+        FrameworkElement container,
+        Point positionInContainer)
+    {
+        var screen = container.PointToScreen(positionInContainer);
+        Assert.IsTrue(
+            SetCursorPos((int)Math.Round(screen.X) + 7, (int)Math.Round(screen.Y) + 5),
+            "真实光标必须可移动（强制位移预热）。");
+        Assert.IsTrue(
+            SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y)),
+            "真实光标必须可移入目标点。");
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!container.IsMouseOver && DateTime.UtcNow < deadline)
+        {
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+        }
+
+        Assert.IsTrue(container.IsMouseOver, "真实光标移入后卡片必须进入悬停态。");
+    }
+
+    /// <summary>泵 dispatcher 直到断言条件成立（备注保存是异步落盘）。</summary>
+    private static void PumpUntil(MainWindow window, Func<bool> condition, string message)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+        }
+
+        Assert.IsTrue(condition(), message);
+    }
+
+    private static bool IsPanelEditHoldActive(MainWindow window) =>
+        typeof(MainWindow)
+            .GetMethod("IsPanelEditHoldActive", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(window, null) as bool? == true;
+
+    private static void RaiseCardEditorKey(MainWindow window, TextBox editor, Key key) =>
+        editor.RaiseEvent(new KeyEventArgs(
+            Keyboard.PrimaryDevice,
+            PresentationSource.FromVisual(window)!,
+            Environment.TickCount,
+            key)
+        {
+            RoutedEvent = Keyboard.KeyDownEvent,
+            Source = editor
+        });
+
+    [STATestMethod]
+    public void CardNote_GhostEntry_OnlyOnTruncatedTextCardsOnHover()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var longItem = board.AddText(LongCardText, BoardCategory.Inbox);
+        var shortItem = board.AddText("短卡字", BoardCategory.Inbox);
+        var imageItem = AddImageCard(directory, board, "ghost.png");
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var longContainer = ContainerOf(window, longItem);
+            var shortContainer = ContainerOf(window, shortItem);
+            var imageContainer = ContainerOf(window, imageItem);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var ghostOnLong = CardNoteGhostButtonOf(longContainer);
+            var ghostOnShort = CardNoteGhostButtonOf(shortContainer);
+            var ghostOnImage = CardNoteGhostButtonOf(imageContainer);
+            Assert.IsFalse(FadeAnimation.GetIsActive(ghostOnLong), "未悬停时幽灵入口必须不可见。");
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                // 截断文字卡悬停：幽灵入口激活且可命中（真实输入可达）。
+                HoverRealAt(window, longContainer, new Point(24, longContainer.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+                Assert.IsTrue(FadeAnimation.GetIsActive(ghostOnLong), "截断文字卡悬停必须激活幽灵入口。");
+                Assert.IsTrue(ghostOnLong.IsHitTestVisible, "可见的幽灵入口必须可命中。");
+                Assert.AreEqual(Visibility.Visible, ghostOnLong.Visibility);
+                SaveVisualEvidence(
+                    (Border)window.FindName("WindowShell"),
+                    "note-ghost-entry.png",
+                    "FTS_NOTE_EVIDENCE_DIR");
+
+                // 短卡悬停：内容完整可见，无添加入口。
+                HoverRealAt(window, shortContainer, new Point(24, shortContainer.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+                Assert.IsFalse(FadeAnimation.GetIsActive(ghostOnShort), "短卡不得出现添加备注入口。");
+                Assert.IsFalse(ghostOnShort.IsHitTestVisible);
+                SaveVisualEvidence(
+                    (Border)window.FindName("WindowShell"),
+                    "note-short-card-no-entry.png",
+                    "FTS_NOTE_EVIDENCE_DIR");
+
+                // 图片卡悬停：无备注入口（备注仅文字卡）。
+                HoverRealAt(window, imageContainer, new Point(24, imageContainer.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+                Assert.IsFalse(FadeAnimation.GetIsActive(ghostOnImage), "图片卡不得出现添加备注入口。");
+
+                // 正文编辑中隐藏备注入口（双向互斥）。
+                HoverRealAt(window, longContainer, new Point(24, longContainer.ActualHeight * 0.8));
+                RaiseCardDoubleClick(ZoneHitSource(window, longItem, CardGestureZones.ContentZone));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+                Assert.IsTrue(longItem.IsEditing, "前置条件：正文编辑已开启。");
+                Assert.IsFalse(FadeAnimation.GetIsActive(ghostOnLong), "正文编辑中必须隐藏添加备注入口。");
+                window.CommitCardTextForTest();
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_HoverDoesNotChangeCardHeight()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText(LongCardText, BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                var heightBefore = container.ActualHeight;
+                HoverRealAt(window, container, new Point(24, container.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                Assert.IsTrue(
+                    FadeAnimation.GetIsActive(CardNoteGhostButtonOf(container)),
+                    "前置条件：悬停已触发幽灵入口（验证的是它出现时的高度稳定性）。");
+
+                Assert.AreEqual(
+                    heightBefore,
+                    container.ActualHeight,
+                    "悬停出现幽灵入口不得改变卡片高度（幽灵只覆盖正文第一行，不参与排版）。");
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_RealInputClickEntersEditingWithoutChangingSelection()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("短卡字", BoardCategory.Inbox);
+        item.Note = "已有备注";
+        var other = board.AddText("另一张短卡", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var entryButton = CardNoteEntryButtonOf(container);
+            Assert.IsTrue(entryButton.IsHitTestVisible, "已有备注的点击面必须可命中（编辑入口无门槛）。");
+            var clickPoint = entryButton.TranslatePoint(
+                new Point(entryButton.ActualWidth / 2, entryButton.ActualHeight / 2),
+                container);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                // 端到端：Win32 消息直驱点击备注点击面（命中层之上的透明按钮），
+                // 进入备注编辑；左键绝不 toggle 选中。
+                ClickRealAt(window, container, clickPoint, hoverSettleMilliseconds: 120);
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var editor = CardNoteEditorOf(container);
+            Assert.IsTrue(item.IsEditingNote, "真实输入点击备注点击面必须进入备注编辑。");
+            Assert.IsTrue(editor.IsVisible);
+            Assert.IsTrue(editor.IsKeyboardFocused, "备注编辑器必须持有键盘焦点。");
+            Assert.AreEqual("已有备注", editor.Text, "打开编辑必须预填现备注（防失焦即误删）。");
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "note-editing.png",
+                "FTS_NOTE_EVIDENCE_DIR");
+            CollectionAssert.AreEqual(
+                Array.Empty<BoardItem>(),
+                ((ListBox)window.FindName("BoardList")).SelectedItems.Cast<BoardItem>().ToArray(),
+                "备注交互条左键绝不改变选择。");
+            Assert.IsFalse(other.IsEditingNote);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_EnterCommitsEscapeCancelsFocusLossCommits()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingCardEditStore(directory.Root);
+        var board = new BoardService();
+        var enterItem = board.AddText("第一张短卡", BoardCategory.Inbox);
+        enterItem.Note = "进入备注";
+        var escapeItem = board.AddText("第二张短卡", BoardCategory.Inbox);
+        escapeItem.Note = "取消备注";
+        var focusItem = board.AddText("第三张短卡", BoardCategory.Inbox);
+        focusItem.Note = "失焦备注";
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            // Enter 提交（预填现值后修改）。
+            RaiseNoteStripClick(window, enterItem, "CardNoteEntryButton");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var editor = CardNoteEditorOf(ContainerOf(window, enterItem));
+            Assert.IsTrue(editor.IsKeyboardFocused, "前置条件：备注编辑器持焦。");
+            Assert.AreEqual("进入备注", editor.Text, "必须预填现备注。");
+            editor.Text = "进入提交的备注";
+            RaiseCardEditorKey(window, editor, Key.Enter);
+            PumpUntil(window, () => enterItem.Note == "进入提交的备注", "Enter 必须提交备注并落盘。");
+            Assert.IsFalse(enterItem.IsEditingNote, "提交后必须退出编辑态。");
+            Assert.IsNull(enterItem.DraftNote, "非编辑态不得残留草稿。");
+
+            // Esc 取消（草稿丢弃，现备注保留）。
+            RaiseNoteStripClick(window, escapeItem, "CardNoteEntryButton");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var escapeEditor = CardNoteEditorOf(ContainerOf(window, escapeItem));
+            escapeEditor.Text = "不应保存的备注";
+            RaiseCardEditorKey(window, escapeEditor, Key.Escape);
+            PumpUntil(window, () => !escapeItem.IsEditingNote, "Esc 必须退出编辑态。");
+            Assert.AreEqual("取消备注", escapeItem.Note, "Esc 取消不得改动现备注。");
+
+            // 失焦提交（焦点离开本窗口才终结——窗口内焦点迁移保持会话）。
+            RaiseNoteStripClick(window, focusItem, "CardNoteEntryButton");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var focusEditor = CardNoteEditorOf(ContainerOf(window, focusItem));
+            focusEditor.Text = "失焦提交的备注";
+            // 焦点去向=窗外元素（用户点别的应用的焦点形态）：NewFocus 非本窗口
+            // 祖先，LostKeyboardFocus 处理器走提交分支。
+            focusEditor.RaiseEvent(new KeyboardFocusChangedEventArgs(
+                Keyboard.PrimaryDevice,
+                Environment.TickCount,
+                focusEditor,
+                new Window())
+            {
+                RoutedEvent = Keyboard.LostKeyboardFocusEvent,
+                Source = focusEditor
+            });
+            PumpUntil(window, () => focusItem.Note == "失焦提交的备注", "失焦必须提交备注。");
+            Assert.IsFalse(focusItem.IsEditingNote);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_EmptyCommitRemovesExistingNote()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingCardEditStore(directory.Root);
+        var board = new BoardService();
+        var item = board.AddText(LongCardText, BoardCategory.Inbox);
+        item.Note = "待删除备注";
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            // 空白提交=删除已有备注（无二次确认，Esc 是后悔通道）。
+            RaiseNoteStripClick(window, item, "CardNoteEntryButton");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var editor = CardNoteEditorOf(ContainerOf(window, item));
+            editor.Text = "   ";
+            RaiseCardEditorKey(window, editor, Key.Enter);
+            PumpUntil(window, () => item.Note is null, "空白提交必须删除已有备注。");
+            Assert.IsFalse(item.IsEditingNote);
+
+            // 无备注时空白提交=无操作：经幽灵入口（悬停淡入的真实路径）再次进入
+            // 编辑，直接 Enter——等值短路不落盘、无状态提示。
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var ghost = CardNoteGhostButtonOf(container);
+            var savedCursor = SaveCursorPosition();
+            try
+            {
+                HoverRealAt(window, container, new Point(24, container.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                Assert.IsTrue(FadeAnimation.GetIsActive(ghost), "前置条件：无备注截断卡悬停出现幽灵入口。");
+                var ghostPoint = ghost.TranslatePoint(
+                    new Point(ghost.ActualWidth / 2, ghost.ActualHeight / 2),
+                    container);
+                ClickRealAt(window, container, ghostPoint, hoverSettleMilliseconds: 120);
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+                CompleteLayout(window);
+                Assert.IsTrue(item.IsEditingNote, "真实点击幽灵入口必须再次进入备注编辑。");
+                var editorAgain = CardNoteEditorOf(container);
+                RaiseCardEditorKey(window, editorAgain, Key.Enter);
+                PumpUntil(window, () => !item.IsEditingNote, "空白提交后必须退出编辑态。");
+                Assert.IsNull(item.Note, "无备注时空白提交必须保持无备注。");
+                Assert.AreEqual(string.Empty, StatusOf(window), "备注删除/无操作不得产生状态条噪音。");
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_SaveFailureRestoresNote()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingCardEditStore(directory.Root) { FailSave = true };
+        var board = new BoardService();
+        var item = board.AddText("短卡字", BoardCategory.Inbox);
+        item.Note = "原备注";
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            RaiseNoteStripClick(window, item, "CardNoteEntryButton");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var editor = CardNoteEditorOf(ContainerOf(window, item));
+            editor.Text = "会失败的备注";
+            window.CommitCardTextForTest();
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            CompleteLayout(window);
+
+            Assert.AreEqual("原备注", item.Note, "保存失败必须还原原备注。");
+            Assert.IsFalse(item.IsEditingNote);
+            StringAssert.Contains(StatusOf(window), "备注未保存，已还原原备注。");
+            store.FailSave = false;
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_EditingKeepsPanelOpen()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("短卡字", BoardCategory.Inbox);
+        item.Note = "持焦备注";
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            RaiseNoteStripClick(window, item, "CardNoteEntryButton");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            Assert.IsTrue(CardNoteEditorOf(ContainerOf(window, item)).IsKeyboardFocused);
+
+            // 契约 #7 的保持机制输入：备注编辑持焦期间编辑保持原因激活。
+            Assert.IsTrue(
+                IsPanelEditHoldActive(window),
+                "备注编辑持焦期间面板不得自动收起（编辑保持原因必须激活）。");
+            Assert.IsTrue(((MainWindowViewModel)window.DataContext).IsPanelExpanded);
+
+            window.CommitCardTextForTest();
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            Assert.IsFalse(
+                IsPanelEditHoldActive(window),
+                "备注会话终结后编辑保持原因必须释放。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_RecycleDuringEditingTerminatesSession()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingCardEditStore(directory.Root);
+        var board = new BoardService();
+        AddScrollableItems(board, BoardCategory.Inbox);
+        var anchor = board.Items(BoardCategory.Inbox).ToArray()[1];
+        anchor.Note = "滚动锚点备注";
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewer = FindDescendant<ScrollViewer>((ListBox)window.FindName("BoardList"));
+            Assert.IsNotNull(viewer);
+            Assert.IsTrue(viewer.ScrollableHeight > 0, "前置条件：列表可滚动。");
+
+            RaiseNoteStripClick(window, anchor, "CardNoteEntryButton");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var editor = CardNoteEditorOf(ContainerOf(window, anchor));
+            Assert.IsTrue(editor.IsKeyboardFocused, "前置条件：备注编辑器持焦。");
+            editor.Text = "滚动后提交的备注";
+
+            // 锚点仍在视口：会话原地保留（两步滚动镜像正文编辑的既有形态）。
+            ScrollTo(window, viewer, Math.Min(60d, viewer.ScrollableHeight));
+            Assert.IsTrue(
+                CardNoteEditorOf(ContainerOf(window, anchor)).IsVisible,
+                "锚点仍在视口时滚动不得终结备注会话。");
+
+            // 锚点滚出虚拟化窗口：容器被回收 → 会话终结并提交（与正文编辑同一
+            // 锚点判定机器）。虚拟化对未实现容器的高度是估算值：offset 爬升随
+            // 实现范围逐步推进，迭代滚动直到收敛（锚点在第 2 张卡，大幅滚动即
+            // 进入回收窗口）。
+            for (var attempt = 0; attempt < 4; attempt++)
+            {
+                viewer.ScrollToVerticalOffset(viewer.ScrollableHeight);
+                CompleteLayout(window);
+            }
+
+            Assert.IsTrue(
+                viewer.VerticalOffset >= 1000d,
+                $"必须大幅滚离锚点（容器进入回收窗口）：offset={viewer.VerticalOffset:0.#}。");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            AssertNoVisibleCardEditor(window);
+            Assert.IsFalse(anchor.IsEditingNote, "锚点滚出视口必须终结备注会话。");
+            Assert.AreEqual(
+                "滚动后提交的备注",
+                board.FindItem(anchor.Id)!.Note,
+                "锚点滚出终结会话时必须提交备注草稿。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_RightClickSemanticsUnchanged()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("短卡字", BoardCategory.Inbox);
+        item.Note = "右键语义备注";
+        var window = CreateWindow(directory, board);
+        var copied = new List<DataObject>();
+        window.ClipboardWriterOverride = dataObject =>
+        {
+            copied.Add(dataObject);
+            return true;
+        };
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                // 右键备注行左半（点击面所在处）：左半右键无操作——既不复制、
+                // 也绝不进入备注编辑（备注带判定只作用于左键）。
+                ClickRealRightAt(
+                    window,
+                    container,
+                    new Point(container.ActualWidth * 0.25, 22d));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+                Assert.IsEmpty(copied, "左半右键不得复制。");
+                Assert.IsFalse(item.IsEditingNote, "右键不得进入备注编辑。");
+
+                // 右键右半（命中层右列）：复制这一张（语义零改动）。选点沿用
+                // CardHalves 约定（右半区内、避开按钮条与 12px 底部环带）。
+                var operationsZone = HalvesZoneOf(container, CardGestureZones.OperationsZone);
+                var zoneOrigin = operationsZone.TranslatePoint(new Point(), container);
+                ClickRealRightAt(
+                    window,
+                    container,
+                    new Point(
+                        zoneOrigin.X + operationsZone.ActualWidth / 2,
+                        zoneOrigin.Y + operationsZone.ActualHeight * 0.6));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+                Assert.HasCount(1, copied, "右半右键复制语义不得被备注功能改变。");
+                Assert.IsFalse(item.IsEditingNote);
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_CommittedStripShownEvenWhenContentShortens()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText(LongCardText, BoardCategory.Inbox);
+        item.Note = "会保留的备注";
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            var noteRow = NoteRowOf(container);
+            Assert.AreEqual(Visibility.Visible, noteRow.Visibility, "前置条件：备注行常显。");
+
+            // 正文后来变短（不再截断）：备注行仍常显可编辑——备注是用户数据。
+            Assert.IsTrue(
+                board.UpdateText(item.Id, "短了"),
+                "前置条件：正文缩短成功。");
+            CompleteLayout(window);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+            Assert.AreEqual(Visibility.Visible, noteRow.Visibility, "正文变短后备注行必须仍然常显。");
+            Assert.AreEqual("会保留的备注", item.Note);
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "note-row-light.png",
+                "FTS_NOTE_EVIDENCE_DIR");
+            DesignThemeManager.Apply(window, DesignTheme.Dark);
+            CompleteLayout(window);
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "note-row-dark.png",
+                "FTS_NOTE_EVIDENCE_DIR");
+            DesignThemeManager.Apply(window, DesignTheme.Light);
+            Assert.IsFalse(
+                FindDescendants<TrimAwareTextBlock>(container)
+                    .Single(candidate => ReferenceEquals(candidate.DataContext, item))
+                    .IsTruncated,
+                "前置核验：正文此时已不截断（编辑入口无门槛的对照面）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_PinnedAndSelectedCardsKeepNoteRow()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("短卡字", BoardCategory.Inbox);
+        item.Note = "置顶选中共存备注";
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            item.IsPinned = true;
+            ((ListBox)window.FindName("BoardList")).SelectedItems.Add(item);
+            CompleteLayout(window);
+
+            Assert.AreEqual(Visibility.Visible, NoteRowOf(container).Visibility, "置顶/选中卡片的备注行必须常显。");
+            Assert.IsTrue(
+                CardNoteEntryButtonOf(container).IsHitTestVisible,
+                "选中卡片的备注编辑入口无门槛（点击面仍可命中）。");
+            Assert.IsTrue(
+                FadeAnimation.GetIsActive(FindDescendants<Border>(container).Single(layer => layer.Name == "CardSelectedFillLayer")),
+                "前置核验：选中着色处于激活态（与备注行共存）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_SelectedTruncatedCardStillShowsGhostOnHover()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText(LongCardText, BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            ((ListBox)window.FindName("BoardList")).SelectedItems.Add(item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                HoverRealAt(window, container, new Point(24, container.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                Assert.IsTrue(
+                    FadeAnimation.GetIsActive(CardNoteGhostButtonOf(container)),
+                    "选中的截断卡悬停仍需出现添加备注入口（幽灵衬底与选中着色叠加）。");
+                Assert.IsTrue(
+                    FadeAnimation.GetIsActive(FindDescendants<Border>(container).Single(layer => layer.Name == "CardSelectedFillLayer")),
+                    "前置核验：选中着色处于激活态。");
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_SearchActiveHidesNoteEntries()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var longItem = board.AddText(LongCardText, BoardCategory.Inbox);
+        var notedItem = board.AddText("短卡字", BoardCategory.Inbox);
+        notedItem.Note = "搜索态备注";
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            window.EnterSearchMode();
+            ((TextBox)window.FindName("SearchInput")).Text = "字";
+            CompleteLayout(window);
+            Assert.IsTrue(((MainWindowViewModel)window.DataContext).IsSearchActive, "前置条件：搜索态。");
+            var longContainer = ContainerOf(window, longItem);
+            var notedContainer = ContainerOf(window, notedItem);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                HoverRealAt(window, longContainer, new Point(24, longContainer.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                Assert.IsFalse(
+                    FadeAnimation.GetIsActive(CardNoteGhostButtonOf(longContainer)),
+                    "搜索态不得出现添加备注入口（搜索态不进入编辑的同族守卫）。");
+                Assert.IsFalse(CardNoteGhostButtonOf(longContainer).IsHitTestVisible);
+                Assert.IsFalse(
+                    CardNoteEntryButtonOf(notedContainer).IsHitTestVisible,
+                    "搜索态隐藏备注点击面（点击会无响应的死入口不得出现）。");
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardOperationAvoidance_NoteRowReservesOperationInset()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText(LongCardText, BoardCategory.Inbox);
+        item.Note = "第一行备注足够长会换到第二行继续显示省略号机制";
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            var noteRow = NoteRowOf(container);
+            var pinButton = FindDescendants<Button>(container).Single(candidate =>
+                Equals(candidate.CommandParameter, CardGestureZones.TogglePinCommand));
+
+            // #16 零像素争用扩展：备注行与右上操作按钮条共用同一派生内缩来源。
+            Assert.AreEqual(
+                (Thickness)window.FindResource("CardTextReservedRightInset"),
+                noteRow.Margin,
+                "备注行右让位必须复用 CardTextReservedRightInset（不得发明第二个数值）。");
+            var noteRowRight = noteRow.TranslatePoint(
+                new Point(noteRow.ActualWidth, 0),
+                container).X;
+            var buttonColumnLeft = pinButton.TranslatePoint(new Point(0, 0), container).X;
+            Assert.IsTrue(
+                noteRowRight <= buttonColumnLeft + 0.5,
+                $"备注行右缘（{noteRowRight:0.#}）不得侵入右上操作按钮条（左缘 {buttonColumnLeft:0.#}，零像素争用）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_SyntheticButtonClickEntersEditingWithoutSelection()
+    {
+        // UIA/合成路径（BoardList_ButtonClick 的 NoteStrip 分支）与手势层真实
+        // 输入路径共用 BeginCardNoteEditing（契约 #13 的合成可达侧）。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("短卡字", BoardCategory.Inbox);
+        item.Note = "合成路径备注";
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            var entryButton = CardNoteEntryButtonOf(container);
+            entryButton.RaiseEvent(new RoutedEventArgs(
+                System.Windows.Controls.Primitives.ButtonBase.ClickEvent,
+                entryButton));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+
+            Assert.IsTrue(item.IsEditingNote, "合成 Click 必须经 NoteStrip 分支进入备注编辑。");
+            Assert.IsTrue(CardNoteEditorOf(container).IsKeyboardFocused);
+            CollectionAssert.AreEqual(
+                Array.Empty<BoardItem>(),
+                ((ListBox)window.FindName("BoardList")).SelectedItems.Cast<BoardItem>().ToArray(),
+                "备注编辑入口不得改变选择。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_PersistsAcrossSaveAndLoad()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        var board = new BoardService();
+        var text = board.AddText("持久化文本", BoardCategory.Inbox);
+        text.Note = "会话备注";
+        var store = new LocalStore(paths, new AtomicTextWriter());
+
+        store.SaveBoardAsync(board.CreateSnapshot()).GetAwaiter().GetResult();
+        var reloaded = new LocalStore(paths, new AtomicTextWriter())
+            .LoadBoardAsync()
+            .GetAwaiter()
+            .GetResult();
+        var loaded = reloaded.Items.Single(candidate => candidate.Id == text.Id);
+        Assert.AreEqual("会话备注", loaded.Note, "备注必须随 board.json 原子往返。");
+        Assert.IsNull(loaded.DraftNote, "会话草稿不得持久化。");
+        Assert.IsFalse(loaded.IsEditingNote, "会话状态不得持久化。");
+    }
+
+    [STATestMethod]
+    public void CardNote_MissingFieldLoadsAsNull()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        var board = new BoardService();
+        var text = board.AddText("旧版本写入", BoardCategory.Inbox);
+        text.Note = "将被剥掉的备注";
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        store.SaveBoardAsync(board.CreateSnapshot()).GetAwaiter().GetResult();
+
+        // 模拟旧版本写入的 board.json：剥掉 note 成员（缺字段取默认的既有约定）。
+        var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(paths.BoardFile))!;
+        node["items"]!.AsArray().Single()!.AsObject().Remove("note");
+        File.WriteAllText(paths.BoardFile, node.ToJsonString());
+
+        var reloaded = new LocalStore(paths, new AtomicTextWriter())
+            .LoadBoardAsync()
+            .GetAwaiter()
+            .GetResult();
+        var loaded = reloaded.Items.Single(candidate => candidate.Id == text.Id);
+        Assert.IsNull(loaded.Note, "旧文件缺 note 字段必须读为无备注（免迁移）。");
+        Assert.AreEqual("旧版本写入", loaded.Text, "其余字段不受影响。");
+    }
+}

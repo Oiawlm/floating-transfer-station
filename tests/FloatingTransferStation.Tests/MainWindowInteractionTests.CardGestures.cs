@@ -608,6 +608,116 @@ public sealed partial class MainWindowInteractionTests
     private const int MkLbutton = 0x0001;
 
     /// <summary>
+    /// F1 交互证据（1.26.0，契约 #14 修订；环境变量 FTS_GESTURE_EVIDENCE_DIR
+    /// 设置时在目录下输出 <c>operations-rapid-repeat-clicks-N.png</c> 关键帧
+    /// 序列）：真实输入管线（Win32 消息直驱）的右半原地快速连点，逐状态捕获
+    /// 真实 UI——选中→取消→选中，每击都生效。未设置环境变量时仍作为守护运行。
+    /// </summary>
+    [STATestMethod]
+    public void CardGestures_OperationsZoneRapidRepeatClicksRecording()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("右半连点", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var operationsZone = HalvesZoneOf(container, CardGestureZones.OperationsZone);
+            var zoneOrigin = operationsZone.TranslatePoint(new Point(), container);
+            var clickPoint = new Point(
+                zoneOrigin.X + 12,
+                zoneOrigin.Y + operationsZone.ActualHeight * 0.6);
+            var list = (ListBox)window.FindName("BoardList");
+            var savedCursor = SaveCursorPosition();
+            var frames = new List<byte[]>();
+
+            try
+            {
+                // 预热（左半，无选择语义）并拉开双击窗；帧 0=未选中基线。
+                ClickRealAt(window, container, new Point(24, container.ActualHeight / 2));
+                PumpDispatcherFor(
+                    window.Dispatcher,
+                    TimeSpan.FromMilliseconds(GetDoubleClickTime() + 100));
+                frames.Add(RenderFrame(container));
+
+                ClickRealAt(window, container, clickPoint);
+                Assert.AreEqual(1, list.SelectedItems.Count, "第一击选中（帧 1 前置）。");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                frames.Add(RenderFrame(container));
+
+                ClickRealAt(window, container, clickPoint);
+                Assert.AreEqual(0, list.SelectedItems.Count, "第二击取消（帧 2 前置）。");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                frames.Add(RenderFrame(container));
+
+                ClickRealAt(window, container, clickPoint);
+                Assert.AreEqual(1, list.SelectedItems.Count, "第三击净选中（帧 3 前置）。");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                frames.Add(RenderFrame(container));
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+
+            SaveFrameSequenceRecording(container, frames, "operations-rapid-repeat-clicks");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>把当前视觉渲染为 PNG 字节（真实 UI 帧捕获）。</summary>
+    private static byte[] RenderFrame(FrameworkElement visual)
+    {
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            (int)Math.Ceiling(visual.ActualWidth),
+            (int)Math.Ceiling(visual.ActualHeight),
+            96,
+            96,
+            System.Windows.Media.PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// 帧序列落盘（真实 UI 关键帧 PNG 序列；环境变量未设置时不产出——本地证据，
+    /// 不入库）。GIF 组装需要 ImageSharp.Formats.Gif 附加包，受「无新依赖」
+    /// 边界约束不引入，故以逐帧 PNG 序列交付交互证据。
+    /// </summary>
+    private static void SaveFrameSequenceRecording(
+        FrameworkElement visual,
+        IReadOnlyList<byte[]> pngFrames,
+        string fileNamePrefix,
+        string environmentVariable = "FTS_GESTURE_EVIDENCE_DIR")
+    {
+        var directory = Environment.GetEnvironmentVariable(environmentVariable);
+        if (string.IsNullOrWhiteSpace(directory) || pngFrames.Count == 0)
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(directory);
+        for (var index = 0; index < pngFrames.Count; index++)
+        {
+            var path = Path.Combine(directory, $"{fileNamePrefix}-{index + 1}.png");
+            File.WriteAllBytes(path, pngFrames[index]);
+        }
+    }
+
+    /// <summary>
     /// 真实输入管线点击：把真实光标移入窗口（HwndMouseInputProvider 对光标
     /// 不在窗口上的注入消息有"Spurious mouse event"丢弃防护），确认悬停
     /// 激活后再投递 Win32 鼠标消息。事件携带真实时间戳与位置；等待用事件

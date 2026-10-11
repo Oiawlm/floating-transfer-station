@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -152,6 +153,12 @@ public sealed partial class MainWindowInteractionTests
                     new Point(24, plainContainer.ActualHeight / 2),
                     () => FadeAnimation.GetIsActive(plainDelete));
                 Assert.IsTrue(plainDelete.IsHitTestVisible, "悬停淡入后的删除钮必须可命中。");
+                // 「淡入完成后」的断言必须真的等淡入走完（FadeVisibilityMs）：
+                // 悬停触发是同步的、淡入是异步动画时钟——触发后立即读 Opacity
+                // 会落在动画中段（≈0），是否踩过首帧取决于调度时序。
+                PumpDispatcherFor(
+                    window.Dispatcher,
+                    TimeSpan.FromMilliseconds(DesignTokens.FadeVisibilityMs + 60));
                 Assert.AreEqual(1d, plainDelete.Opacity, 0.01, "淡入完成后删除钮必须完全可见。");
                 Assert.IsTrue(FadeAnimation.GetIsActive(plainPin), "未选中卡片悬停时置顶钮必须淡入。");
                 Assert.AreEqual("删除", plainDelete.ToolTip, "删除钮 ToolTip 必须为「删除」。");
