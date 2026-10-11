@@ -26,8 +26,8 @@ public sealed partial class MainWindowInteractionTests
     private static TextBox CardNoteEditorOf(ListBoxItem container) =>
         FindDescendants<TextBox>(container).Single(editor => editor.Name == "CardNoteEditor");
 
-    private static Button CardNoteGhostButtonOf(ListBoxItem container) =>
-        FindDescendants<Button>(container).Single(button => button.Name == "CardNoteGhostButton");
+    private static Button CardNoteStripButtonOf(ListBoxItem container) =>
+        FindDescendants<Button>(container).Single(button => button.Name == "CardOperationNoteButton");
 
     private static Button CardNoteEntryButtonOf(ListBoxItem container) =>
         FindDescendants<Button>(container).Single(button => button.Name == "CardNoteEntryButton");
@@ -95,13 +95,13 @@ public sealed partial class MainWindowInteractionTests
         });
 
     [STATestMethod]
-    public void CardNote_GhostEntry_OnlyOnTruncatedTextCardsOnHover()
+    public void CardNote_StripEntry_OnlyOnTruncatedTextCardsOnHover()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
         var longItem = board.AddText(LongCardText, BoardCategory.Inbox);
         var shortItem = board.AddText("短卡字", BoardCategory.Inbox);
-        var imageItem = AddImageCard(directory, board, "ghost.png");
+        var imageItem = AddImageCard(directory, board, "strip-entry.png");
         var window = CreateWindow(directory, board);
 
         try
@@ -114,30 +114,35 @@ public sealed partial class MainWindowInteractionTests
             var imageContainer = ContainerOf(window, imageItem);
             window.Topmost = true;
             CompleteLayout(window);
-            var ghostOnLong = CardNoteGhostButtonOf(longContainer);
-            var ghostOnShort = CardNoteGhostButtonOf(shortContainer);
-            var ghostOnImage = CardNoteGhostButtonOf(imageContainer);
-            Assert.IsFalse(FadeAnimation.GetIsActive(ghostOnLong), "未悬停时幽灵入口必须不可见。");
+            var stripOnLong = CardNoteStripButtonOf(longContainer);
+            var stripOnShort = CardNoteStripButtonOf(shortContainer);
+            var stripOnImage = CardNoteStripButtonOf(imageContainer);
+            Assert.IsFalse(FadeAnimation.GetIsActive(stripOnLong), "未悬停时添加备注按钮必须不可见。");
+            Assert.AreEqual(
+                Visibility.Collapsed, stripOnLong.Visibility,
+                "未悬停时按钮必须塌缩（布局塌缩语义，Auto 列宽归零）。");
             var savedCursor = SaveCursorPosition();
 
             try
             {
-                // 截断文字卡悬停：幽灵入口激活且可命中（真实输入可达）。
+                // 截断文字卡悬停：右侧添加备注按钮激活且可命中（真实输入可达）。
                 HoverRealAt(window, longContainer, new Point(24, longContainer.ActualHeight * 0.8));
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
-                Assert.IsTrue(FadeAnimation.GetIsActive(ghostOnLong), "截断文字卡悬停必须激活幽灵入口。");
-                Assert.IsTrue(ghostOnLong.IsHitTestVisible, "可见的幽灵入口必须可命中。");
-                Assert.AreEqual(Visibility.Visible, ghostOnLong.Visibility);
+                Assert.IsTrue(FadeAnimation.GetIsActive(stripOnLong), "截断文字卡悬停必须激活添加备注按钮。");
+                Assert.IsTrue(stripOnLong.IsHitTestVisible, "可见的添加备注按钮必须可命中。");
+                Assert.AreEqual(Visibility.Visible, stripOnLong.Visibility);
+                Assert.AreEqual("添加备注", stripOnLong.ToolTip);
                 SaveVisualEvidence(
                     (Border)window.FindName("WindowShell"),
-                    "note-ghost-entry.png",
+                    "note-strip-entry.png",
                     "FTS_NOTE_EVIDENCE_DIR");
 
-                // 短卡悬停：内容完整可见，无添加入口。
+                // 短卡悬停：内容完整可见，无添加入口（按钮塌缩）。
                 HoverRealAt(window, shortContainer, new Point(24, shortContainer.ActualHeight * 0.8));
-                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
-                Assert.IsFalse(FadeAnimation.GetIsActive(ghostOnShort), "短卡不得出现添加备注入口。");
-                Assert.IsFalse(ghostOnShort.IsHitTestVisible);
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+                Assert.IsFalse(FadeAnimation.GetIsActive(stripOnShort), "短卡不得出现添加备注入口。");
+                Assert.IsFalse(stripOnShort.IsHitTestVisible);
+                Assert.AreEqual(Visibility.Collapsed, stripOnShort.Visibility, "短卡的添加备注按钮必须塌缩。");
                 SaveVisualEvidence(
                     (Border)window.FindName("WindowShell"),
                     "note-short-card-no-entry.png",
@@ -145,16 +150,27 @@ public sealed partial class MainWindowInteractionTests
 
                 // 图片卡悬停：无备注入口（备注仅文字卡）。
                 HoverRealAt(window, imageContainer, new Point(24, imageContainer.ActualHeight * 0.8));
-                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
-                Assert.IsFalse(FadeAnimation.GetIsActive(ghostOnImage), "图片卡不得出现添加备注入口。");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+                Assert.IsFalse(FadeAnimation.GetIsActive(stripOnImage), "图片卡不得出现添加备注入口。");
+                Assert.AreEqual(Visibility.Collapsed, stripOnImage.Visibility);
 
                 // 正文编辑中隐藏备注入口（双向互斥）。
                 HoverRealAt(window, longContainer, new Point(24, longContainer.ActualHeight * 0.8));
                 RaiseCardDoubleClick(ZoneHitSource(window, longItem, CardGestureZones.ContentZone));
-                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
                 Assert.IsTrue(longItem.IsEditing, "前置条件：正文编辑已开启。");
-                Assert.IsFalse(FadeAnimation.GetIsActive(ghostOnLong), "正文编辑中必须隐藏添加备注入口。");
+                Assert.IsFalse(FadeAnimation.GetIsActive(stripOnLong), "正文编辑中必须隐藏添加备注按钮。");
+                Assert.AreEqual(Visibility.Collapsed, stripOnLong.Visibility);
                 window.CommitCardTextForTest();
+
+                // 备注编辑中同样隐藏（IsEditingNote 条件）。
+                RaiseNoteStripClick(window, longItem, "CardOperationNoteButton");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+                Assert.IsTrue(longItem.IsEditingNote, "前置条件：备注编辑已开启。");
+                HoverRealAt(window, longContainer, new Point(24, longContainer.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+                Assert.IsFalse(FadeAnimation.GetIsActive(stripOnLong), "备注编辑中必须隐藏添加备注按钮。");
+                Assert.AreEqual(Visibility.Collapsed, stripOnLong.Visibility);
             }
             finally
             {
@@ -191,13 +207,13 @@ public sealed partial class MainWindowInteractionTests
                 HoverRealAt(window, container, new Point(24, container.ActualHeight * 0.8));
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
                 Assert.IsTrue(
-                    FadeAnimation.GetIsActive(CardNoteGhostButtonOf(container)),
-                    "前置条件：悬停已触发幽灵入口（验证的是它出现时的高度稳定性）。");
+                    FadeAnimation.GetIsActive(CardNoteStripButtonOf(container)),
+                    "前置条件：悬停已触发添加备注按钮（验证的是它出现时的高度稳定性）。");
 
                 Assert.AreEqual(
                     heightBefore,
                     container.ActualHeight,
-                    "悬停出现幽灵入口不得改变卡片高度（幽灵只覆盖正文第一行，不参与排版）。");
+                    "悬停出现添加备注按钮不得改变卡片高度（按钮出现在既有操作条列内，向左生长不参与纵向排版）。");
             }
             finally
             {
@@ -364,25 +380,25 @@ public sealed partial class MainWindowInteractionTests
             PumpUntil(window, () => item.Note is null, "空白提交必须删除已有备注。");
             Assert.IsFalse(item.IsEditingNote);
 
-            // 无备注时空白提交=无操作：经幽灵入口（悬停淡入的真实路径）再次进入
-            // 编辑，直接 Enter——等值短路不落盘、无状态提示。
+            // 无备注时空白提交=无操作：经右侧添加备注按钮（悬停揭示的真实路径）
+            // 再次进入编辑，直接 Enter——等值短路不落盘、无状态提示。
             var container = ContainerOf(window, item);
             window.Topmost = true;
             CompleteLayout(window);
-            var ghost = CardNoteGhostButtonOf(container);
+            var strip = CardNoteStripButtonOf(container);
             var savedCursor = SaveCursorPosition();
             try
             {
                 HoverRealAt(window, container, new Point(24, container.ActualHeight * 0.8));
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
-                Assert.IsTrue(FadeAnimation.GetIsActive(ghost), "前置条件：无备注截断卡悬停出现幽灵入口。");
-                var ghostPoint = ghost.TranslatePoint(
-                    new Point(ghost.ActualWidth / 2, ghost.ActualHeight / 2),
+                Assert.IsTrue(FadeAnimation.GetIsActive(strip), "前置条件：无备注截断卡悬停出现添加备注按钮。");
+                var stripPoint = strip.TranslatePoint(
+                    new Point(strip.ActualWidth / 2, strip.ActualHeight / 2),
                     container);
-                ClickRealAt(window, container, ghostPoint, hoverSettleMilliseconds: 120);
+                ClickRealAt(window, container, stripPoint, hoverSettleMilliseconds: 120);
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
                 CompleteLayout(window);
-                Assert.IsTrue(item.IsEditingNote, "真实点击幽灵入口必须再次进入备注编辑。");
+                Assert.IsTrue(item.IsEditingNote, "真实点击添加备注按钮必须再次进入备注编辑。");
                 var editorAgain = CardNoteEditorOf(container);
                 RaiseCardEditorKey(window, editorAgain, Key.Enter);
                 PumpUntil(window, () => !item.IsEditingNote, "空白提交后必须退出编辑态。");
@@ -677,7 +693,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CardNote_SelectedTruncatedCardStillShowsGhostOnHover()
+    public void CardNote_StripEntry_SelectedTruncatedCardStillShowsOnHover()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -700,8 +716,8 @@ public sealed partial class MainWindowInteractionTests
                 HoverRealAt(window, container, new Point(24, container.ActualHeight * 0.8));
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
                 Assert.IsTrue(
-                    FadeAnimation.GetIsActive(CardNoteGhostButtonOf(container)),
-                    "选中的截断卡悬停仍需出现添加备注入口（幽灵衬底与选中着色叠加）。");
+                    FadeAnimation.GetIsActive(CardNoteStripButtonOf(container)),
+                    "选中的截断卡悬停仍需出现添加备注按钮（右侧按钮组与选中着色共存）。");
                 Assert.IsTrue(
                     FadeAnimation.GetIsActive(FindDescendants<Border>(container).Single(layer => layer.Name == "CardSelectedFillLayer")),
                     "前置核验：选中着色处于激活态。");
@@ -746,10 +762,12 @@ public sealed partial class MainWindowInteractionTests
             {
                 HoverRealAt(window, longContainer, new Point(24, longContainer.ActualHeight * 0.8));
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                var stripOnLong = CardNoteStripButtonOf(longContainer);
                 Assert.IsFalse(
-                    FadeAnimation.GetIsActive(CardNoteGhostButtonOf(longContainer)),
+                    FadeAnimation.GetIsActive(stripOnLong),
                     "搜索态不得出现添加备注入口（搜索态不进入编辑的同族守卫）。");
-                Assert.IsFalse(CardNoteGhostButtonOf(longContainer).IsHitTestVisible);
+                Assert.IsFalse(stripOnLong.IsHitTestVisible);
+                Assert.AreEqual(Visibility.Collapsed, stripOnLong.Visibility);
                 Assert.IsFalse(
                     CardNoteEntryButtonOf(notedContainer).IsHitTestVisible,
                     "搜索态隐藏备注点击面（点击会无响应的死入口不得出现）。");
@@ -833,6 +851,144 @@ public sealed partial class MainWindowInteractionTests
                 Array.Empty<BoardItem>(),
                 ((ListBox)window.FindName("BoardList")).SelectedItems.Cast<BoardItem>().ToArray(),
                 "备注编辑入口不得改变选择。");
+
+            // 1.29.0 扩展：右侧操作条添加备注钮同走 NoteStrip 参数路由（UIA/合成
+            // 路径按 CommandParameter 分派，与位置无关，几何零取样点）。
+            var stripItem = board.AddText(LongCardText, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var stripButton = CardNoteStripButtonOf(ContainerOf(window, stripItem));
+            stripButton.RaiseEvent(new RoutedEventArgs(
+                System.Windows.Controls.Primitives.ButtonBase.ClickEvent,
+                stripButton));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+
+            Assert.IsTrue(stripItem.IsEditingNote, "合成 Click 右侧添加备注按钮必须经 NoteStrip 分支进入备注编辑。");
+            CollectionAssert.AreEqual(
+                Array.Empty<BoardItem>(),
+                ((ListBox)window.FindName("BoardList")).SelectedItems.Cast<BoardItem>().ToArray(),
+                "右侧添加备注按钮不得改变选择。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_RealInputClickOnStripButtonEntersEditingWithoutChangingSelection()
+    {
+        // 契约 #13 口径：右侧添加备注按钮必须经完整输入管线（Win32 消息直驱）
+        // 真实可点，左键绝不 toggle 选中（OperationsNote 会话语义天然继承）。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText(LongCardText, BoardCategory.Inbox);
+        var other = board.AddText("另一张短卡", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var stripButton = CardNoteStripButtonOf(container);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                // 悬停揭示右侧添加备注按钮（截断卡），真实点击进入备注编辑。
+                HoverRealAt(window, container, new Point(24, container.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                Assert.IsTrue(
+                    FadeAnimation.GetIsActive(stripButton) && stripButton.IsHitTestVisible,
+                    "前置条件：悬停揭示添加备注按钮。");
+                var clickPoint = stripButton.TranslatePoint(
+                    new Point(stripButton.ActualWidth / 2, stripButton.ActualHeight / 2),
+                    container);
+                ClickRealAt(window, container, clickPoint, hoverSettleMilliseconds: 120);
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var editor = CardNoteEditorOf(container);
+            Assert.IsTrue(item.IsEditingNote, "真实输入点击右侧添加备注按钮必须进入备注编辑。");
+            Assert.IsTrue(editor.IsVisible);
+            Assert.IsTrue(editor.IsKeyboardFocused, "备注编辑器必须持有键盘焦点。");
+            Assert.AreEqual(string.Empty, editor.Text, "无备注卡打开编辑预填空值。");
+            CollectionAssert.AreEqual(
+                Array.Empty<BoardItem>(),
+                ((ListBox)window.FindName("BoardList")).SelectedItems.Cast<BoardItem>().ToArray(),
+                "右侧添加备注按钮左键绝不改变选择。");
+            Assert.IsFalse(other.IsEditingNote);
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "note-strip-click-editing.png",
+                "FTS_NOTE_EVIDENCE_DIR");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardOperationMatrix_NoteButtonRow()
+    {
+        // 契约 #19 扩展：备注钮行——图片卡恒无（Kind 门控）；已置顶 ∧ 未选中 ∧
+        // 悬停照常揭示（与置顶/删除钮共存）；备注编辑期塌缩（IsEditingNote 门）。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText(LongCardText, BoardCategory.Inbox);
+        var imageItem = AddImageCard(directory, board, "note-matrix.png");
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            var imageContainer = ContainerOf(window, imageItem);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var stripButton = CardNoteStripButtonOf(container);
+            var imageStrip = CardNoteStripButtonOf(imageContainer);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                // 图片卡：Kind 门控——悬停也不出现。
+                HoverRealAt(window, imageContainer, new Point(24, imageContainer.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+                Assert.IsFalse(FadeAnimation.GetIsActive(imageStrip), "图片卡悬停不得出现添加备注按钮。");
+                Assert.AreEqual(Visibility.Collapsed, imageStrip.Visibility);
+
+                // 已置顶 ∧ 未选中 ∧ 悬停：备注钮照常揭示。
+                item.IsPinned = true;
+                CompleteLayout(window);
+                HoverRealAt(window, container, new Point(24, container.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+                Assert.IsTrue(FadeAnimation.GetIsActive(stripButton), "已置顶未选中卡片悬停时添加备注按钮照常揭示。");
+                Assert.AreEqual(Visibility.Visible, stripButton.Visibility);
+
+                // 备注编辑期塌缩（真实路径经新按钮进入编辑后，按钮随即隐藏）。
+                RaiseNoteStripClick(window, item, "CardOperationNoteButton");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+                Assert.IsTrue(item.IsEditingNote, "前置条件：备注编辑已开启。");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+                Assert.AreEqual(Visibility.Collapsed, stripButton.Visibility, "备注编辑期添加备注按钮必须塌缩。");
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
         }
         finally
         {
