@@ -183,8 +183,9 @@ public sealed partial class MainWindowInteractionTests
             var pinButton = buttons.Single(candidate =>
                 Equals(candidate.CommandParameter, CardGestureZones.TogglePinCommand));
             Assert.AreEqual(
-                visibleStrip.Left, pinButton.TranslatePoint(new Point(), container).X, 0.5,
-                "最左列必须是备注钮（置顶钮左侧恰好让出一整列）。");
+                visibleStrip.Left + columns.Value,
+                pinButton.TranslatePoint(new Point(), container).X, 0.5,
+                "备注钮必须独占最左列（置顶钮左缘 = 按钮条左缘 + 一整列）。");
         }
         finally
         {

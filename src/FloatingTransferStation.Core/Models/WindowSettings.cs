@@ -10,7 +10,10 @@ public sealed record WindowSettings(
     IReadOnlyList<BoardCategory>? CategoryOrder = null)
 {
     public const double TabWidth = 58;
-    public const double MinPanelWidth = 280;
+    // 卡片内容宽 = PanelWidth − 50（页边 12×2 + 边框 1×2 + 卡内边距 12×2），
+    // 右半区 = 内容宽/2 必须容纳右上四列按钮条（4×30=120，含备注钮 1.29.0 起）
+    // ：(PanelWidth − 50)/2 ≥ 120 → PanelWidth ≥ 290，取 310 留 10 DIP 余量。
+    public const double MinPanelWidth = 310;
     public const double MaxPanelWidth = 640;
     public const double MinWindowHeight = 360;
 

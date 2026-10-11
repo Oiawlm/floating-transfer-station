@@ -1143,7 +1143,9 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsFalse(noteButton.IsHitTestVisible);
             Assert.AreEqual(Visibility.Collapsed, noteButton.Visibility, "备注钮基态必须塌缩（非纯 Opacity 隐藏）。");
             Assert.IsInstanceOfType(noteButton.Content, typeof(Viewbox));
-            Assert.IsNotNull(FindDescendant<System.Windows.Shapes.Path>(noteButton));
+            // 基态 Collapsed 不参与 Measure、模板未展开——图标几何走逻辑树断言
+            //（Viewbox.Child），模板展开后的视觉断言由激活态测试覆盖。
+            Assert.IsInstanceOfType(((Viewbox)noteButton.Content).Child, typeof(System.Windows.Shapes.Path));
             Assert.AreEqual("添加备注", noteButton.ToolTip);
             Assert.AreEqual("备注", System.Windows.Automation.AutomationProperties.GetName(noteButton));
             Assert.AreEqual(30d, pinButton.Width);
