@@ -226,12 +226,11 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CardGestures_OperationsZoneDoubleClickTogglesExactlyOnce()
+    public void CardGestures_OperationsZoneRapidRepeatClicksToggleEachTime()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
-        var item = board.AddText("右半双击");
-        var other = board.AddText("另一张");
+        var item = board.AddText("右半连点", BoardCategory.Inbox);
         var window = CreateWindow(directory, board);
 
         try
@@ -239,21 +238,61 @@ public sealed partial class MainWindowInteractionTests
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
-            var list = (ListBox)window.FindName("BoardList");
+            var container = ContainerOf(window, item);
+            // 先稳定窗口几何（置顶与贴边重排定稿），三击的同一物理点才不会
+            // 因窗口移动而在双击位置容差内漂移。
+            window.Topmost = true;
+            CompleteLayout(window);
+            // 右半左缘内侧（远离右上角按钮条，任何面板宽度下几何安全；正文
+            // 极短，悬停不产生备注幽灵入口）。
+            var operationsZone = HalvesZoneOf(container, CardGestureZones.OperationsZone);
+            var zoneOrigin = operationsZone.TranslatePoint(new Point(), container);
+            var clickPoint = new Point(
+                zoneOrigin.X + 12,
+                zoneOrigin.Y + operationsZone.ActualHeight * 0.6);
+            var savedCursor = SaveCursorPosition();
 
-            // 右半双击净效果等同一次单击：第一击 toggle，第二击识别为双击不再
-            // toggle（避免选中态闪烁）。
-            RaiseCardDoubleClick(ZoneHitSource(window, item, CardGestureZones.OperationsZone));
-            CollectionAssert.AreEqual(
-                new[] { item },
-                list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "右半双击只 toggle 一次。");
+            try
+            {
+                // 预热一击（打在左半，无选择语义）让几何定稿，并拉开双击窗——
+                // 正式三击必须构成同位置快速连点（两击间隔落在系统双击时限内）。
+                ClickRealAt(window, container, new Point(24, container.ActualHeight / 2));
+                PumpDispatcherFor(
+                    window.Dispatcher,
+                    TimeSpan.FromMilliseconds(GetDoubleClickTime() + 100));
+
+                // 端到端守护（1.26.0 修订，Win32 消息直驱）：右半同一位置连点，
+                // 每一击都 toggle——两击=选中→取消，三击=净选中。旧实现把第二击
+                // 当双击吞掉（双击窗分支对 Operations 无分发路径且被吞点击仍
+                // 刷新痕迹），必须挪动鼠标或等超时才能再次 toggle。
+                var list = (ListBox)window.FindName("BoardList");
+                ClickRealAt(window, container, clickPoint);
+                CollectionAssert.AreEquivalent(
+                    new[] { item },
+                    list.SelectedItems.Cast<BoardItem>().ToArray(),
+                    "右半第一击选中。");
+
+                ClickRealAt(window, container, clickPoint);
+                Assert.AreEqual(
+                    0,
+                    list.SelectedItems.Count,
+                    "右半第二击（同位置快速连点）必须取消选中，不得被双击窗吞掉。");
+
+                ClickRealAt(window, container, clickPoint);
+                CollectionAssert.AreEquivalent(
+                    new[] { item },
+                    list.SelectedItems.Cast<BoardItem>().ToArray(),
+                    "右半第三击重新选中（三连击=选中→取消→选中）。");
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
 
             Assert.AreEqual(
                 string.Empty,
                 StatusOf(window),
-                "右半双击不触发编辑或复制等其他意图。");
-            _ = other;
+                "右半连点不触发编辑或复制等其他意图。");
         }
         finally
         {

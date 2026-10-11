@@ -101,12 +101,12 @@
 - **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardGestures.cs`（Win32 消息直驱用例）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardHalves.cs`（`CardHalves_RealInput*` 系列）。
 - **关联**：`docs/observations.md` B-007、CHANGELOG 1.17.0/1.17.1。
 
-### 14. 卡片对半分区（1.18.0 起）
+### 14. 卡片对半分区（1.18.0 起；1.26.0 修订右半连点逐击 toggle）
 
-- **断言**：卡片命中层左右对半（两列 `*`/`*`，区域=元素身份，DPI 无关）：左半双击编辑、按住拖拽、单击无选择语义；右半裸/`Ctrl` 单击 toggle、`Shift` 范围选择、右键复制（不改选择）；右半双击净一次 toggle；卡片 12px 边缘环带归左半。内容视觉层全宽独立（图片/文字横贯整卡），与命中层解耦。
-- **由来**：1.17.0「内容列 + 60px 操作列」表达不了用户心智的「同一元素左右对半」（Bug B）；1.18.0 改为独立叠加命中层。
-- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardHalves.cs`（`CardHalves_HitLayerSplitsCardContentIntoEqualHalves` 等）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardGestures.cs`。
-- **关联**：CHANGELOG 1.18.0（无独立 spec，如实标注）。
+- **断言**：卡片命中层左右对半（两列 `*`/`*`，区域=元素身份，DPI 无关）：左半双击编辑、按住拖拽、单击无选择语义；右半裸/`Ctrl` 单击 toggle、`Shift` 范围选择、右键复制（不改选择）；右半每击都 toggle——双击窗只适用于左半文字卡的就地编辑判定，双击=两次 toggle=净零，原地快速连点每击都生效（1.26.0 修订）；卡片 12px 边缘环带归左半。内容视觉层全宽独立（图片/文字横贯整卡），与命中层解耦。
+- **由来**：1.17.0「内容列 + 60px 操作列」表达不了用户心智的「同一元素左右对半」（Bug B）；1.18.0 改为独立叠加命中层。1.26.0 用户报障「右半同一位置快速连点第二击被吞」——双击窗分支对右半无分发路径且被吞点击仍刷新痕迹，修订为窗限定左半（`_pressZone == Content` 外层守卫）；右半 Operations 痕迹保留，职责改为重置左半双击窗（防快速 左→右→左 同位点击拼成伪双击误开编辑）。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardHalves.cs`（`CardHalves_HitLayerSplitsCardContentIntoEqualHalves` 等）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardGestures.cs`（含 `CardGestures_OperationsZoneRapidRepeatClicksToggleEachTime`，Win32 消息直驱）。
+- **关联**：CHANGELOG 1.18.0/1.26.0（无独立 spec，如实标注）；1.26.0 修订 Issue Oiawlm/floating-transfer-station#93。
 
 ### 15. 大数据量显示根因契约（1.19.0 起）
 

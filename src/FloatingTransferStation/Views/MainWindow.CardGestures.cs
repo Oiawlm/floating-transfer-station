@@ -22,7 +22,9 @@ namespace FloatingTransferStation.Views;
 /// 双击判定由手势层自维护（上次点击的按下时刻、按下位置与命中区域），
 /// 与系统语义一致按 Down 判定，不依赖 Control.MouseDoubleClick——其系统触发
 /// 链会被预览层为压制 ListBox 默认选择而设置的 Handled 阻断
-/// （docs/observations.md B-007 的实机根因）。
+/// （docs/observations.md B-007 的实机根因）。双击窗只对左半文字卡的
+/// 就地编辑生效（1.26.0 修订）：右半无双击窗，单击逐击 toggle 选择，
+/// 原地快速连点每击都生效。
 /// 右半操作按钮同样由手势层接管：真实输入下原生按钮 Click 会先被 ListBox
 /// 默认单击选择吞掉（合成/UIA 可达、实机不可达，1.16.0 起的隐性缺陷，
 /// 1.17.1 修复）。按钮按压是独立会话：不参与拖拽起点，释放点滑离按钮即
@@ -179,20 +181,21 @@ public partial class MainWindow
     {
         // 系统双击语义按两击的按下时刻与按下位置判定（长按后快速单击不得
         // 拼成伪双击）；痕迹与判定均取 Down 值，Up 不参与。
-        if (IsWithinDoubleClickWindow(item))
+        // 双击窗只属于有双击语义的区域（1.26.0 修订，Issue #93）：只有左半
+        // 文字卡的双击进入就地编辑；右半不再有双击窗——裸单击与 Ctrl+单击
+        // 逐击 toggle，原地快速连点每击都生效（点一下选中、再点一下取消，
+        // 双击=两次 toggle=净零），Shift 逐击重算区间。双击要求两击同区：
+        // 跨半两击各自独立分发。右半点击痕迹（本方法末尾统一记录）在这里
+        // 的职责是重置左半双击窗——快速 左→右→左 同位点击不得被拼成伪双击
+        // 误开编辑。
+        if (_pressZone == CardHitZone.Content && IsWithinDoubleClickWindow(item))
         {
-            // 双击已在 _lastCardClick 更新前判定；本击痕迹由本方法末尾统一记录。
-            // 双击要求两击同区：跨半两击各自独立分发（右半第一击已 toggle，
-            // 左半第二击无语义；反向亦然）。右半双击：第一击已 toggle，第二击
-            // 不再分发（净效果等同一次单击，避免选中态闪烁）；左半双击：文字卡
-            // 进入就地编辑（守卫沿用 BeginCardTextEditing：搜索态、关闭中；
-            // 已有会话接续提交后重开；图片卡无操作）。
-            if (_pressZone == CardHitZone.Content && item.Kind == BoardItemKind.Text)
+            // 左半双击：文字卡进入就地编辑（守卫沿用 BeginCardTextEditing：
+            // 搜索态、关闭中；已有会话接续提交后重开；图片卡无操作）。
+            if (item.Kind == BoardItemKind.Text &&
+                BoardList.ItemContainerGenerator.ContainerFromItem(item) is ListBoxItem container)
             {
-                if (BoardList.ItemContainerGenerator.ContainerFromItem(item) is ListBoxItem container)
-                {
-                    BeginCardTextEditing(item, container);
-                }
+                BeginCardTextEditing(item, container);
             }
         }
         else if (_pressZone == CardHitZone.OperationsPin)
@@ -222,9 +225,11 @@ public partial class MainWindow
             }
         }
 
-        // 痕迹只记左半与右半点击：置顶/删除按钮是独立意图不参与双击窗——
-        // 连点置顶必须每击都 toggle（否则第二击被双击窗吞掉，按钮像坏的）；
-        // 连点删除的意图分发同样逐击发生，删除保存期间的重入由
+        // 痕迹只记左半与右半点击（1.26.0）：右半痕迹的职责是重置左半双击窗
+        // ——快速 左→右→左 同位点击不得被拼成伪双击误开编辑（右半自身已无
+        // 双击窗，每击都 toggle）。置顶/删除按钮是独立意图不参与双击窗，不记
+        // 痕迹——连点置顶必须每击都 toggle（否则第二击被双击窗吞掉，按钮像
+        // 坏的）；连点删除的意图分发同样逐击发生，删除保存期间的重入由
         // DeleteContentAsync 的 _isDeletePending 保护丢弃（与顶部垃圾桶一致）。
         if (_pressZone is CardHitZone.Content or CardHitZone.Operations)
         {
@@ -237,9 +242,9 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 双击窗口判定：同一卡片、两击同区、系统双击时限内、按下位置在系统
-    /// 双击容差内。时限与容差取系统双击设置，与拖拽阈值一样尊重用户的
-    /// 鼠标配置。
+    /// 双击窗口判定（1.26.0 起只对左半文字卡的就地编辑生效，调用方先判区域）：
+    /// 同一卡片、两击同区、系统双击时限内、按下位置在系统双击容差内。时限与
+    /// 容差取系统双击设置，与拖拽阈值一样尊重用户的鼠标配置。
     /// </summary>
     private bool IsWithinDoubleClickWindow(BoardItem item)
     {
