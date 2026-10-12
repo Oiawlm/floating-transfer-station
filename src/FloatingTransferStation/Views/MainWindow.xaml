@@ -149,6 +149,24 @@
                           VerticalAlignment="Center"
                           Margin="0,0,8,0"
                           Style="{StaticResource HeaderActionsHostStyle}">
+                <Button x:Name="UpdateButton"
+                        Style="{StaticResource HeaderActionButtonStyle}"
+                        ToolTip="检查更新"
+                        AutomationProperties.Name="检查更新"
+                        Click="UpdateButton_Click">
+                  <!-- 「横杠+向上箭头」填充图标：直译「升入新版本」；填充规范=Viewbox 16×16 +
+                       Path Fill 绑定按钮前景（与齿轮/图钉同一规范，自动纳入
+                       HeaderActionIcons_AreCenteredAndOpticallyConsistent 全量扫描）。
+                       几何铺满 20×20 网格跨度（与齿轮 19.2 同量级）：Viewbox 渲染尺寸跟随
+                       缩放后的子内容（探针实测），非正方形跨度会让墨迹宽高失衡；
+                       双态文案与强调色由 MainWindow.Updates 按“本地版本 < 远端版本”派生。 -->
+                  <Viewbox Width="16" Height="16">
+                    <Path Data="M12,2 L20.5,10.5 L15.2,10.5 L15.2,17 L8.8,17 L8.8,10.5 L3.5,10.5 Z M2,19.4 L22,19.4 L22,22 L2,22 Z"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                          Stretch="Uniform" />
+                  </Viewbox>
+                </Button>
+
                 <Button x:Name="PanelHoldButton"
                         Style="{StaticResource HeaderActionButtonStyle}"
                         ToolTip="保持展开，暂停自动收起"

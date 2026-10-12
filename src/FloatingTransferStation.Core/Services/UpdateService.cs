@@ -89,6 +89,19 @@ public sealed record UpdateDownloadResult
     };
 }
 
+/// <summary>更新服务的界面侧契约：检查、下载校验、静默安装启动（界面只做接线，不写业务逻辑）。</summary>
+public interface IUpdateService
+{
+    Task<UpdateCheckResult> CheckForUpdateAsync(CancellationToken cancellationToken = default);
+
+    Task<UpdateDownloadResult> DownloadUpdateAsync(
+        UpdateCheckResult check,
+        string downloadDirectory,
+        CancellationToken cancellationToken = default);
+
+    bool TryStartSilentInstaller(string installerPath);
+}
+
 /// <summary>
 /// GitHub Releases 更新服务：releases/latest 检查、严格大于的版本比较、精确名资产定位、
 /// 下载 + SHA256 校验、静默安装器启动。无状态（检查与下载按调用独立），HttpClient 在实例内
@@ -97,7 +110,7 @@ public sealed record UpdateDownloadResult
 /// 版本比较 tag 剥 v 前缀后 Version 严格大于才算更新（相等、解析失败一律无更新）；
 /// 任何失败折叠为结果记录而非异常外泄（自动检查静默降级的机制基础）。
 /// </summary>
-public sealed class UpdateService
+public sealed class UpdateService : IUpdateService
 {
     // 安装资产在 GitHub Release 上的稳定精确名（README 元数据测试锁定同名约定）；
     // SHA256SUMS.txt 是唯一信任锚（sha256sum 格式：<64位十六进制><空白><文件名>）。

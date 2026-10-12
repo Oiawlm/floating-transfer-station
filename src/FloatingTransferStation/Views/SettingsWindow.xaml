@@ -489,6 +489,29 @@
                              Visibility="Collapsed" />
                 </StackPanel>
               </Border>
+              <Border Style="{StaticResource SettingsCardStyle}" Margin="0">
+                <StackPanel>
+                  <TextBlock Text="自动检查更新" Style="{StaticResource SectionTitleStyle}" />
+                  <Grid Background="Transparent">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="启动 30 秒后检查，之后每 24 小时一次"
+                               Style="{StaticResource RowCaptionStyle}" />
+                    <CheckBox x:Name="AutoUpdateCheckToggle"
+                              Grid.Column="1"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              AutomationProperties.Name="自动检查更新"
+                              Checked="AutoUpdateCheckToggle_Checked"
+                              Unchecked="AutoUpdateCheckToggle_Unchecked" />
+                  </Grid>
+                  <TextBlock x:Name="AutoUpdateCheckNoteText"
+                             Style="{StaticResource NoteCaptionStyle}"
+                             Text="检查在后台静默进行；发现新版本时标题栏「更新」按钮会点亮，点击即可自动下载安装。关闭后仍可随时点击该按钮手动检查。" />
+                </StackPanel>
+              </Border>
             </StackPanel>
 
             <StackPanel x:Name="DataPage" Visibility="Collapsed">
@@ -685,7 +708,6 @@
             </TextBlock>
             <TextBlock FontSize="12" Margin="0,2,0,0">
               <Hyperlink x:Name="RepoLink"
-                         NavigateUri="https://github.com/Oiawlm/floating-transfer-station"
                          Foreground="{DynamicResource AccentBrush}"
                          RequestNavigate="RepoLink_RequestNavigate">GitHub 仓库与更新记录</Hyperlink>
             </TextBlock>
