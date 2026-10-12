@@ -213,6 +213,65 @@ public sealed class SettingsWindowNavPaneTests
         }
     }
 
+    [STATestMethod]
+    public void NavPane_AllPagesRenderAcrossBothThemes()
+    {
+        var (window, settings) = OpenSettings();
+        try
+        {
+            var nav = AssertNavList(settings);
+            var items = nav.Children.OfType<RadioButton>().ToArray();
+            foreach (var theme in new[] { ThemePreference.Light, ThemePreference.Dark })
+            {
+                window.ApplyPreferences(window.CurrentPreferences with { ThemeMode = theme });
+                CompleteLayout(settings);
+                for (var index = 0; index < items.Length; index++)
+                {
+                    items[index].IsChecked = true;
+                    CompleteLayout(settings);
+                    var anchor = (FrameworkElement)settings.FindName(FrozenPages[index].AnchorName)!;
+                    Assert.IsTrue(
+                        anchor.IsVisible,
+                        $"{theme} 主题下第 {index} 页（{FrozenPages[index].AutomationName}）锚定控件必须可见。");
+                    Assert.IsTrue(items[index].IsChecked == true);
+                }
+            }
+        }
+        finally
+        {
+            window.ApplyPreferences(window.CurrentPreferences with { ThemeMode = ThemePreference.FollowSystem });
+            CloseAll(window, settings);
+        }
+    }
+
+    [STATestMethod]
+    public void NavPane_PageSwitchWithAnimationsDisabledIsInstant()
+    {
+        var preferences = AppPreferences.Default with { AnimationsEnabled = false };
+        var (window, settings) = OpenSettings(preferences);
+        try
+        {
+            CompleteLayout(settings);
+            var nav = AssertNavList(settings);
+            var items = nav.Children.OfType<RadioButton>().ToArray();
+            Keyboard.Focus(items[0]);
+            SendNavKey(nav, Key.Down);
+            var anchor = (FrameworkElement)settings.FindName(FrozenPages[1].AnchorName)!;
+            Assert.IsTrue(anchor.IsVisible, "动效关闭时页切换必须即时可见（无淡入等待）。");
+            Assert.AreEqual(
+                1d,
+                items[1].Opacity,
+                0.001,
+                "动效关闭路径不得留下中间透明度。");
+            var page = (FrameworkElement)settings.FindName("PanelPage")!;
+            Assert.AreEqual(1d, page.Opacity, 0.001, "动效关闭时入场页透明度必须直接就位。");
+        }
+        finally
+        {
+            CloseAll(window, settings);
+        }
+    }
+
     // ---- 基建（按本测试套既有各文件自持 helper 的模式复制）----
 
     private static MainWindow CreateWindow(
@@ -255,12 +314,12 @@ public sealed class SettingsWindowNavPaneTests
         return window;
     }
 
-    private static (MainWindow Window, SettingsWindow Settings) OpenSettings()
+    private static (MainWindow Window, SettingsWindow Settings) OpenSettings(AppPreferences? preferences = null)
     {
         var directory = new TestDirectory();
         var store = new RecordingPreferencesStore();
         var startup = new FakeStartupManager();
-        var window = CreateWindow(directory, store, startup);
+        var window = CreateWindow(directory, store, startup, preferences);
         window.Show();
         var gear = window.FindName("SettingsButton") as Button;
         Assert.IsNotNull(gear);

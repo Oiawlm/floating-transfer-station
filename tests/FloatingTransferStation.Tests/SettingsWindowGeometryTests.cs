@@ -233,6 +233,38 @@ public sealed class SettingsWindowGeometryTests
         }
     }
 
+    [STATestMethod]
+    public void Geometry_DisconnectedMonitor_FallsBackToPrimaryWorkAreaClamp()
+    {
+        // 显示器断开：查询不可用（null）→ 按契约退主屏工作区；持久化矩形（居主屏内的
+        // 尺寸与越界位置）被钳进主屏工作区，而不是丢回默认定位。
+        SettingsWindowPlacement.WorkAreaResolverOverride = (_, _) => null;
+        var preferences = AppPreferences.Default with
+        {
+            SettingsWindowLeft = 1600,
+            SettingsWindowTop = 60,
+            SettingsWindowWidth = 860,
+            SettingsWindowHeight = 520
+        };
+        var (window, settings) = OpenSettings(preferences);
+        try
+        {
+            CompleteLayout(settings);
+            var work = SystemParameters.WorkArea;
+            Assert.AreEqual(
+                Math.Max(work.Right - 860, work.Left),
+                settings.Left,
+                0.01,
+                "显示器断开后位置应钳进主屏工作区（右缘对齐）而非回落默认定位。");
+            Assert.AreEqual(860d, settings.ActualWidth, 0.01, "尺寸合法时应原样保留。");
+        }
+        finally
+        {
+            SettingsWindowPlacement.WorkAreaResolverOverride = null;
+            CloseAll(window, settings);
+        }
+    }
+
     private static void AssertDefaultPlacement(AppPreferences preferences, string message)
     {
         var (window, settings) = OpenSettings(preferences);
