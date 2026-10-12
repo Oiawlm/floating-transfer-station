@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using FloatingTransferStation.Controls;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
@@ -78,6 +80,26 @@ public sealed partial class MainWindowInteractionTests
         }
 
         Assert.IsTrue(condition(), message);
+    }
+
+    /// <summary>
+    /// 按显示元素的实际字体设置量测每字符宽度（同款 Display 格式化模式），
+    /// 供点击定位用例推导目标字位——不依赖「汉字宽=字号」的假定（T7 评审
+    /// 20261012-204651-6pi：期望索引必须来自实测量测而非推算）。
+    /// </summary>
+    private static double MeasuredCharWidth(TextBlock display, string text)
+    {
+        var formatted = new FormattedText(
+            text,
+            CultureInfo.CurrentUICulture,
+            display.FlowDirection,
+            new Typeface(display.FontFamily, display.FontStyle, display.FontWeight, display.FontStretch),
+            display.FontSize,
+            Brushes.Transparent,
+            null,
+            TextOptions.GetTextFormattingMode(display),
+            VisualTreeHelper.GetDpi(display).DpiScaleX);
+        return formatted.Width / text.Length;
     }
 
     private static bool IsPanelEditHoldActive(MainWindow window) =>
@@ -979,6 +1001,18 @@ public sealed partial class MainWindowInteractionTests
                 "编辑器必须声明在显示 TextBlock 之后（同格渲染在上）。");
             Assert.IsNotNull(editor.Background, "编辑器必须有不透明衬底（同格盖写先例）。");
             Assert.AreEqual(
+                window.FindResource("CardBrush"),
+                editor.Background,
+                "编辑器衬底必须就是卡片底色 CardBrush（同格盖写不透明，显示文字不得透出）。");
+            Assert.AreEqual(
+                new Thickness(0),
+                editor.Padding,
+                "编辑器零内边距（文字起笔即左缘，对齐不得有隐藏偏移）。");
+            Assert.AreEqual(
+                new Thickness(0),
+                editor.BorderThickness,
+                "编辑器零边框。");
+            Assert.AreEqual(
                 Visibility.Visible,
                 display.Visibility,
                 "编辑期间显示态保持可见（不透明盖写，非显隐互斥切换）。");
@@ -1085,8 +1119,10 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var display = ((Grid)NoteRowOf(container)).Children.OfType<TextBlock>().Single();
             var textOrigin = display.TranslatePoint(new Point(0, 0), container);
-            // 备注字号 12，汉字宽 ≈12 DIP：点位取第 5 字（索引 4）中部。
-            var clickPoint = new Point(textOrigin.X + 4.5 * 12, textOrigin.Y + 10);
+            // 备注字号 12：按显示元素实际字体量测每字符宽度（T7 评审：不依赖
+            // 「汉字宽=字号」假定），点位取第 5 字（索引 4）中部。
+            var charWidth = MeasuredCharWidth(display, item.Note);
+            var clickPoint = new Point(textOrigin.X + 4.5 * charWidth, textOrigin.Y + 10);
             var savedCursor = SaveCursorPosition();
 
             try

@@ -383,9 +383,12 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var displayHost = FindDescendants<TrimAwareTextBlock>(container)
                 .Single(candidate => ReferenceEquals(candidate.DataContext, item));
-            var textOrigin = ((TextBlock)displayHost.Child).TranslatePoint(new Point(0, 0), container);
-            // 正文字号 14，汉字宽 ≈14 DIP：点位取第 4 字（索引 3）中部。
-            var clickPoint = new Point(textOrigin.X + 3.5 * 14, textOrigin.Y + 10);
+            var display = (TextBlock)displayHost.Child;
+            var textOrigin = display.TranslatePoint(new Point(0, 0), container);
+            // 正文字号 14：按显示元素实际字体量测每字符宽度（T7 评审：不依赖
+            // 「汉字宽=字号」假定），点位取第 4 字（索引 3）中部。
+            var charWidth = MeasuredCharWidth(display, item.Text);
+            var clickPoint = new Point(textOrigin.X + 3.5 * charWidth, textOrigin.Y + 10);
             var savedCursor = SaveCursorPosition();
 
             try
