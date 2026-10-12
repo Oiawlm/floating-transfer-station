@@ -145,19 +145,25 @@ public partial class MainWindow
     /// <summary>
     /// 双击进入正文编辑：草稿种子为全文，可见性由条目状态驱动原位切换。已有
     /// 会话时先同步完成上一提交（接续编辑另一张卡），顺序必须严格同步，防止
-    /// 新会话被旧会话的焦点回调提前提交。
+    /// 新会话被旧会话的焦点回调提前提交。<paramref name="clickPoint"/>=进入
+    /// 编辑的按压点位（窗口 DIP 空间，双击取第二击按下位），光标定位到点击处。
     /// </summary>
-    private void BeginCardTextEditing(BoardItem item, ListBoxItem container) =>
-        BeginCardEditing(item, container, CardEditTarget.Text);
+    private void BeginCardTextEditing(BoardItem item, ListBoxItem container, Point? clickPoint) =>
+        BeginCardEditing(item, container, CardEditTarget.Text, clickPoint);
 
     /// <summary>
     /// 备注交互条进入备注编辑（1.28.0）：守卫、会话互斥与焦点注入与正文编辑
     /// 同一机器；双击进入正文编辑时同样先终结未完备注会话（既有单会话语义）。
+    /// <paramref name="clickPoint"/>=按压点位（真实输入），合成/UIA 路径传 null。
     /// </summary>
-    private void BeginCardNoteEditing(BoardItem item, ListBoxItem container) =>
-        BeginCardEditing(item, container, CardEditTarget.Note);
+    private void BeginCardNoteEditing(BoardItem item, ListBoxItem container, Point? clickPoint) =>
+        BeginCardEditing(item, container, CardEditTarget.Note, clickPoint);
 
-    private void BeginCardEditing(BoardItem item, ListBoxItem container, CardEditTarget target)
+    private void BeginCardEditing(
+        BoardItem item,
+        ListBoxItem container,
+        CardEditTarget target,
+        Point? clickPoint)
     {
         if (_isClosing ||
             _viewModel.IsSearchActive ||
@@ -203,8 +209,32 @@ public partial class MainWindow
                 }
 
                 editor.Focus();
-                editor.SelectAll();
+                PlaceCardEditorCaret(editor, clickPoint);
             }));
+    }
+
+    /// <summary>
+    /// 进入编辑时的光标定位（2026-10-12，取代既有 SelectAll）：真实输入入口
+    /// 携带按压点位（窗口 DIP 空间——正文双击取第二击按下位，备注单击取按下
+    /// 位），经 TranslatePoint 从窗口换算到编辑器坐标（同视觉树，DPI 安全）后
+    /// 取最近字符索引；合成/UIA 路径无点位（null）、换算失败或索引落在文本
+    /// 范围外（GetCharacterIndexFromPoint 返回 &lt;0）时回退光标到文末（搜索框/
+    /// 分类改名同族先例）。正文与备注编辑器共用本实现，不写两份。
+    /// </summary>
+    private void PlaceCardEditorCaret(TextBox editor, Point? clickPoint)
+    {
+        var characterIndex = -1;
+        if (clickPoint is { } click && editor.IsVisible)
+        {
+            // 编辑器刚由触发器转为可见：Input 优先级晚于 Render 布局，显式
+            // 定稿一次保证换算基于已排列几何（已定稿时空操作）。
+            editor.UpdateLayout();
+            characterIndex = editor.GetCharacterIndexFromPoint(
+                TranslatePoint(click, editor),
+                snapToText: true);
+        }
+
+        editor.CaretIndex = characterIndex < 0 ? editor.Text.Length : characterIndex;
     }
 
     /// <summary>
