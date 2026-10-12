@@ -1,3 +1,5 @@
+using FloatingTransferStation.Services;
+
 namespace FloatingTransferStation.Models;
 
 public enum ThemePreference
@@ -52,7 +54,7 @@ public sealed record AppPreferences(
     string? PluginsDirectoryOverride = null,
     bool AutoCleanupEnabled = true,
     string? DeepSeekApiKeyProtected = null,
-    string DeepSeekModel = "deepseek-v4-flash",
+    string DeepSeekModel = DeepSeekModels.Flash,
     double? SettingsWindowLeft = null,
     double? SettingsWindowTop = null,
     double? SettingsWindowWidth = null,

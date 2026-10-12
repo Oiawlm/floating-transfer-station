@@ -72,13 +72,11 @@ public partial class SettingsWindow : Window
         TrashRightClickComboBox.SelectedItem = ((ComboBoxItem[])TrashRightClickComboBox.ItemsSource)
             .Single(item => Equals(item.Tag, host.CurrentPreferences.TrashNoSelectionRightClick));
 
-        // AI 设置（1.27.0）：模型候选以官方当前 ID 为先，存储值为自由字符串，
-        // 旧配置或官方新增 ID 原样呈现为一项，不破坏。
-        var deepSeekModelItems = new List<ComboBoxItem>
-        {
-            new() { Content = "deepseek-v4-flash", Tag = "deepseek-v4-flash" },
-            new() { Content = "deepseek-v4-pro", Tag = "deepseek-v4-pro" }
-        };
+        // AI 设置（1.27.0）：模型候选来自 Core 层目录（官方现行 ID 为先），存储值为
+        // 自由字符串，旧配置或官方新增 ID 原样呈现为一项，不破坏。
+        var deepSeekModelItems = DeepSeekModels.All
+            .Select(id => new ComboBoxItem { Content = id, Tag = id })
+            .ToList();
         var storedDeepSeekModel = host.CurrentPreferences.DeepSeekModel;
         if (!string.IsNullOrEmpty(storedDeepSeekModel) &&
             deepSeekModelItems.All(item =>
@@ -91,6 +89,7 @@ public partial class SettingsWindow : Window
         DeepSeekModelComboBox.SelectedItem = deepSeekModelItems.FirstOrDefault(
             item => string.Equals((string)item.Tag, storedDeepSeekModel, StringComparison.Ordinal))
             ?? deepSeekModelItems[0];
+        DeepSeekModelHintText.Text = DeepSeekModels.HintText;
 
         // 存量 Key 解密后入框（明文只在内存）；解密失败按未配置降级并就地提示。
         var storedDeepSeekKey = host.CurrentPreferences.DeepSeekApiKeyProtected;
