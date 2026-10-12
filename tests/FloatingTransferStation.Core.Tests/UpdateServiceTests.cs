@@ -321,16 +321,66 @@ public sealed class UpdateServiceTests
     }
 
     [TestMethod]
-    public void ProductIdentity_GitHubConstants_AreSingleSource()
+    public async Task CheckForUpdateAsync_GarbageTag_ReportsUpToDate()
     {
-        // repo 地址单一来源（更新服务与设置窗页脚共用）：API 地址必须与 HTML 地址同仓同路径。
-        Assert.AreEqual(
-            "https://github.com/Oiawlm/floating-transfer-station",
-            ProductIdentity.GitHubRepoHtmlUrl);
-        Assert.AreEqual(
-            "https://api.github.com/repos/Oiawlm/floating-transfer-station/releases/latest",
-            ProductIdentity.GitHubLatestReleaseApiUrl);
+        // 锁定决策 2：tag 解析失败/格式垃圾一律按「无更新」而非失败。
+        var service = new UpdateService(RespondWithRelease(ReleaseBody("not-a-version", "[]")));
+
+        var result = await service.CheckForUpdateAsync();
+
+        Assert.IsTrue(result.IsSuccess);
+        Assert.IsFalse(result.HasUpdate);
     }
+
+    [TestMethod]
+    public async Task CheckForUpdateAsync_MalformedAssetEntries_StillFindsTargetAsset()
+    {
+        // 畸形资产条目（缺字段）只跳过自身，不拖垮整个发布解析：目标资产与校验清单照常定位。
+        var assets = string.Join(
+            ",",
+            """{"size":1}""",
+            AssetEntry(InstallerAssetName, InstallerDownloadUrl, 123),
+            """{"name":"SHA256SUMS.txt","size":99}""",
+            AssetEntry("SHA256SUMS.txt", ChecksumsDownloadUrl, 99));
+        var service = new UpdateService(RespondWithRelease(ReleaseBody("v99.0.0", assets)));
+
+        var result = await service.CheckForUpdateAsync();
+
+        Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
+        Assert.IsTrue(result.HasUpdate);
+        Assert.IsNotNull(result.Asset);
+        Assert.AreEqual(InstallerAssetName, result.Asset!.Name);
+        Assert.IsNotNull(result.Checksums);
+        Assert.AreEqual(ChecksumsDownloadUrl, result.Checksums!.DownloadUrl);
+    }
+
+    [TestMethod]
+    public async Task DownloadUpdateAsync_CancellationRequested_CleansPartialAndPropagates()
+    {
+        var payload = new byte[] { 7, 7, 7 };
+        var (_, service) = CreateVerifiedDownloadService(payload, Sha256Sum(InstallerAssetName, payload));
+        using var directory = new TestDirectory();
+        var check = await service.CheckForUpdateAsync();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        OperationCanceledException? cancelled = null;
+        try
+        {
+            await service.DownloadUpdateAsync(check, directory.Root, cts.Token);
+        }
+        catch (OperationCanceledException exception)
+        {
+            cancelled = exception;
+        }
+
+        Assert.IsNotNull(cancelled, "外层取消必须原样上抛（关闭序列依赖）。");
+        Assert.IsEmpty(Directory.GetFiles(directory.Root), "取消路径同样必须清理半成品。");
+    }
+
+    // repo 地址单一来源的锁定不在此处：常量对字面量的断言是恒真同义反复（MSTEST0032），
+    // 真实锁定由 CheckForUpdateAsync_SendsRequiredGitHubHeadersToConfiguredApiUrl
+    // （服务实际请求 URL=预期 API 地址）与 LifecycleTests.RepoUrl_IsSingleSourcedFromProductIdentity
+    // （设置窗 XAML 无仓库地址字面量）承担。
 
     private static FakeHttpMessageHandler RespondWithRelease(string releaseBody) =>
         new((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)

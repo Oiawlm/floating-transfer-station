@@ -31,7 +31,7 @@ public partial class MainWindow : Window
     private bool _initialUpdateCheckPending;
     private bool _isUpdateCheckInFlight;
     private bool _isUpdateDownloadInFlight;
-    private bool _assetMissingPrompted;
+    private bool _assetMissingBrowserOpened;
     private UpdateCheckResult? _availableUpdate;
 
     private void InitializeUpdates()
@@ -39,6 +39,8 @@ public partial class MainWindow : Window
         // 首检尚未发生：偏好开启时（无论何时开启）都从 30 秒延迟首检开始。
         _initialUpdateCheckPending = true;
         _updateCheckTimer.Tick += (_, _) => RunScheduledUpdateCheck();
+        // 初始态文案同样经双态派生（单一来源，XAML 只作占位）。
+        UpdateUpdateButtonState();
     }
 
     /// <summary>
@@ -65,18 +67,19 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>定时检查 tick：首检后切 24 小时节奏；单飞期间跳过本轮（下个周期自然重试）。</summary>
+    /// <summary>定时检查 tick：通过单飞守卫后才结算首检并切 24 小时节奏——首检被在途
+    /// 操作挤掉时保留待办，下个 tick 仍按 30 秒节奏补跑（不被丢进 24 小时）。</summary>
     private void RunScheduledUpdateCheck()
     {
+        if (_isUpdateCheckInFlight || _isUpdateDownloadInFlight)
+        {
+            return;
+        }
+
         if (_initialUpdateCheckPending)
         {
             _initialUpdateCheckPending = false;
             _updateCheckTimer.Interval = UpdateCheckInterval;
-        }
-
-        if (_isUpdateCheckInFlight || _isUpdateDownloadInFlight)
-        {
-            return;
         }
 
         _isUpdateCheckInFlight = true;
@@ -134,6 +137,11 @@ public partial class MainWindow : Window
         catch (OperationCanceledException)
         {
         }
+        catch (Exception)
+        {
+            // async void 的未知异常会击穿为进程崩溃：手动路径就地降级反馈。
+            ShowStatus("检查更新失败，请稍后重试。");
+        }
         finally
         {
             _isUpdateCheckInFlight = false;
@@ -142,8 +150,10 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// 检查结果采纳：更新可用 → 点亮按钮并按需状态条提示一次（手动检查必然提示）；
-    /// 无更新/失败按手动与否决定是否提示。AssetMissing（精确名资产或校验清单缺失）
-    /// 走发布页浏览器回退，不静默吞掉（每会话每版本只回退一次，防自动节奏反复开浏览器）。
+    /// 无更新/失败按手动与否决定是否提示，无更新同时熄灭按钮（远端撤回发布时
+    /// 按钮状态仍由版本比较派生）。AssetMissing（精确名资产或校验清单缺失）仅在
+    /// 手动检查时经状态条提示并回退发布页（wbx 评审：自动检查的任何失败完全静默，
+    /// 零操作不得弹浏览器）；浏览器回退每会话至多一次，防自动节奏反复打扰。
     /// </summary>
     private void AdoptCheckResult(UpdateCheckResult result, bool isManual)
     {
@@ -159,6 +169,12 @@ public partial class MainWindow : Window
 
         if (!result.HasUpdate)
         {
+            if (_availableUpdate is not null)
+            {
+                _availableUpdate = null;
+                UpdateUpdateButtonState();
+            }
+
             if (isManual)
             {
                 ShowStatus("已是最新版本。");
@@ -169,15 +185,17 @@ public partial class MainWindow : Window
 
         if (result.Asset is null || result.Checksums is null)
         {
-            if (_assetMissingPrompted)
+            if (isManual)
             {
-                return;
+                ShowStatus(
+                    $"新版本 {result.LatestVersion} 暂不支持自动更新，已在浏览器打开发布页，可手动下载安装。");
+                if (!_assetMissingBrowserOpened)
+                {
+                    _assetMissingBrowserOpened = true;
+                    OpenReleasePage(result.ReleaseUrl);
+                }
             }
 
-            _assetMissingPrompted = true;
-            ShowStatus(
-                $"新版本 {result.LatestVersion} 暂不支持自动更新，已在浏览器打开发布页，可手动下载安装。");
-            OpenReleasePage(result.ReleaseUrl);
             return;
         }
 
@@ -234,6 +252,11 @@ public partial class MainWindow : Window
         {
             // 关闭序列取消了下载：应用正在退出，无需也不应再提示。
         }
+        catch (Exception)
+        {
+            // async void 的未知异常会击穿为进程崩溃：就地降级，按钮回到可用态可重试。
+            ShowStatus("更新未完成，可稍后重试。");
+        }
         finally
         {
             _isUpdateDownloadInFlight = false;
@@ -243,12 +266,14 @@ public partial class MainWindow : Window
     /// <summary>
     /// 更新前的最小前置冲刷（与既有关闭序列同源）：提交在编辑内容、冲刷复盘、
     /// 等待在途操作归零，使启动安装器之后的窗口关闭路径近乎瞬时完成，
-    /// 把「安装器查锁时应用未退出」的竞态窗口压到最小。
+    /// 把「安装器查锁时应用未退出」的竞态窗口压到最小。二次 Drain 收紧重入窗口：
+    /// 排空期间到达的剪贴板采集等新入队操作也等待落定（不构造无界循环）。
     /// </summary>
     private async Task DrainBeforeUpdateAsync()
     {
         CommitCardTextEditing();
         TrackPendingOperation(FlushReviewAsync());
+        await DrainPendingOperationsAsync();
         await DrainPendingOperationsAsync();
     }
 
@@ -272,12 +297,15 @@ public partial class MainWindow : Window
 
     private static void OpenReleasePage(string? releaseUrl)
     {
-        var url = string.IsNullOrWhiteSpace(releaseUrl)
-            ? ProductIdentity.GitHubRepoHtmlUrl + "/releases"
-            : releaseUrl;
+        // 发布页地址来自远端 JSON：仅接受 https 绝对地址，其余一律回退仓库 releases 页
+        // （杜绝被篡改响应诱导打开任意协议/本地路径）。
+        var target = Uri.TryCreate(releaseUrl, UriKind.Absolute, out var uri) &&
+            string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)
+                ? uri.ToString()
+                : ProductIdentity.GitHubRepoHtmlUrl + "/releases";
         try
         {
-            using var _ = Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            using var _ = Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
         }
         catch (Exception exception) when (
             exception is InvalidOperationException or System.ComponentModel.Win32Exception)

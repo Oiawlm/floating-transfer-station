@@ -550,6 +550,7 @@ public partial class SettingsWindow : Window
 
     private void RightClickCopyToggle_Checked(object sender, RoutedEventArgs e) =>
         ApplyCopyGesturePreference(rightClickCardCopy: true);
+
     private void RightClickCopyToggle_Unchecked(object sender, RoutedEventArgs e) =>
         ApplyCopyGesturePreference(rightClickCardCopy: false);
 

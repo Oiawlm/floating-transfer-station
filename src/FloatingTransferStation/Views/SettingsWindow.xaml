@@ -507,8 +507,7 @@
                               Checked="AutoUpdateCheckToggle_Checked"
                               Unchecked="AutoUpdateCheckToggle_Unchecked" />
                   </Grid>
-                  <TextBlock x:Name="AutoUpdateCheckNoteText"
-                             Style="{StaticResource NoteCaptionStyle}"
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
                              Text="检查在后台静默进行；发现新版本时标题栏「更新」按钮会点亮，点击即可自动下载安装。关闭后仍可随时点击该按钮手动检查。" />
                 </StackPanel>
               </Border>

@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace FloatingTransferStation.Services;
@@ -48,14 +49,14 @@ public sealed record UpdateCheckResult
         string? releaseUrl,
         UpdateAsset asset,
         UpdateAsset checksums) => new()
-    {
-        IsSuccess = true,
-        HasUpdate = true,
-        LatestVersion = latestVersion,
-        ReleaseUrl = releaseUrl,
-        Asset = asset,
-        Checksums = checksums
-    };
+        {
+            IsSuccess = true,
+            HasUpdate = true,
+            LatestVersion = latestVersion,
+            ReleaseUrl = releaseUrl,
+            Asset = asset,
+            Checksums = checksums
+        };
 
     public static UpdateCheckResult Fail(UpdateErrorKind kind, string message) => new()
     {
@@ -122,9 +123,16 @@ public sealed class UpdateService : IUpdateService
 
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(30);
-    // 检查是小响应（30s 兜底），下载是大安装包（给足 10 分钟；超时静默失败可重试）。
+    // 检查是小响应（30s 兜底），下载是大安装包（给足 10 分钟；超时静默失败可重试）；
+    // 校验清单是秒级小文件，单独给短预算（复用 10 分钟会拖慢失败反馈）。
     private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan ChecksumsTimeout = TimeSpan.FromSeconds(30);
+    // 响应体硬上限：检查响应（releases/latest JSON）与校验清单异常膨胀即拒读，
+    // 杜绝无上限 ReadAsStringAsync 的内存放大（wbx 评审 MAJOR）。
+    private const long MaxCheckResponseBytes = 1024 * 1024;
     private const long MaxChecksumsBytes = 1024 * 1024;
+    // 安装包大小硬上限（自包含 WPF 安装包实际 ~150MB 量级；异常/恶意响应超限即中止并清理）。
+    private const long MaxInstallerBytes = 2L * 1024 * 1024 * 1024;
 
     private readonly HttpClient _httpClient;
     private readonly Func<ProcessStartInfo, bool>? _processStarter;
@@ -135,8 +143,9 @@ public sealed class UpdateService : IUpdateService
             ConnectTimeout = ConnectTimeout,
             // 长驻桌面进程：定期轮换池化连接，网络切换后不连到过期 DNS。
             PooledConnectionLifetime = TimeSpan.FromMinutes(5),
-            // 不跟随重定向：更新源异动应原样暴露，不静默换源。
-            AllowAutoRedirect = false
+            // 资产/清单的 browser_download_url 会 302 到 GitHub CDN（objects.githubusercontent.com），
+            // 必须跟随重定向，否则下载必失败（wbx 评审 BLOCKER；API 检查正常不重定向）。
+            AllowAutoRedirect = true
         })
     {
     }
@@ -182,14 +191,21 @@ public sealed class UpdateService : IUpdateService
                 cancellationToken,
                 timeoutCts.Token);
             using var response = await _httpClient
-                .SendAsync(request, linkedCts.Token)
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token)
                 .ConfigureAwait(false);
-            var body = await response.Content
-                .ReadAsStringAsync(linkedCts.Token)
-                .ConfigureAwait(false);
-            return response.IsSuccessStatusCode
-                ? ParseRelease(body, ProductIdentity.Version)
-                : MapCheckFailure(response.StatusCode);
+            if (!response.IsSuccessStatusCode)
+            {
+                return MapCheckFailure(response.StatusCode);
+            }
+
+            // 响应体硬上限流式读取：异常膨胀的响应先拒读，不做无上限缓冲。
+            var body = await ReadCappedAsync(
+                response.Content,
+                MaxCheckResponseBytes,
+                linkedCts.Token).ConfigureAwait(false);
+            return body is null
+                ? UpdateCheckResult.Fail(UpdateErrorKind.BadResponse, "更新服务返回了异常膨胀的响应。")
+                : ParseRelease(body, ProductIdentity.Version);
         }
         catch (Exception exception) when (IsRequestFailure(exception, cancellationToken, out var kind))
         {
@@ -223,13 +239,14 @@ public sealed class UpdateService : IUpdateService
             return UpdateDownloadResult.Fail(UpdateErrorKind.DownloadFailed, "没有可下载的更新包，请重新检查更新。");
         }
 
-        Directory.CreateDirectory(downloadDirectory);
         var targetPath = Path.Combine(downloadDirectory, asset.Name);
         var partialPath = targetPath + DownloadPartialSuffix;
         TryDelete(targetPath);
         TryDelete(partialPath);
         try
         {
+            // 建目录在 try 内收口：目录不可写也按「失败清理」契约折叠为结果记录。
+            Directory.CreateDirectory(downloadDirectory);
             await DownloadToFileAsync(asset.DownloadUrl, partialPath, cancellationToken).ConfigureAwait(false);
             var checksumsText = await DownloadTextAsync(
                 checksums.DownloadUrl,
@@ -254,6 +271,18 @@ public sealed class UpdateService : IUpdateService
 
             File.Move(partialPath, targetPath);
             return UpdateDownloadResult.Ok(targetPath);
+        }
+        catch (OperationCanceledException)
+        {
+            // 关闭序列等真实取消：清理半成品后原样上抛；下载预算耗尽（外层令牌未取消）
+            // 同样清理并折叠为超时结果。
+            TryDelete(partialPath);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+
+            return UpdateDownloadResult.Fail(UpdateErrorKind.Timeout, "更新下载超时，请稍后重试。");
         }
         catch (Exception exception) when (IsRequestFailure(exception, cancellationToken, out var kind))
         {
@@ -325,21 +354,13 @@ public sealed class UpdateService : IUpdateService
             string? releaseUrl = root.TryGetProperty("html_url", out var urlElement)
                 ? urlElement.GetString()
                 : null;
-            if (!TryNormalizeVersion(tag, out var remoteVersion))
-            {
-                return UpdateCheckResult.Fail(UpdateErrorKind.BadResponse, "更新服务返回了无法解析的版本号。");
-            }
-
-            var versionText = tag!.Trim();
-            if (versionText.StartsWith('v') || versionText.StartsWith('V'))
-            {
-                versionText = versionText[1..];
-            }
-
-            if (!Version.TryParse(localVersion, out var localVersionValue) || remoteVersion <= localVersionValue)
+            // 版本比较唯一入口（锁定决策 2）：相等、解析失败、垃圾 tag 一律「无更新」。
+            if (!IsNewerVersion(tag, localVersion))
             {
                 return UpdateCheckResult.UpToDate();
             }
+
+            var versionText = NormalizeVersionText(tag!);
 
             UpdateAsset? asset = null;
             UpdateAsset? checksums = null;
@@ -348,27 +369,36 @@ public sealed class UpdateService : IUpdateService
             {
                 foreach (var entry in assetsElement.EnumerateArray())
                 {
-                    var name = entry.GetProperty("name").GetString();
-                    var downloadUrl = entry.GetProperty("browser_download_url").GetString();
-                    long size = entry.TryGetProperty("size", out var sizeElement) &&
-                        sizeElement.TryGetInt64(out var parsedSize)
-                            ? parsedSize
-                            : 0;
-                    if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(downloadUrl))
+                    // 畸形资产条目只跳过自身，不拖垮整个发布解析（目标资产可能就在后面）。
+                    UpdateAsset? parsed;
+                    try
+                    {
+                        parsed = ParseAssetEntry(entry);
+                    }
+                    catch (Exception exception) when (
+                        exception is JsonException
+                            or KeyNotFoundException
+                            or FormatException
+                            or InvalidOperationException)
+                    {
+                        continue;
+                    }
+
+                    if (parsed is null)
                     {
                         continue;
                     }
 
                     if (string.Equals(
-                            name,
+                            parsed.Name,
                             InstallerAssetNamePrefix + versionText + InstallerAssetNameSuffix,
                             StringComparison.Ordinal))
                     {
-                        asset = new UpdateAsset(name, downloadUrl, size);
+                        asset = parsed;
                     }
-                    else if (string.Equals(name, ChecksumsFileName, StringComparison.Ordinal))
+                    else if (string.Equals(parsed.Name, ChecksumsFileName, StringComparison.Ordinal))
                     {
-                        checksums = new UpdateAsset(name, downloadUrl, size);
+                        checksums = parsed;
                     }
                 }
             }
@@ -397,6 +427,30 @@ public sealed class UpdateService : IUpdateService
         {
             return UpdateCheckResult.Fail(UpdateErrorKind.BadResponse, "更新服务返回了无法解析的响应。");
         }
+    }
+
+    private static UpdateAsset? ParseAssetEntry(JsonElement entry)
+    {
+        var name = entry.GetProperty("name").GetString();
+        var downloadUrl = entry.GetProperty("browser_download_url").GetString();
+        long size = entry.TryGetProperty("size", out var sizeElement) &&
+            sizeElement.TryGetInt64(out var parsedSize)
+                ? parsedSize
+                : 0;
+        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(downloadUrl))
+        {
+            return null;
+        }
+
+        return new UpdateAsset(name, downloadUrl, size);
+    }
+
+    private static string NormalizeVersionText(string tag)
+    {
+        var candidate = tag.Trim();
+        return candidate.StartsWith('v') || candidate.StartsWith('V')
+            ? candidate[1..]
+            : candidate;
     }
 
     private static bool TryNormalizeVersion(string? tag, [NotNullWhen(true)] out Version? version)
@@ -513,6 +567,12 @@ public sealed class UpdateService : IUpdateService
             .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token)
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
+        var length = response.Content.Headers.ContentLength;
+        if (length is > MaxInstallerBytes)
+        {
+            throw new IOException("更新包大小异常。");
+        }
+
         await using var source = await response.Content
             .ReadAsStreamAsync(linkedCts.Token)
             .ConfigureAwait(false);
@@ -521,7 +581,25 @@ public sealed class UpdateService : IUpdateService
             FileMode.CreateNew,
             FileAccess.Write,
             FileShare.None);
-        await source.CopyToAsync(target, linkedCts.Token).ConfigureAwait(false);
+        // 流式计数硬上限：无 Content-Length 的分块响应同样受限，超限即中止（清理由调用方统一收口）。
+        var buffer = new byte[81920];
+        long written = 0;
+        while (true)
+        {
+            var read = await source.ReadAsync(buffer, linkedCts.Token).ConfigureAwait(false);
+            if (read == 0)
+            {
+                break;
+            }
+
+            written += read;
+            if (written > MaxInstallerBytes)
+            {
+                throw new IOException("更新包大小异常。");
+            }
+
+            await target.WriteAsync(buffer.AsMemory(0, read), linkedCts.Token).ConfigureAwait(false);
+        }
     }
 
     private async Task<string?> DownloadTextAsync(
@@ -530,23 +608,53 @@ public sealed class UpdateService : IUpdateService
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        using var timeoutCts = new CancellationTokenSource(DownloadTimeout);
+        using var timeoutCts = new CancellationTokenSource(ChecksumsTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
             timeoutCts.Token);
         using var response = await _httpClient
-            .SendAsync(request, HttpCompletionOption.ResponseContentRead, linkedCts.Token)
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token)
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
-        var length = response.Content.Headers.ContentLength;
+        // 异常膨胀的清单不可信：按无校验值处理（调用方折叠为 HashMismatch）。
+        return await ReadCappedAsync(response.Content, maxBytes, linkedCts.Token).ConfigureAwait(false);
+    }
+
+    /// <summary>响应体带硬上限的流式读取：超限返回 null（拒绝缓冲），杜绝无上限内存放大。</summary>
+    private static async Task<string?> ReadCappedAsync(
+        HttpContent content,
+        long maxBytes,
+        CancellationToken cancellationToken)
+    {
+        var length = content.Headers.ContentLength;
         if (length is { } knownLength && knownLength > maxBytes)
         {
-            // 异常膨胀的清单不可信：按无校验值处理（调用方折叠为 HashMismatch）。
             return null;
         }
 
-        return await response.Content
-            .ReadAsStringAsync(linkedCts.Token)
+        await using var source = await content
+            .ReadAsStreamAsync(cancellationToken)
             .ConfigureAwait(false);
+        var buffer = new byte[81920];
+        long total = 0;
+        using var sink = new MemoryStream();
+        while (true)
+        {
+            var read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            if (read == 0)
+            {
+                break;
+            }
+
+            total += read;
+            if (total > maxBytes)
+            {
+                return null;
+            }
+
+            await sink.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+        }
+
+        return Encoding.UTF8.GetString(sink.ToArray());
     }
 }
