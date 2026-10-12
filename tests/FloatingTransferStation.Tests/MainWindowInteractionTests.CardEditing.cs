@@ -363,6 +363,60 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void CardEditing_DoubleClickPlacesCaretNearClickPoint()
+    {
+        // D4（2026-10-12，Issue #121）：正文双击与备注单击同规则——光标定位到
+        // 第二击按下处（取代旧 SelectAll 语义）。合成双击的按压位取自真实光标
+        // （Mouse.PrimaryDevice 实时位置），先 HoverRealAt 驻留到目标字位。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("一二三四五六七八九十", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var displayHost = FindDescendants<TrimAwareTextBlock>(container)
+                .Single(candidate => ReferenceEquals(candidate.DataContext, item));
+            var display = (TextBlock)displayHost.Child;
+            var textOrigin = display.TranslatePoint(new Point(0, 0), container);
+            // 正文字号 14：按显示元素实际字体量测每字符宽度（T7 评审：不依赖
+            // 「汉字宽=字号」假定），点位取第 4 字（索引 3）中部。
+            var charWidth = MeasuredCharWidth(display, item.Text);
+            var clickPoint = new Point(textOrigin.X + 3.5 * charWidth, textOrigin.Y + 10);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                HoverRealAt(window, container, clickPoint);
+                RaiseCardDoubleClick(ZoneHitSource(window, item, CardGestureZones.ContentZone));
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var editor = EditorInput(window, item);
+            Assert.IsTrue(item.IsEditing, "前置条件：双击进入正文编辑。");
+            Assert.IsTrue(editor.IsKeyboardFocused);
+            Assert.IsTrue(
+                Math.Abs(editor.CaretIndex - 3) <= 1,
+                $"正文光标必须命中点击处（索引 3 附近）：实际 CaretIndex={editor.CaretIndex}。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void CardEditing_CloseWithOpenEditorFlushesBeforeBoardGateSeals()
     {
         using var directory = new TestDirectory();

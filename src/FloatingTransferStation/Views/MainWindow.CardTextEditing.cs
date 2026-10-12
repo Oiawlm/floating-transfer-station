@@ -145,25 +145,25 @@ public partial class MainWindow
     /// <summary>
     /// 双击进入正文编辑：草稿种子为全文，可见性由条目状态驱动原位切换。已有
     /// 会话时先同步完成上一提交（接续编辑另一张卡），顺序必须严格同步，防止
-    /// 新会话被旧会话的焦点回调提前提交。<paramref name="caretAnchor"/> 是双击
-    /// 第二击的按下点（窗口坐标），焦点注入时光标落在其就近插入边界。
+    /// 新会话被旧会话的焦点回调提前提交。<paramref name="clickPoint"/>=进入
+    /// 编辑的按压点位（窗口 DIP 空间，双击取第二击按下位），光标定位到点击处。
     /// </summary>
-    private void BeginCardTextEditing(BoardItem item, ListBoxItem container, Point caretAnchor) =>
-        BeginCardEditing(item, container, CardEditTarget.Text, caretAnchor);
+    private void BeginCardTextEditing(BoardItem item, ListBoxItem container, Point? clickPoint) =>
+        BeginCardEditing(item, container, CardEditTarget.Text, clickPoint);
 
     /// <summary>
     /// 备注交互条进入备注编辑（1.28.0）：守卫、会话互斥与焦点注入与正文编辑
-    /// 同一机器；无锚点（可空参数默认）→ 焦点注入保持全选默认。双击进入正文
-    /// 编辑时同样先终结未完备注会话（既有单会话语义）。
+    /// 同一机器；双击进入正文编辑时同样先终结未完备注会话（既有单会话语义）。
+    /// <paramref name="clickPoint"/>=按压点位（真实输入），合成/UIA 路径传 null。
     /// </summary>
-    private void BeginCardNoteEditing(BoardItem item, ListBoxItem container) =>
-        BeginCardEditing(item, container, CardEditTarget.Note);
+    private void BeginCardNoteEditing(BoardItem item, ListBoxItem container, Point? clickPoint) =>
+        BeginCardEditing(item, container, CardEditTarget.Note, clickPoint);
 
     private void BeginCardEditing(
         BoardItem item,
         ListBoxItem container,
         CardEditTarget target,
-        Point? caretAnchor = null)
+        Point? clickPoint)
     {
         if (_isClosing ||
             _viewModel.IsSearchActive ||
@@ -171,13 +171,6 @@ public partial class MainWindow
         {
             return;
         }
-
-        // 锚点定影（提交旧会话等副作用之前）：窗口坐标换算为容器坐标——提交
-        // 与聚焦可能引发滚动使窗口坐标失真，容器坐标不受影响。两元素已由 Up
-        // 分发前提保证同树，断开属程序错误，TranslatePoint 显式失败即可。
-        Point? anchoredCaret = caretAnchor is { } windowPoint
-            ? this.TranslatePoint(windowPoint, container)
-            : null;
 
         if (_editingCardItemId is not null)
         {
@@ -197,10 +190,7 @@ public partial class MainWindow
         }
 
         // 焦点在模板应用后注入（照分类改名范式）；失败不回滚——可见性已由
-        // 条目状态驱动，稍后的点击仍可把焦点送入编辑器。有锚点时先排清布局
-        // 再把容器坐标映射进编辑器坐标系，光标落在就近插入边界（-1 仅源于
-        // 空文本/未命中，钳 0 = 文首兜底，绝不回退全选）；无锚点入口保持
-        // 全选统一默认。
+        // 条目状态驱动，稍后的点击仍可把焦点送入编辑器。
         Dispatcher.BeginInvoke(
             DispatcherPriority.Input,
             new Action(() =>
@@ -219,19 +209,32 @@ public partial class MainWindow
                 }
 
                 editor.Focus();
-                editor.UpdateLayout();
-                if (anchoredCaret is { } containerPoint)
-                {
-                    var index = editor.GetCharacterIndexFromPoint(
-                        container.TranslatePoint(containerPoint, editor),
-                        snapToText: true);
-                    editor.CaretIndex = Math.Max(0, index);
-                }
-                else
-                {
-                    editor.SelectAll();
-                }
+                PlaceCardEditorCaret(editor, clickPoint);
             }));
+    }
+
+    /// <summary>
+    /// 进入编辑时的光标定位（2026-10-12，取代既有 SelectAll）：真实输入入口
+    /// 携带按压点位（窗口 DIP 空间——正文双击取第二击按下位，备注单击取按下
+    /// 位），经 TranslatePoint 从窗口换算到编辑器坐标（同视觉树，DPI 安全）后
+    /// 取最近字符索引；合成/UIA 路径无点位（null）、换算失败或索引落在文本
+    /// 范围外（GetCharacterIndexFromPoint 返回 &lt;0）时回退光标到文末（搜索框/
+    /// 分类改名同族先例）。正文与备注编辑器共用本实现，不写两份。
+    /// </summary>
+    private void PlaceCardEditorCaret(TextBox editor, Point? clickPoint)
+    {
+        var characterIndex = -1;
+        if (clickPoint is { } click && editor.IsVisible)
+        {
+            // 编辑器刚由触发器转为可见：Input 优先级晚于 Render 布局，显式
+            // 定稿一次保证换算基于已排列几何（已定稿时空操作）。
+            editor.UpdateLayout();
+            characterIndex = editor.GetCharacterIndexFromPoint(
+                TranslatePoint(click, editor),
+                snapToText: true);
+        }
+
+        editor.CaretIndex = characterIndex < 0 ? editor.Text.Length : characterIndex;
     }
 
     /// <summary>

@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using FloatingTransferStation.Controls;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
@@ -15,8 +17,10 @@ namespace FloatingTransferStation.Tests;
 /// TrimAwareTextBlock.IsTruncated）、编辑入口无门槛（已有备注常显随时可点）、
 /// 空白提交=删除、备注是元数据（不参与选择/复制/拖出/搜索）、备注编辑复用
 /// 正文编辑会话机器（Enter/Esc/失焦/锚点终结/编辑持焦面板不收起）、原子持久化
-/// 与失败还原、右键语义零改动、#16 避让零争用。指针路径用 Win32 消息直驱
-/// （契约 #13 口径）；持久化用 LocalStore 真实文件往返。
+/// 与失败还原、右键语义零改动、#16 避让零争用。2026-10-12 起（Issue #121）：
+/// 编辑器行0 备注行原位同格盖写（图标可见性统一规则、结构化对齐、有界长高
+/// 回落）与进入编辑光标定位到点击处（无点位回退文末）。指针路径用 Win32
+/// 消息直驱（契约 #13 口径）；持久化用 LocalStore 真实文件往返。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -76,6 +80,26 @@ public sealed partial class MainWindowInteractionTests
         }
 
         Assert.IsTrue(condition(), message);
+    }
+
+    /// <summary>
+    /// 按显示元素的实际字体设置量测每字符宽度（同款 Display 格式化模式），
+    /// 供点击定位用例推导目标字位——不依赖「汉字宽=字号」的假定（T7 评审
+    /// 20261012-204651-6pi：期望索引必须来自实测量测而非推算）。
+    /// </summary>
+    private static double MeasuredCharWidth(TextBlock display, string text)
+    {
+        var formatted = new FormattedText(
+            text,
+            CultureInfo.CurrentUICulture,
+            display.FlowDirection,
+            new Typeface(display.FontFamily, display.FontStyle, display.FontWeight, display.FontStretch),
+            display.FontSize,
+            Brushes.Transparent,
+            null,
+            TextOptions.GetTextFormattingMode(display),
+            VisualTreeHelper.GetDpi(display).DpiScaleX);
+        return formatted.Width / text.Length;
     }
 
     private static bool IsPanelEditHoldActive(MainWindow window) =>
@@ -278,46 +302,6 @@ public sealed partial class MainWindowInteractionTests
                 ((ListBox)window.FindName("BoardList")).SelectedItems.Cast<BoardItem>().ToArray(),
                 "备注交互条左键绝不改变选择。");
             Assert.IsFalse(other.IsEditingNote);
-        }
-        finally
-        {
-            CloseWindow(window);
-        }
-    }
-
-    /// <summary>
-    /// 无锚点入口保持全选（caret anchor 参数化的回归防线）：备注单击进入编辑
-    /// 走 SelectAll 默认——该分支是无锚点入口的统一默认而非死代码，正文双击
-    /// 接入光标锚点时不得误伤本路径。
-    /// </summary>
-    [STATestMethod]
-    public void CardNote_SingleClickEntryKeepsSelectAll()
-    {
-        using var directory = new TestDirectory();
-        var board = new BoardService();
-        var item = board.AddText("短卡字", BoardCategory.Inbox);
-        item.Note = "预置的非空备注";
-        var window = CreateWindow(directory, board);
-
-        try
-        {
-            window.Show();
-            ExpandCategory(window, BoardCategory.Inbox);
-            CompleteLayout(window);
-            RaiseNoteStripClick(window, item, "CardNoteEntryButton");
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
-            CompleteLayout(window);
-
-            var editor = CardNoteEditorOf(ContainerOf(window, item));
-            Assert.IsTrue(item.IsEditingNote, "前置：备注编辑必须已进入。");
-            Assert.IsTrue(editor.IsKeyboardFocused, "备注编辑器必须持有键盘焦点。");
-            Assert.IsTrue(
-                item.DraftNote!.Length > 0,
-                "前置：预置备注必须非空（全选断言才有意义）。");
-            Assert.AreEqual(
-                item.DraftNote.Length,
-                editor.SelectionLength,
-                "无锚点入口（备注单击）必须保持全选默认。");
         }
         finally
         {
@@ -971,6 +955,231 @@ public sealed partial class MainWindowInteractionTests
                 (Border)window.FindName("WindowShell"),
                 "note-strip-click-editing.png",
                 "FTS_NOTE_EVIDENCE_DIR");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_EditorOverlaysNoteRowInPlaceWithIconVisible()
+    {
+        // 编辑器移回备注行原位（2026-10-12，Issue #121）：编辑态下 CardNoteEditor
+        // 位于行0 两列 Grid 的列1、与备注显示 TextBlock 同格且声明序在后
+        // （不透明盖写，取代 1.28.0 的行1 盖写正文落位）；图标可见（
+        // Note 非空 ∨ IsEditingNote 统一规则）；编辑框左缘与文字列结构化对齐。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("短卡字", BoardCategory.Inbox);
+        item.Note = "原位备注";
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            RaiseNoteStripClick(window, item, "CardNoteEntryButton");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            var noteRow = (Grid)NoteRowOf(container);
+            var editor = CardNoteEditorOf(container);
+            var display = noteRow.Children.OfType<TextBlock>().Single();
+
+            Assert.IsTrue(item.IsEditingNote, "前置条件：备注编辑已开启。");
+            Assert.IsTrue(editor.IsVisible);
+            Assert.AreEqual(0, Grid.GetRow(noteRow), "备注行必须处于卡片网格行0（正文区为行1）。");
+            Assert.AreEqual(1, Grid.GetColumn(editor), "编辑器必须位于行0 两列 Grid 的列1（内容列，原位）。");
+            Assert.AreEqual(
+                1,
+                Grid.GetColumn(display),
+                "备注显示文字与编辑器必须同列（列1）。");
+            Assert.IsTrue(
+                noteRow.Children.IndexOf(editor) > noteRow.Children.IndexOf(display),
+                "编辑器必须声明在显示 TextBlock 之后（同格渲染在上）。");
+            Assert.IsNotNull(editor.Background, "编辑器必须有不透明衬底（同格盖写先例）。");
+            Assert.AreEqual(
+                window.FindResource("CardBrush"),
+                editor.Background,
+                "编辑器衬底必须就是卡片底色 CardBrush（同格盖写不透明，显示文字不得透出）。");
+            Assert.AreEqual(
+                new Thickness(0),
+                editor.Padding,
+                "编辑器零内边距（文字起笔即左缘，对齐不得有隐藏偏移）。");
+            Assert.AreEqual(
+                new Thickness(0),
+                editor.BorderThickness,
+                "编辑器零边框。");
+            Assert.AreEqual(
+                Visibility.Visible,
+                display.Visibility,
+                "编辑期间显示态保持可见（不透明盖写，非显隐互斥切换）。");
+
+            var icon = FindDescendants<Viewbox>(noteRow).Single();
+            Assert.IsTrue(icon.IsVisible, "编辑已有备注时备注图标必须保持可见（统一可见性规则）。");
+            var editorOrigin = editor.TranslatePoint(new Point(0, 0), container);
+            var displayOrigin = display.TranslatePoint(new Point(0, 0), container);
+            Assert.AreEqual(
+                displayOrigin.X,
+                editorOrigin.X,
+                0.5,
+                "编辑框左缘必须与备注文字同列像素对齐（结构化对齐，随图标列宽度派生）。");
+            Assert.AreEqual(
+                displayOrigin.Y,
+                editorOrigin.Y,
+                0.5,
+                "编辑框与备注文字同格顶部对齐（VerticalAlignment=Top）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_EmptyNoteEditingExpandsRowBoundedThenFallsBack()
+    {
+        // D3/D6 同一规则：无备注卡进入备注编辑（添加备注钮入口），编辑器同样
+        // 出现在行0 备注位，行0 有界长高（≤2 行/40px）；空白提交（无备注空白
+        // =无操作）后回落塌缩、卡片高度还原——无「有/无备注」条件分叉。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText(LongCardText, BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            var noteRow = NoteRowOf(container);
+            var heightBefore = container.ActualHeight;
+            Assert.AreEqual(Visibility.Collapsed, noteRow.Visibility, "前置条件：无备注卡行0塌缩。");
+
+            RaiseNoteStripClick(window, item, "CardOperationNoteButton");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var editor = CardNoteEditorOf(container);
+
+            Assert.IsTrue(item.IsEditingNote, "前置条件：备注编辑已开启。");
+            Assert.IsTrue(editor.IsVisible);
+            Assert.AreEqual(
+                Visibility.Visible,
+                noteRow.Visibility,
+                "无备注卡编辑期行0必须展开（与编辑已有备注同一规则）。");
+            Assert.IsTrue(
+                FindDescendants<Viewbox>(noteRow).Single().IsVisible,
+                "无备注卡编辑期图标同样可见（统一可见性规则）。");
+            var growth = container.ActualHeight - heightBefore;
+            Assert.IsTrue(growth > 0, "行0 展开必须撑高卡片。");
+            Assert.IsTrue(growth <= 40.5, $"行0 长高必须有界（≤40 DIP）：实际 {growth:0.#}。");
+
+            RaiseCardEditorKey(window, editor, Key.Enter);
+            PumpUntil(window, () => !item.IsEditingNote, "空白提交必须退出编辑态（无备注空白=无操作）。");
+            CompleteLayout(window);
+            Assert.IsNull(item.Note);
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                NoteRowOf(container).Visibility,
+                "编辑结束后行0必须回落塌缩。");
+            Assert.AreEqual(
+                heightBefore,
+                container.ActualHeight,
+                0.5,
+                "编辑结束后卡片高度必须回落原值。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_RealClickPlacesCaretNearClickPoint()
+    {
+        // D4：真实输入点击备注进入编辑，光标定位到点击处（第 5 字附近，±1 字
+        // 容差吸收字体度量差）；Win32 消息携带的按下位经手势层传入编辑器，
+        // GetCharacterIndexFromPoint 换算 CaretIndex。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("短卡字", BoardCategory.Inbox);
+        item.Note = "一二三四五六七八九十";
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var display = ((Grid)NoteRowOf(container)).Children.OfType<TextBlock>().Single();
+            var textOrigin = display.TranslatePoint(new Point(0, 0), container);
+            // 备注字号 12：按显示元素实际字体量测每字符宽度（T7 评审：不依赖
+            // 「汉字宽=字号」假定），点位取第 5 字（索引 4）中部。
+            var charWidth = MeasuredCharWidth(display, item.Note);
+            var clickPoint = new Point(textOrigin.X + 4.5 * charWidth, textOrigin.Y + 10);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                ClickRealAt(window, container, clickPoint, hoverSettleMilliseconds: 120);
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var editor = CardNoteEditorOf(container);
+            Assert.IsTrue(item.IsEditingNote, "前置条件：真实点击进入备注编辑。");
+            Assert.IsTrue(editor.IsKeyboardFocused, "备注编辑器必须持有键盘焦点。");
+            Assert.IsTrue(
+                Math.Abs(editor.CaretIndex - 4) <= 1,
+                $"光标必须命中点击处（索引 4 附近）：实际 CaretIndex={editor.CaretIndex}。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_SyntheticEntryPlacesCaretAtTextEnd()
+    {
+        // D4 无点位回退：合成/UIA 路径（BoardList_ButtonClick 的 NoteStrip 分支）
+        // 传 null 点位，光标回退文末（取代旧 SelectAll 语义）。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("短卡字", BoardCategory.Inbox);
+        item.Note = "文末回退备注";
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            var entryButton = CardNoteEntryButtonOf(container);
+            entryButton.RaiseEvent(new RoutedEventArgs(
+                System.Windows.Controls.Primitives.ButtonBase.ClickEvent,
+                entryButton));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var editor = CardNoteEditorOf(container);
+
+            Assert.IsTrue(item.IsEditingNote, "前置条件：合成路径进入备注编辑。");
+            Assert.IsTrue(editor.IsKeyboardFocused);
+            Assert.AreEqual(
+                editor.Text.Length,
+                editor.CaretIndex,
+                "合成路径无点位来源，光标必须回退文末。");
         }
         finally
         {
