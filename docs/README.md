@@ -4,6 +4,7 @@
 
 - [架构说明](architecture.md)：主要组件与数据流。
 - [发布指南](releasing.md)：版本发布流程与质量门。
+- [多窗口并行开发协议](multi-window.md)：多窗口并行的工作区隔离、冲突面申报与串行集成。
 - [设计规范](design.md)：界面颜色、圆角、间距与动效 token。
 - [设计契约清单](design-contracts.md)：已定型、不得回退的行为契约（断言/由来/锁定测试/关联）。
 - [images/README.md](images/README.md)：README 视觉资产的构成与再生方式。
