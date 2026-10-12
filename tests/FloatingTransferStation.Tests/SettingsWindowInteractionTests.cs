@@ -655,7 +655,7 @@ public sealed class SettingsWindowInteractionTests
     }
 
     /// <summary>
-    /// 设置窗固定视口与滚动回归（契约 #23，Issue #106）：SizeToContent=Manual 后
+    /// 设置窗固定视口与滚动回归（契约 #24，Issue #106）：SizeToContent=Manual 后
     /// 窗口高度不再跟随内容，最大高按「工作区 − 48、矮屏抬到 MinHeight(460)」收敛；
     /// 内容溢出由共享视口滚动，页脚（退出按钮）在滚动区外保持常驻可见。
     /// </summary>

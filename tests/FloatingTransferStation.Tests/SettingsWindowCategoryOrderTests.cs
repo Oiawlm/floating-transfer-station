@@ -637,7 +637,7 @@ public sealed class SettingsWindowCategoryOrderTests
         gear.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         var settings = GetPrivateField<SettingsWindow>(window, "_settingsWindow");
         Assert.IsNotNull(settings);
-        // 双栏布局（契约 #23）：标签顺序节位于「面板」页，拖拽与可见性断言须先导航。
+        // 双栏布局（契约 #24）：标签顺序节位于「面板」页，拖拽与可见性断言须先导航。
         var panelNav = settings.FindName("SettingsNavPanel") as RadioButton;
         Assert.IsNotNull(panelNav, "设置窗必须有「面板」导航项。");
         panelNav.IsChecked = true;

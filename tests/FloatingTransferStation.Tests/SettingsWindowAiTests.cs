@@ -75,7 +75,7 @@ public sealed class SettingsWindowAiTests
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         var settings = (SettingsWindow?)field!.GetValue(window);
         Assert.IsNotNull(settings);
-        // 双栏布局（契约 #23）：AI 节独立成页，可见性断言与证据截图先导航到「AI」页。
+        // 双栏布局（契约 #24）：AI 节独立成页，可见性断言与证据截图先导航到「AI」页。
         var aiNav = settings.FindName("SettingsNavAi") as RadioButton;
         Assert.IsNotNull(aiNav, "设置窗必须有「AI」导航项。");
         aiNav.IsChecked = true;

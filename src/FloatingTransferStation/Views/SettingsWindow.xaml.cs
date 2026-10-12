@@ -19,7 +19,7 @@ namespace FloatingTransferStation.Views;
 /// </summary>
 public partial class SettingsWindow : Window
 {
-    // 冻结几何（契约 #23，Issue #106）：最大高 = 所在工作区高 − 48（矮屏抬到
+    // 冻结几何（契约 #24，Issue #106）：最大高 = 所在工作区高 − 48（矮屏抬到
     // MinHeight 防冲突）；其余冻结值（默认 680×600、最小 560×460、最大宽 900）
     // 在 XAML 声明，视口高度交给 * 行与内部 ScrollViewer（SizeToContent=Manual）。
     private const double MaxHeightMargin = 48;
@@ -37,7 +37,7 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         DesignThemeManager.Apply(this, host.CurrentTheme);
 
-        // 固定视口（契约 #23，Issue #106）：窗口高度不再跟随内容（SizeToContent=Manual），
+        // 固定视口（契约 #24，Issue #106）：窗口高度不再跟随内容（SizeToContent=Manual），
         // 溢出由 SettingsScrollHost 滚动；最大高先按主屏工作区收敛、矮屏抬到最小高，
         // 恢复持久化几何时（SourceInitialized）再按目标显示器工作区重算。
         MaxHeight = Math.Max(MinHeight, SystemParameters.WorkArea.Height - MaxHeightMargin);
@@ -132,7 +132,7 @@ public partial class SettingsWindow : Window
             theme == DesignTheme.Dark);
     }
 
-    // ---- 双栏导航（契约 #23，Issue #106）----
+    // ---- 双栏导航（契约 #24，Issue #106）----
 
     private static readonly string[] PageNames =
         ["AppearancePage", "PanelPage", "GeneralPage", "DataPage", "AiPage"];
@@ -169,7 +169,7 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// 页切换淡入（167ms 档，契约 #23 设计语言）：只动 Opacity，可见性已即时生效，
+    /// 页切换淡入（167ms 档，契约 #24 设计语言）：只动 Opacity，可见性已即时生效，
     /// UIA/命中不依赖动画收尾；「界面动效」关闭或构造期首项 Checked（未加载）直接就位。
     /// </summary>
     private void AnimatePageIn(StackPanel page)
@@ -190,7 +190,7 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// ↑/↓/Home/End 确定性切换导航项（契约 #23 键盘判据）。在隧道期消费，
+    /// ↑/↓/Home/End 确定性切换导航项（契约 #24 键盘判据）。在隧道期消费，
     /// 压掉 RadioButton 的原生方向键导航，保证一次按键只前进一步。
     /// </summary>
     private void SettingsNavList_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -244,7 +244,7 @@ public partial class SettingsWindow : Window
                 ?? WindowShell.Background;
         }
 
-        // 系统级缩放/最大化（契约 #23，Issue #106）：WM_EXITSIZEMOVE 是「结束才落盘」
+        // 系统级缩放/最大化（契约 #24，Issue #106）：WM_EXITSIZEMOVE 是「结束才落盘」
         // 的唯一可靠信号，WM_GETMINMAXINFO 修正无边框窗口的最大化几何。
         if (System.Windows.Interop.HwndSource.FromHwnd(handle) is { } source)
         {
@@ -254,7 +254,7 @@ public partial class SettingsWindow : Window
         RestorePlacementOrDefault();
     }
 
-    // ---- 几何持久化与恢复（契约 #23，Issue #106）----
+    // ---- 几何持久化与恢复（契约 #24，Issue #106）----
 
     private bool _isInSystemSizing;
 
@@ -291,7 +291,7 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// 恢复持久化几何（契约 #23 §四.3）：整组非法（缺失/NaN/±∞/非正尺寸）或完全落在
+    /// 恢复持久化几何（契约 #24 §四.3）：整组非法（缺失/NaN/±∞/非正尺寸）或完全落在
     /// 所有显示器之外 → 回落 owner 相对默认定位；否则按持久化矩形中心解析目标显示器，
     /// 先按其工作区重算 MaxHeight，再把矩形归一（部分越界钳入、负坐标合法）后应用。
     /// </summary>

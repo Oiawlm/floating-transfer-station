@@ -14,7 +14,7 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 设置窗口双栏外壳（契约 #23）：左导航 5 组的冻结顺序、SelectionItem 语义、
+/// 设置窗口双栏外壳（契约 #24）：左导航 5 组的冻结顺序、SelectionItem 语义、
 /// ↑/↓/Home/End 键盘切换、Tab 可达性与双主题渲染。页锚定控件按冻结表：
 /// 外观=ThemeComboBox、面板=CategoryOrderHost、通用=StartupToggle、
 /// 数据与维护=AutoCleanupToggle、AI=DeepSeekKeyBox。

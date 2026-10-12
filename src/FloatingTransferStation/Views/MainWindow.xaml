@@ -422,6 +422,13 @@
                  VirtualizingPanel.IsVirtualizing="True"
                  VirtualizingPanel.ScrollUnit="Pixel"
                  VirtualizingPanel.VirtualizationMode="Recycling">
+          <ListBox.Resources>
+            <!-- 作用域隐式样式：BoardList 模板内部生成的 ScrollViewer 改用 overlay 模板
+                 （单格叠加，滚动条悬浮内容之上不占布局列），viewport 几何与滚动条可见性
+                 解耦——卡片几何不再随滚动条出现/消失漂移。keyed 样式 + 列表作用域挂接，
+                 不做全局隐式样式（避免波及复盘编辑器等其余 ScrollViewer 表面）。 -->
+            <Style TargetType="ScrollViewer" BasedOn="{StaticResource OverlayScrollViewerStyle}" />
+          </ListBox.Resources>
           <ListBox.ItemsPanel>
             <ItemsPanelTemplate>
               <VirtualizingStackPanel />

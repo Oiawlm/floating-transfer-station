@@ -6,7 +6,7 @@ using System.Windows.Media;
 namespace FloatingTransferStation.Views;
 
 /// <summary>
-/// 设置窗口几何规则（契约 #23，Issue #106）：合法性校验、工作区钳制与显示器工作区查询。
+/// 设置窗口几何规则（契约 #24，Issue #106）：合法性校验、工作区钳制与显示器工作区查询。
 /// 内部一律 DIP；仅在 Win32 边界按目标显示器有效 DPI 换算（物理像素 ↔ DIP）。
 /// <see cref="WorkAreaResolverOverride"/> 是测试缝合点：默认走 Win32
 /// （MonitorFromPoint/MonitorFromWindow + GetMonitorInfo + GetDpiForMonitor），

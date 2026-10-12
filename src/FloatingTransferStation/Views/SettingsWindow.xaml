@@ -18,7 +18,7 @@
         FontFamily="Segoe UI Variable, Segoe UI"
         PreviewKeyDown="SettingsWindow_PreviewKeyDown">
   <!-- 复用主窗 Mica 壳技术：整窗玻璃帧承载 DWM 材质，圆角由 DWM 裁剪。
-       几何契约（#23，Issue #106）：SizeToContent=Manual + CanResize + 系统级
+       几何契约（#24，Issue #106）：SizeToContent=Manual + CanResize + 系统级
        8 向缩放（ResizeBorderThickness=6），固定视口由内部 ScrollViewer 承担滚动；
        MaxHeight 在 code-behind 按工作区冻结式收敛（矮屏抬到 MinHeight）。 -->
   <WindowChrome.WindowChrome>
@@ -55,7 +55,7 @@
         <Setter Property="Margin" Value="0,6,0,0" />
       </Style>
 
-      <!-- 设置节卡片（契约 #23 设计语言）：既有卡片语言分组，颜色全走主题键。
+      <!-- 设置节卡片（契约 #24 设计语言）：既有卡片语言分组，颜色全走主题键。
            页内最后一张卡片用本地 Margin="0" 收尾。 -->
       <Style x:Key="SettingsCardStyle" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource CardBrush}" />
@@ -66,7 +66,7 @@
         <Setter Property="Margin" Value="0,0,0,12" />
       </Style>
 
-      <!-- 左导航项（契约 #23）：RadioButton 原生带 SelectionItem 语义与 UIA peer，
+      <!-- 左导航项（契约 #24）：RadioButton 原生带 SelectionItem 语义与 UIA peer，
            风格同主窗分类轨——选中态 ActiveCategory 底 + 强调色指示条。 -->
       <Style x:Key="SettingsNavItemStyle" TargetType="RadioButton">
         <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
@@ -249,7 +249,7 @@
         </Grid>
       </Border>
 
-      <!-- 双栏主体（契约 #23，分组冻结表）：左导航 5 组 + 右内容页；
+      <!-- 双栏主体（契约 #24，分组冻结表）：左导航 5 组 + 右内容页；
            SettingsScrollHost 是全部页共享的唯一滚动视口（x:Name 单一实例），
            页切换只翻 Visibility，可视树直书保证 43 个既有 x:Name 保持在窗口
            同一 namescope（FindName/UIA 全可达）。 -->
@@ -676,7 +676,7 @@
         </ScrollViewer>
       </Grid>
 
-      <!-- 页脚（契约 #23）：关于 + 退出，非导航项。 -->
+      <!-- 页脚（契约 #24）：关于 + 退出，非导航项。 -->
       <Border Grid.Row="2" Background="{DynamicResource HeaderBrush}">
         <Grid Margin="16,10,16,12">
           <StackPanel VerticalAlignment="Center">

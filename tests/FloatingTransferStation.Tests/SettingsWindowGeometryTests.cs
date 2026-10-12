@@ -12,7 +12,7 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 设置窗口几何契约（#23，Issue #106）：冻结 min/max 约束、持久化往返、
+/// 设置窗口几何契约（#24，Issue #106）：冻结 min/max 约束、持久化往返、
 /// 越界钳制、负坐标合法、非法值/全屏外回落默认定位、「结束才落盘」时机与
 /// 最大化不落盘。多屏/显示器断开经 WorkAreaResolverOverride 假工作区注入。
 /// </summary>

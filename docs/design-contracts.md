@@ -80,9 +80,9 @@
 
 ### 11. 撤销最近删除语义
 
-- **断言**：`Ctrl + Z` 仅在面板持有键盘焦点且无文本编辑时生效，绝不注册为全局热键；恢复用锚点插回（不回退删除后的新增/移动/重新置顶），批内保持删除时显示顺序；会话级最多 20 批；删除的图片文件保留到批次被驱逐、显式丢弃或正常退出时清理；撤销保存失败必须回到删除状态。
-- **由来**：1.11.0 撤销切片（用户误删的最后防线，同时不能变成热键劫持）。
-- **锁定**：`tests/FloatingTransferStation.Tests/BoardMutationServiceUndoTests.cs`、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.Undo.cs`。
+- **断言**：`Ctrl + Z` 仅在面板持有键盘焦点且无文本编辑时生效，绝不注册为全局热键；恢复用锚点插回（不回退删除后的新增/移动/重新置顶），批内保持删除时显示顺序；会话级最多 20 批；多批次时后进先出——恢复的总是最近一批，栈满驱逐最旧一批（图片文件随之清理）；删除的图片文件保留到批次被驱逐、显式丢弃或正常退出时清理；撤销保存失败必须回到删除状态。
+- **由来**：1.11.0 撤销切片（用户误删的最后防线，同时不能变成热键劫持）；1.30.0 显式化多批次后进先出——原实现误用 FIFO 队列弹出最旧批，自动清扫批与用户删除共栈，置顶卡删除后一次撤销恢复出的是用户无感知的旧清扫批（Issue Oiawlm/floating-transfer-station#104）。
+- **锁定**：`tests/FloatingTransferStation.Tests/BoardMutationServiceUndoTests.cs`（含 `UndoLastDelete_PopsMostRecentBatchNotOldest`、`UndoLastDelete_PinnedCardRestoredOverAutoCleanupBatch`、`UndoStack_EvictionKeepsLifoOrder`、`UndoLastDelete_SaveFailureWithMultipleBatchesKeepsOlderBatches`）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.Undo.cs`（含 `Undo_RestoresMostRecentDeleteWhenMultipleBatches`）。
 - **关联**：撤销与回收站设计草案：`docs/superpowers/specs/2026-09-25-undo-recycle-bin-design.md`。
 
 ## 二、补登（12–15，历史已定型但此前未入清单）
@@ -174,14 +174,24 @@
 - **锁定**：`tests/FloatingTransferStation.Tests/TrimAwareTextBlockTests.cs`（截断判据与翻转）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardNote.cs`（`CardNote_StripEntry_OnlyOnTruncatedTextCardsOnHover` 门槛矩阵、`CardNote_StripEntry_SelectedTruncatedCardStillShowsOnHover`、`CardNote_RealInputClickOnStripButtonEntersEditingWithoutChangingSelection` 真实输入、`CardOperationMatrix_NoteButtonRow`、常显/高度稳定/键盘语义/空白删除/失败还原/持焦不收起/回收终结/右键零改动/避让零争用/持久化往返/缺字段免迁移/合成路径）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardOperationAvoidance.cs`（`CardOperationStrip_HiddenNoteButtonCollapsesColumn` 塌缩语义）。
 - **关联**：CHANGELOG 1.28.0/1.29.0（无独立 spec，如实标注）；契约记录 Issue Oiawlm/floating-transfer-station#94；#7/#16 的 1.28.0 扩展同 Issue；1.29.0 入口迁移修订记录 Issue Oiawlm/floating-transfer-station#98。
 
-## 八、本次新增（23，设置窗口双栏改造）
+## 八、本次新增（23，1.31.0）
 
-### 23. 设置窗口双栏信息架构、冻结几何与跨会话几何持久化（记录 Issue #106）
+### 23. BoardList viewport 几何与滚动条可见性解耦（1.31.0 起）
+
+- **断言**：BoardList 的卡片几何不随垂直滚动条出现/消失而变化——同一窗口下可滚动与不可滚动两种内容量，ScrollViewer viewport 宽、单张卡片宽（全宽拉伸）、卡片相对视口位置（含置顶卡右缘=右上操作条锚定缘）逐项相等；滚动条保留 `Auto` 语义（需要时才出现）但永不占布局宽，条带（8 DIP，隐式瘦条样式给出）落在卡片右缘外边距带（12 DIP）内，与每张卡片内容及右上按钮条零像素相交，Track 命令接线保持可交互（上页点击必须移动视口）；挂接唯一路径是 keyed overlay ScrollViewer 模板样式经 BoardList.Resources 作用域隐式样式作用于模板内部生成的 ScrollViewer——不做全局隐式 ScrollViewer 样式（不波及复盘编辑器等其他 ScrollViewer 表面）、不重写 ListBox 模板、不改隐式 ScrollBar 样式与卡片模板内部几何；模板内三个 `PART_*` 命名部件（ScrollContentPresenter、垂直/水平 ScrollBar）与 `CanContentScroll`/两向 `ScrollBarVisibility`/`Background` 透传绑定齐备（虚拟化 `ScrollUnit=Pixel`/`Recycling` 与键盘滚动的生命线），条带 `MinWidth`/`MinHeight=0` 压掉主题 ScrollBar 样式的系统尺寸下限；禁止负 margin 反向溢出与任何宽度补偿特判。
+- **由来**：用户报障「卡片多时右侧出现滚动条、卡片变窄；删除部分卡片后滚动条消失、卡片变宽——剩余置顶卡片位置轻微位移」。根因链是 WPF 默认 ScrollViewer 模板把垂直滚动条放进独立 Auto 布局列（出现/消失即列宽 0↔N），且主题 ScrollBar 样式带系统尺寸下限（`MinWidth`=系统滚动条宽，150% 缩放实测 17.33 DIP，压过瘦条样式的 `Width=8`——比「瘦条 8 DIP」的表象根因更深一层，失败先行测试实测暴露）；`BoardListItemStyle` 的 `HorizontalContentAlignment=Stretch` 把 viewport 宽传导给每张卡片。单格叠加（overlay，滚动条悬浮内容之上）是 WinUI 3/Win11 Fluent/浏览器 overlay 滚动条的业界主流，与既有透明轨道瘦条天然契合；稳定留槽（`Hidden` 常驻占位）被否决（卡片恒窄 17.33 DIP 且空闲留一条空槽，与「无滚动条时卡片应是全宽」的用户心智相反），宽度补偿/负 margin 属补丁禁用。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.ScrollViewport.cs`（`ScrollViewport_WidthIsIndependentOfVerticalScrollBarVisibility`、`ScrollViewport_CardWidthIsIndependentOfVerticalScrollBarVisibility`、`ScrollViewport_CardPositionIsIndependentOfVerticalScrollBarVisibility`、`ScrollViewport_OverlayScrollBarRemainsInteractive` 四条）。
+- **关联**：CHANGELOG 1.31.0（无独立 spec，如实标注）；同日根因调研底稿 `docs/research/2026-10-12-scrollbar-viewport-stability.md`（维护者本地资料，不入库）。
+
+## 九、本次新增（24，设置窗口双栏改造）
+
+### 24. 设置窗口双栏信息架构、冻结几何与跨会话几何持久化（记录 Issue #106）
 
 - **断言**：设置窗口是「标题栏 + 左导航 + 右内容页 + 页脚」双栏布局——左导航 5 组按冻结表（外观=主题/动效；面板=标签顺序/内容复制/垃圾桶按钮；通用=开机自启/全局快捷键；数据与维护=自动清理/数据目录/插件；AI=AI 设置）RadioButton 实现（同组互斥、`RadioButtonAutomationPeer` 原生 SelectionItem 语义、每项 `AutomationProperties.Name`=组名），↑/↓ 循环切换、Home/End 跳首末（预览隧道期消费、一次按键一步），Tab 可达（头部关闭钮不占 Tab），页脚承载关于（应用名+版本+GitHub 链接）与退出按钮（Danger 样式），不作为导航项；右列 `SettingsScrollHost` 是全部页共享的唯一滚动视口（单一 x:Name 实例，垂直 Auto/水平 Disabled），5 个内容页以可视树直书叠放（无 DataTemplate，43 个既有 x:Name 全部保持在窗口同一 namescope、FindName/UIA 永远可达），页切换只翻 Visibility，入场页可做 167ms 档 Opacity 淡入（可见性即时生效，UIA/命中不依赖动画收尾；「界面动效」关闭或构造期直接就位）。**冻结几何**：`SizeToContent="Manual"`、`ResizeMode="CanResize"` + `WindowChrome.ResizeBorderThickness=6`（无边框系统级 8 向缩放），默认 680×600 DIP、最小 560×460、最大宽 900、最大高 = 所在工作区高 − 48（矮屏抬到最小高，禁止 MaxHeight < MinHeight）；独立浮动窗口四边描边、标题栏双上角圆（不再是主窗贴右缘的停靠形态）。**几何持久化与恢复**：`AppPreferences` 的可空字段 `SettingsWindowLeft/Top/Width/Height`（WPF DIP；null=默认定位；旧 preferences.json 免迁移），只在拖动（Thumb `DragCompleted`）/系统缩放（`WM_EXITSIZEMOVE`）结束且 `WindowState==Normal` 时经 `ISettingsHost.ApplyPreferences` 原子管线落盘（契约 #5 同路，禁止平行保存路径；拖拽进行中零写盘；最大化/最小化状态不落盘）；恢复在 `SourceInitialized`：整组非法（缺失/NaN/±∞/非正尺寸）或完全落在所有显示器之外 → 整组回落 owner 相对默认定位；否则按持久化矩形中心解析目标显示器工作区（Win32 `MonitorFromPoint`+`GetMonitorInfo`+`GetDpiForMonitor`，DIP 内部口径、边界按显示器有效 DPI 换算，无句柄/查询失败退 `SystemParameters.WorkArea`），并按其重算 MaxHeight、把矩形归一（尺寸钳 [min,max]、部分越界钳到最近工作区边界、负坐标在目标屏工作区内原样合法——不钳非负）；运行中变化（显示器断开/缩放/DPI）由 SizeChanged 安全网与恢复共用同一钳制（`ClampIntoCurrentWorkArea`，系统交互缩放期间挂起、`WM_EXITSIZEMOVE` 收口一次）；`WM_GETMINMAXINFO` 按所在显示器工作区修正无边框最大化几何。标题栏拖拽的 DragDelta 钳制维持主屏工作区语义（GOAL §三/§四.2 冻结）。节内容用既有卡片语言分组（Card/Border/圆角 8），颜色全走既有主题字典键；插件行与标签顺序行同卡片行语言。
 - **由来**：用户报障「设置窗口默认太高、宽高都调不了、窗口高≈屏高致拖动幅度极小」——三者同源（380 固定宽 + `SizeToContent=Height` 全节纵堆 + `NoResize`）。双栏信息架构与冻结几何为规划窗口定稿（GOAL-V1-SETTINGS-PROMPT §四），wbx 双 lane T7 设计评审（job `20261012-103045-vsq`）采纳 15 项修订（单一 ScrollViewer namescope、恢复先选屏再钳制、DIP/物理换算边界、矮屏 MaxHeight 抬底、Win32 可注入缝合点、EXITSIZEMOVE 落盘时机、交互期挂起钳制、最大化修正、RadioButton 原生 SelectionItem、入场页-only 淡入、同 namescope 直书、测试盲区清单等）。
 - **锁定**：`tests/FloatingTransferStation.Tests/SettingsWindowNavPaneTests.cs`（冻结顺序与命名、SelectionItem 语义 UIA 路径、↑↓ 循环/Home/End/Tab、双主题导航完好、双主题全节渲染巡检、动效关闭即时切换）、`tests/FloatingTransferStation.Tests/SettingsWindowGeometryTests.cs`（冻结约束声明与强制、持久化往返原样恢复、负坐标合法（假左副屏）、部分越界钳入、NaN 回落默认定位、全屏外回落、结束才落盘（拖中零写盘/DragCompleted/EXITSIZEMOVE 路径）+最大化不落盘、矮屏 MaxHeight 抬底、显示器断开退主屏钳制）、`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`（几何字段 JSON 往返与旧文件回落）、`tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs`（`SettingsWindow_FixedViewportScrollsOverflowAndKeepsFooterVisible` 取代旧 MaxHeight 公式断言：固定视口滚动 + 页脚常驻可见）。
 - **关联**：契约记录 Issue Oiawlm/floating-transfer-station#106；CHANGELOG 未发布区；#5（ApplyPreferences 管线）、#13（标签顺序真实输入用例先导航到「面板」页再消息直驱）、#21（标签顺序节语义零变化，仅容器迁页）不受影响。
+
 
 ## 维护规则
 

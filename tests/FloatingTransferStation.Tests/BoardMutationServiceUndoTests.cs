@@ -169,6 +169,73 @@ public sealed class BoardMutationServiceUndoTests
     }
 
     [TestMethod]
+    public async Task UndoStack_EvictionKeepsLifoOrder()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var oldestPath = Path.Combine(directory.Root, "oldest.png");
+        await File.WriteAllBytesAsync(oldestPath, [0x89, 0x50, 0x4E, 0x47]);
+        var oldest = board.AddImage(Guid.NewGuid(), "images/oldest.png", oldestPath);
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        Assert.IsTrue(await service.DeleteManyAsync([oldest.Id]));
+        var newestPath = Path.Combine(directory.Root, "newest.png");
+        await File.WriteAllBytesAsync(newestPath, [0x89, 0x50, 0x4E, 0x47]);
+        var newestImage = board.AddImage(Guid.NewGuid(), "images/newest.png", newestPath);
+
+        for (var index = 0; index < 19; index++)
+        {
+            var item = board.AddText($"批量{index}");
+            Assert.IsTrue(await service.DeleteManyAsync([item.Id]));
+        }
+
+        // 第 21 批(最新,含图片)入栈:最旧图片批被驱逐,最新批的图片必须幸存。
+        Assert.IsTrue(await service.DeleteManyAsync([newestImage.Id]));
+
+        Assert.AreEqual(20, service.PendingUndoDeleteCount, "第 21 批入栈驱逐最旧一批。");
+        Assert.IsFalse(File.Exists(oldestPath), "被驱逐批次的图片文件应立即清理。");
+        Assert.IsTrue(File.Exists(newestPath), "非驱逐批次的图片不受驱逐影响。");
+        Assert.AreEqual(1, store.DeleteCount);
+
+        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.AreEqual(newestImage.Id, board.Items(BoardCategory.Inbox).Single().Id,
+            "驱逐最旧批后,撤销得的仍是最近一批,而非次旧批。");
+        Assert.IsTrue(File.Exists(newestPath), "撤销恢复后最新批的图片文件仍然存在。");
+        Assert.AreEqual(19, service.PendingUndoDeleteCount);
+    }
+
+    [TestMethod]
+    public async Task UndoLastDelete_SaveFailureWithMultipleBatchesKeepsOlderBatches()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var earlier = board.AddText("较早删除");
+        var latest = board.AddText("最近删除");
+        var store = new MutationStore(directory.Root);
+        var messages = new List<string>();
+        var service = new BoardMutationService(board, store, messages.Add);
+
+        Assert.IsTrue(await service.DeleteManyAsync([earlier.Id]));
+        Assert.IsTrue(await service.DeleteManyAsync([latest.Id]));
+        store.FailSave = true;
+
+        Assert.IsFalse(await service.UndoLastDeleteAsync());
+        Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count,
+            "多批下撤销保存失败:本批回到删除态,无恢复残留。");
+        Assert.AreEqual(1, service.PendingUndoDeleteCount, "旧批仍在栈,后续仍可撤销。");
+        CollectionAssert.AreEqual(new[] { "撤销未保存，内容保持删除状态。" }, messages);
+
+        store.FailSave = false;
+        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        CollectionAssert.AreEqual(
+            new[] { earlier.Id },
+            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
+            "失败后的下一次撤销恢复旧批;保存失败批保持删除态且已被消费,不再回到栈。");
+        Assert.AreEqual(0, service.PendingUndoDeleteCount);
+    }
+
+    [TestMethod]
     public async Task UndoLastDelete_ClearCategoryIsUndoableAsOneUnit()
     {
         using var directory = new TestDirectory();
@@ -188,6 +255,67 @@ public sealed class BoardMutationServiceUndoTests
         CollectionAssert.AreEqual(new[] { pinned.Id, last.Id, first.Id }, current,
             "清空撤销按区语义恢复:置顶在前,普通区保持删除时的显示顺序(新增置顶)。");
         Assert.AreSame(otherCategory, board.Items(BoardCategory.Prompt).Single());
+    }
+
+    [TestMethod]
+    public async Task UndoLastDelete_PopsMostRecentBatchNotOldest()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var earlier = board.AddText("较早删除");
+        var latest = board.AddText("最近删除");
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        Assert.IsTrue(await service.DeleteManyAsync([earlier.Id]));
+        Assert.IsTrue(await service.DeleteManyAsync([latest.Id]));
+        Assert.AreEqual(2, service.PendingUndoDeleteCount);
+
+        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        CollectionAssert.AreEqual(
+            new[] { latest.Id },
+            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
+            "第一次撤销必须恢复最近删除的一批,而不是最旧的一批。");
+
+        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        CollectionAssert.AreEqual(
+            new[] { latest.Id, earlier.Id },
+            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
+            "再次撤销按后进先出恢复前一批,回到删除前的布局。");
+        Assert.AreEqual(0, service.PendingUndoDeleteCount);
+    }
+
+    [TestMethod]
+    public async Task UndoLastDelete_PinnedCardRestoredOverAutoCleanupBatch()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var now = DateTimeOffset.Now;
+        var expired = board.AddText("超龄普通卡", createdAt: now - TimeSpan.FromHours(25));
+        var pinned = board.AddText("被删置顶卡", createdAt: now - TimeSpan.FromHours(1));
+        board.SetPinnedMany([pinned.Id], true);
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        var cleanup = await service.ClearNonPinnedAsync([BoardCategory.Inbox], now - TimeSpan.FromHours(24));
+        Assert.IsTrue(cleanup.Saved);
+        Assert.AreEqual(1, cleanup.RemovedCount);
+        Assert.IsTrue(board.Items(BoardCategory.Inbox).Single().IsPinned, "自动清扫只删非置顶,置顶卡保留。");
+
+        Assert.IsTrue(await service.DeleteManyAsync([pinned.Id]));
+        Assert.AreEqual(2, service.PendingUndoDeleteCount, "清扫批与置顶卡删除批共栈。");
+
+        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(board.Items(BoardCategory.Inbox).Single(item => item.Id == pinned.Id).IsPinned,
+            "一次撤销必须恢复被删的置顶卡且置顶属性保留(落置顶区),而不是旧清扫批。");
+        Assert.AreEqual(1, service.PendingUndoDeleteCount, "清扫批仍在栈,未被弹出。");
+
+        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        CollectionAssert.AreEqual(
+            new[] { pinned.Id, expired.Id },
+            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
+            "再次撤销恢复清扫批(置顶区在前,普通区按锚点插回)。");
+        Assert.AreEqual(0, service.PendingUndoDeleteCount);
     }
 
     [TestMethod]

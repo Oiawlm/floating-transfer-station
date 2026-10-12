@@ -46,6 +46,45 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
+    [STATestMethod]
+    public async Task Undo_RestoresMostRecentDeleteWhenMultipleBatches()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var earlier = board.AddText("较早删除");
+        var latest = board.AddText("最近删除");
+        var store = new RecordingUndoStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            var mutations = GetPrivateField<BoardMutationService>(window, "_mutations");
+            Assert.IsTrue(await mutations.DeleteManyAsync([earlier.Id]));
+            Assert.IsTrue(await mutations.DeleteManyAsync([latest.Id]));
+
+            Assert.IsTrue(await window.UndoLastDeleteFromPanelAsync(), "Ctrl+Z 必须恢复最近删除的一张。");
+            CollectionAssert.AreEqual(
+                new[] { latest.Id },
+                board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
+            Assert.AreEqual(3, store.SaveCount);
+
+            Assert.IsTrue(await window.UndoLastDeleteFromPanelAsync());
+            CollectionAssert.AreEqual(
+                new[] { latest.Id, earlier.Id },
+                board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
+                "再次撤销按后进先出恢复前一张,回到删除前布局。");
+            Assert.AreEqual(4, store.SaveCount);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
     private sealed class RecordingUndoStore : IBoardStore
     {
         public RecordingUndoStore(string root) => ImagesDirectory = Path.Combine(root, "images");
