@@ -577,4 +577,57 @@ public sealed partial class MainWindowInteractionTests
             return true;
         }
     }
+
+    /// <summary>
+    /// 1.35.0 发布证据（FTS_UPDATE_EVIDENCE_DIR 设置时产出真实 WPF 渲染截图，契约 #25）：
+    /// 头部「更新」按钮双态——常态（次级色「检查更新」）与发现新版本态（强调色点亮）。
+    /// 有更新态经 fake 服务回报真实走 AdoptCheckResult 采纳路径；渲染走
+    /// SaveVisualEvidence（RenderTargetBitmap 实拍窗口壳层）。
+    /// </summary>
+    [STATestMethod]
+    public void Evidence_CaptureUpdateButtonDualStates()
+    {
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_UPDATE_EVIDENCE_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_UPDATE_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText(new string('更', 160), BoardCategory.Inbox);
+        var fake = new FakeUpdateService { CheckResult = AvailableUpdate() };
+        var window = CreateWindow(directory, board, updateService: fake);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            window.Topmost = true;
+            CompleteLayout(window);
+            // 头部按钮行默认悬停淡显：截图用真实显隐路径点亮（与 armed 常显同源），
+            // 呈现用户悬停头部时看到的样子。
+            InvokePrivate(window, "SetHeaderActionsVisible", true);
+            CompleteLayout(window);
+
+            // 常态：次级色「检查更新」。
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "update-button-default.png",
+                "FTS_UPDATE_EVIDENCE_DIR");
+
+            // 发现新版本态：强调色点亮（fake 服务回报可用更新，真实走检查采纳路径）。
+            InvokePrivate(window, "RunScheduledUpdateCheck");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            Assert.IsNotNull(GetPrivateField<UpdateCheckResult>(window, "_availableUpdate"));
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "update-button-available.png",
+                "FTS_UPDATE_EVIDENCE_DIR");
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
 }
