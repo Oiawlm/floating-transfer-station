@@ -29,7 +29,7 @@
   承接既有分支（如掉队分支）时改用检出写法：`git worktree add "../悬浮中转站-worktrees/<slug>" <类型>/<slug>`。
 
 - **gitignored 本地指令文档不随 worktree 复制**：创建后手动拷入 `AGENTS.md`、`PROJECT_GUIDE.md` 等本地指令文件与本地交接目录（不拷则规则链断裂）；用后清理：`git worktree remove <路径> && git worktree prune`。
-- 主检出保持 on main，受跟踪内容由集成窗口独占写入；仅有的例外是两个不入库动作：规划窗口把执行提示词落盘 gitignored 本地交接目录、收尾执行窗口的本地文档回写。worktree 内每文件单一写者。
+- 主检出保持 on main，受跟踪内容由集成窗口独占写入；gitignored 本地文档的三个不入库写动作不在此限：规划窗口落盘执行提示词、归位时的本地文档回写、执行报告落盘交接目录。worktree 内每文件单一写者。
 
 ## 错峰与并发
 
