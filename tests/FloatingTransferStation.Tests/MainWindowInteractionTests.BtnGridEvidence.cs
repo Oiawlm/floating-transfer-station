@@ -33,6 +33,7 @@ public sealed partial class MainWindowInteractionTests
         board.AddText(new string('网', 160), BoardCategory.Prompt);
         board.AddText(new string('格', 160), BoardCategory.Inbox);
         var window = CreateWindow(directory, board);
+        var savedCursor = SaveCursorPosition();
 
         try
         {
@@ -62,6 +63,7 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
+            RestoreCursorPosition(savedCursor);
             CloseWindow(window);
         }
     }
