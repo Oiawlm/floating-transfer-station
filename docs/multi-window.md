@@ -12,7 +12,7 @@
 | 执行窗口 | 自建 worktree | 仅本 worktree（无集成窗口收尾自办时，含主检出 gitignored 本地文档回写） | 分支创建即推送、每提交必推、PR 跟绿质量门；无集成窗口时收尾自办合并、列车与装机 |
 | 集成窗口 | 主检出（受跟踪内容唯一写者） | 主检出受跟踪内容（经逐 PR 合并与发行列车操作）；批量模式收尾含 gitignored 本地文档回写 | 串行合并、一列发行列车、GitHub Release、装机、归位、本地文档回写 |
 
-规划窗口的执行提示词按维护者交接惯例落盘为 `<日期>-<slug>-execution-prompt.md`（gitignored 本地交接目录，不入库），这是规划窗口唯一的写动作，不触碰任何受跟踪文件；执行报告同落交接目录，命名 `<日期>-<slug>-report.md`。提示词文件本身即协调介质：新窗口以提示词全文为首条消息启动，脱离规划会话仍可独立执行到验收。
+规划窗口的执行提示词按维护者交接惯例落盘为 `<日期>-<slug>-execution-prompt.md`（gitignored 本地交接目录，不入库），这是规划窗口唯一的写动作，不触碰任何受跟踪文件；执行报告同落主检出侧交接目录，命名 `<日期>-<slug>-report.md`（勿写进 worktree，防随 `git worktree remove` 丢失）。提示词文件本身即协调介质：新窗口以提示词全文为首条消息启动，脱离规划会话仍可独立执行到验收。
 
 ## worktree 规范
 
@@ -25,6 +25,8 @@
   git worktree add "../悬浮中转站-worktrees/<slug>" -b <类型>/<slug> origin/main
   git -C "../悬浮中转站-worktrees/<slug>" push -u origin <类型>/<slug>
   ```
+
+  承接既有分支（如掉队分支）时改用检出写法：`git worktree add "../悬浮中转站-worktrees/<slug>" <类型>/<slug>`。
 
 - **gitignored 本地指令文档不随 worktree 复制**：创建后手动拷入 `AGENTS.md`、`PROJECT_GUIDE.md` 等本地指令文件与本地交接目录（不拷则规则链断裂）；用后清理：`git worktree remove <路径> && git worktree prune`。
 - 主检出保持 on main，受跟踪内容由集成窗口独占写入；仅有的例外是两个不入库动作：规划窗口把执行提示词落盘 gitignored 本地交接目录、收尾执行窗口的本地文档回写。worktree 内每文件单一写者。
