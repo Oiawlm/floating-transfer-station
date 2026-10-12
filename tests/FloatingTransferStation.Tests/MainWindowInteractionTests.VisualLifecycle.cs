@@ -1166,22 +1166,23 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsNotNull(contentGrid);
             // 1.18.0 对半分区：命中层两列 * /* 各占一半；右半（Tag=
             // CardGestureZones.OperationsZone）右上角保留按钮网格（1.30.0 起固定
-            // 两列 × 2 行、行列绝对 30，行优先序 选择|删除|置顶|备注，Issue #103；
-            // 按钮隐藏时格子留空不漂移）；内容视觉层全宽在命中层之下（无 Tag，
-            // 指针命中总落在命中层上）。
+            // 两列 × 按钮行、列与按钮行绝对 30，行间 4 DIP 间隔行，行优先序
+            // 选择|删除|置顶|备注，Issue #103；按钮隐藏时格子留空不漂移）；
+            // 内容视觉层全宽在命中层之下（无 Tag，指针命中总落在命中层上）。
             Assert.AreEqual(2, contentGrid.ColumnDefinitions.Count);
             Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[0].Width);
             Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[1].Width);
-            Assert.AreEqual(2, contentGrid.RowDefinitions.Count);
+            Assert.AreEqual(3, contentGrid.RowDefinitions.Count);
             Assert.AreEqual(new GridLength(30), contentGrid.RowDefinitions[0].Height);
-            Assert.AreEqual(new GridLength(30), contentGrid.RowDefinitions[1].Height);
+            Assert.AreEqual(new GridLength(4), contentGrid.RowDefinitions[1].Height);
+            Assert.AreEqual(new GridLength(30), contentGrid.RowDefinitions[2].Height);
             Assert.AreEqual(0, Grid.GetRow(selectionButton));
             Assert.AreEqual(0, Grid.GetColumn(selectionButton));
             Assert.AreEqual(0, Grid.GetRow(deleteButton));
             Assert.AreEqual(1, Grid.GetColumn(deleteButton));
-            Assert.AreEqual(1, Grid.GetRow(pinButton));
+            Assert.AreEqual(2, Grid.GetRow(pinButton));
             Assert.AreEqual(0, Grid.GetColumn(pinButton));
-            Assert.AreEqual(1, Grid.GetRow(noteButton));
+            Assert.AreEqual(2, Grid.GetRow(noteButton));
             Assert.AreEqual(1, Grid.GetColumn(noteButton));
             Assert.AreEqual(HorizontalAlignment.Right, contentGrid.HorizontalAlignment);
             Assert.AreEqual(VerticalAlignment.Top, contentGrid.VerticalAlignment);

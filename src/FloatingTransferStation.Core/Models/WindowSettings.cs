@@ -11,8 +11,10 @@ public sealed record WindowSettings(
 {
     public const double TabWidth = 58;
     // 卡片内容宽 = PanelWidth − 50（页边 12×2 + 边框 1×2 + 卡内边距 12×2），
-    // 右半区 = 内容宽/2 必须容纳右上四列按钮条（4×30=120，含备注钮 1.29.0 起）
-    // ：(PanelWidth − 50)/2 ≥ 120 → PanelWidth ≥ 290，取 310 留 10 DIP 余量。
+    // 右半区 = 内容宽/2 必须容纳右上两列按钮网格占地 2×30=60（1.30.0 起网格几何，
+    // Issue #103；四列时代曾为 4×30=120 下限；正文另让 4 DIP 缓冲合计内缩 64，
+    // 见 CardTextReservedRightInset）：(PanelWidth − 50)/2 ≥ 60 → PanelWidth ≥ 170，
+    // 取 310 维持 1.29.0 起的产品下限不变（非几何约束）。
     public const double MinPanelWidth = 310;
     public const double MaxPanelWidth = 640;
     public const double MinWindowHeight = 360;

@@ -206,6 +206,12 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(
                 noteRect.Top, pinRect.Top, 0.5,
                 "备注钮与置顶钮必须同处第二行（行优先网格序）。");
+            var deleteButton = buttons.Single(candidate =>
+                Equals(candidate.CommandParameter, CardGestureZones.DeleteCardCommand));
+            var deleteRect = RectOf(deleteButton, container);
+            Assert.AreEqual(
+                4, pinRect.Top - deleteRect.Bottom, 0.5,
+                "两按钮行之间的行间隙必须恰为 4 DIP（独立间隔行，实际排列位置）。");
         }
         finally
         {
