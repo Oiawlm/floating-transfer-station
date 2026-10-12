@@ -9,12 +9,14 @@
        由 DesignThemeManager 在运行时整体替换；本字典内一律以 DynamicResource 引用。 -->
   <FontFamily x:Key="InterfaceFontFamily">Segoe UI Variable, Segoe UI</FontFamily>
   <GridLength x:Key="CardOperationColumnWidth">30</GridLength>
-  <!-- 文字卡正文右侧排他内缩（派生资源，唯一数值来源）：四列 CardOperationColumnWidth
-       （备注/置顶/选择/删除按钮条）+ 4 DIP 间隙。对半分区的内容视觉层全宽、按钮悬停才淡入，
-       正文不内缩就会与角按钮条争用同一批像素（1.20.0 两列，1.24.0 三列，1.29.0 随添加
-       备注按钮扩为四列）；命中层与图片卡不受影响。静态值（不随悬停派生）：按钮显隐
-       若牵动正文回流会造成布局抖动，已否决按卡动态内缩。 -->
-  <Thickness x:Key="CardTextReservedRightInset" Left="0" Top="0" Right="124" Bottom="0" />
+  <!-- 文字卡正文右侧排他内缩（派生资源，唯一数值来源）：两列 CardOperationColumnWidth
+       （固定两列按钮网格横向占地，Issue #103）+ 4 DIP 正文-网格水平缓冲（与网格内
+       部的纵向行间隙无关）。对半分区的内容视觉层全宽、按钮悬停才淡入，正文不内缩
+       就会与角按钮网格争用同一批像素（1.20.0 两列横排 64，1.24.0 三列 94，1.29.0
+       四列 124，1.33.0 回归右上两列网格 64——横占地减半、卡片右下角纵向闲置空间
+       被利用）；命中层与图片卡不受影响。静态值（不随悬停派生）：按钮显隐若牵动
+       正文回流会造成布局抖动，已否决按卡动态内缩。 -->
+  <Thickness x:Key="CardTextReservedRightInset" Left="0" Top="0" Right="64" Bottom="0" />
   <CornerRadius x:Key="ShellCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="HeaderActionCornerRadius">7</CornerRadius>
@@ -576,9 +578,9 @@
   </Style>
 
   <!-- 备注幽灵入口（1.28.0，契约 #22）已于 1.29.0 移除：添加备注入口整件迁入
-       卡片右上操作条最左列（NoteButtonStyle，见删除钮样式之后的备注钮节）——
-       幽灵标签与正文文字重叠的根因（同格叠加盖写）随入口移除而消除；
-       备注显示行、点击面与编辑会话语义零变化。 -->
+       卡片右上操作条（NoteButtonStyle，见删除钮样式之后的备注钮节；1.33.0 起固定
+       于两列网格右下格 (1,1)，Issue #103）——幽灵标签与正文文字重叠的根因（同格
+       叠加盖写）随入口移除而消除；备注显示行、点击面与编辑会话语义零变化。 -->
 
   <Style x:Key="BoardListStyle" TargetType="ListBox">
     <Setter Property="Background" Value="Transparent" />
@@ -882,15 +884,15 @@
     </Style.Triggers>
   </Style>
 
-  <!-- 添加备注钮（1.29.0，契约 #22 修订，记录 Issue #98）：卡片右上操作条最左列
-       （备注|置顶|选择|删除），聊天气泡 16×16 Path 自 1.28.0 幽灵入口迁移复用，
+  <!-- 添加备注钮（1.29.0 迁入操作条，记录 Issue #98；1.33.0 随 Issue #103 固定于
+       操作网格右下格 (1,1)）：聊天气泡 16×16 Path 自 1.28.0 幽灵入口迁移复用，
        ToolTip/AutomationName 沿用幽灵样式既有值。可见性=幽灵入口七条件原样迁移
        （无备注 ∧ 正文截断 ∧ 卡片悬停 ∧ 无正文编辑 ∧ 无备注编辑 ∧ 文字卡 ∧ 非搜索态；
        ElementName=CardPreviewText 与条目属性绑定同模板 namescope 原样可用）。
-       隐藏必须是布局塌缩语义：基态 Visibility=Collapsed + 列定义 Auto——不可见时
-       列宽归零、按钮条贴右缘回落三钮几何（禁止纯 Opacity 隐藏：opacity 不释放
-       布局会让置顶/选择/删除三钮漂移）；FadeAnimation.ManageVisibility 承载
-       激活即 Visible、失活动画完成后 Collapsed、动效关闭立即切。 -->
+       隐藏必须是格子固定预留、可见性塌缩语义：基态 Visibility=Collapsed + 网格
+       绝对行列——不可见时 (1,1) 格子留空、其余按钮几何逐像素不动（禁止纯 Opacity
+       隐藏：opacity 不释放命中）；FadeAnimation.ManageVisibility 承载激活即
+       Visible、失活动画完成后 Collapsed、动效关闭立即切。 -->
   <Style x:Key="NoteButtonStyle" TargetType="Button">
     <Setter Property="Width" Value="30" />
     <Setter Property="Height" Value="30" />
@@ -1301,32 +1303,56 @@
               <Grid Grid.Column="1"
                     Background="Transparent"
                     Tag="{x:Static views:CardGestureZones.OperationsZone}">
+                <!-- 操作按钮网格（1.33.0，Issue #103）：固定两列 × 按钮行、列与按钮行
+                     均为绝对 30 DIP（复用 CardOperationColumnWidth 单一来源），右上角
+                     锚定，行优先序 选择|删除|置顶|备注（此后新增按钮按行优先向下
+                     占格——追加「按钮行 + 间隔行」后左→右）。格子固定：按钮隐藏
+                     （备注钮七条件门槛、三信号矩阵显隐）时格子留空、其余按钮零漂移
+                     （绝对行列下 Collapsed 天然留空；UniformGrid/定宽 WrapPanel 不
+                     保证隐藏留空，均被排除）。行间隙 4 DIP 是独立间隔行（T7 评审
+                     P1：30 行装不下 30 钮 + 4 边距，Margin 过约束使间隙不可靠），
+                     按钮行物理行号为 0/2，网格宽恒 2×30、高 64。 -->
                 <Grid HorizontalAlignment="Right"
                       VerticalAlignment="Top">
                   <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
                     <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
                     <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
                   </Grid.ColumnDefinitions>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="{StaticResource CardOperationColumnWidth}" />
+                    <RowDefinition Height="4" />
+                    <RowDefinition Height="{StaticResource CardOperationColumnWidth}" />
+                  </Grid.RowDefinitions>
 
-                  <!-- 添加备注钮（1.29.0，契约 #22 修订）：最左列，几何向左生长——
-                       置顶/选择/删除三钮位置与三钮时代逐像素一致；聊天气泡几何自
-                       幽灵入口迁移。可见性七条件与塌缩语义见 NoteButtonStyle，
-                       点击复用 NoteStripCommand 参数路由（手势层与 UIA 路径零改动）。 -->
-                  <Button x:Name="CardOperationNoteButton"
+                  <!-- 选择钮：按钮行 0 左格 (0,0)。可见性矩阵见 SelectionButtonStyle。 -->
+                  <Button Grid.Row="0"
                           Grid.Column="0"
-                          Style="{StaticResource NoteButtonStyle}"
+                          Style="{StaticResource SelectionButtonStyle}"
                           Tag="{Binding}"
-                          CommandParameter="{x:Static views:CardGestureZones.NoteStripCommand}">
+                          CommandParameter="{x:Static views:CardGestureZones.ToggleSelectionCommand}"
+                          ToolTip="选择"
+                          AutomationProperties.Name="选择" />
+
+                  <!-- 删除钮（1.24.0）：垃圾桶图标与头部垃圾桶按钮同一几何（16×16 网格
+                       规范），前景随共享模板的悬停强调色；按钮行 0 右格 (0,1)，可见性
+                       矩阵见 DeleteButtonStyle。 -->
+                  <Button Grid.Row="0"
+                          Grid.Column="1"
+                          Style="{StaticResource DeleteButtonStyle}"
+                          Tag="{Binding}"
+                          CommandParameter="{x:Static views:CardGestureZones.DeleteCardCommand}"
+                          AutomationProperties.Name="删除">
                     <Viewbox Width="16" Height="16">
-                      <Path Data="M3,2.75 L13,2.75 C13.9665,2.75 14.75,3.5335 14.75,4.5 L14.75,9.5 C14.75,10.4665 13.9665,11.25 13,11.25 L8.2,11.25 L5.35,13.9 C5.05,14.18 4.75,14.06 4.75,13.6 L4.75,11.25 L3,11.25 C2.0335,11.25 1.25,10.4665 1.25,9.5 L1.25,4.5 C1.25,3.5335 2.0335,2.75 3,2.75 Z"
+                      <Path Data="M8.5,4 L11.5,4 C11.5,3.17157 10.8284,2.5 10,2.5 C9.17157,2.5 8.5,3.17157 8.5,4 Z M7.5,4 C7.5,2.61929 8.61929,1.5 10,1.5 C11.3807,1.5 12.5,2.61929 12.5,4 L17.5,4 C17.7761,4 18,4.22386 18,4.5 C18,4.77614 17.7761,5 17.5,5 L16.4456,5 L15.2521,15.3439 C15.0774,16.8576 13.7957,18 12.2719,18 L7.72813,18 C6.20431,18 4.92256,16.8576 4.7479,15.3439 L3.55437,5 L2.5,5 C2.22386,5 2,4.77614 2,4.5 C2,4.22386 2.22386,4 2.5,4 L7.5,4 Z M5.74131,15.2292 C5.85775,16.2384 6.71225,17 7.72813,17 L12.2719,17 C13.2878,17 14.1422,16.2384 14.2587,15.2292 L15.439,5 L4.56101,5 Z M8.5,7.5 C8.77614,7.5 9,7.72386 9,8 L9,14 C9,14.2761 8.77614,14.5 8.5,14.5 C8.22386,14.5 8,14.2761 8,14 L8,8 C8,7.72386 8.22386,7.5 8.5,7.5 Z M12,8 C12,7.72386 11.7761,7.5 11.5,7.5 C11.2239,7.5 11,7.72386 11,8 L11,14 C11,14.2239 11.2239,14.5 11.5,14.5 C11.7761,14.5 12,14.2761 12,14 L12,8 Z"
                             Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
                             Stretch="Uniform" />
                     </Viewbox>
                   </Button>
 
-                  <Button Grid.Column="1"
+                  <!-- 置顶钮：按钮行 1 左格 (1,0)（物理行 2，行 1 为 4 DIP 间隔行）。
+                       可见性矩阵见 PinButtonStyle。 -->
+                  <Button Grid.Row="2"
+                          Grid.Column="0"
                           Style="{StaticResource PinButtonStyle}"
                           Tag="{Binding}"
                           CommandParameter="{x:Static views:CardGestureZones.TogglePinCommand}">
@@ -1337,22 +1363,17 @@
                     </Viewbox>
                   </Button>
 
-                  <Button Grid.Column="2"
-                          Style="{StaticResource SelectionButtonStyle}"
+                  <!-- 添加备注钮：按钮行 1 右格 (1,1)（物理行 2）。可见性七条件与塌缩
+                       语义见 NoteButtonStyle，点击复用 NoteStripCommand 参数路由
+                       （手势层与 UIA 路径零改动）。 -->
+                  <Button x:Name="CardOperationNoteButton"
+                          Grid.Row="2"
+                          Grid.Column="1"
+                          Style="{StaticResource NoteButtonStyle}"
                           Tag="{Binding}"
-                          CommandParameter="{x:Static views:CardGestureZones.ToggleSelectionCommand}"
-                          ToolTip="选择"
-                          AutomationProperties.Name="选择" />
-
-                  <!-- 删除钮（1.24.0）：垃圾桶图标与头部垃圾桶按钮同一几何（16×16 网格
-                       规范），前景随共享模板的悬停强调色；可见性矩阵见 DeleteButtonStyle。 -->
-                  <Button Grid.Column="3"
-                          Style="{StaticResource DeleteButtonStyle}"
-                          Tag="{Binding}"
-                          CommandParameter="{x:Static views:CardGestureZones.DeleteCardCommand}"
-                          AutomationProperties.Name="删除">
+                          CommandParameter="{x:Static views:CardGestureZones.NoteStripCommand}">
                     <Viewbox Width="16" Height="16">
-                      <Path Data="M8.5,4 L11.5,4 C11.5,3.17157 10.8284,2.5 10,2.5 C9.17157,2.5 8.5,3.17157 8.5,4 Z M7.5,4 C7.5,2.61929 8.61929,1.5 10,1.5 C11.3807,1.5 12.5,2.61929 12.5,4 L17.5,4 C17.7761,4 18,4.22386 18,4.5 C18,4.77614 17.7761,5 17.5,5 L16.4456,5 L15.2521,15.3439 C15.0774,16.8576 13.7957,18 12.2719,18 L7.72813,18 C6.20431,18 4.92256,16.8576 4.7479,15.3439 L3.55437,5 L2.5,5 C2.22386,5 2,4.77614 2,4.5 C2,4.22386 2.22386,4 2.5,4 L7.5,4 Z M5.74131,15.2292 C5.85775,16.2384 6.71225,17 7.72813,17 L12.2719,17 C13.2878,17 14.1422,16.2384 14.2587,15.2292 L15.439,5 L4.56101,5 Z M8.5,7.5 C8.77614,7.5 9,7.72386 9,8 L9,14 C9,14.2761 8.77614,14.5 8.5,14.5 C8.22386,14.5 8,14.2761 8,14 L8,8 C8,7.72386 8.22386,7.5 8.5,7.5 Z M12,8 C12,7.72386 11.7761,7.5 11.5,7.5 C11.2239,7.5 11,7.72386 11,8 L11,14 C11,14.2239 11.2239,14.5 11.5,14.5 C11.7761,14.5 12,14.2761 12,14 L12,8 Z"
+                      <Path Data="M3,2.75 L13,2.75 C13.9665,2.75 14.75,3.5335 14.75,4.5 L14.75,9.5 C14.75,10.4665 13.9665,11.25 13,11.25 L8.2,11.25 L5.35,13.9 C5.05,14.18 4.75,14.06 4.75,13.6 L4.75,11.25 L3,11.25 C2.0335,11.25 1.25,10.4665 1.25,9.5 L1.25,4.5 C1.25,3.5335 2.0335,2.75 3,2.75 Z"
                             Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
                             Stretch="Uniform" />
                     </Viewbox>
@@ -1382,9 +1403,10 @@
                  ① 点击面（行 0 左半容器内拉伸=恰好盖住备注显示行左半）：已有
                     备注的编辑入口，左键绝不 toggle 选中（独立意图 OperationsNote，
                     滑离释放取消，不进双击窗）；ToolTip 借面显示备注全文。
-                 ② 添加备注钮（1.29.0 起改在右上操作条最左列，CardOperationNoteButton，
-                    见上方操作条）：无备注∧正文截断∧卡片悬停∧无会话进行中才淡入
-                    可点，NoteButtonStyle；幽灵标签入口已删除（重叠根因消除）。
+                 ② 添加备注钮（1.33.0 起固定于右上操作网格右下格 (1,1)，
+                    CardOperationNoteButton，见上方操作网格）：无备注∧正文截断∧
+                    卡片悬停∧无会话进行中才淡入可点，NoteButtonStyle；幽灵标签
+                    入口已删除（重叠根因消除）。
                  ③ 备注编辑器（行 1 顶部盖写正文前 1-2 行，CardBrush 衬底）：
                     IsEditingNote 驱动，CardNoteEditorStyle。
                  右键语义零改动：备注元素只承接左键会话（Down 沿 OriginalSource

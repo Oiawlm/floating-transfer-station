@@ -75,6 +75,11 @@ public sealed class SettingsWindowPluginTests
             return (SettingsWindow?)field?.GetValue(window);
         });
         Assert.IsNotNull(settings);
+        // 双栏布局（契约 #24）：插件节位于「数据与维护」页，证据截图与可见性依赖先导航。
+        var dataNav = window.Dispatcher.Invoke(() =>
+            settings.FindName("SettingsNavData") as RadioButton);
+        Assert.IsNotNull(dataNav, "设置窗必须有「数据与维护」导航项。");
+        window.Dispatcher.Invoke(() => dataNav.IsChecked = true);
         return settings;
     }
 
@@ -219,7 +224,7 @@ public sealed class SettingsWindowPluginTests
             var panel = settings.FindName("PluginListPanel") as StackPanel;
             Assert.IsNotNull(panel);
             Assert.AreEqual(1, panel.Children.Count, "应当恰好渲染一个插件行。");
-            var row = (Grid)panel.Children[0];
+            var row = (Grid)((Border)panel.Children[0]).Child;
             var title = ((StackPanel)row.Children[0]).Children.OfType<TextBlock>().First().Text;
             StringAssert.Contains(title, "演示整理");
             StringAssert.Contains(title, "1.2.0");
@@ -250,7 +255,7 @@ public sealed class SettingsWindowPluginTests
             var settings = OpenSettings(window);
             CompleteLayout(settings);
             var panel = (StackPanel)settings.FindName("PluginListPanel")!;
-            var toggle = ((Grid)panel.Children[0]).Children.OfType<CheckBox>().Single();
+            var toggle = ((Grid)((Border)panel.Children[0]).Child).Children.OfType<CheckBox>().Single();
 
             toggle.IsChecked = true;
             PumpDispatcherUntil(
@@ -308,7 +313,8 @@ public sealed class SettingsWindowPluginTests
             var panel = (StackPanel)settings.FindName("PluginListPanel")!;
             Assert.AreEqual(2, panel.Children.Count);
             var brokenRow = panel.Children
-                .OfType<Grid>()
+                .OfType<Border>()
+                .Select(surface => (Grid)surface.Child)
                 .Single(row => row.Children.OfType<CheckBox>().Single().Tag as string != "demo-tidy");
             var toggle = brokenRow.Children.OfType<CheckBox>().Single();
             Assert.IsFalse(toggle.IsEnabled, "清单非法的插件不能启用。");
