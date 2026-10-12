@@ -163,6 +163,9 @@ public partial class SettingsWindow : Window
                 AnimatePageIn(page);
             }
         }
+
+        // 共享视口的滚动偏移不跨页残留（切页回到页首）；构造期首项 Checked 时视口尚未解析。
+        SettingsScrollHost?.ScrollToHome();
     }
 
     /// <summary>

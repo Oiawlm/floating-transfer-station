@@ -31,6 +31,9 @@ public sealed class SettingsWindowNavPaneTests
         ("AI", "DeepSeekKeyBox")
     ];
 
+    private static readonly string[] PageNames =
+        ["AppearancePage", "PanelPage", "GeneralPage", "DataPage", "AiPage"];
+
     [STATestMethod]
     public void NavPane_ExposesFiveItemsInFrozenOrderWithSelectionSemantics()
     {
@@ -272,6 +275,145 @@ public sealed class SettingsWindowNavPaneTests
         }
     }
 
+    [STATestMethod]
+    public void NavPane_DownArrowWrapsForwardFromLastItemAndFocusFollowsSelection()
+    {
+        var (window, settings) = OpenSettings();
+        try
+        {
+            CompleteLayout(settings);
+            var nav = AssertNavList(settings);
+            var items = nav.Children.OfType<RadioButton>().ToArray();
+            Keyboard.Focus(items[^1]);
+            SendNavKey(nav, Key.End);
+            SendNavKey(nav, Key.Down);
+            Assert.IsTrue(items[0].IsChecked == true, "末项按 ↓ 应正向回绕到首项。");
+            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorName)!).IsVisible, "正向回绕须同步切页。");
+            Assert.AreEqual(
+                items[0],
+                Keyboard.FocusedElement,
+                "键盘焦点必须跟随选中项（roving 语义）。");
+        }
+        finally
+        {
+            CloseAll(window, settings);
+        }
+    }
+
+    [STATestMethod]
+    public void NavPane_PagesAreMutuallyExclusiveWithSingleSharedViewport()
+    {
+        var (window, settings) = OpenSettings();
+        try
+        {
+            CompleteLayout(settings);
+            var nav = AssertNavList(settings);
+            var items = nav.Children.OfType<RadioButton>().ToArray();
+            var pages = PageNames.Select(name => (FrameworkElement)settings.FindName(name)!).ToArray();
+
+            var scroll = settings.FindName("SettingsScrollHost") as ScrollViewer;
+            Assert.IsNotNull(scroll, "右列必须有共享滚动视口 SettingsScrollHost。");
+            var pagePanel = (FrameworkElement)((FrameworkElement)settings.FindName(PageNames[0])!).Parent;
+            var nestedScrollViewers = FindDescendants<ScrollViewer>(pagePanel).Count();
+            Assert.AreEqual(
+                0,
+                nestedScrollViewers,
+                "内容页内不得再包 ScrollViewer（共享视口唯一，页内套滚动是漂移信号）。");
+
+            for (var index = 0; index < items.Length; index++)
+            {
+                items[index].IsChecked = true;
+                CompleteLayout(settings);
+                for (var page = 0; page < pages.Length; page++)
+                {
+                    Assert.AreEqual(
+                        page == index ? Visibility.Visible : Visibility.Collapsed,
+                        pages[page].Visibility,
+                        $"选中第 {index} 页时第 {page} 页可见性必须互斥（Collapsed 而非 Hidden）。");
+                }
+            }
+        }
+        finally
+        {
+            CloseAll(window, settings);
+        }
+    }
+
+    [STATestMethod]
+    public void NavPane_InitialPageIsPlacedWithoutAnimationAndSwitchAnimatesOpacityOnly()
+    {
+        // 构造期直接就位（动效默认开）：首屏 Opacity==1、无变换残留。
+        var (window, settings) = OpenSettings();
+        try
+        {
+            CompleteLayout(settings);
+            var appearance = (FrameworkElement)settings.FindName(PageNames[0])!;
+            Assert.AreEqual(1d, appearance.Opacity, 0.001, "构造期首屏必须直接就位（无淡入中间态）。");
+            Assert.IsTrue(
+                appearance.RenderTransform is null
+                || appearance.RenderTransform.Value == System.Windows.Media.Matrix.Identity,
+                "构造期首屏不得残留变换。");
+            Assert.IsTrue(
+                appearance.LayoutTransform is null
+                || appearance.LayoutTransform == System.Windows.Media.Transform.Identity,
+                "构造期首屏不得残留变换。");
+
+            // 动效开切页：可见性即时生效（UIA/命中不等动画收尾）、只动 Opacity（无变换动画）。
+            var nav = AssertNavList(settings);
+            var items = nav.Children.OfType<RadioButton>().ToArray();
+            Keyboard.Focus(items[0]);
+            SendNavKey(nav, Key.Down);
+            var panel = (FrameworkElement)settings.FindName(PageNames[1])!;
+            Assert.IsTrue(panel.IsVisible, "动效开时入场页可见性必须即时生效。");
+            Assert.IsTrue(
+                panel.RenderTransform is null
+                || panel.RenderTransform.Value == System.Windows.Media.Matrix.Identity,
+                "页切换只允许 Opacity 动画，不得引入变换动画。");
+        }
+        finally
+        {
+            CloseAll(window, settings);
+        }
+    }
+
+    [STATestMethod]
+    public void NavPane_SwitchingPagesResetsSharedScrollOffset()
+    {
+        var (window, settings) = OpenSettings();
+        try
+        {
+            CompleteLayout(settings);
+            var scroll = settings.FindName("SettingsScrollHost") as ScrollViewer;
+            Assert.IsNotNull(scroll);
+            // 面板页在矮窗口下才溢出：收缩到最小高后滚到底，切走再切回，偏移必须归零。
+            settings.Height = 460;
+            var panelNav = (RadioButton)settings.FindName("SettingsNavPanel");
+            panelNav.IsChecked = true;
+            CompleteLayout(settings);
+            Assert.IsTrue(scroll.ScrollableHeight > 0, "前提：面板页在最小高下可滚动。");
+            scroll.ScrollToEnd();
+            CompleteLayout(settings);
+            Assert.IsTrue(scroll.VerticalOffset > 0);
+
+            var generalNav = (RadioButton)settings.FindName("SettingsNavGeneral");
+            generalNav.IsChecked = true;
+            CompleteLayout(settings);
+            generalNav.IsChecked = true;
+            var backNav = (RadioButton)settings.FindName("SettingsNavPanel");
+            backNav.IsChecked = true;
+            CompleteLayout(settings);
+            Assert.AreEqual(
+                0d,
+                scroll.VerticalOffset,
+                0.01,
+                "共享视口的滚动偏移不得跨页残留。");
+        }
+        finally
+        {
+            CloseAll(window, settings);
+        }
+    }
+
     // ---- 基建（按本测试套既有各文件自持 helper 的模式复制）----
 
     private static MainWindow CreateWindow(
@@ -368,6 +510,24 @@ public sealed class SettingsWindowNavPaneTests
             new Action(() => frame.Continue = false));
         Dispatcher.PushFrame(frame);
         window.UpdateLayout();
+    }
+
+    private static IEnumerable<T> FindDescendants<T>(DependencyObject parent)
+        where T : DependencyObject
+    {
+        for (var index = 0; index < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, index);
+            if (child is T match)
+            {
+                yield return match;
+            }
+
+            foreach (var descendant in FindDescendants<T>(child))
+            {
+                yield return descendant;
+            }
+        }
     }
 
     private static void CloseAll(MainWindow window, SettingsWindow settings)

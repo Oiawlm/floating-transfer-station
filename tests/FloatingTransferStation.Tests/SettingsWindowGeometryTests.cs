@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -26,6 +27,11 @@ public sealed class SettingsWindowGeometryTests
         {
             CompleteLayout(settings);
             var work = SystemParameters.WorkArea;
+            Assert.AreEqual(SizeToContent.Manual, settings.SizeToContent, "SizeToContent 冻结为 Manual（内容驱动测量会把高度撑回内容高度）。");
+            Assert.AreEqual(ResizeMode.CanResize, settings.ResizeMode, "冻结为 CanResize（系统级 8 向缩放）。");
+            var chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(settings);
+            Assert.IsNotNull(chrome);
+            Assert.AreEqual(6d, chrome.ResizeBorderThickness.Left, "无边框缩放命中区冻结为 6。");
             Assert.AreEqual(560d, settings.MinWidth, 0.01, "最小宽冻结值 560。");
             Assert.AreEqual(460d, settings.MinHeight, 0.01, "最小高冻结值 460。");
             Assert.AreEqual(900d, settings.MaxWidth, 0.01, "最大宽冻结值 900。");
@@ -43,6 +49,9 @@ public sealed class SettingsWindowGeometryTests
             settings.Width = 1200;
             CompleteLayout(settings);
             Assert.IsTrue(settings.ActualWidth <= 900 + 0.01, "宽度不得超出最大值。");
+            settings.Height = 300;
+            CompleteLayout(settings);
+            Assert.IsTrue(settings.ActualHeight >= 460 - 0.01, "高度不得低于最小值。");
         }
         finally
         {
@@ -148,6 +157,59 @@ public sealed class SettingsWindowGeometryTests
     }
 
     [STATestMethod]
+    public void Geometry_InfinityNonPositiveAndPartialNull_FallBackAsWholeGroup()
+    {
+        // 整组语义：任一字段非法（±∞/非正尺寸/部分 null）→ 整组回落，不逐字段抢救。
+        var cases = new[]
+        {
+            (
+                "Left=+∞",
+                AppPreferences.Default with
+                {
+                    SettingsWindowLeft = double.PositiveInfinity,
+                    SettingsWindowTop = 50,
+                    SettingsWindowWidth = 860,
+                    SettingsWindowHeight = 520
+                }
+            ),
+            (
+                "Width=0",
+                AppPreferences.Default with
+                {
+                    SettingsWindowLeft = 60,
+                    SettingsWindowTop = 50,
+                    SettingsWindowWidth = 0,
+                    SettingsWindowHeight = 520
+                }
+            ),
+            (
+                "Height<0",
+                AppPreferences.Default with
+                {
+                    SettingsWindowLeft = 60,
+                    SettingsWindowTop = 50,
+                    SettingsWindowWidth = 860,
+                    SettingsWindowHeight = -520
+                }
+            ),
+            (
+                "Height=null（部分字段缺失）",
+                AppPreferences.Default with
+                {
+                    SettingsWindowLeft = 60,
+                    SettingsWindowTop = 50,
+                    SettingsWindowWidth = 860,
+                    SettingsWindowHeight = null
+                }
+            )
+        };
+        foreach (var (name, preferences) in cases)
+        {
+            AssertDefaultPlacement(preferences, $"{name}：非法/不完整几何必须整组回落默认定位。");
+        }
+    }
+
+    [STATestMethod]
     public void Geometry_FullyOffscreen_FallsBackToDefaultOwnerRelativePlacement()
     {
         var preferences = AppPreferences.Default with
@@ -197,9 +259,112 @@ public sealed class SettingsWindowGeometryTests
             CompleteLayout(settings);
             Assert.IsNull(store.LastSaved, "最大化状态不得落盘。");
             settings.WindowState = WindowState.Normal;
+
+            // 最小化同属非 Normal 态：不落盘。
+            settings.WindowState = WindowState.Minimized;
+            InvokeCommitPlacement(settings);
+            CompleteLayout(settings);
+            Assert.IsNull(store.LastSaved, "最小化状态不得落盘。");
+            settings.WindowState = WindowState.Normal;
         }
         finally
         {
+            CloseAll(window, settings);
+        }
+    }
+
+    [STATestMethod]
+    public void Geometry_SystemSizeMoveCommitsAtEndAndSuspendsClampDuringSizing()
+    {
+        var (window, settings) = OpenSettings();
+        try
+        {
+            CompleteLayout(settings);
+            var store = GetPreferencesStore(window);
+            var handle = new System.Windows.Interop.WindowInteropHelper(settings).Handle;
+            Assert.IsTrue(handle != IntPtr.Zero);
+            const int WmEnterSizeMove = 0x0231;
+            const int WmExitSizeMove = 0x0232;
+
+            // 系统缩放开始：安全网钳制挂起——把窗口推到工作区外，位置不得被立刻拉回。
+            PostMessage(handle, WmEnterSizeMove, IntPtr.Zero, IntPtr.Zero);
+            CompleteLayout(settings);
+            settings.Top = SystemParameters.WorkArea.Bottom + 500;
+            CompleteLayout(settings);
+            Assert.IsTrue(
+                settings.Top > SystemParameters.WorkArea.Bottom,
+                "WM_SIZEMOVE 期间安全网必须挂起（不与交互缩放打架）。");
+
+            // 系统缩放结束：收口一次——钳回工作区 + 落盘。
+            PostMessage(handle, WmExitSizeMove, IntPtr.Zero, IntPtr.Zero);
+            CompleteLayout(settings);
+            var work = SystemParameters.WorkArea;
+            Assert.IsTrue(
+                settings.Top <= work.Bottom + 0.01,
+                "WM_EXITSIZEMOVE 后必须钳回工作区。");
+            Assert.IsNotNull(store.LastSaved, "系统缩放结束必须落盘（EXITSIZEMOVE 路径）。");
+        }
+        finally
+        {
+            CloseAll(window, settings);
+        }
+    }
+
+    [STATestMethod]
+    public void Geometry_MaximizeStaysWithinWorkArea()
+    {
+        var (window, settings) = OpenSettings();
+        try
+        {
+            CompleteLayout(settings);
+            settings.WindowState = WindowState.Maximized;
+            CompleteLayout(settings);
+            var work = SystemParameters.WorkArea;
+            // WM_GETMINMAXINFO 按所在显示器工作区修正无边框最大化（留 resize 边框容差）。
+            Assert.IsTrue(settings.Top >= work.Top - 8, $"最大化上缘不得探出工作区，Top={settings.Top}。");
+            Assert.IsTrue(settings.Left >= work.Left - 8, $"最大化左缘不得探出工作区，Left={settings.Left}。");
+            Assert.IsTrue(
+                settings.Top + settings.ActualHeight <= work.Bottom + 8,
+                $"最大化下缘不得探出工作区（含任务栏），Bottom={settings.Top + settings.ActualHeight}。");
+            settings.WindowState = WindowState.Normal;
+            CompleteLayout(settings);
+        }
+        finally
+        {
+            CloseAll(window, settings);
+        }
+    }
+
+    [STATestMethod]
+    public void Geometry_TargetMonitorIsResolvedByRectCenter()
+    {
+        // 中心选屏接线：解析入参必须是持久化矩形的中心（而非左上角/最大交集）。
+        double? resolvedX = null;
+        double? resolvedY = null;
+        SettingsWindowPlacement.WorkAreaResolverOverride = (x, y) =>
+        {
+            resolvedX = x;
+            resolvedY = y;
+            return new SettingsWindowPlacement.WorkArea(-1920, 0, 0, 1040);
+        };
+        var preferences = AppPreferences.Default with
+        {
+            SettingsWindowLeft = -300,
+            SettingsWindowTop = 100,
+            SettingsWindowWidth = 680,
+            SettingsWindowHeight = 600
+        };
+        var (window, settings) = OpenSettings(preferences);
+        try
+        {
+            CompleteLayout(settings);
+            Assert.IsNotNull(resolvedX);
+            Assert.AreEqual(-300d + 680d / 2, resolvedX!.Value, 0.01, "选屏必须以矩形中心 X 为准。");
+            Assert.AreEqual(100d + 600d / 2, resolvedY!.Value, 0.01, "选屏必须以矩形中心 Y 为准。");
+        }
+        finally
+        {
+            SettingsWindowPlacement.WorkAreaResolverOverride = null;
             CloseAll(window, settings);
         }
     }
@@ -292,6 +457,9 @@ public sealed class SettingsWindowGeometryTests
         Assert.IsNotNull(method, "CommitPlacement 是落盘唯一入口。");
         method.Invoke(settings, null);
     }
+
+    [DllImport("user32.dll")]
+    private static extern bool PostMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
     private static RecordingPreferencesStore GetPreferencesStore(MainWindow window)
     {
