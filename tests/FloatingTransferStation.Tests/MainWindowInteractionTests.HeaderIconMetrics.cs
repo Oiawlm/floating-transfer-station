@@ -30,6 +30,7 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
 
             // 齿轮与垃圾桶：填充图标，墨迹足印 = 16×16 Viewbox。
+            AssertFillIconCentered(window, "UpdateButton", expectedSize: 16d);
             AssertFillIconCentered(window, "SettingsButton", expectedSize: 16d);
             AssertFillIconCentered(window, "DeleteContentButton", expectedSize: 16d);
 

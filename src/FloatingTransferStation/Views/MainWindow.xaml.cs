@@ -123,7 +123,8 @@ public partial class MainWindow : Window
         BoardOperationGate? operationGate = null,
         DataDirectoryChangeService? dataDirectoryChangeService = null,
         ISecretProtector? secretProtector = null,
-        DeepSeekClient? deepSeekClient = null)
+        DeepSeekClient? deepSeekClient = null,
+        IUpdateService? updateService = null)
     {
         InitializeComponent();
         _preferences = preferences ?? AppPreferences.Default;
@@ -135,6 +136,7 @@ public partial class MainWindow : Window
         // 未注入时用真实实现兜底（与 _startupManager/_globalHotkeySource 同法）。
         _secretProtector = secretProtector ?? new DpapiSecretProtector();
         _deepSeekClient = deepSeekClient ?? new DeepSeekClient();
+        _updateService = updateService ?? new UpdateService();
         _operationGate = operationGate;
         _dataDirectoryChangeService = dataDirectoryChangeService;
         _dataDirectory = dataDirectory ?? string.Empty;
@@ -168,6 +170,7 @@ public partial class MainWindow : Window
         _edgeHideRecallTimer.Tick += EdgeHideRecallTimer_Tick;
         InitializeDailyReviewEditing();
         InitializeAutoCleanup();
+        InitializeUpdates();
         InitializeCategoryNameEditing();
         InitializePanelTextEditing();
         InitializeCardEditSessionTracking();
@@ -315,6 +318,8 @@ public partial class MainWindow : Window
         ReassertTopmost();
         _topmostTimer.Start();
         _autoCleanupCheckTimer.Start();
+        // 自动检查更新（默认开）：启动 30 秒后首检 + 每 24 小时一次（契约 #26）。
+        ApplyUpdateCheckPreference(_preferences.AutoUpdateCheckEnabled);
     }
 
     /// <summary>注册剪贴板格式监听；已在监听时为 no-op。搬迁静默期停止后可由此恢复。</summary>

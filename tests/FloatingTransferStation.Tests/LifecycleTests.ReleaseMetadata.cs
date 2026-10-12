@@ -92,4 +92,18 @@ public sealed partial class LifecycleTests
             File.ReadAllText(Path.Combine(repositoryRoot, "CONTRIBUTING.md")),
             "dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore");
     }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
+    public void RepoUrl_IsSingleSourcedFromProductIdentity()
+    {
+        // repo 地址单一来源（契约 #26）：设置窗 XAML 不得再维护仓库地址字面量，
+        // 页脚链接与更新服务一律经 ProductIdentity 常量（code-behind 赋值/请求构造）。
+        var repositoryRoot = FindRepositoryRoot();
+        var settingsWindow = File.ReadAllText(
+            Path.Combine(repositoryRoot, "src", "FloatingTransferStation", "Views", "SettingsWindow.xaml"));
+        Assert.IsFalse(
+            settingsWindow.Contains("github.com", StringComparison.OrdinalIgnoreCase),
+            "SettingsWindow.xaml must not embed the repository URL literal; it is assigned from ProductIdentity in code-behind.");
+    }
 }

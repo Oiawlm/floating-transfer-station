@@ -53,6 +53,7 @@ public partial class SettingsWindow : Window
         AnimationsToggle.IsChecked = host.CurrentPreferences.AnimationsEnabled;
         StartupToggle.IsChecked = host.StartupManager.IsEnabled();
         GlobalHotkeyToggle.IsChecked = host.CurrentPreferences.GlobalHotkeyEnabled;
+        AutoUpdateCheckToggle.IsChecked = host.CurrentPreferences.AutoUpdateCheckEnabled;
         RightClickCopyToggle.IsChecked = host.CurrentPreferences.RightClickCardCopyEnabled;
         CtrlCCopyToggle.IsChecked = host.CurrentPreferences.CopySelectionWithCtrlCEnabled;
         AutoCleanupToggle.IsChecked = host.CurrentPreferences.AutoCleanupEnabled;
@@ -111,6 +112,9 @@ public partial class SettingsWindow : Window
         DataDirectoryText.Text = host.DataDirectory;
         AppNameRun.Text = ProductIdentity.DisplayName;
         VersionRun.Text = $"版本 {ProductIdentity.Version}";
+        // repo 地址单一来源（契约 #26）：页脚链接与更新服务共用 ProductIdentity 常量，
+        // XAML 不再维护字面量。
+        RepoLink.NavigateUri = new Uri(ProductIdentity.GitHubRepoHtmlUrl);
         PopulatePluginSection();
         PopulateCategoryOrderSection();
         Owner = host.HostWindow;
@@ -597,6 +601,25 @@ public partial class SettingsWindow : Window
         _host.ApplyPreferences(_host.CurrentPreferences with
         {
             AutoCleanupEnabled = enabled
+        });
+    }
+
+    private void AutoUpdateCheckToggle_Checked(object sender, RoutedEventArgs e) =>
+        ApplyAutoUpdateCheckPreference(enabled: true);
+
+    private void AutoUpdateCheckToggle_Unchecked(object sender, RoutedEventArgs e) =>
+        ApplyAutoUpdateCheckPreference(enabled: false);
+
+    private void ApplyAutoUpdateCheckPreference(bool enabled)
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with
+        {
+            AutoUpdateCheckEnabled = enabled
         });
     }
 

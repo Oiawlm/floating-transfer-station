@@ -79,6 +79,34 @@ function Assert-FileHash([string]$path, [string]$expectedHash) {
     Assert-Condition ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -eq $expectedHash) "File contents must remain: $path"
 }
 
+# 契约 #26（检查更新与一键更新）：[Run] 条目已去 skipifsilent——成功的静默安装/更新
+# 必须自动启动应用，且启动的是当前安装目录的新版本。等待有界时间内出现进程，
+# 并校验进程路径确为当前安装目录的可执行文件。
+function Assert-AppStartedFrom([string]$executablePath) {
+    $deadline = [DateTime]::UtcNow.AddSeconds(30)
+    $processes = @()
+    while ([DateTime]::UtcNow -lt $deadline) {
+        $processes = @(Get-Process -Name $productName -ErrorAction SilentlyContinue)
+        if ($processes.Count -gt 0) { break }
+        Start-Sleep -Milliseconds 500
+    }
+    Assert-Condition ($processes.Count -gt 0) 'Silent setup must start the application ([Run] entry without skipifsilent).'
+    foreach ($process in $processes) {
+        $processPath = try { $process.Path } catch { $null }
+        Assert-Condition ($null -ne $processPath -and $processPath -eq $executablePath) "The started application must run from the current installation directory (actual: $processPath)."
+    }
+}
+
+function Stop-RunningApp {
+    Get-Process -Name $productName -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    $deadline = [DateTime]::UtcNow.AddSeconds(15)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        if (@(Get-Process -Name $productName -ErrorAction SilentlyContinue).Count -eq 0) { return }
+        Start-Sleep -Milliseconds 250
+    }
+    throw 'The started application must be stoppable between lifecycle stages.'
+}
+
 function Assert-InstalledState {
     Assert-FileHash $installedExecutable $expectedExecutableHash
     $registration = Get-ItemProperty -LiteralPath $settingsKey
@@ -90,7 +118,6 @@ function Assert-InstalledState {
     $uninstall = Get-ItemProperty -LiteralPath $uninstallKey
     Assert-Condition ($uninstall.DisplayVersion -eq $expectedVersion) 'Windows uninstall metadata must match the installer version.'
     Assert-Condition ($uninstall.InstallLocation.TrimEnd('\') -eq $installedDirectory) 'Windows uninstall metadata must identify the current installation directory.'
-    Assert-Condition (@(Get-Process -Name $productName -ErrorAction SilentlyContinue).Count -eq 0) 'Silent setup must not start the application.'
     foreach ($entry in $dataHashes.GetEnumerator()) { Assert-FileHash $entry.Key $entry.Value }
     foreach ($entry in $sentinelHashes.GetEnumerator()) { Assert-FileHash $entry.Key $entry.Value }
 }
@@ -142,7 +169,7 @@ $report = [ordered]@{
     InstallerSHA256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash
     VerifiedStages = @()
     Assertions = $assertions
-    Scope = 'Synthetic install and reinstall; block legacy application relocation, enable ownership with an in-place update, relocate the application, reject the old uninstaller, and uninstall the current installation. Board, image, and settings files (including saved category names) must retain their hashes before uninstall. The registered data directory stays unchanged; cross-directory data migration is not claimed.'
+    Scope = 'Synthetic install and reinstall; block legacy application relocation, enable ownership with an in-place update, relocate the application, reject the old uninstaller, and uninstall the current installation. Successful silent install and update stages must start the application from the current installation directory ([Run] without skipifsilent, contract #26); failed or rejected stages must not start it. Board, image, and settings files (including saved category names) must retain their hashes before uninstall. The registered data directory stays unchanged; cross-directory data migration is not claimed.'
 }
 try {
     foreach ($stage in @('install', 'update')) {
@@ -150,6 +177,8 @@ try {
         $arguments = '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $installedDirectory + '" /LOG="' + $logPath + '"'
         Invoke-SetupProcess $installer.FullName $arguments $stage
         Assert-InstalledState
+        Assert-AppStartedFrom $installedExecutable
+        Stop-RunningApp
         $report.VerifiedStages += $stage
     }
 
@@ -165,6 +194,7 @@ try {
     $arguments = '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $relocatedDirectory + '" /LOG="' + $logPath + '"'
     Invoke-SetupProcess $installer.FullName $arguments 'legacy-relocation-blocked' 7
     Assert-Condition (-not (Test-Path -LiteralPath $relocatedDirectory)) 'Legacy relocation must stop before creating a replacement installation.'
+    Assert-Condition (@(Get-Process -Name $productName -ErrorAction SilentlyContinue).Count -eq 0) 'A failed setup must not start the application.'
     foreach ($entry in $dataHashes.GetEnumerator()) { Assert-FileHash $entry.Key $entry.Value }
     foreach ($entry in $sentinelHashes.GetEnumerator()) { Assert-FileHash $entry.Key $entry.Value }
     $report.VerifiedStages += 'legacy-relocation-blocked'
@@ -173,6 +203,8 @@ try {
     $arguments = '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $installedDirectory + '" /LOG="' + $logPath + '"'
     Invoke-SetupProcess $installer.FullName $arguments 'enable-ownership'
     Assert-InstalledState
+    Assert-AppStartedFrom $installedExecutable
+    Stop-RunningApp
     $report.VerifiedStages += 'enable-ownership'
 
     $logPath = Join-Path $evidenceDirectory 'relocate-application.log'
@@ -181,12 +213,15 @@ try {
     $installedDirectory = $relocatedDirectory
     $installedExecutable = Join-Path $installedDirectory "$productName.exe"
     Assert-InstalledState
+    Assert-AppStartedFrom $installedExecutable
+    Stop-RunningApp
     $report.VerifiedStages += 'relocate-application'
 
     $logPath = Join-Path $evidenceDirectory 'old-uninstaller-blocked.log'
     Invoke-SetupProcess $oldUninstallers[0].FullName ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + $logPath + '"') 'old-uninstaller-blocked' -1
     Assert-InstalledState
     Assert-Condition (Test-Path -LiteralPath (Join-Path $oldInstalledDirectory "$productName.exe")) 'A rejected old uninstaller must not start native cleanup.'
+    Assert-Condition (@(Get-Process -Name $productName -ErrorAction SilentlyContinue).Count -eq 0) 'A rejected old uninstaller must not (re)start the application.'
     $report.VerifiedStages += 'old-uninstaller-blocked'
 
     $uninstallers = @(Get-ChildItem -LiteralPath $installedDirectory -Filter 'unins*.exe' -File)

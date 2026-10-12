@@ -21,25 +21,36 @@ public sealed partial class MainWindowInteractionTests
     private static MainWindow CreateWindow(
         TestDirectory directory,
         BoardService board,
-        DefaultCaptureCategoryState? defaultCaptureCategory = null)
+        DefaultCaptureCategoryState? defaultCaptureCategory = null,
+        IUpdateService? updateService = null,
+        IPreferencesStore? preferencesStore = null)
     {
         defaultCaptureCategory ??= new DefaultCaptureCategoryState();
         var paths = AppPaths.ForTests(directory.Root);
         var store = new LocalStore(paths, new AtomicTextWriter());
-        return CreateWindow(board, store, WindowSettings.Default, defaultCaptureCategory);
+        return CreateWindow(
+            board,
+            store,
+            WindowSettings.Default,
+            defaultCaptureCategory,
+            new ImageNormalizer(store.ImagesDirectory),
+            updateService: updateService,
+            preferencesStore: preferencesStore);
     }
 
     private static MainWindow CreateWindow(
         BoardService board,
         IBoardStore store,
         WindowSettings settings,
-        DefaultCaptureCategoryState? defaultCaptureCategory = null)
+        DefaultCaptureCategoryState? defaultCaptureCategory = null,
+        IUpdateService? updateService = null)
         => CreateWindow(
             board,
             store,
             settings,
             defaultCaptureCategory,
-            new ImageNormalizer(store.ImagesDirectory));
+            new ImageNormalizer(store.ImagesDirectory),
+            updateService: updateService);
 
     private static MainWindow CreateWindow(
         BoardService board,
@@ -47,7 +58,9 @@ public sealed partial class MainWindowInteractionTests
         WindowSettings settings,
         DefaultCaptureCategoryState? defaultCaptureCategory,
         IImageNormalizer normalizer,
-        IClipboardReader? clipboardReader = null)
+        IClipboardReader? clipboardReader = null,
+        IUpdateService? updateService = null,
+        IPreferencesStore? preferencesStore = null)
     {
         defaultCaptureCategory ??= new DefaultCaptureCategoryState();
         var operationGate = new BoardOperationGate();
@@ -75,7 +88,9 @@ public sealed partial class MainWindowInteractionTests
                 store,
                 ShowStatus,
                 operationGate),
-            defaultCaptureCategory);
+            defaultCaptureCategory,
+            updateService: updateService,
+            preferencesStore: preferencesStore);
         return window;
     }
 
