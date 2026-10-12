@@ -264,4 +264,42 @@ public sealed partial class MainWindowInteractionTests
             CloseWindow(window);
         }
     }
+
+    /// <summary>契约 #23 的 UI 证据（FTS_SCROLLVIEWPORT_EVIDENCE_DIR 设置时产出真实
+    /// WPF 渲染截图）：同一分类「滚动条在场」与「清空非置顶后离场」两态——置顶卡片
+    /// 位置与宽度不变。内容为合成数据。</summary>
+    [STATestMethod]
+    public void ScrollViewport_Evidence_Capture()
+    {
+        var evidenceDirectory = Environment.GetEnvironmentVariable("FTS_SCROLLVIEWPORT_EVIDENCE_DIR");
+        if (string.IsNullOrWhiteSpace(evidenceDirectory))
+        {
+            Assert.Inconclusive("未设置 FTS_SCROLLVIEWPORT_EVIDENCE_DIR，跳过 viewport 稳定性证据产出。");
+        }
+
+        using var directory = new TestDirectory();
+        var window = CreateScrollableWindow(directory, out var board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            SaveVisualEvidence(
+                window,
+                "scrollviewport-1-scrollbar-present.png",
+                "FTS_SCROLLVIEWPORT_EVIDENCE_DIR");
+
+            Assert.IsNotNull(board.RemoveNonPinned([BoardCategory.Inbox]));
+            CompleteLayout(window);
+            SaveVisualEvidence(
+                window,
+                "scrollviewport-2-scrollbar-gone.png",
+                "FTS_SCROLLVIEWPORT_EVIDENCE_DIR");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
 }
