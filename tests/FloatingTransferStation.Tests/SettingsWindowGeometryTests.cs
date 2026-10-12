@@ -401,13 +401,18 @@ public sealed class SettingsWindowGeometryTests
     [STATestMethod]
     public void Geometry_DisconnectedMonitor_FallsBackToPrimaryWorkAreaClamp()
     {
-        // 显示器断开：查询不可用（null）→ 按契约退主屏工作区；持久化矩形（居主屏内的
-        // 尺寸与越界位置）被钳进主屏工作区，而不是丢回默认定位。
+        // 显示器断开：查询不可用（null）→ 按契约退主屏工作区；持久化矩形（越出主屏
+        // 右缘）被钳进主屏工作区，而不是丢回默认定位。种子相对当前工作区右缘构造，
+        // 并注入覆盖幽灵显示器的假虚拟桌面界——否则单屏环境按「完全出所有显示器」
+        // 契约正确回落默认定位，构不成钳制分支（CI 1024 宽虚机实测教训）。
+        var work = SystemParameters.WorkArea;
         SettingsWindowPlacement.WorkAreaResolverOverride = (_, _) => null;
+        SettingsWindowPlacement.VirtualScreenBoundsOverride = () =>
+            (0, 0, work.Right + 100 + 900 + 60, work.Height);
         var preferences = AppPreferences.Default with
         {
-            SettingsWindowLeft = 1600,
-            SettingsWindowTop = 60,
+            SettingsWindowLeft = work.Right + 100,
+            SettingsWindowTop = work.Top + 60,
             SettingsWindowWidth = 860,
             SettingsWindowHeight = 520
         };
@@ -415,7 +420,6 @@ public sealed class SettingsWindowGeometryTests
         try
         {
             CompleteLayout(settings);
-            var work = SystemParameters.WorkArea;
             Assert.AreEqual(
                 Math.Max(work.Right - 860, work.Left),
                 settings.Left,
@@ -426,6 +430,7 @@ public sealed class SettingsWindowGeometryTests
         finally
         {
             SettingsWindowPlacement.WorkAreaResolverOverride = null;
+            SettingsWindowPlacement.VirtualScreenBoundsOverride = null;
             CloseAll(window, settings);
         }
     }
