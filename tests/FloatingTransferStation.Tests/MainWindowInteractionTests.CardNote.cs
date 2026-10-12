@@ -120,7 +120,7 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsFalse(FadeAnimation.GetIsActive(stripOnLong), "未悬停时添加备注按钮必须不可见。");
             Assert.AreEqual(
                 Visibility.Collapsed, stripOnLong.Visibility,
-                "未悬停时按钮必须塌缩（布局塌缩语义，Auto 列宽归零）。");
+                "未悬停时按钮必须塌缩（格子固定预留、可见性塌缩）。");
             var savedCursor = SaveCursorPosition();
 
             try
