@@ -193,6 +193,16 @@
 - **关联**：契约记录 Issue Oiawlm/floating-transfer-station#106；CHANGELOG 未发布区；#5（ApplyPreferences 管线）、#13（标签顺序真实输入用例先导航到「面板」页再消息直驱）、#21（标签顺序节语义零变化，仅容器迁页）不受影响。
 
 
+## 十、本次新增（25，两态行距同源与光标行带精度）
+
+### 25. 两态行距同源（单一资源）与光标锚点行带精度
+
+- **断言**：卡片文字的行距数值唯一来源是资源 `CardTextLineHeight`（20，`sys:Double`）——正文预览与备注显示行两处显示态、正文编辑器与备注编辑器两处编辑态（`TextBlock.LineHeight` 附加属性 + `BlockLineHeight`，实测在 TextBox 文本宿主上生效：资源值改变编辑态行距随之改变）共同引用，任何位置不得出现第二份行距字面量；显示态与编辑态行带逐像素对齐（同原点、同行距、同一文本同换行数——两态总高一致），这是 #22 修订的「进入编辑光标定位到点击处」就近行映射的确定性前提（点击像素位置在两态间无歧义换算）。锁定测试的精度口径：Win32 消息直驱双击显示态某行行中心，光标纵向落点必须落在编辑态同一视觉行的行带内（跨行断言防坐标空间误判；左缘双击 `CaretIndex <= 1`）；选区空时在光标处插入字符，插入点仍在双击行；自动换行卡（无显式换行符）双击第二视觉行，光标落同一视觉行且两态总高一致；合成双击序列不全选。横向语义与编辑器内原生点击同规（`GetCharacterIndexFromPoint(snapToText: true)` 就近字符）。
+- **由来**：用户需求「双击在哪里，闪烁光标就落在哪里，直接从该处开始输入」（光标语义本体随 #22 修订于 2026-10-12 落地，本条固化其度量地基）。行距若两态各异，点击行与编辑行将错位；此前行距以字面量分散三处（显示两处）+ 编辑态自然度量，单一资源化消除双重维护面并使对齐成为结构保证而非巧合。spike 实证：资源临时改 40，编辑态行距随之变化、锁定测试即红——附加属性生效有测试存证。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardCaretAnchor.cs`（`CardCaretAnchor_DoubleClickPlacesCaretAtClickedLineRealInput` Win32 消息直驱端到端含跨行与左缘下界、`CardCaretAnchor_TypingStartsAtClickedPosition`、`CardCaretAnchor_EditorLineMetricsMatchDisplay` 含两态总高一致、`CardCaretAnchor_DoubleClickKeepsSelectionEmptySynthetic`、`CardCaretAnchor_WrappedLineDoubleClickMapsToSameVisualLine`）。
+- **关联**：CHANGELOG 未发布区（无独立 spec，如实标注）；#22（2026-10-12 修订的点击定位光标语义与备注显示行行距引用，行距原字面量 20 收拢为本条资源）、#13（真实输入口径）、#7（编辑持焦零改动）、#14（对半分区零改动）。
+
+
 ## 维护规则
 
 - 新契约入清单时机：行为定型的同一版本，随 CHANGELOG 与锁定测试一起落。

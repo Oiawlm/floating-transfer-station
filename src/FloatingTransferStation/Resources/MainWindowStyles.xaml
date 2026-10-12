@@ -4,7 +4,8 @@
                     xmlns:design="clr-namespace:FloatingTransferStation.Design;assembly=FloatingTransferStation.Core"
                     xmlns:models="clr-namespace:FloatingTransferStation.Models;assembly=FloatingTransferStation.Core"
                     xmlns:views="clr-namespace:FloatingTransferStation.Views"
-                    xmlns:controls="clr-namespace:FloatingTransferStation.Controls">
+                    xmlns:controls="clr-namespace:FloatingTransferStation.Controls"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
   <!-- 颜色画刷与卡片阴影定义在 Resources/DesignTheme.Light.xaml 与 DesignTheme.Dark.xaml，
        由 DesignThemeManager 在运行时整体替换；本字典内一律以 DynamicResource 引用。 -->
   <FontFamily x:Key="InterfaceFontFamily">Segoe UI Variable, Segoe UI</FontFamily>
@@ -17,6 +18,11 @@
        被利用）；命中层与图片卡不受影响。静态值（不随悬停派生）：按钮显隐若牵动
        正文回流会造成布局抖动，已否决按卡动态内缩。 -->
   <Thickness x:Key="CardTextReservedRightInset" Left="0" Top="0" Right="64" Bottom="0" />
+  <!-- 卡片正文行距唯一数值来源：显示态两处（正文预览/备注显示行）与编辑态
+       （CardTextEditorStyle 经 TextBlock.LineHeight 附加属性）共同引用——双击
+       光标锚点要求两态行距同源，行带才能逐像素对齐（就近行映射的确定性前提，
+       见 CardTextEditorStyle 注释）。 -->
+  <sys:Double x:Key="CardTextLineHeight">20</sys:Double>
   <CornerRadius x:Key="ShellCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="HeaderActionCornerRadius">7</CornerRadius>
@@ -480,9 +486,10 @@
        背景默认卡片底色、实例上绑定卡面实际底色（跟随选中态），不透明盖写同区域
        显示文本（显示态保持可见、卡片高度恒定不随草稿塌缩，也不盖邻卡；全文超出
        有界预览时编辑态以 MaxHeight=100 为共同上限，卡片至多长到显示态同款上限）；
-       无独立圆角/阴影。行距取输入字体自然度量——TextBox 不暴露
-       LineHeight/LineStackingStrategy（WPF 平台约束），多行编辑的行距与显示态存在
-       ≤1.5px/行的字体度量差，水平度量与宽度完全一致。滚动条 Hidden：溢出内容可滚
+       无独立圆角/阴影。行距与显示态同源：TextBlock.LineHeight/LineStackingStrategy
+       以附加属性设在 TextBox 上生效（TextBox 自身不暴露这两个属性，但文本宿主按
+       TextBlock 附加属性排版），值引用 CardTextLineHeight 单一资源——双击光标锚点
+       的就近行映射要求两态行带逐像素对齐。滚动条 Hidden：溢出内容可滚
        但不占内容宽，编辑态换行宽度与显示态一致。可见性由条目 IsEditing 驱动（状态
        挂在条目上，虚拟化回收不错乱）。焦点提示在卡片级 accent 细环（模板内
        CardEditingRingLayer），不在文字盒上加边。 -->
@@ -498,6 +505,8 @@
     <Setter Property="FontWeight" Value="Normal" />
     <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
     <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="TextBlock.LineHeight" Value="{StaticResource CardTextLineHeight}" />
+    <Setter Property="TextBlock.LineStackingStrategy" Value="BlockLineHeight" />
     <Setter Property="AcceptsReturn" Value="False" />
     <Setter Property="VerticalScrollBarVisibility" Value="Hidden" />
     <Setter Property="MaxHeight" Value="100" />
@@ -516,7 +525,8 @@
        对齐，见模板备注行 Grid 注释），显示态保持可见、卡片高度只随行 0 有界
        增长（≤2 行/40px）。行距经 TextBlock.LineHeight/LineStackingStrategy 附加
        属性进 TextBoxView（Inherits=true），与显示行精确同行距、消除字体度量差
-       ——只在编辑器样式本地设置，不得提升到容器级（防继承泄漏）。
+       ——只在编辑器样式本地设置，不得提升到容器级（防继承泄漏），值引用
+       CardTextLineHeight 单一资源（与正文编辑态/两处显示态同源，值不变仍为 20）。
        可见性由条目 IsEditingNote 驱动（状态挂条目，虚拟化回收不错乱），键位与
        失焦经窗口级路由事件挂接，与正文编辑器共用同一会话机器。 -->
   <Style x:Key="CardNoteEditorStyle" TargetType="TextBox">
@@ -530,7 +540,7 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="FontWeight" Value="Normal" />
     <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
-    <Setter Property="TextBlock.LineHeight" Value="20" />
+    <Setter Property="TextBlock.LineHeight" Value="{StaticResource CardTextLineHeight}" />
     <Setter Property="TextBlock.LineStackingStrategy" Value="BlockLineHeight" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="AcceptsReturn" Value="False" />
@@ -1239,7 +1249,7 @@
                            TextOptions.TextFormattingMode="Display"
                            TextWrapping="Wrap"
                            TextTrimming="CharacterEllipsis"
-                           LineHeight="20"
+                           LineHeight="{StaticResource CardTextLineHeight}"
                            LineStackingStrategy="BlockLineHeight" />
               </controls:TrimAwareTextBlock>
             </Grid>
@@ -1439,7 +1449,7 @@
                          TextOptions.TextFormattingMode="Display"
                          TextWrapping="Wrap"
                          TextTrimming="CharacterEllipsis"
-                         LineHeight="20"
+                         LineHeight="{StaticResource CardTextLineHeight}"
                          LineStackingStrategy="BlockLineHeight"
                          MaxHeight="40"
                          IsHitTestVisible="False">
