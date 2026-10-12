@@ -50,7 +50,7 @@ Windows 正式版使用 .NET 10、WPF、MSTest 和 Inno Setup，引用 `Floating
 - **合并走 PR**：合并进 main 必须经 PR 与 `quality` 质量门；**合并前把最新 `origin/main` 同步进分支**（merge 或 rebase 由你决定）。PR 合并被 GitHub 串行化，这是并行窗口之间唯一的合并点。
 - **轨道文件冲突约定**：`CHANGELOG.md`「未发布」区冲突=**保留双方条目**（两类改动都该被发行列车消费）；`version.txt` 与 README「下载」段冲突=说明有并行发行，按「以远端 main 为准重放」处理（功能分支本不该改这两个文件——出现即流程违规信号）。
 - **合并后归位**：切回 main、`git pull --ff-only`、删除本地与远端功能分支、`git fetch --prune --tags`。
-- **工作区隔离**：并行窗口**默认各自独立 clone**（refs、config、stash 全独立，是真隔离）；`git worktree` 为可选轻量方案，但它共享 config/stash/hooks，且 **gitignored 本地文档不随 worktree 复制**——用 worktree 必须手动拷贝 `AGENTS.md`/`PROJECT_GUIDE.md` 等本地指令文件。多个窗口**不得共享同一个 checkout**（分支切换互踩、暂存区互相污染）。
+- **工作区隔离**：并行执行窗口**默认 git worktree 兄弟目录**（`../悬浮中转站-worktrees/<slug>/`；gitignored 本地指令文档不随 worktree 复制，创建后须手动拷入）；独立完整 clone 留给需要完全隔离 refs/config/stash 的环境；任何情况**不得共享同一个 checkout**（分支切换互踩、暂存区互相污染）。worktree 创建模板、三角色分工、冲突面申报与串行集成编排见[多窗口并行开发协议](docs/multi-window.md)。
 
 ## 提交 PR 前
 
