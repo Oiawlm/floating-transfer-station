@@ -80,9 +80,9 @@
 
 ### 11. 撤销最近删除语义
 
-- **断言**：`Ctrl + Z` 仅在面板持有键盘焦点且无文本编辑时生效，绝不注册为全局热键；恢复用锚点插回（不回退删除后的新增/移动/重新置顶），批内保持删除时显示顺序；会话级最多 20 批；删除的图片文件保留到批次被驱逐、显式丢弃或正常退出时清理；撤销保存失败必须回到删除状态。
-- **由来**：1.11.0 撤销切片（用户误删的最后防线，同时不能变成热键劫持）。
-- **锁定**：`tests/FloatingTransferStation.Tests/BoardMutationServiceUndoTests.cs`、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.Undo.cs`。
+- **断言**：`Ctrl + Z` 仅在面板持有键盘焦点且无文本编辑时生效，绝不注册为全局热键；恢复用锚点插回（不回退删除后的新增/移动/重新置顶），批内保持删除时显示顺序；会话级最多 20 批；多批次时后进先出——恢复的总是最近一批，栈满驱逐最旧一批（图片文件随之清理）；删除的图片文件保留到批次被驱逐、显式丢弃或正常退出时清理；撤销保存失败必须回到删除状态。
+- **由来**：1.11.0 撤销切片（用户误删的最后防线，同时不能变成热键劫持）；1.30.0 显式化多批次后进先出——原实现误用 FIFO 队列弹出最旧批，自动清扫批与用户删除共栈，置顶卡删除后一次撤销恢复出的是用户无感知的旧清扫批（Issue Oiawlm/floating-transfer-station#104）。
+- **锁定**：`tests/FloatingTransferStation.Tests/BoardMutationServiceUndoTests.cs`（含 `UndoLastDelete_PopsMostRecentBatchNotOldest`、`UndoLastDelete_PinnedCardRestoredOverAutoCleanupBatch`、`UndoStack_EvictionKeepsLifoOrder`、`UndoLastDelete_SaveFailureWithMultipleBatchesKeepsOlderBatches`）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.Undo.cs`（含 `Undo_RestoresMostRecentDeleteWhenMultipleBatches`）。
 - **关联**：撤销与回收站设计草案：`docs/superpowers/specs/2026-09-25-undo-recycle-bin-design.md`。
 
 ## 二、补登（12–15，历史已定型但此前未入清单）
