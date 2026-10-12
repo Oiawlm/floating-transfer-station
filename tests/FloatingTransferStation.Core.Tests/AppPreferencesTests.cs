@@ -222,4 +222,45 @@ public sealed class AppPreferencesTests
         Assert.IsNull(restored.DeepSeekApiKeyProtected, "1.27.0 之前的 preferences.json 必须回落到未配置。");
         Assert.AreEqual("deepseek-v4-flash", restored.DeepSeekModel, "缺模型字段必须回落默认模型。");
     }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesSettingsWindowGeometry()
+    {
+        var preferences = AppPreferences.Default with
+        {
+            SettingsWindowLeft = -700.5,
+            SettingsWindowTop = 80,
+            SettingsWindowWidth = 860,
+            SettingsWindowHeight = 520
+        };
+
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            JsonSerializer.Serialize(preferences));
+
+        Assert.AreEqual(preferences, restored);
+        Assert.AreEqual(-700.5, restored!.SettingsWindowLeft);
+        Assert.AreEqual(80, restored.SettingsWindowTop);
+        Assert.AreEqual(860, restored.SettingsWindowWidth);
+        Assert.AreEqual(520, restored.SettingsWindowHeight);
+    }
+
+    [TestMethod]
+    public void DefaultAndOlderJson_SettingWindowGeometryIsNull()
+    {
+        Assert.IsNull(AppPreferences.Default.SettingsWindowLeft);
+        Assert.IsNull(AppPreferences.Default.SettingsWindowHeight);
+
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light"}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsNull(restored.SettingsWindowLeft, "旧 preferences.json 的几何字段必须回落 null（默认定位）。");
+        Assert.IsNull(restored.SettingsWindowHeight);
+    }
 }
