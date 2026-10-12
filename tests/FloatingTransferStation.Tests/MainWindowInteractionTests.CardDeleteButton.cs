@@ -91,7 +91,8 @@ public sealed partial class MainWindowInteractionTests
         PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(250));
     }
 
-    /// <summary>悬停直到条件成立（吸收窗口贴边重排残余漂移），重试后仍不成立即失败。</summary>
+    /// <summary>悬停直到条件成立（吸收窗口贴边重排残余漂移），重试后仍不成立即失败。
+    /// 失败时携带命中诊断（光标/窗口几何、目标点命中元素、各容器悬停态与矩形）。</summary>
     private static void HoverRealUntil(
         MainWindow window,
         FrameworkElement container,
@@ -103,7 +104,20 @@ public sealed partial class MainWindowInteractionTests
             HoverRealAt(window, container, positionInContainer);
         }
 
-        Assert.IsTrue(ready(), "重试真实悬停后条件仍未成立（窗口几何或悬停路由漂移）。");
+        if (!ready())
+        {
+            var screen = container.PointToScreen(positionInContainer);
+            var winPt = window.PointFromScreen(screen);
+            var hitAtTarget = System.Windows.Media.VisualTreeHelper.HitTest(window, winPt);
+            var others = string.Join(";", FindDescendants<System.Windows.Controls.ListBoxItem>(window)
+                .Select(o => string.Create(null, $"mo={o.IsMouseOver} rect={new Rect(o.TranslatePoint(new Point(), window), new Size(o.ActualWidth, o.ActualHeight))}")));
+            Assert.Fail(
+                $"重试真实悬停后条件仍未成立（窗口几何或悬停路由漂移）。" +
+                $"DIAG cursor=({screen.X:0},{screen.Y:0}) winPt={winPt:0.#} " +
+                $"winRect={new Rect(new Point(), new Size(window.ActualWidth, window.ActualHeight))} " +
+                $"winPos=({window.Left:0.#},{window.Top:0.#}) top={window.Topmost} " +
+                $"hitAtTarget={hitAtTarget?.VisualHit?.GetType()?.Name} items={others}");
+        }
     }
 
     [STATestMethod]

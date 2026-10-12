@@ -1099,7 +1099,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void TextCard_ReservesFixedPinSelectionAndDeleteColumns()
+    public void TextCard_ReservesFixedTwoColumnOperationGrid()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -1135,8 +1135,9 @@ public sealed partial class MainWindowInteractionTests
             var text = FindDescendants<TextBlock>(container)
                 .Single(candidate => candidate.Text == item.Text);
 
-            // 1.29.0 添加备注钮（右侧操作条最左列）：聊天气泡图标、30×30、基态塌缩
-            //（Visibility=Collapsed——布局塌缩语义，Auto 列宽归零）、未悬停不可命中。
+            // 1.30.0 添加备注钮（操作网格右下格 (1,1)，Issue #103）：聊天气泡图标、
+            // 30×30、基态塌缩（Visibility=Collapsed——格子固定预留、可见性塌缩）、
+            // 未悬停不可命中。
             Assert.AreEqual(30d, noteButton.Width);
             Assert.AreEqual(30d, noteButton.Height);
             Assert.AreEqual(0d, noteButton.Opacity);
@@ -1164,18 +1165,25 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual("删除", deleteButton.ToolTip);
             Assert.IsNotNull(contentGrid);
             // 1.18.0 对半分区：命中层两列 * /* 各占一半；右半（Tag=
-            // CardGestureZones.OperationsZone）右上角保留按钮包（1.29.0 起四枚
-            // 按钮——备注列 Auto（塌缩时归零），置顶/选择/删除各占固定 30px 列、
-            // 右对齐）；内容视觉层全宽在命中层之下（无 Tag，指针命中总落在命中层上）。
-            Assert.AreEqual(4, contentGrid.ColumnDefinitions.Count);
+            // CardGestureZones.OperationsZone）右上角保留按钮网格（1.30.0 起固定
+            // 两列 × 按钮行、列与按钮行绝对 30，行间 4 DIP 间隔行，行优先序
+            // 选择|删除|置顶|备注，Issue #103；按钮隐藏时格子留空不漂移）；
+            // 内容视觉层全宽在命中层之下（无 Tag，指针命中总落在命中层上）。
+            Assert.AreEqual(2, contentGrid.ColumnDefinitions.Count);
+            Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[0].Width);
             Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[1].Width);
-            Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[2].Width);
-            Assert.AreEqual(new GridLength(30), contentGrid.ColumnDefinitions[3].Width);
-            Assert.AreEqual(GridUnitType.Auto, contentGrid.ColumnDefinitions[0].Width.GridUnitType, "备注列必须 Auto（塌缩语义）。");
-            Assert.AreEqual(0, Grid.GetColumn(noteButton));
-            Assert.AreEqual(1, Grid.GetColumn(pinButton));
-            Assert.AreEqual(2, Grid.GetColumn(selectionButton));
-            Assert.AreEqual(3, Grid.GetColumn(deleteButton));
+            Assert.AreEqual(3, contentGrid.RowDefinitions.Count);
+            Assert.AreEqual(new GridLength(30), contentGrid.RowDefinitions[0].Height);
+            Assert.AreEqual(new GridLength(4), contentGrid.RowDefinitions[1].Height);
+            Assert.AreEqual(new GridLength(30), contentGrid.RowDefinitions[2].Height);
+            Assert.AreEqual(0, Grid.GetRow(selectionButton));
+            Assert.AreEqual(0, Grid.GetColumn(selectionButton));
+            Assert.AreEqual(0, Grid.GetRow(deleteButton));
+            Assert.AreEqual(1, Grid.GetColumn(deleteButton));
+            Assert.AreEqual(2, Grid.GetRow(pinButton));
+            Assert.AreEqual(0, Grid.GetColumn(pinButton));
+            Assert.AreEqual(2, Grid.GetRow(noteButton));
+            Assert.AreEqual(1, Grid.GetColumn(noteButton));
             Assert.AreEqual(HorizontalAlignment.Right, contentGrid.HorizontalAlignment);
             Assert.AreEqual(VerticalAlignment.Top, contentGrid.VerticalAlignment);
             var operationsZone = contentGrid.Parent as Grid;
@@ -1219,10 +1227,11 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void TextCard_MinPanelWidthFitsFourOperationColumns()
+    public void TextCard_MinPanelWidthFitsOperationGrid()
     {
-        // 1.29.0 守卫（MinPanelWidth 280→310 的存在理由）：最小面板宽度下右半区
-        // 必须完整容纳四列按钮条（4×30），备注钮激活时不得侵入左半手势区。
+        // 守卫（1.30.0 随两列网格修订断言，Issue #103；MinPanelWidth 310 产品下限
+        // 不变）：最小面板宽度下右半区必须完整容纳两列按钮网格（2×30），备注钮
+        // 激活时网格左缘不得侵入左半手势区。
         using var directory = new TestDirectory();
         var board = new BoardService();
         var item = board.AddText(new string('x', 240));
@@ -1256,11 +1265,11 @@ public sealed partial class MainWindowInteractionTests
             var strip = buttons.Aggregate((left, right) => Rect.Union(left, right));
 
             Assert.IsTrue(
-                zone.ActualWidth >= 4 * columns.Value,
-                $"最小面板宽度 {WindowSettings.MinPanelWidth} 下右半区 {zone.ActualWidth:0.#} 必须容纳四列按钮条 {4 * columns.Value:0.#}。");
+                zone.ActualWidth >= 2 * columns.Value,
+                $"最小面板宽度 {WindowSettings.MinPanelWidth} 下右半区 {zone.ActualWidth:0.#} 必须容纳两列按钮网格 {2 * columns.Value:0.#}。");
             Assert.IsTrue(
                 zone.TranslatePoint(new Point(), container).X <= strip.Left + 0.5,
-                $"四钮条左缘 {strip.Left:0.#} 不得越过右半区左缘 {zone.TranslatePoint(new Point(), container).X:0.#}（不侵入左半手势区）。");
+                $"按钮网格左缘 {strip.Left:0.#} 不得越过右半区左缘 {zone.TranslatePoint(new Point(), container).X:0.#}（不侵入左半手势区）。");
         }
         finally
         {
