@@ -199,10 +199,12 @@ public partial class MainWindow
         {
             // 左半双击：文字卡进入就地编辑（守卫沿用 BeginCardTextEditing：
             // 搜索态、关闭中；已有会话接续提交后重开；图片卡无操作）。
+            // 点位传第二击按下位（双击判定即按 Down，_pressStartPosition 此时
+            // 仍是第二击的按下位置），编辑器光标定位到点击处。
             if (item.Kind == BoardItemKind.Text &&
                 BoardList.ItemContainerGenerator.ContainerFromItem(item) is ListBoxItem container)
             {
-                BeginCardTextEditing(item, container);
+                BeginCardTextEditing(item, container, _pressStartPosition);
             }
         }
         else if (_pressZone == CardHitZone.OperationsPin)
@@ -222,10 +224,11 @@ public partial class MainWindow
         {
             // 备注交互条是独立意图（1.28.0）：单击进入备注就地编辑，绝不 toggle
             // 选中；语义与 BoardList_ButtonClick 的 NoteStrip 分支共用同一实现
-            // （合成与 UIA 自动化路径），真实输入路径在此分发。
+            // （合成与 UIA 自动化路径），真实输入路径在此分发并携带按下点位
+            // （编辑器光标定位到点击处）。
             if (BoardList.ItemContainerGenerator.ContainerFromItem(item) is ListBoxItem noteContainer)
             {
-                BeginCardNoteEditing(item, noteContainer);
+                BeginCardNoteEditing(item, noteContainer, _pressStartPosition);
             }
         }
         else if (_pressZone == CardHitZone.Operations)

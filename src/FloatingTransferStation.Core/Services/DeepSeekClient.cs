@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FloatingTransferStation.Models;
 
 namespace FloatingTransferStation.Services;
 
@@ -106,7 +107,7 @@ public sealed class DeepSeekClient
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>官方当前轻量模型，也是设置页的默认选择（与 AppPreferences 默认值一致）。</summary>
-    public const string DefaultModel = "deepseek-v4-flash";
+    public const string DefaultModel = DeepSeekModels.Flash;
 
     private static readonly JsonSerializerOptions RequestJsonOptions = new()
     {

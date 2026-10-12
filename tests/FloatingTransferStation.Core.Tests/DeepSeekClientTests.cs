@@ -10,11 +10,11 @@ public sealed class DeepSeekClientTests
 {
     private const string ApiKey = "sk-test-fake-key";
 
-    private static string SuccessBody(string model = "deepseek-v4-flash") => """
+    private static string SuccessBody(string model = "deepseek-flash") => """
         {"id":"1","model":"DEEPSEEK_MODEL","choices":[{"index":0,"message":{"role":"assistant","content":"pong"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}
         """.Replace("DEEPSEEK_MODEL", model);
 
-    private static DeepSeekChatRequest PingRequest(string model = "deepseek-v4-flash") => new(
+    private static DeepSeekChatRequest PingRequest(string model = "deepseek-flash") => new(
         model,
         [new DeepSeekChatMessage("user", "ping")]);
 
@@ -54,7 +54,7 @@ public sealed class DeepSeekClientTests
         Assert.AreEqual(1, result.Usage.PromptTokens);
         Assert.AreEqual(1, result.Usage.CompletionTokens);
         Assert.AreEqual(2, result.Usage.TotalTokens);
-        Assert.AreEqual("deepseek-v4-flash", result.Model);
+        Assert.AreEqual("deepseek-flash", result.Model);
         Assert.AreEqual(DeepSeekErrorKind.None, result.ErrorKind);
     }
 
@@ -238,7 +238,7 @@ public sealed class DeepSeekClientTests
             (_, _) => throw new AssertFailedException("空 key 不得发起请求。"));
         var client = new DeepSeekClient(handler);
 
-        var result = await client.TestConnectionAsync("", "deepseek-v4-flash");
+        var result = await client.TestConnectionAsync("", "deepseek-flash");
 
         Assert.IsFalse(result.IsSuccess);
         Assert.AreEqual("请先填写 API Key。", result.Message);

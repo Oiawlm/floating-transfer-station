@@ -47,77 +47,77 @@ jobs:
         run: '& .\scripts\test-installed-lifecycle.ps1'
       - name: 保存安装态验证结果
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: installed-lifecycle-evidence
           path: TestResults/installed-lifecycle/
           if-no-files-found: warn
           retention-days: 30
       - name: 保存跨分类交互截图
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: category-switch-evidence
           path: ${{ runner.temp }}/category-switch-evidence/*.png
           if-no-files-found: error
           retention-days: 30
       - name: 保存剪贴板图片回退截图
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: clipboard-image-fallback-evidence
           path: ${{ runner.temp }}/clipboard-image-fallback-evidence/*.png
           if-no-files-found: error
           retention-days: 30
       - name: 保存删除与拖入回归截图
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: audit-remediation-evidence
           path: ${{ runner.temp }}/audit-remediation-evidence/*.png
           if-no-files-found: error
           retention-days: 30
       - name: 保存分类默认名称与改名截图
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: category-names-evidence
           path: ${{ runner.temp }}/category-names-evidence/*.png
           if-no-files-found: error
           retention-days: 30
       - name: 保存连续范围选择截图
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: range-selection-evidence
           path: ${{ runner.temp }}/range-selection-evidence/*.png
           if-no-files-found: error
           retention-days: 30
       - name: 保存窗口过渡回归截图
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: visual-transitions-evidence
           path: ${{ runner.temp }}/visual-transitions-evidence/*.png
           if-no-files-found: error
           retention-days: 30
       - name: 保存卡片复制与垃圾桶双交互截图
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: delivery-evidence
           path: ${{ runner.temp }}/delivery-evidence/*.png
           if-no-files-found: error
           retention-days: 30
       - name: 保存动效过渡与置顶不重演入场截图
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: motion-transitions-evidence
           path: ${{ runner.temp }}/motion-transitions-evidence/*.png
           if-no-files-found: error
           retention-days: 30
       - name: 保存卡片左右分区手势截图
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gesture-evidence
           path: ${{ runner.temp }}/gesture-evidence/*.png
           if-no-files-found: error
           retention-days: 30
       - name: 保存通过安装验证的候选安装包
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-candidate
           path: artifacts/installer/*.exe

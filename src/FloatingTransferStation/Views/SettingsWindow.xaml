@@ -676,8 +676,8 @@
                             Style="{StaticResource ThemedComboBoxStyle}"
                             AutomationProperties.Name="DeepSeek 模型"
                             SelectionChanged="DeepSeekModelComboBox_SelectionChanged" />
-                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="deepseek-v4-flash 快速省钱，适合日常文本整理；deepseek-v4-pro 更强，适合复杂任务。" />
+                  <TextBlock x:Name="DeepSeekModelHintText"
+                             Style="{StaticResource NoteCaptionStyle}" />
                   <Button x:Name="DeepSeekTestButton"
                           Style="{StaticResource ThemedActionButtonStyle}"
                           Content="测试连接"

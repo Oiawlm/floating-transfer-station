@@ -182,7 +182,9 @@ public sealed class AppPreferencesTests
     public void Default_HasNoDeepSeekKeyAndUsesClientDefaultModel()
     {
         Assert.IsNull(AppPreferences.Default.DeepSeekApiKeyProtected, "默认不得携带任何 API Key（密文或明文）。");
-        Assert.AreEqual("deepseek-v4-flash", AppPreferences.Default.DeepSeekModel);
+        Assert.AreEqual("deepseek-flash", AppPreferences.Default.DeepSeekModel);
+        // DeepSeekClient.DefaultModel 的值钉死由编译期保证：它是 const（=DeepSeekModels.Flash），
+        // 值若偏离 "deepseek-flash" 会被 MSTEST0032 分析器在本断言处折叠判恒真报错。
         Assert.AreEqual(
             DeepSeekClient.DefaultModel,
             AppPreferences.Default.DeepSeekModel,
@@ -220,7 +222,7 @@ public sealed class AppPreferencesTests
 
         Assert.IsNotNull(restored);
         Assert.IsNull(restored.DeepSeekApiKeyProtected, "1.27.0 之前的 preferences.json 必须回落到未配置。");
-        Assert.AreEqual("deepseek-v4-flash", restored.DeepSeekModel, "缺模型字段必须回落默认模型。");
+        Assert.AreEqual("deepseek-flash", restored.DeepSeekModel, "缺模型字段必须回落默认模型。");
     }
 
     [TestMethod]
