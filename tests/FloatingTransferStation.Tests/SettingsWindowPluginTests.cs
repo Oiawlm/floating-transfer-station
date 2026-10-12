@@ -75,6 +75,11 @@ public sealed class SettingsWindowPluginTests
             return (SettingsWindow?)field?.GetValue(window);
         });
         Assert.IsNotNull(settings);
+        // 双栏布局（契约 #23）：插件节位于「数据与维护」页，证据截图与可见性依赖先导航。
+        var dataNav = window.Dispatcher.Invoke(() =>
+            settings.FindName("SettingsNavData") as RadioButton);
+        Assert.IsNotNull(dataNav, "设置窗必须有「数据与维护」导航项。");
+        window.Dispatcher.Invoke(() => dataNav.IsChecked = true);
         return settings;
     }
 

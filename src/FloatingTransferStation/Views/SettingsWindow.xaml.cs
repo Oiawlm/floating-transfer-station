@@ -19,11 +19,10 @@ namespace FloatingTransferStation.Views;
 /// </summary>
 public partial class SettingsWindow : Window
 {
-    // 内容滚动区最高点让窗口整体矮于工作区 WorkAreaHeightMargin；
-    // 头部行高与 SettingsWindow.xaml 的 RowDefinition 保持一致。
-    private const double WorkAreaHeightMargin = 24;
-    private const double HeaderRowHeight = 46;
-    private const double MinContentHeight = 160;
+    // 冻结几何（契约 #23，Issue #106）：最大高 = 所在工作区高 − 48（矮屏抬到
+    // MinHeight 防冲突）；其余冻结值（默认 680×600、最小 560×460、最大宽 900）
+    // 在 XAML 声明，视口高度交给 * 行与内部 ScrollViewer（SizeToContent=Manual）。
+    private const double MaxHeightMargin = 48;
 
     private readonly ISettingsHost _host;
     private bool _isSynchronizingControls;
@@ -38,14 +37,9 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         DesignThemeManager.Apply(this, host.CurrentTheme);
 
-        // 限高：内容高于工作区时滚动区收缩并由 ScrollViewer 滚动，而不是顶满整屏、
-        // 把下缘推出屏幕且垂直拖不动。上限必须落在 ScrollViewer 上——窗口 MaxHeight
-        // 只裁剪 HWND，内部布局仍按内容全高排布，滚动区拿不到受限视口。
-        var contentCap = Math.Max(
-            MinContentHeight,
-            SystemParameters.WorkArea.Height - WorkAreaHeightMargin - HeaderRowHeight);
-        SettingsScrollHost.MaxHeight = contentCap;
-        MaxHeight = contentCap + HeaderRowHeight;
+        // 固定视口（契约 #23，Issue #106）：窗口高度不再跟随内容（SizeToContent=Manual），
+        // 溢出由 SettingsScrollHost 滚动；最大高随主屏工作区收敛、矮屏抬到最小高。
+        MaxHeight = Math.Max(MinHeight, SystemParameters.WorkArea.Height - MaxHeightMargin);
 
         _isSynchronizingControls = true;
         ThemeComboBox.ItemsSource = new[]
@@ -135,6 +129,78 @@ public partial class SettingsWindow : Window
         DwmWindowEffects.UpdateImmersiveDarkMode(
             new System.Windows.Interop.WindowInteropHelper(this).Handle,
             theme == DesignTheme.Dark);
+    }
+
+    // ---- 双栏导航（契约 #23，Issue #106）----
+
+    private static readonly string[] PageNames =
+        ["AppearancePage", "PanelPage", "GeneralPage", "DataPage", "AiPage"];
+
+    private void SettingsNavItem_Checked(object sender, RoutedEventArgs e)
+    {
+        if (sender is RadioButton { Tag: string pageName })
+        {
+            SelectSettingsPage(pageName);
+        }
+    }
+
+    private void SelectSettingsPage(string pageName)
+    {
+        foreach (var name in PageNames)
+        {
+            // InitializeComponent 解析中途首项 Checked 已触发，此时后续页尚未解析；
+            // 各页初始可见性已在 XAML 声明，此处只补运行期切换。
+            if (FindName(name) is not StackPanel page)
+            {
+                continue;
+            }
+
+            page.Visibility = string.Equals(name, pageName, StringComparison.Ordinal)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// ↑/↓/Home/End 确定性切换导航项（契约 #23 键盘判据）。在隧道期消费，
+    /// 压掉 RadioButton 的原生方向键导航，保证一次按键只前进一步。
+    /// </summary>
+    private void SettingsNavList_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var offset = e.Key switch
+        {
+            Key.Up => -1,
+            Key.Down => 1,
+            Key.Home => int.MinValue,
+            Key.End => int.MaxValue,
+            _ => 0
+        };
+        if (offset == 0)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var items = SettingsNavList.Children.OfType<RadioButton>().ToArray();
+        if (items.Length == 0)
+        {
+            return;
+        }
+
+        var current = Array.FindIndex(items, item => item.IsChecked == true);
+        if (current < 0)
+        {
+            current = 0;
+        }
+
+        var next = offset switch
+        {
+            int.MinValue => 0,
+            int.MaxValue => items.Length - 1,
+            _ => (current + offset + items.Length) % items.Length
+        };
+        items[next].IsChecked = true;
+        items[next].Focus();
     }
 
     private void SettingsWindow_SourceInitialized(object? sender, EventArgs e)
