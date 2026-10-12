@@ -174,6 +174,15 @@
 - **锁定**：`tests/FloatingTransferStation.Tests/TrimAwareTextBlockTests.cs`（截断判据与翻转）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardNote.cs`（`CardNote_StripEntry_OnlyOnTruncatedTextCardsOnHover` 门槛矩阵、`CardNote_StripEntry_SelectedTruncatedCardStillShowsOnHover`、`CardNote_RealInputClickOnStripButtonEntersEditingWithoutChangingSelection` 真实输入、`CardOperationMatrix_NoteButtonRow`、常显/高度稳定/键盘语义/空白删除/失败还原/持焦不收起/回收终结/右键零改动/避让零争用/持久化往返/缺字段免迁移/合成路径）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardOperationAvoidance.cs`（`CardOperationStrip_HiddenNoteButtonCollapsesColumn` 塌缩语义）。
 - **关联**：CHANGELOG 1.28.0/1.29.0（无独立 spec，如实标注）；契约记录 Issue Oiawlm/floating-transfer-station#94；#7/#16 的 1.28.0 扩展同 Issue；1.29.0 入口迁移修订记录 Issue Oiawlm/floating-transfer-station#98。
 
+## 八、本次新增（23，1.31.0）
+
+### 23. BoardList viewport 几何与滚动条可见性解耦（1.31.0 起）
+
+- **断言**：BoardList 的卡片几何不随垂直滚动条出现/消失而变化——同一窗口下可滚动与不可滚动两种内容量，ScrollViewer viewport 宽、单张卡片宽（全宽拉伸）、卡片相对视口位置（含置顶卡右缘=右上操作条锚定缘）逐项相等；滚动条保留 `Auto` 语义（需要时才出现）但永不占布局宽，条带（8 DIP，隐式瘦条样式给出）落在卡片右缘外边距带（12 DIP）内，与每张卡片内容及右上按钮条零像素相交，Track 命令接线保持可交互（上页点击必须移动视口）；挂接唯一路径是 keyed overlay ScrollViewer 模板样式经 BoardList.Resources 作用域隐式样式作用于模板内部生成的 ScrollViewer——不做全局隐式 ScrollViewer 样式（不波及复盘编辑器等其他 ScrollViewer 表面）、不重写 ListBox 模板、不改隐式 ScrollBar 样式与卡片模板内部几何；模板内三个 `PART_*` 命名部件（ScrollContentPresenter、垂直/水平 ScrollBar）与 `CanContentScroll`/两向 `ScrollBarVisibility`/`Background` 透传绑定齐备（虚拟化 `ScrollUnit=Pixel`/`Recycling` 与键盘滚动的生命线），条带 `MinWidth`/`MinHeight=0` 压掉主题 ScrollBar 样式的系统尺寸下限；禁止负 margin 反向溢出与任何宽度补偿特判。
+- **由来**：用户报障「卡片多时右侧出现滚动条、卡片变窄；删除部分卡片后滚动条消失、卡片变宽——剩余置顶卡片位置轻微位移」。根因链是 WPF 默认 ScrollViewer 模板把垂直滚动条放进独立 Auto 布局列（出现/消失即列宽 0↔N），且主题 ScrollBar 样式带系统尺寸下限（`MinWidth`=系统滚动条宽，150% 缩放实测 17.33 DIP，压过瘦条样式的 `Width=8`——比「瘦条 8 DIP」的表象根因更深一层，失败先行测试实测暴露）；`BoardListItemStyle` 的 `HorizontalContentAlignment=Stretch` 把 viewport 宽传导给每张卡片。单格叠加（overlay，滚动条悬浮内容之上）是 WinUI 3/Win11 Fluent/浏览器 overlay 滚动条的业界主流，与既有透明轨道瘦条天然契合；稳定留槽（`Hidden` 常驻占位）被否决（卡片恒窄 17.33 DIP 且空闲留一条空槽，与「无滚动条时卡片应是全宽」的用户心智相反），宽度补偿/负 margin 属补丁禁用。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.ScrollViewport.cs`（`ScrollViewport_WidthIsIndependentOfVerticalScrollBarVisibility`、`ScrollViewport_CardWidthIsIndependentOfVerticalScrollBarVisibility`、`ScrollViewport_CardPositionIsIndependentOfVerticalScrollBarVisibility`、`ScrollViewport_OverlayScrollBarRemainsInteractive` 四条）。
+- **关联**：CHANGELOG 1.31.0（无独立 spec，如实标注）；同日根因调研底稿 `docs/research/2026-10-12-scrollbar-viewport-stability.md`（维护者本地资料，不入库）。
+
 ## 维护规则
 
 - 新契约入清单时机：行为定型的同一版本，随 CHANGELOG 与锁定测试一起落。

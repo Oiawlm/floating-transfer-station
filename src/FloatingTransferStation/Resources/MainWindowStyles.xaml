@@ -1065,6 +1065,54 @@
     </Setter>
   </Style>
 
+  <!-- BoardList 专用 overlay ScrollViewer 模板（keyed；经 MainWindow.xaml BoardList.Resources
+       的作用域隐式样式挂接，仅作用于该列表内部生成的 ScrollViewer）。单格叠加：垂直滚动条
+       与内容同格、右缘悬浮其上，不占布局列——viewport 几何与滚动条可见性解耦，卡片几何
+       不再随滚动条出现/消失漂移（默认模板的 Auto 独立列 + 系统滚动条宽度下限是漂移
+       根因，出现/消失会在全宽与全宽−17.33 DIP 间跳变；条带 MinWidth/MinHeight=0 压掉
+       主题 ScrollBar 样式的系统尺寸下限，瘦条宽 8 由既有隐式 ScrollBar 样式给出）。
+       三个 PART_* 命名部件与
+       透传绑定缺一不可：CanContentScroll 是虚拟化与键盘滚动的生命线；两向 ScrollBarVisibility
+       保留 Auto 语义（需要时才出现，只是不再改变 viewport 宽）；不引入自动隐藏定时器。 -->
+  <Style x:Key="OverlayScrollViewerStyle" TargetType="ScrollViewer">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollViewer">
+          <Grid Background="{TemplateBinding Background}">
+            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                    CanContentScroll="{TemplateBinding CanContentScroll}"
+                                    CanHorizontallyScroll="False"
+                                    CanVerticallyScroll="False"
+                                    ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                    ContentTemplate="{TemplateBinding ContentTemplate}"
+                                    Content="{TemplateBinding Content}"
+                                    Margin="{TemplateBinding Padding}" />
+            <ScrollBar x:Name="PART_VerticalScrollBar"
+                       Orientation="Vertical"
+                       HorizontalAlignment="Right"
+                       VerticalAlignment="Stretch"
+                       MinWidth="0"
+                       Minimum="0"
+                       Maximum="{TemplateBinding ScrollableHeight}"
+                       ViewportSize="{TemplateBinding ViewportHeight}"
+                       Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" />
+            <ScrollBar x:Name="PART_HorizontalScrollBar"
+                       Orientation="Horizontal"
+                       HorizontalAlignment="Stretch"
+                       VerticalAlignment="Bottom"
+                       MinHeight="0"
+                       Minimum="0"
+                       Maximum="{TemplateBinding ScrollableWidth}"
+                       ViewportSize="{TemplateBinding ViewportWidth}"
+                       Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                       Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}" />
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <DataTemplate DataType="{x:Type models:BoardItem}">
     <Grid Style="{StaticResource CardRootStyle}">
       <Border Style="{StaticResource CardShadowLayerStyle}" />
