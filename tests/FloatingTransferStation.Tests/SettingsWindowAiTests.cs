@@ -307,7 +307,7 @@ public sealed class SettingsWindowAiTests
             var settings = OpenSettings(window);
             CompleteLayout(settings);
             var comboBox = ModelComboBox(settings);
-            Assert.AreEqual("deepseek-v4-flash", window.CurrentPreferences.DeepSeekModel);
+            Assert.AreEqual("deepseek-flash", window.CurrentPreferences.DeepSeekModel);
 
             comboBox.SelectedIndex = 1;
             PumpUntil(settings.Dispatcher, () => preferencesStore.LastSaved is not null);
@@ -325,13 +325,34 @@ public sealed class SettingsWindowAiTests
     }
 
     [STATestMethod]
+    public void ModelHint_ShowsOfficialDisplayNameMapping()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeSecretProtector());
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            RevealAiSection(settings);
+            var hint = (TextBlock)settings.FindName("DeepSeekModelHintText");
+
+            StringAssert.Contains(hint.Text, "deepseek-flash（DeepSeek V4.1 Flash）");
+            StringAssert.Contains(hint.Text, "deepseek-v4-pro（DeepSeek V4 Pro）");
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    [STATestMethod]
     public void TestConnection_WithUnsavedNewKeyInput_TestsCurrentBoxContentAndShowsSuccess()
     {
         using var directory = new TestDirectory();
         var protector = new FakeSecretProtector();
         var preferencesStore = new RecordingPreferencesStore();
         var handler = new StubHttpMessageHandler();
-        handler.Respond = (_, _) => HandlerResponse(200, SuccessBody("deepseek-v4-flash"));
+        handler.Respond = (_, _) => HandlerResponse(200, SuccessBody("deepseek-flash"));
         var window = CreateWindow(
             directory,
             preferencesStore,
@@ -349,7 +370,7 @@ public sealed class SettingsWindowAiTests
             PumpUntil(settings.Dispatcher, () => StatusText(settings).Visibility == Visibility.Visible);
 
             StringAssert.Contains(StatusText(settings).Text, "连接成功");
-            StringAssert.Contains(StatusText(settings).Text, "deepseek-v4-flash");
+            StringAssert.Contains(StatusText(settings).Text, "deepseek-flash");
             StringAssert.Contains(StatusText(settings).Text, "耗时");
             Assert.IsNotNull(handler.LastRequest, "必须真实发起（假 handler 捕获的）请求。");
             Assert.AreEqual("Bearer", handler.LastRequest!.Headers.Authorization!.Scheme);
@@ -467,7 +488,7 @@ public sealed class SettingsWindowAiTests
             DesignThemeManager.Apply(settings, DesignTheme.Light);
             RevealAiSection(settings);
 
-            handler.Respond = (_, _) => HandlerResponse(200, SuccessBody("deepseek-v4-flash"));
+            handler.Respond = (_, _) => HandlerResponse(200, SuccessBody("deepseek-flash"));
             ((Button)settings.FindName("DeepSeekTestButton")).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
             PumpUntil(settings.Dispatcher, () => StatusText(settings).Visibility == Visibility.Visible);
