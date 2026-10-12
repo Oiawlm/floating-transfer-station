@@ -655,12 +655,12 @@ public sealed class SettingsWindowInteractionTests
     }
 
     /// <summary>
-    /// 设置窗限高与滚动回归：此前 SizeToContent=Height 无上限，内容高于屏幕时窗口
-    /// 顶满整屏、下缘探出工作区且垂直拖不动。窗口高度必须受工作区钳制，
-    /// 内容超出视口时必须可滚动到最底部（退出按钮）。
+    /// 设置窗固定视口与滚动回归（契约 #24，Issue #106）：SizeToContent=Manual 后
+    /// 窗口高度不再跟随内容，最大高按「工作区 − 48、矮屏抬到 MinHeight(460)」收敛；
+    /// 内容溢出由共享视口滚动，页脚（退出按钮）在滚动区外保持常驻可见。
     /// </summary>
     [STATestMethod]
-    public void SettingsWindow_ClampsHeightToWorkAreaAndScrollsOverflow()
+    public void SettingsWindow_FixedViewportScrollsOverflowAndKeepsFooterVisible()
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeStartupManager());
@@ -671,50 +671,42 @@ public sealed class SettingsWindowInteractionTests
             CompleteLayout(settings);
 
             var work = SystemParameters.WorkArea;
-            Assert.IsTrue(
-                settings.MaxHeight <= work.Height,
-                $"设置窗最大高度不得超出工作区，MaxHeight={settings.MaxHeight}，工作区高={work.Height}。");
+            Assert.AreEqual(
+                Math.Max(460d, work.Height - 48d),
+                settings.MaxHeight,
+                0.01,
+                "最大高必须按冻结式收敛：max(最小高 460, 工作区高 − 48)。");
             var scroll = settings.FindName("SettingsScrollHost") as ScrollViewer;
-            Assert.IsNotNull(scroll, "设置内容应包在 ScrollViewer 中。");
+            Assert.IsNotNull(scroll, "设置内容应包在共享 ScrollViewer 视口中。");
             Assert.AreEqual(ScrollBarVisibility.Auto, scroll.VerticalScrollBarVisibility);
             Assert.AreEqual(ScrollBarVisibility.Disabled, scroll.HorizontalScrollBarVisibility);
-            // 上限必须落在 ScrollViewer 上：窗口 MaxHeight 只裁剪 HWND，滚动区
-            // 拿不到受限视口，内容仍按全高排布而无法滚动。
-            Assert.AreEqual(
-                Math.Max(160d, work.Height - 24d - 46d),
-                scroll.MaxHeight,
-                0.01,
-                "滚动区高度上限应按工作区推定。");
             Assert.IsTrue(
                 settings.ActualHeight <= settings.MaxHeight + 0.01,
                 $"设置窗实际高度必须服从最大高度，ActualHeight={settings.ActualHeight}。");
+            Assert.AreEqual(680d, settings.ActualWidth, 0.01, "默认宽度应为冻结值 680 DIP。");
 
-            // 模拟矮屏：限高后窗口收缩，内容（含退出按钮）滚动可达。
-            settings.SizeToContent = SizeToContent.Manual;
-            settings.MaxHeight = 320;
-            scroll.MaxHeight = 274;
-            settings.Height = 320;
+            // 页脚在滚动区外：不滚动也完整可见。
+            var exit = (Button)settings.FindName("ExitButton");
+            Assert.IsTrue(exit.IsVisible, "页脚退出按钮必须常驻可见（不属于任何导航页）。");
+
+            // 模拟矮屏：窗口收至最小高，视口收缩；面板页（标签顺序四行必渲染）必溢出。
+            var panelNav = (RadioButton)settings.FindName("SettingsNavPanel");
+            panelNav.IsChecked = true;
+            CompleteLayout(settings);
+            settings.Height = 460;
             CompleteLayout(settings);
 
             Assert.IsTrue(
-                Math.Abs(settings.ActualHeight - 320) <= 0.01,
-                $"限高后窗口应收缩到 320，实际 ActualHeight={settings.ActualHeight}。");
+                Math.Abs(settings.ActualHeight - 460) <= 0.01,
+                $"矮屏下窗口应收缩到最小高 460，实际 ActualHeight={settings.ActualHeight}。");
             Assert.IsTrue(scroll.ScrollableHeight > 0, "内容超出视口时应出现纵向滚动量。");
-            scroll.ScrollToVerticalOffset(scroll.ScrollableHeight / 2);
+            scroll.ScrollToEnd();
             CompleteLayout(settings);
+            Assert.IsTrue(scroll.VerticalOffset > 0, "滚动到底后应有实际滚动位移。");
+            Assert.IsTrue(exit.IsVisible, "内容滚动时页脚退出按钮仍必须可见。");
             SaveVisualEvidence(
                 (Border)settings.FindName("WindowShell"),
                 "settings-scroll-limited.png");
-
-            var exit = (Button)settings.FindName("ExitButton");
-            scroll.ScrollToEnd();
-            CompleteLayout(settings);
-
-            Assert.IsTrue(scroll.VerticalOffset > 0, "滚动到底后应有实际滚动位移。");
-            var exitBottom = exit.TransformToVisual(scroll).Transform(new Point()).Y + exit.ActualHeight;
-            Assert.IsTrue(
-                exitBottom <= scroll.ViewportHeight + 0.5,
-                $"滚动到底后退出按钮应完整进入视口，按钮下缘 {exitBottom}，视口高 {scroll.ViewportHeight}。");
 
             CloseWindow(settings);
         }

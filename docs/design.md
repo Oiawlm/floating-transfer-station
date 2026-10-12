@@ -113,6 +113,7 @@
 - 卡片统一携带共享冻结的 `CardShadowEffect`（浅色 `#1D1D1F`/0.12、深色 `#000000`/0.35，模糊 8、深度 2、方向 270°），不逐卡片实例化以保证虚拟化列表性能。
 - 卡片悬停时以渲染位移上浮 1px（`LiftAnimation.LiftedOffsetPx = -1`，167ms 减速曲线，回落用加速曲线），不参与布局、不影响命中测试。
 - 滚动条滑块悬停时经 6px 宽悬停层交叉淡入表现展宽（基宽 4px）。
+- BoardList 滚动条为 overlay 布局（1.31.0 起）：列表作用域的 overlay ScrollViewer 模板（`OverlayScrollViewerStyle`，经 BoardList.Resources 作用域隐式样式挂接）让垂直滚动条与内容同格、右缘悬浮其上、不占布局宽——viewport 几何与滚动条可见性解耦，卡片几何不随滚动条出现/消失漂移（默认模板的 Auto 独立列 + 主题样式的系统滚动条宽度下限曾是漂移根因，条带 `MinWidth/MinHeight=0` 压掉该下限）。条带宽 8 落在卡片右缘外边距带 12 内、与卡片内容零遮挡；`Auto` 语义不变（需要时才出现），滑块、透明轨道与悬停展宽 token 全部继续有效。设计契约 #23。
 
 ## 五·C、窗口材质（Mica，Windows 11）
 
@@ -124,8 +125,14 @@
 
 ## 五·D、卡片文字避让与一次性贴边隐藏（1.20.0）
 
-- **文字避让操作列（1.20.0 起；1.24.0 随卡片删除按钮扩为三列）**：文字卡正文右侧为右上角操作按钮条预留排他空间，任何时刻（悬停/非悬停）零像素争用。内缩量唯一来源是 WPF 派生资源 `CardTextReservedRightInset`（三列 `CardOperationColumnWidth` 30×3 + 4 DIP 间隙 = 94；1.20.0 两列时为 64），不得在别处写死第二个数值；命中层对半分区与图片卡全幅不变。280px 最窄面板下每行文字约损失 30% 宽度，是消除像素争用的确定代价。
+- **文字避让操作列（1.20.0 起；1.24.0 扩为三列，1.29.0 扩为四列，1.33.0 改右上两列网格）**：文字卡正文右侧为右上角操作按钮网格预留排他空间，任何时刻（悬停/非悬停）零像素争用。内缩量唯一来源是 WPF 派生资源 `CardTextReservedRightInset`（两列 `CardOperationColumnWidth` 30×2 + 4 DIP 间隙 = 64；1.20.0 两列横排为 64，1.24.0 三列 94，1.29.0 四列 124，1.33.0 随按钮区网格化回归 64），不得在别处写死第二个数值；操作按钮网格为固定两列 × 按钮行（列与按钮行绝对 30 DIP，按钮行间 4 DIP 独立间隔行，行优先序 选择|删除|置顶|备注，按钮隐藏时格子留空不漂移）；命中层对半分区与图片卡全幅不变。310px 最窄面板下每行文字约损失 25% 宽度（64/260），是消除像素争用的确定代价。
 - **一次性贴边隐藏（1.20.0 起）**：头部按钮（暂停符右侧、「箭头收入右缘」图标）切换语义；待命期间按钮转强调色、头部操作区常显（鼠标离开恰是最需要看到待命指示的时刻）。隐藏 = 整窗**同尺寸纯移动**到所有显示器右缘之外（含 DWM 阴影余量 32 物理像素，目标矩形与每一个显示器零交集），面板保持展开、内容冻结，沿用迁移原子性（隐藏与恢复各一次矩形变更）；触发融入既有 250ms 收起节奏，抑制条件复用 `PanelStateMachine.WouldCollapse`。回位区 = 隐藏时刻屏幕内可见矩形外扩 8 物理像素，以物理像素保存（此后不做运行时 DPI 换算），光标驻留 ≥200ms 恢复；恢复即回原位原形并自动解除（一次性），热键与显示器变化兜底。图标遵守 14.5×14.5 + 1.5 描边规范；窗口位移不做动画（全仓放置迁移一致）。行为契约全文见[设计契约清单](design-contracts.md) 第 16、17 条。
+
+## 五·E、设置窗口（双栏导航、冻结几何与几何持久化）
+
+- **信息架构**：设置窗口是独立浮动窗口（非主窗贴缘停靠形态）：标题栏 + 左导航 + 右内容页 + 页脚。左导航 5 组（外观/面板/通用/数据与维护/AI）为同组 RadioButton（风格同主窗分类轨：选中态 `ActiveCategoryBrush` 底 + 3px `AccentBrush` 指示条、圆角 7、悬停 `HoverSurfaceBrush`），原生携带 SelectionItem 自动化语义；↑/↓ 循环、Home/End 跳首末在预览隧道期消费（压掉 RadioButton 原生方向键导航，保证一次按键一步）；页脚承载关于（应用名+版本+GitHub 链接）与退出（Danger 描边），不作导航项。13 个设置节按冻结表迁入 5 个内容页，每节用既有卡片语言分组（`CardBrush`/`BorderBrush`/圆角 8），颜色一律走两本主题字典键；页切换只翻 `Visibility`，入场页可做 167ms 档 Opacity 淡入（可见性即时生效，动效关闭或构造期直接就位）。右列 `SettingsScrollHost` 是全部页共享的唯一滚动视口——单一 x:Name 实例是 namescope 唯一性约束下的必然形态，也使迁移锁（`IsEnabled=false`）语义与旧单列表格一致。
+- **冻结几何**：`SizeToContent="Manual"` + `ResizeMode="CanResize"` + `WindowChrome.ResizeBorderThickness=6`（无边框窗口系统级 8 向缩放的正解；`NoResize` 会移除 WS_THICKFRAME 使缩放命中失效；`CaptionHeight=0` 恰好避免顶边命中冲突；DWM 圆角缩放时自动重算，禁止 `SetWindowRgn`）。默认 680×600 DIP、最小 560×460、最大宽 900、最大高 = 所在工作区高 − 48（`MaxHeightMargin=48`，矮屏抬到最小高——`MaxHeight<MinHeight` 在 WPF 是未定义行为）。窗口独立四边描边、标题栏双上角圆。内容溢出由共享视口滚动，页脚在滚动区外常驻可见。
+- **几何持久化**：`AppPreferences` 可空 DIP 字段（`SettingsWindowLeft/Top/Width/Height`，null=默认定位），只走 `ISettingsHost.ApplyPreferences` 原子管线（契约 #5 同路）；落盘时机=操作结束（头部 Thumb `DragCompleted` 与系统缩放 `WM_EXITSIZEMOVE`，`WindowState==Normal` 才写，拖拽进行中零写盘）。恢复在 `SourceInitialized`：整组非法（NaN/±∞/非正尺寸）或完全落在所有显示器之外 → 回落 owner 相对默认定位；否则按矩形中心解析目标显示器（`MonitorFromPoint`+`GetMonitorInfo`+`GetDpiForMonitor`，内部一律 DIP、仅 Win32 边界按显示器有效 DPI 换算；无句柄/失败退主屏工作区），按其重算 MaxHeight 并把矩形归一——部分越界钳到最近工作区边界，负坐标在目标屏工作区内原样合法（左侧副屏不钳非负）。系统交互缩放期间（`WM_SIZEMOVE`）挂起位置钳制，`WM_EXITSIZEMOVE` 收口一次；`WM_GETMINMAXINFO` 按所在显示器工作区修正无边框最大化几何。标题栏拖拽 DragDelta 钳制维持主屏工作区语义（历史冻结）。行为契约全文见[设计契约清单](design-contracts.md) 第 23 条（记录 Issue #106）。
 
 ## 六、动效原则（评审基准）
 
