@@ -38,6 +38,8 @@ public enum TrashNoSelectionRightClickAction
 /// 设置窗口几何（双栏改造起）持久化为 WPF DIP 值（null = 首次运行用默认定位），
 /// 旧配置文件缺字段免迁移加载，非法值（非有限数/非正尺寸/完全落在所有显示器之外）
 /// 由窗口侧整组回落默认定位（契约 #24）。
+/// 1.35.0 起新增自动检查更新开关（默认开启；关=停自动检查定时器，开=恢复节奏，
+/// 手动检查不受影响），旧配置缺字段按未知成员回落默认开启。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -56,7 +58,8 @@ public sealed record AppPreferences(
     double? SettingsWindowLeft = null,
     double? SettingsWindowTop = null,
     double? SettingsWindowWidth = null,
-    double? SettingsWindowHeight = null)
+    double? SettingsWindowHeight = null,
+    bool AutoUpdateCheckEnabled = true)
 {
     public static AppPreferences Default { get; } = new();
 }

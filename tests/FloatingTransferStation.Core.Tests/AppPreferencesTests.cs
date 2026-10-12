@@ -263,4 +263,39 @@ public sealed class AppPreferencesTests
         Assert.IsNull(restored.SettingsWindowLeft, "旧 preferences.json 的几何字段必须回落 null（默认定位）。");
         Assert.IsNull(restored.SettingsWindowHeight);
     }
+
+    [TestMethod]
+    public void Default_EnablesAutoUpdateCheck()
+    {
+        Assert.IsTrue(AppPreferences.Default.AutoUpdateCheckEnabled);
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesAutoUpdateCheckPreference()
+    {
+        var preferences = AppPreferences.Default with { AutoUpdateCheckEnabled = false };
+
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            JsonSerializer.Serialize(preferences));
+
+        Assert.AreEqual(preferences, restored);
+        Assert.IsFalse(restored!.AutoUpdateCheckEnabled);
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutAutoUpdateCheckField_FallsBackToEnabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","autoCleanupEnabled":false}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsTrue(restored.AutoUpdateCheckEnabled, "旧 preferences.json 缺字段时必须回落到默认开启。");
+        Assert.IsFalse(restored.AutoCleanupEnabled, "测试数据里的旧字段语义不受新字段影响。");
+    }
 }
