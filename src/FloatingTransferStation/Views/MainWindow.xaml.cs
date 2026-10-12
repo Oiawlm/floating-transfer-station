@@ -318,7 +318,7 @@ public partial class MainWindow : Window
         ReassertTopmost();
         _topmostTimer.Start();
         _autoCleanupCheckTimer.Start();
-        // 自动检查更新（默认开）：启动 30 秒后首检 + 每 24 小时一次（契约 #25）。
+        // 自动检查更新（默认开）：启动 30 秒后首检 + 每 24 小时一次（契约 #26）。
         ApplyUpdateCheckPreference(_preferences.AutoUpdateCheckEnabled);
     }
 

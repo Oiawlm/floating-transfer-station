@@ -97,7 +97,7 @@ public sealed partial class LifecycleTests
     [TestCategory("Adversarial")]
     public void RepoUrl_IsSingleSourcedFromProductIdentity()
     {
-        // repo 地址单一来源（契约 #25）：设置窗 XAML 不得再维护仓库地址字面量，
+        // repo 地址单一来源（契约 #26）：设置窗 XAML 不得再维护仓库地址字面量，
         // 页脚链接与更新服务一律经 ProductIdentity 常量（code-behind 赋值/请求构造）。
         var repositoryRoot = FindRepositoryRoot();
         var settingsWindow = File.ReadAllText(

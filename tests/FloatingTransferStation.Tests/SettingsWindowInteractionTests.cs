@@ -243,7 +243,7 @@ public sealed class SettingsWindowInteractionTests
             Assert.AreEqual("设置", System.Windows.Automation.AutomationProperties.GetName(gear));
             var actions = (StackPanel)window.FindName("HeaderActions");
             var buttons = actions.Children.OfType<Button>().ToArray();
-            Assert.AreEqual("UpdateButton", buttons[0].Name, "更新按钮最左常驻（契约 #25：检查更新/一键更新双语义）。");
+            Assert.AreEqual("UpdateButton", buttons[0].Name, "更新按钮最左常驻（契约 #26：检查更新/一键更新双语义）。");
             Assert.AreEqual("PanelHoldButton", buttons[1].Name, "保持展开开关紧随更新按钮。");
             Assert.AreEqual(
                 "EdgeHideButton",

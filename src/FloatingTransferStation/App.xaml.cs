@@ -115,7 +115,7 @@ public partial class App : Application
             // DeepSeek 接入地基（1.27.0）：显式装配，别处不做隐藏加密调用或请求构造。
             var secretProtector = new DpapiSecretProtector();
             var deepSeekClient = new DeepSeekClient();
-            // 检查更新与一键更新（契约 #25）：更新服务组合根装配单例，UI 只做接线。
+            // 检查更新与一键更新（契约 #26）：更新服务组合根装配单例，UI 只做接线。
             var updateService = new UpdateService();
             window = new MainWindow(
                 board,

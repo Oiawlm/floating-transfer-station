@@ -113,7 +113,7 @@ public partial class SettingsWindow : Window
         DataDirectoryText.Text = host.DataDirectory;
         AppNameRun.Text = ProductIdentity.DisplayName;
         VersionRun.Text = $"版本 {ProductIdentity.Version}";
-        // repo 地址单一来源（契约 #25）：页脚链接与更新服务共用 ProductIdentity 常量，
+        // repo 地址单一来源（契约 #26）：页脚链接与更新服务共用 ProductIdentity 常量，
         // XAML 不再维护字面量。
         RepoLink.NavigateUri = new Uri(ProductIdentity.GitHubRepoHtmlUrl);
         PopulatePluginSection();

@@ -12,7 +12,7 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 检查更新与一键更新的窗口层契约（契约 #25）：头部按钮行最左常驻更新按钮；
+/// 检查更新与一键更新的窗口层契约（契约 #26）：头部按钮行最左常驻更新按钮；
 /// 双态（无更新=次级色「检查更新」，有更新=强调色 + tooltip/无障碍名携带新版本号）；
 /// 自动检查的失败完全静默、发现新版本仅状态条提示一次；无更新手动点击状态条反馈、
 /// 失败提示一次；检查与下载全程单飞防重入；可用态点击按「下载→校验→排空→静默
@@ -579,7 +579,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     /// <summary>
-    /// 1.35.0 发布证据（FTS_UPDATE_EVIDENCE_DIR 设置时产出真实 WPF 渲染截图，契约 #25）：
+    /// 发布证据（FTS_UPDATE_EVIDENCE_DIR 设置时产出真实 WPF 渲染截图，契约 #26）：
     /// 头部「更新」按钮双态——常态（次级色「检查更新」）与发现新版本态（强调色点亮）。
     /// 有更新态经 fake 服务回报真实走 AdoptCheckResult 采纳路径；渲染走
     /// SaveVisualEvidence（RenderTargetBitmap 实拍窗口壳层）。

@@ -313,7 +313,7 @@ public sealed partial class LifecycleTests
             runSections.Count,
             "The installer must define exactly one [Run] section.");
         var run = NormalizeInstallerSectionBody(runSections[0].Groups["Body"].Value);
-        // 契约性修订（检查更新与一键更新，契约 #25）：去掉 skipifsilent——静默更新安装
+        // 契约性修订（检查更新与一键更新，契约 #26）：去掉 skipifsilent——静默更新安装
         // 后 [Run] 条目照常执行，应用经安装器自动重启（普通安装行为不变，本就自动启动）。
         const string expectedRun =
             "Filename: \"{app}\\{#MyAppExeName}\"; Description: \"启动 {#MyAppName}\"; Flags: nowait";
