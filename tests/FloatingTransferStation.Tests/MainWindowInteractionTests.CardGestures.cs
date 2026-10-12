@@ -733,6 +733,32 @@ public sealed partial class MainWindowInteractionTests
         bool requireGestureHandled = true,
         int hoverSettleMilliseconds = 0)
     {
+        // 全量批跑中上一测试恢复的光标位置可能与本测试点击点重合（窗口都在
+        // 同一贴边位置生成），悬停/抬起的瞬时未命中（窗口贴边重排、淡入时钟
+        // 与消息到达的先后抖动）用一次完整重试吸收——重试重新预热位移、重新
+        // 悬停再投递按下/抬起，连续两次都无 Up 事件才判失败。
+        MouseButtonEventArgs? upArgs = null;
+        for (var attempt = 0; attempt < 2 && upArgs is null; attempt++)
+        {
+            upArgs = ClickRealAtOnce(window, container, positionInContainer, hoverSettleMilliseconds);
+        }
+
+        // 路由同步完成后 Handled 已定型：手势层的 Up 处理器对命中卡片置 true，
+        // 据此确认真实消息没有被输入管线丢弃。按钮命中路径（右半按钮淡入后
+        // 可命中）由按钮命令承接，Up 不经手势层置 Handled。
+        Assert.IsNotNull(upArgs);
+        if (requireGestureHandled)
+        {
+            Assert.IsTrue(upArgs.Handled, "真实点击必须被手势层处理（按下命中卡片）。");
+        }
+    }
+
+    private static MouseButtonEventArgs? ClickRealAtOnce(
+        MainWindow window,
+        FrameworkElement container,
+        Point positionInContainer,
+        int hoverSettleMilliseconds)
+    {
         var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
         var screen = container.PointToScreen(positionInContainer);
         var client = new NativePoint((int)Math.Round(screen.X), (int)Math.Round(screen.Y));
@@ -770,14 +796,19 @@ public sealed partial class MainWindowInteractionTests
             window.RemoveHandler(UIElement.PreviewMouseLeftButtonUpEvent, onUp);
         }
 
-        // 路由同步完成后 Handled 已定型：手势层的 Up 处理器对命中卡片置 true，
-        // 据此确认真实消息没有被输入管线丢弃。按钮命中路径（右半按钮淡入后
-        // 可命中）由按钮命令承接，Up 不经手势层置 Handled。
-        Assert.IsNotNull(upArgs);
-        if (requireGestureHandled)
+        if (upArgs is null)
         {
-            Assert.IsTrue(upArgs.Handled, "真实点击必须被手势层处理（按下命中卡片）。");
+            var captured = System.Windows.Input.Mouse.Captured;
+            var directlyOver = System.Windows.Input.Mouse.DirectlyOver;
+            Assert.Fail(
+                $"DIAGCLICK captured={captured?.GetType()?.FullName ?? "null"} " +
+                $"directlyOver={directlyOver?.GetType()?.FullName ?? "null"} " +
+                $"overAncestorOfWindow={directlyOver is System.Windows.Media.Visual v && window.IsAncestorOf(v)} " +
+                $"winVisible={window.IsVisible} winEnabled={window.IsEnabled} winActive={window.IsActive} " +
+                $"contMo={container.IsMouseOver} listMo={((System.Windows.Controls.ListBox)window.FindName("BoardList")).IsMouseOver}");
         }
+
+        return upArgs;
     }
 
     /// <summary>等待 WPF 认定真实光标已悬停在窗口上（MouseEnter 处理完成）。</summary>

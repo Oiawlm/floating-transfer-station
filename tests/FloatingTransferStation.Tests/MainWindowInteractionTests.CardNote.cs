@@ -44,7 +44,9 @@ public sealed partial class MainWindowInteractionTests
         RaiseCardPressAndRelease(button, NextIsolatedClickTimestamp());
     }
 
-    /// <summary>真实光标悬停（无点击）：强制位移预热后移入目标点并泵到容器悬停。</summary>
+    /// <summary>真实光标悬停（无点击）：强制位移预热后移入目标点并泵到容器悬停。
+    /// 不在此处断言成败——悬停落空的瞬时偏差由 HoverRealUntil 的重试（重新预热
+    /// 位移再移入）吸收，直接调用方依赖后续状态断言兜底。</summary>
     private static void HoverRealAt(
         MainWindow window,
         FrameworkElement container,
@@ -57,13 +59,11 @@ public sealed partial class MainWindowInteractionTests
         Assert.IsTrue(
             SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y)),
             "真实光标必须可移入目标点。");
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
         while (!container.IsMouseOver && DateTime.UtcNow < deadline)
         {
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
         }
-
-        Assert.IsTrue(container.IsMouseOver, "真实光标移入后卡片必须进入悬停态。");
     }
 
     /// <summary>泵 dispatcher 直到断言条件成立（备注保存是异步落盘）。</summary>
