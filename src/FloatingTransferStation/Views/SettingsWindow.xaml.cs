@@ -38,7 +38,8 @@ public partial class SettingsWindow : Window
         DesignThemeManager.Apply(this, host.CurrentTheme);
 
         // 固定视口（契约 #23，Issue #106）：窗口高度不再跟随内容（SizeToContent=Manual），
-        // 溢出由 SettingsScrollHost 滚动；最大高随主屏工作区收敛、矮屏抬到最小高。
+        // 溢出由 SettingsScrollHost 滚动；最大高先按主屏工作区收敛、矮屏抬到最小高，
+        // 恢复持久化几何时（SourceInitialized）再按目标显示器工作区重算。
         MaxHeight = Math.Max(MinHeight, SystemParameters.WorkArea.Height - MaxHeightMargin);
 
         _isSynchronizingControls = true;
@@ -240,29 +241,167 @@ public partial class SettingsWindow : Window
                 ?? WindowShell.Background;
         }
 
-        var work = SystemParameters.WorkArea;
-        Left = Math.Max(work.Left, Math.Min(Owner.Left - Width - 12, work.Right - Width));
-        // 整窗入屏：下缘约束用已定稿的实际高度（SizeToContent 在 HWND 创建前完成测量，
-        // 探针实测 SourceInitialized 时 ActualHeight 已是定稿值），不再用 1.15.1 的
-        // work.Bottom-44——它只保证顶部一条 44px 带可见，与真实高度无关，窗口高度接近
-        // 整屏时下缘照样探出工作区。若个别环境此时尚未定稿，构造函数挂上的 SizeChanged
-        // 钳位会在定稿后收口。本次只承诺主屏工作区（SystemParameters.WorkArea）；
-        // 按窗口所在显示器取工作区（MonitorFromWindow）为后续增强。
-        Top = Math.Clamp(Owner.Top, work.Top, Math.Max(work.Top, work.Bottom - ActualHeight));
+        // 系统级缩放/最大化（契约 #23，Issue #106）：WM_EXITSIZEMOVE 是「结束才落盘」
+        // 的唯一可靠信号，WM_GETMINMAXINFO 修正无边框窗口的最大化几何。
+        if (System.Windows.Interop.HwndSource.FromHwnd(handle) is { } source)
+        {
+            source.AddHook(WndProc);
+        }
+
+        RestorePlacementOrDefault();
+    }
+
+    // ---- 几何持久化与恢复（契约 #23，Issue #106）----
+
+    private bool _isInSystemSizing;
+
+    private IntPtr WndProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int WmGetMinMaxInfo = 0x0024;
+        const int WmEnterSizeMove = 0x0231;
+        const int WmExitSizeMove = 0x0232;
+        switch (message)
+        {
+            case WmEnterSizeMove:
+                _isInSystemSizing = true;
+                break;
+            case WmExitSizeMove:
+                _isInSystemSizing = false;
+                ClampIntoCurrentWorkArea();
+                CommitPlacement();
+                break;
+            case WmGetMinMaxInfo:
+                var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+                handled = SettingsWindowPlacement.TryApplyMaximizeWorkArea(
+                    hwnd,
+                    lParam,
+                    MinWidth,
+                    MinHeight,
+                    MaxWidth,
+                    MaxHeight,
+                    dpi.PixelsPerInchX / 96d,
+                    dpi.PixelsPerInchY / 96d);
+                break;
+        }
+
+        return IntPtr.Zero;
     }
 
     /// <summary>
-    /// 尺寸定稿或打开后再变化（如运行时改缩放）时，把窗口上下缘钳回工作区。
-    /// 探针实测 SizeToContent 的测量与尺寸事件先于 SourceInitialized 发生，该处理器
-    /// 必须在构造函数挂接才覆盖初始放置；Top/Left 尚为 NaN（未放置）时 Clamp 结果
-    /// 仍为 NaN，赋回等于保持未设置。同时保证垂直拖拽钳制在矮屏上仍有向上空间。
-    /// 只按主屏工作区（SystemParameters.WorkArea）钳制。
+    /// 恢复持久化几何（契约 #23 §四.3）：整组非法（缺失/NaN/±∞/非正尺寸）或完全落在
+    /// 所有显示器之外 → 回落 owner 相对默认定位；否则按持久化矩形中心解析目标显示器，
+    /// 先按其工作区重算 MaxHeight，再把矩形归一（部分越界钳入、负坐标合法）后应用。
+    /// </summary>
+    private void RestorePlacementOrDefault()
+    {
+        var preferences = _host.CurrentPreferences;
+        var (left, top, width, height) = (
+            preferences.SettingsWindowLeft,
+            preferences.SettingsWindowTop,
+            preferences.SettingsWindowWidth,
+            preferences.SettingsWindowHeight);
+        if (!SettingsWindowPlacement.IsValid(left, top, width, height)
+            || !SettingsWindowPlacement.IntersectsVirtualScreen(left!.Value, top!.Value, width!.Value, height!.Value))
+        {
+            PlaceAtDefaultPosition();
+            return;
+        }
+
+        var workArea = ResolveWorkAreaFor(left!.Value + width!.Value / 2, top!.Value + height!.Value / 2);
+        MaxHeight = Math.Max(MinHeight, workArea.Height - MaxHeightMargin);
+        var rect = SettingsWindowPlacement.Normalize(
+            left.Value, top.Value, width.Value, height.Value,
+            MinWidth, MaxWidth, MinHeight, MaxHeight,
+            workArea);
+        Width = rect.Width;
+        Height = rect.Height;
+        Left = rect.Left;
+        Top = rect.Top;
+    }
+
+    /// <summary>owner 相对默认定位（首次运行或几何不可用的回落路径）。</summary>
+    private void PlaceAtDefaultPosition()
+    {
+        var work = SystemParameters.WorkArea;
+        if (Owner is { } owner)
+        {
+            Left = Math.Max(work.Left, Math.Min(owner.Left - Width - 12, work.Right - Width));
+            Top = Math.Clamp(owner.Top, work.Top, Math.Max(work.Top, work.Bottom - ActualHeight));
+            return;
+        }
+
+        // Owner 不可用的理论边界：主屏工作区居中。
+        Left = work.Left + Math.Max(0, (work.Width - Width) / 2);
+        Top = work.Top + Math.Max(0, (work.Height - ActualHeight) / 2);
+    }
+
+    private SettingsWindowPlacement.WorkArea ResolveWorkAreaFor(double dipX, double dipY)
+    {
+        if (SettingsWindowPlacement.WorkAreaResolverOverride is { } resolver)
+        {
+            return resolver(dipX, dipY) ?? PrimaryWorkArea();
+        }
+
+        return SettingsWindowPlacement.QueryWorkArea(this, dipX, dipY) ?? PrimaryWorkArea();
+    }
+
+    private static SettingsWindowPlacement.WorkArea PrimaryWorkArea() => new(
+        SystemParameters.WorkArea.Left,
+        SystemParameters.WorkArea.Top,
+        SystemParameters.WorkArea.Right,
+        SystemParameters.WorkArea.Bottom);
+
+    /// <summary>把当前位置钳进所在显示器工作区（恢复/SizeChanged/系统缩放结束共用，
+    /// 不留第二套钳制）。</summary>
+    private void ClampIntoCurrentWorkArea()
+    {
+        if (double.IsNaN(Left) || double.IsNaN(Top))
+        {
+            return;
+        }
+
+        var workArea = ResolveWorkAreaFor(Left + (double.IsNaN(ActualWidth) ? 0 : ActualWidth / 2),
+            Top + (double.IsNaN(ActualHeight) ? 0 : ActualHeight / 2));
+        Top = Math.Clamp(Top, workArea.Top, Math.Max(workArea.Top, workArea.Bottom - ActualHeight));
+        Left = Math.Clamp(Left, workArea.Left, Math.Max(workArea.Left, workArea.Right - ActualWidth));
+    }
+
+    /// <summary>
+    /// 拖动/系统缩放结束（Normal 态）把几何写回偏好：复用 ApplyPreferences 原子管线
+    /// （契约 #5 同路）；最大化/最小化状态不落盘（恢复的是 Normal 几何）。
+    /// </summary>
+    private void CommitPlacement()
+    {
+        if (WindowState != WindowState.Normal)
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with
+        {
+            SettingsWindowLeft = Left,
+            SettingsWindowTop = Top,
+            SettingsWindowWidth = ActualWidth,
+            SettingsWindowHeight = ActualHeight
+        });
+    }
+
+    private void HeaderDragRegion_DragCompleted(object sender, DragCompletedEventArgs e) => CommitPlacement();
+
+    /// <summary>
+    /// 尺寸定稿或打开后再变化（如运行时改缩放、显示器断开）时，把窗口钳回所在
+    /// 显示器工作区（与恢复共用同一钳制）。探针实测 SizeToContent 的测量与尺寸事件
+    /// 先于 SourceInitialized 发生，该处理器必须在构造函数挂接才覆盖初始放置；
+    /// 系统交互缩放期间（WM_SIZEMOVE）不逐帧回写位置，由 EXITSIZEMOVE 收口一次。
     /// </summary>
     private void SettingsWindow_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        var work = SystemParameters.WorkArea;
-        Top = Math.Clamp(Top, work.Top, Math.Max(work.Top, work.Bottom - ActualHeight));
-        Left = Math.Clamp(Left, work.Left, Math.Max(work.Left, work.Right - ActualWidth));
+        if (_isInSystemSizing)
+        {
+            return;
+        }
+
+        ClampIntoCurrentWorkArea();
     }
 
     private void SettingsWindow_PreviewKeyDown(object sender, KeyEventArgs e)

@@ -224,7 +224,8 @@
           <Thumb x:Name="HeaderDragRegion"
                  Style="{StaticResource HeaderThumbStyle}"
                  Cursor="SizeAll"
-                 DragDelta="HeaderDragRegion_DragDelta" />
+                 DragDelta="HeaderDragRegion_DragDelta"
+                 DragCompleted="HeaderDragRegion_DragCompleted" />
           <TextBlock Text="设置"
                      Margin="16,0"
                      FontSize="15"
