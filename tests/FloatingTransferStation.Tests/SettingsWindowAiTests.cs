@@ -325,6 +325,27 @@ public sealed class SettingsWindowAiTests
     }
 
     [STATestMethod]
+    public void ModelHint_ShowsOfficialDisplayNameMapping()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeSecretProtector());
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            RevealAiSection(settings);
+            var hint = (TextBlock)settings.FindName("DeepSeekModelHintText");
+
+            StringAssert.Contains(hint.Text, "deepseek-flash（DeepSeek V4.1 Flash）");
+            StringAssert.Contains(hint.Text, "deepseek-v4-pro（DeepSeek V4 Pro）");
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    [STATestMethod]
     public void TestConnection_WithUnsavedNewKeyInput_TestsCurrentBoxContentAndShowsSuccess()
     {
         using var directory = new TestDirectory();
