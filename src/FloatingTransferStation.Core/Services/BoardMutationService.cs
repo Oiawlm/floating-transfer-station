@@ -26,7 +26,8 @@ public sealed class BoardMutationService
     private readonly IBoardStore _store;
     private readonly Action<string> _showStatus;
     private readonly BoardOperationGate _operationGate;
-    private readonly Queue<RemovedBoardItems> _undoableDeletes = new();
+    // 有界 LIFO 撤销栈:尾端是最近删除批(撤销弹出端),头端是最旧批(驱逐端)。
+    private readonly LinkedList<RemovedBoardItems> _undoableDeletes = new();
 
     public BoardMutationService(
         BoardService board,
@@ -174,7 +175,7 @@ public sealed class BoardMutationService
                 throw;
             }
 
-            EnqueueUndoableDelete(removed);
+            RecordUndoableDelete(removed);
             return true;
         }, cancellationToken);
 
@@ -268,7 +269,8 @@ public sealed class BoardMutationService
 
     /// <summary>
     /// 撤销最近一次成功删除(单条、批量或清空):按锚点插回原分类(不回退删除后的
-    /// 其他改动)并持久化;保存失败时回到删除状态。空栈返回 false 并提示。
+    /// 其他改动)并持久化;保存失败时回到删除状态。多批次时后进先出,恢复的总是
+    /// 最近一批。空栈返回 false 并提示。
     /// </summary>
     public Task<bool> UndoLastDeleteAsync(CancellationToken cancellationToken = default) =>
         _operationGate.RunAsync(async () =>
@@ -279,7 +281,8 @@ public sealed class BoardMutationService
                 return false;
             }
 
-            var removed = _undoableDeletes.Dequeue();
+            var removed = _undoableDeletes.Last!.Value;
+            _undoableDeletes.RemoveLast();
             try
             {
                 _board.RestoreInsert(removed);
@@ -307,21 +310,33 @@ public sealed class BoardMutationService
     {
         while (_undoableDeletes.Count > 0)
         {
-            DeleteImagesBestEffort(_undoableDeletes.Dequeue());
+            RemoveOldestAndCleanImages();
         }
     }
 
     /// <summary>
-    /// 删除成功后进入会话级撤销栈:图片文件保留到条目被驱逐、显式丢弃或进程退出,
-    /// 保证撤销时缩略图可用。驱逐最旧批次时同步清理其图片文件。
+    /// 删除成功后记录为会话级撤销栈的最近删除批(后进先出):图片文件保留到批次被
+    /// 驱逐、显式丢弃或进程退出,保证撤销时缩略图可用;超过上限时驱逐最旧批次并
+    /// 同步清理其图片文件。
     /// </summary>
-    private void EnqueueUndoableDelete(RemovedBoardItems removed)
+    private void RecordUndoableDelete(RemovedBoardItems removed)
     {
-        _undoableDeletes.Enqueue(removed);
+        _undoableDeletes.AddLast(removed);
         while (_undoableDeletes.Count > MaxUndoableDeletes)
         {
-            DeleteImagesBestEffort(_undoableDeletes.Dequeue());
+            RemoveOldestAndCleanImages();
         }
+    }
+
+    /// <summary>
+    /// 从栈头摘除最旧批次并清理其图片文件。必须先摘链、后清理:清理经
+    /// DeleteImagesBestEffort 同步回调状态提示,持链操作其后进行才不受重入影响。
+    /// </summary>
+    private void RemoveOldestAndCleanImages()
+    {
+        var oldest = _undoableDeletes.First!.Value;
+        _undoableDeletes.RemoveFirst();
+        DeleteImagesBestEffort(oldest);
     }
 
     private void DeleteImagesBestEffort(RemovedBoardItems removed)
@@ -367,7 +382,7 @@ public sealed class BoardMutationService
             }
 
             // 清空等同于批量移入撤销栈:可整体撤销,图片文件按栈生命周期清理。
-            EnqueueUndoableDelete(new RemovedBoardItems(
+            RecordUndoableDelete(new RemovedBoardItems(
                 new Dictionary<BoardCategory, IReadOnlyList<BoardItem>>
                 {
                     [removed.Category] = removed.Items
@@ -431,7 +446,7 @@ public sealed class BoardMutationService
             }
 
             // 与清空全部分类同构:进入会话级撤销栈,图片文件按栈生命周期清理。
-            EnqueueUndoableDelete(removed);
+            RecordUndoableDelete(removed);
             return new ClearNonPinnedOutcome(true, removed.RemovedItems.Count);
         }, cancellationToken);
     }

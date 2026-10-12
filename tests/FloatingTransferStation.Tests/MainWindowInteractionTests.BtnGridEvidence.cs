@@ -8,7 +8,7 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 1.30.0 发布证据（FTS_NOTE_EVIDENCE_DIR 设置时产出真实 WPF 渲染截图，Issue #103）：
+/// 1.32.0 发布证据（FTS_NOTE_EVIDENCE_DIR 设置时产出真实 WPF 渲染截图，Issue #103）：
 /// 图片/文本/待分类三个分类标签页的卡片悬停态——右上角固定两列操作网格
 /// （选择|删除|置顶|备注）随悬停淡入的实拍。悬停走真实光标路径（契约 #13），
 /// 渲染走 SaveVisualEvidence（RenderTargetBitmap 实拍窗口壳层）。复用
