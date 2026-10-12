@@ -155,10 +155,34 @@ public partial class SettingsWindow : Window
                 continue;
             }
 
-            page.Visibility = string.Equals(name, pageName, StringComparison.Ordinal)
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+            var selected = string.Equals(name, pageName, StringComparison.Ordinal);
+            page.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
+            if (selected)
+            {
+                AnimatePageIn(page);
+            }
         }
+    }
+
+    /// <summary>
+    /// 页切换淡入（167ms 档，契约 #23 设计语言）：只动 Opacity，可见性已即时生效，
+    /// UIA/命中不依赖动画收尾；「界面动效」关闭或构造期首项 Checked（未加载）直接就位。
+    /// </summary>
+    private void AnimatePageIn(StackPanel page)
+    {
+        page.BeginAnimation(UIElement.OpacityProperty, null);
+        page.Opacity = 1d;
+        if (!IsLoaded || !_host.CurrentPreferences.AnimationsEnabled)
+        {
+            return;
+        }
+
+        page.BeginAnimation(
+            UIElement.OpacityProperty,
+            new System.Windows.Media.Animation.DoubleAnimation(
+                0d,
+                1d,
+                TimeSpan.FromMilliseconds(FloatingTransferStation.Design.DesignTokens.NormalDurationMs)));
     }
 
     /// <summary>
@@ -776,11 +800,23 @@ public partial class SettingsWindow : Window
         RefreshPluginDirectoryDisplay();
     }
 
-    private Grid CreatePluginRow(PluginEntry entry)
+    private Border CreatePluginRow(PluginEntry entry)
     {
         var row = new Grid { Background = System.Windows.Media.Brushes.Transparent };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        // 卡片行语言与「标签顺序」行同族：Card 底 + Border 描边 + 圆角 4，颜色走主题键。
+        var surface = new Border
+        {
+            Background = TryFindResource("CardBrush") as System.Windows.Media.Brush,
+            BorderBrush = TryFindResource("BorderBrush") as System.Windows.Media.Brush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 0, 0, 6),
+            Child = row
+        };
 
         var title = entry.Manifest is { } manifest
             ? $"{manifest.Name}  {manifest.Version}"
@@ -828,7 +864,7 @@ public partial class SettingsWindow : Window
         Grid.SetColumn(toggle, 1);
         row.Children.Add(toggle);
 
-        return row;
+        return surface;
     }
 
     private async void PluginToggle_StateChanged(object sender, RoutedEventArgs e)
