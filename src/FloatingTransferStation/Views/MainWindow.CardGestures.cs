@@ -199,10 +199,12 @@ public partial class MainWindow
         {
             // 左半双击：文字卡进入就地编辑（守卫沿用 BeginCardTextEditing：
             // 搜索态、关闭中；已有会话接续提交后重开；图片卡无操作）。
+            // 双击锚点（第二击按下点，窗口坐标）随意图下发——「双击在哪里，
+            // 光标就落在哪里」；无锚点入口（备注）仍走全选默认。
             if (item.Kind == BoardItemKind.Text &&
                 BoardList.ItemContainerGenerator.ContainerFromItem(item) is ListBoxItem container)
             {
-                BeginCardTextEditing(item, container);
+                BeginCardTextEditing(item, container, _pressStartPosition);
             }
         }
         else if (_pressZone == CardHitZone.OperationsPin)

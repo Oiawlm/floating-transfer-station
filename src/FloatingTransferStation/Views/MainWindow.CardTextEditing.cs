@@ -145,19 +145,25 @@ public partial class MainWindow
     /// <summary>
     /// 双击进入正文编辑：草稿种子为全文，可见性由条目状态驱动原位切换。已有
     /// 会话时先同步完成上一提交（接续编辑另一张卡），顺序必须严格同步，防止
-    /// 新会话被旧会话的焦点回调提前提交。
+    /// 新会话被旧会话的焦点回调提前提交。<paramref name="caretAnchor"/> 是双击
+    /// 第二击的按下点（窗口坐标），焦点注入时光标落在其就近插入边界。
     /// </summary>
-    private void BeginCardTextEditing(BoardItem item, ListBoxItem container) =>
-        BeginCardEditing(item, container, CardEditTarget.Text);
+    private void BeginCardTextEditing(BoardItem item, ListBoxItem container, Point caretAnchor) =>
+        BeginCardEditing(item, container, CardEditTarget.Text, caretAnchor);
 
     /// <summary>
     /// 备注交互条进入备注编辑（1.28.0）：守卫、会话互斥与焦点注入与正文编辑
-    /// 同一机器；双击进入正文编辑时同样先终结未完备注会话（既有单会话语义）。
+    /// 同一机器；无锚点（可空参数默认）→ 焦点注入保持全选默认。双击进入正文
+    /// 编辑时同样先终结未完备注会话（既有单会话语义）。
     /// </summary>
     private void BeginCardNoteEditing(BoardItem item, ListBoxItem container) =>
         BeginCardEditing(item, container, CardEditTarget.Note);
 
-    private void BeginCardEditing(BoardItem item, ListBoxItem container, CardEditTarget target)
+    private void BeginCardEditing(
+        BoardItem item,
+        ListBoxItem container,
+        CardEditTarget target,
+        Point? caretAnchor = null)
     {
         if (_isClosing ||
             _viewModel.IsSearchActive ||
@@ -165,6 +171,13 @@ public partial class MainWindow
         {
             return;
         }
+
+        // 锚点定影（提交旧会话等副作用之前）：窗口坐标换算为容器坐标——提交
+        // 与聚焦可能引发滚动使窗口坐标失真，容器坐标不受影响。两元素已由 Up
+        // 分发前提保证同树，断开属程序错误，TranslatePoint 显式失败即可。
+        Point? anchoredCaret = caretAnchor is { } windowPoint
+            ? this.TranslatePoint(windowPoint, container)
+            : null;
 
         if (_editingCardItemId is not null)
         {
@@ -184,7 +197,10 @@ public partial class MainWindow
         }
 
         // 焦点在模板应用后注入（照分类改名范式）；失败不回滚——可见性已由
-        // 条目状态驱动，稍后的点击仍可把焦点送入编辑器。
+        // 条目状态驱动，稍后的点击仍可把焦点送入编辑器。有锚点时先排清布局
+        // 再把容器坐标映射进编辑器坐标系，光标落在就近插入边界（-1 仅源于
+        // 空文本/未命中，钳 0 = 文首兜底，绝不回退全选）；无锚点入口保持
+        // 全选统一默认。
         Dispatcher.BeginInvoke(
             DispatcherPriority.Input,
             new Action(() =>
@@ -203,7 +219,18 @@ public partial class MainWindow
                 }
 
                 editor.Focus();
-                editor.SelectAll();
+                editor.UpdateLayout();
+                if (anchoredCaret is { } containerPoint)
+                {
+                    var index = editor.GetCharacterIndexFromPoint(
+                        container.TranslatePoint(containerPoint, editor),
+                        snapToText: true);
+                    editor.CaretIndex = Math.Max(0, index);
+                }
+                else
+                {
+                    editor.SelectAll();
+                }
             }));
     }
 

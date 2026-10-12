@@ -193,6 +193,16 @@
 - **关联**：契约记录 Issue Oiawlm/floating-transfer-station#106；CHANGELOG 未发布区；#5（ApplyPreferences 管线）、#13（标签顺序真实输入用例先导航到「面板」页再消息直驱）、#21（标签顺序节语义零变化，仅容器迁页）不受影响。
 
 
+## 十、本次新增（25，卡片编辑光标锚点）
+
+### 25. 双击编辑光标锚点与两态行距同源
+
+- **断言**：双击卡片左半文字区进入就地编辑时，光标落在双击点的就近插入边界且无选区（「从该处编辑」语义——多行正文进入编辑即全选存在下一次键入整段清空的误删风险）；横向语义与编辑器内原生点击同规（`GetCharacterIndexFromPoint(snapToText: true)` 就近字符，点击落在省略号/空白/卡缘时确定性收敛）；映射失败（空文本/未命中返回 -1）的兜底是光标钳在文首，绝不回退全选。锚点以可空参数贯通三层：手势分发把双击第二击按下点（`_pressStartPosition`，窗口坐标）随意图下发 → 会话机器入口在提交旧会话等副作用之前把窗口坐标定影为容器坐标（防提交/聚焦引发滚动使窗口坐标失真）→ 焦点注入回调先 `Focus` + `UpdateLayout` 排清布局再映射（把「布局未定稿的合法但错行」概率判断变确定）。无锚点入口保持全选统一默认（备注单击进入编辑仍全选、分类改名不变，`SelectAll` 分支非死代码）；编辑态与显示态行距同源——行距数值唯一来源是资源 `CardTextLineHeight`（20），显示态两处（正文预览/备注显示行）与编辑态（`TextBlock.LineHeight` 附加属性 + `BlockLineHeight`，实测在 TextBox 文本宿主上生效）共同引用，两态行带逐像素对齐是就近行映射的确定性前提；`Enter`/`Esc`/失焦提交/IME 守卫/锚点终结/编辑持焦不收起（#7）零改动。
+- **由来**：用户需求「双击在哪里，闪烁光标就落在哪里，直接从该处开始输入」。根因是编辑意图不携带位置信息：手势层明确拥有语义位置（双击第二击的按下点）但分发时丢弃，编辑器入口退化为「无位置默认=全选」。交互先例同向（Excel/Google Sheets 双击进单元格=光标在点击处；Notion/Obsidian 点击渲染文本即落点；「进入编辑=全选」只属重命名整名语义——资源管理器 F2，且该全选本身被大量用户抱怨）。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardCaretAnchor.cs`（`CardCaretAnchor_DoubleClickPlacesCaretAtClickedLineRealInput` Win32 消息直驱端到端含跨行与左缘下界、`CardCaretAnchor_TypingStartsAtClickedPosition`、`CardCaretAnchor_EditorLineMetricsMatchDisplay`、`CardCaretAnchor_DoubleClickKeepsSelectionEmptySynthetic`）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardNote.cs`（`CardNote_SingleClickEntryKeepsSelectAll` 无锚点路径全选防线）。
+- **关联**：CHANGELOG 未发布区（无独立 spec，如实标注）；#13（真实输入口径）、#7（编辑持焦零改动）、#14（对半分区零改动）、#22（备注全选路径与备注显示行行距引用）。
+
+
 ## 维护规则
 
 - 新契约入清单时机：行为定型的同一版本，随 CHANGELOG 与锁定测试一起落。

@@ -285,6 +285,46 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
+    /// <summary>
+    /// 无锚点入口保持全选（caret anchor 参数化的回归防线）：备注单击进入编辑
+    /// 走 SelectAll 默认——该分支是无锚点入口的统一默认而非死代码，正文双击
+    /// 接入光标锚点时不得误伤本路径。
+    /// </summary>
+    [STATestMethod]
+    public void CardNote_SingleClickEntryKeepsSelectAll()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("短卡字", BoardCategory.Inbox);
+        item.Note = "预置的非空备注";
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            RaiseNoteStripClick(window, item, "CardNoteEntryButton");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+
+            var editor = CardNoteEditorOf(ContainerOf(window, item));
+            Assert.IsTrue(item.IsEditingNote, "前置：备注编辑必须已进入。");
+            Assert.IsTrue(editor.IsKeyboardFocused, "备注编辑器必须持有键盘焦点。");
+            Assert.IsTrue(
+                item.DraftNote!.Length > 0,
+                "前置：预置备注必须非空（全选断言才有意义）。");
+            Assert.AreEqual(
+                item.DraftNote.Length,
+                editor.SelectionLength,
+                "无锚点入口（备注单击）必须保持全选默认。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
     [STATestMethod]
     public void CardNote_EnterCommitsEscapeCancelsFocusLossCommits()
     {
