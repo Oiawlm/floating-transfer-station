@@ -1014,6 +1014,93 @@
     </Style.Triggers>
   </Style>
 
+  <!-- AI 整理钮（1.41.0，契约 #29）：可见性六条件＝备注钮七条件减「无备注」
+       （备注与 AI 正交）：正文截断 ∧ 卡片悬停 ∧ 无正文编辑 ∧ 无备注编辑 ∧
+       文字卡 ∧ 非搜索态（ElementName=CardPreviewText 与条目绑定同模板
+       namescope 原样可用）。隐藏同备注钮家族语义：基态 Collapsed +
+       FadeAnimation.ManageVisibility（禁纯 Opacity 隐藏），所在追加网格行随之
+       塌缩（短卡高度不变、其余按钮零漂移，#16/#19）。忙态（IsAiOrganizing）
+       图标换旋转弧；按钮保持 IsEnabled=true——禁用元素在 WPF 下不可命中，点击
+       会穿透成右半选择手势（#19 先例），防抖由入口守卫（IsAiOrganizing 即丢弃）。 -->
+  <Style x:Key="AiOrganizeButtonStyle" TargetType="Button">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="Visibility" Value="Collapsed" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="6" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="ToolTip" Value="AI 整理" />
+    <Setter Property="AutomationProperties.Name" Value="AI 整理" />
+    <Setter Property="Template" Value="{StaticResource CardIconButtonTemplate}" />
+    <Setter Property="views:FadeAnimation.IsActive" Value="False" />
+    <Setter Property="views:FadeAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
+    <Setter Property="views:FadeAnimation.DurationMs"
+            Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+    <Setter Property="views:FadeAnimation.ManageVisibility" Value="True" />
+    <Style.Triggers>
+      <MultiDataTrigger>
+        <MultiDataTrigger.Conditions>
+          <Condition Binding="{Binding IsTruncated, ElementName=CardPreviewText}" Value="True" />
+          <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True" />
+          <Condition Binding="{Binding IsEditing}" Value="False" />
+          <Condition Binding="{Binding IsEditingNote}" Value="False" />
+          <Condition Binding="{Binding Kind}" Value="{x:Static models:BoardItemKind.Text}" />
+          <Condition Binding="{Binding DataContext.IsSearchActive, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False" />
+        </MultiDataTrigger.Conditions>
+        <Setter Property="views:FadeAnimation.IsActive" Value="True" />
+        <Setter Property="IsHitTestVisible" Value="True" />
+      </MultiDataTrigger>
+    </Style.Triggers>
+  </Style>
+
+  <!-- AI 整理钮的常态图标（星光 motif）：忙态让位给旋转弧。 -->
+  <Style x:Key="AiOrganizeIdleIconStyle" TargetType="Viewbox">
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsAiOrganizing}" Value="True">
+        <Setter Property="Visibility" Value="Collapsed" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+
+  <!-- AI 整理钮的忙态图标（弧线）：只在整理在途出现；旋转由窗口层驱动
+       （尊重「界面动效」关闭＝静态弧线），变换实例由窗口层代码创建——模板
+       内联 Freezable 会在密封期冻结，冻结对象不可承载动画。 -->
+  <Style x:Key="AiOrganizeBusyIconStyle" TargetType="Viewbox">
+    <Setter Property="Visibility" Value="Collapsed" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsAiOrganizing}" Value="True">
+        <Setter Property="Visibility" Value="Visible" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+
+  <!-- AI 追加按钮行（1.41.0，#16/#19 修订）：命中层右列改垂直 StackPanel——
+       基座 2×2 网格原样（恒 64）＋本追加网格（两列×CardOperationColumnWidth、
+       单 30 DIP 按钮行、上缘 4 DIP 间隔）。只在截断文字卡出现：正文恒钳
+       MaxHeight=100 ≥ 追加后网格总高 98，任何卡高度零跳变；短卡/图片卡整行
+       塌缩（短卡下限 64 不变、其余按钮零漂移）。显隐由截断布局事实驱动
+       （IsTruncated 唯一权威，TrimAwareTextBlock），不随悬停派生——悬停只
+       控制行内按钮的淡入淡出，追加行自身常在，高度稳定。 -->
+  <Style x:Key="CardAiAppendRowStyle" TargetType="Grid">
+    <Setter Property="Visibility" Value="Collapsed" />
+    <Style.Triggers>
+      <MultiDataTrigger>
+        <MultiDataTrigger.Conditions>
+          <Condition Binding="{Binding IsTruncated, ElementName=CardPreviewText}" Value="True" />
+          <Condition Binding="{Binding Kind}" Value="{x:Static models:BoardItemKind.Text}" />
+        </MultiDataTrigger.Conditions>
+        <Setter Property="Visibility" Value="Visible" />
+      </MultiDataTrigger>
+    </Style.Triggers>
+  </Style>
+
   <Style x:Key="StatusOverlayStyle" TargetType="Border">
     <Setter Property="Margin" Value="12" />
     <Setter Property="Padding" Value="9,7" />
@@ -1333,6 +1420,11 @@
               <Grid Grid.Column="1"
                     Background="Transparent"
                     Tag="{x:Static views:CardGestureZones.OperationsZone}">
+                <!-- 右列 1.41.0 起为垂直 StackPanel（右上锚定）：基座操作网格原样
+                     ＋ AI 追加行网格（见 CardAiAppendRowStyle——只在截断文字卡
+                     显形，短卡整行塌缩、正文恒钳 100 ≥ 98，任何卡高度零跳变）。 -->
+                <StackPanel HorizontalAlignment="Right"
+                            VerticalAlignment="Top">
                 <!-- 操作按钮网格（1.33.0，Issue #103）：固定两列 × 按钮行、列与按钮行
                      均为绝对 30 DIP（复用 CardOperationColumnWidth 单一来源），右上角
                      锚定，行优先序 选择|删除|置顶|备注（此后新增按钮按行优先向下
@@ -1342,8 +1434,7 @@
                      保证隐藏留空，均被排除）。行间隙 4 DIP 是独立间隔行（T7 评审
                      P1：30 行装不下 30 钮 + 4 边距，Margin 过约束使间隙不可靠），
                      按钮行物理行号为 0/2，网格宽恒 2×30、高 64。 -->
-                <Grid HorizontalAlignment="Right"
-                      VerticalAlignment="Top">
+                <Grid>
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
                     <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
@@ -1409,6 +1500,48 @@
                     </Viewbox>
                   </Button>
                 </Grid>
+
+                  <!-- AI 整理钮（1.41.0）：追加按钮行左格 (2,0)（上缘 4 DIP 间隔、
+                       单 30 DIP 按钮行），右格固定留空（后续按钮按行优先左→右）。
+                       追加行几何与显隐见 CardAiAppendRowStyle；按钮可见性六条件、
+                       忙态图标与防抖语义见 AiOrganizeButtonStyle。点击意图经
+                       AiOrganizeCommand 参数路由（手势层与 UIA 路径共用实现）。 -->
+                  <Grid Style="{StaticResource CardAiAppendRowStyle}"
+                        Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
+                      <ColumnDefinition Width="{StaticResource CardOperationColumnWidth}" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="{StaticResource CardOperationColumnWidth}" />
+                    </Grid.RowDefinitions>
+
+                    <Button x:Name="CardOperationAiOrganizeButton"
+                            Grid.Row="0"
+                            Grid.Column="0"
+                            Style="{StaticResource AiOrganizeButtonStyle}"
+                            Tag="{Binding}"
+                            CommandParameter="{x:Static views:CardGestureZones.AiOrganizeCommand}">
+                      <Grid>
+                        <Viewbox Width="16" Height="16"
+                                 Style="{StaticResource AiOrganizeIdleIconStyle}">
+                          <Path Data="M9.5,1.8 L11.2,7.3 L16.7,9 L11.2,10.7 L9.5,16.2 L7.8,10.7 L2.3,9 L7.8,7.3 Z M14.8,12.3 L15.4,14.1 L17.2,14.7 L15.4,15.3 L14.8,17.1 L14.2,15.3 L12.4,14.7 L14.2,14.1 Z"
+                                Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                                Stretch="Uniform" />
+                        </Viewbox>
+                        <Viewbox x:Name="CardAiBusyIcon"
+                                 Width="16" Height="16"
+                                 Style="{StaticResource AiOrganizeBusyIconStyle}">
+                          <Path Data="M 9,1.5 A 7.5,7.5 0 1 1 1.5,9"
+                                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                                StrokeThickness="1.8"
+                                StrokeStartLineCap="Round"
+                                StrokeEndLineCap="Round" />
+                        </Viewbox>
+                      </Grid>
+                    </Button>
+                  </Grid>
+                </StackPanel>
               </Grid>
             </Grid>
 

@@ -20,6 +20,7 @@ public sealed class BoardItem : INotifyPropertyChanged
     private string? _draftText;
     private bool _isEditingNote;
     private string? _draftNote;
+    private bool _isAiOrganizing;
     private string? _note;
     private string? _text;
 
@@ -161,6 +162,24 @@ public sealed class BoardItem : INotifyPropertyChanged
         IsEditingNote = false;
         DraftNote = null;
     }
+
+    /// <summary>
+    /// AI 整理在途标志（会话状态，照 <see cref="IsEditingNote"/> 惯例：挂条目、
+    /// 虚拟化回收不错乱、不持久化）。驱动卡片操作钮的忙态 glyph 与点击防抖；
+    /// 每卡单飞（重入由入口守卫丢弃），跨卡允许并发。
+    /// </summary>
+    [JsonIgnore]
+    public bool IsAiOrganizing
+    {
+        get => _isAiOrganizing;
+        private set => SetProperty(ref _isAiOrganizing, value);
+    }
+
+    /// <summary>进入 AI 整理（原文由调用方在调用前捕获）。</summary>
+    public void BeginAiOrganize() => IsAiOrganizing = true;
+
+    /// <summary>结束 AI 整理（成功、失败与并发放弃共用的状态清理）。</summary>
+    public void EndAiOrganize() => IsAiOrganizing = false;
 
     public static BoardItem CreateText(string text, Guid id, DateTimeOffset createdAt) => new()
     {

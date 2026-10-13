@@ -20,14 +20,15 @@ public enum BoardPinResult
 
 public sealed class BoardMutationService
 {
-    private const int MaxUndoableDeletes = 20;
+    private const int MaxUndoableBatches = 20;
 
     private readonly BoardService _board;
     private readonly IBoardStore _store;
     private readonly Action<string> _showStatus;
     private readonly BoardOperationGate _operationGate;
-    // 有界 LIFO 撤销栈:尾端是最近删除批(撤销弹出端),头端是最旧批(驱逐端)。
-    private readonly LinkedList<RemovedBoardItems> _undoableDeletes = new();
+    // 有界 LIFO 撤销栈(1.41.0 泛化为可撤销操作批):尾端是最近批(撤销弹出端),
+    // 头端是最旧批(驱逐端)。删除批与 AI 文本替换批共用同一条 LIFO/驱逐/丢弃语义。
+    private readonly LinkedList<IUndoableBatch> _undoableBatches = new();
 
     public BoardMutationService(
         BoardService board,
@@ -41,8 +42,8 @@ public sealed class BoardMutationService
         _operationGate = operationGate ?? new BoardOperationGate();
     }
 
-    /// <summary>当前可撤销的删除批次数(会话内,用于界面提示与测试)。</summary>
-    public int PendingUndoDeleteCount => _undoableDeletes.Count;
+    /// <summary>当前可撤销的操作批次数(会话内,用于界面提示与测试)。</summary>
+    public int PendingUndoCount => _undoableBatches.Count;
 
     public Task<BoardBatchMoveResult> MoveManyAsync(
         IReadOnlyCollection<Guid> itemIds,
@@ -268,49 +269,72 @@ public sealed class BoardMutationService
     }
 
     /// <summary>
-    /// 撤销最近一次成功删除(单条、批量或清空):按锚点插回原分类(不回退删除后的
-    /// 其他改动)并持久化;保存失败时回到删除状态。多批次时后进先出,恢复的总是
-    /// 最近一批。空栈返回 false 并提示。
+    /// 用 AI 整理结果替换文字卡正文，并把「替换前的原文」压入撤销栈（AI 文本
+    /// 替换批）：与 <see cref="UpdateItemTextAsync"/>（手工编辑，仍不进撤销栈，
+    /// 契约 #22 口径）同族共用 <see cref="SaveItemFieldChangeAsync"/> 保存管线，
+    /// 不平行复制持久化路径；保存失败内存还原原文并提示、不入栈。原文在应用
+    /// 变更前捕获（<c>BoardService.UpdateText</c> 原地改 <c>item.Text</c>）。
+    /// 条目不存在或整理结果与原文相同时不落盘（幂等）。
     /// </summary>
-    public Task<bool> UndoLastDeleteAsync(CancellationToken cancellationToken = default) =>
+    public Task<bool> ReplaceItemTextUndoableAsync(
+        Guid itemId,
+        string newText,
+        CancellationToken cancellationToken = default) =>
         _operationGate.RunAsync(async () =>
         {
-            if (_undoableDeletes.Count == 0)
+            var item = _board.FindItem(itemId);
+            if (item is not { Kind: BoardItemKind.Text })
             {
-                _showStatus("没有可撤销的删除。");
                 return false;
             }
 
-            var removed = _undoableDeletes.Last!.Value;
-            _undoableDeletes.RemoveLast();
-            try
+            var original = item.Text ?? string.Empty;
+            if (string.Equals(original, newText, StringComparison.Ordinal))
             {
-                _board.RestoreInsert(removed);
-                await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
-                _showStatus("已恢复最近删除的内容。");
                 return true;
             }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+
+            var saved = await SaveItemFieldChangeAsync(
+                cancellationToken,
+                apply: () => _board.UpdateText(itemId, newText),
+                restore: () => _board.UpdateText(itemId, original),
+                failureStatus: "内容未保存，已还原原文本。");
+            if (!saved)
             {
-                _ = _board.RemoveMany(removed.RemovedItems.Select(item => item.Id).ToArray());
-                _showStatus("撤销未保存，内容保持删除状态。");
                 return false;
             }
-            catch
-            {
-                _ = _board.RemoveMany(removed.RemovedItems.Select(item => item.Id).ToArray());
-                throw;
-            }
+
+            RecordUndoableBatch(new UndoableTextBatch(this, itemId, original));
+            return true;
         }, cancellationToken);
 
     /// <summary>
-    /// 退出时丢弃全部可撤销删除并清理对应图片文件;调用后删除不再可恢复。
+    /// 撤销最近一批可撤销操作(删除批按锚点插回原分类不回退删除后的其他改动 /
+    /// AI 文本替换批恢复原文):多批次时后进先出,恢复的总是最近一批。空栈返回
+    /// false 并提示。
     /// </summary>
-    public void DiscardUndoableDeletes()
-    {
-        while (_undoableDeletes.Count > 0)
+    public Task<bool> UndoLastAsync(CancellationToken cancellationToken = default) =>
+        _operationGate.RunAsync(async () =>
         {
-            RemoveOldestAndCleanImages();
+            if (_undoableBatches.Count == 0)
+            {
+                _showStatus("没有可撤销的操作。");
+                return false;
+            }
+
+            var batch = _undoableBatches.Last!.Value;
+            _undoableBatches.RemoveLast();
+            return await batch.UndoAsync(cancellationToken);
+        }, cancellationToken);
+
+    /// <summary>
+    /// 退出时丢弃全部可撤销批次(删除批随之清理对应图片文件);调用后不再可恢复。
+    /// </summary>
+    public void DiscardUndoableBatches()
+    {
+        while (_undoableBatches.Count > 0)
+        {
+            RemoveOldestBatch();
         }
     }
 
@@ -319,24 +343,29 @@ public sealed class BoardMutationService
     /// 驱逐、显式丢弃或进程退出,保证撤销时缩略图可用;超过上限时驱逐最旧批次并
     /// 同步清理其图片文件。
     /// </summary>
-    private void RecordUndoableDelete(RemovedBoardItems removed)
+    private void RecordUndoableDelete(RemovedBoardItems removed) =>
+        RecordUndoableBatch(new UndoableDeleteBatch(this, removed));
+
+    /// <summary>批次入栈(尾端)并执行有界驱逐。</summary>
+    private void RecordUndoableBatch(IUndoableBatch batch)
     {
-        _undoableDeletes.AddLast(removed);
-        while (_undoableDeletes.Count > MaxUndoableDeletes)
+        _undoableBatches.AddLast(batch);
+        while (_undoableBatches.Count > MaxUndoableBatches)
         {
-            RemoveOldestAndCleanImages();
+            RemoveOldestBatch();
         }
     }
 
     /// <summary>
-    /// 从栈头摘除最旧批次并清理其图片文件。必须先摘链、后清理:清理经
-    /// DeleteImagesBestEffort 同步回调状态提示,持链操作其后进行才不受重入影响。
+    /// 从栈头摘除最旧批次并回收其资源(删除批清理图片文件,文本批 no-op)。
+    /// 必须先摘链、后回收:删除批的清理经 DeleteImagesBestEffort 同步回调状态
+    /// 提示,持链操作其后进行才不受重入影响。
     /// </summary>
-    private void RemoveOldestAndCleanImages()
+    private void RemoveOldestBatch()
     {
-        var oldest = _undoableDeletes.First!.Value;
-        _undoableDeletes.RemoveFirst();
-        DeleteImagesBestEffort(oldest);
+        var oldest = _undoableBatches.First!.Value;
+        _undoableBatches.RemoveFirst();
+        oldest.OnEvicted();
     }
 
     private void DeleteImagesBestEffort(RemovedBoardItems removed)
@@ -459,4 +488,85 @@ public sealed class BoardMutationService
             await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
             await saveAdditionalState();
         }, cancellationToken);
+
+    /// <summary>
+    /// 会话级撤销栈的可撤销操作批（1.41.0 泛化，契约 #11 修订）：Ctrl+Z 弹出
+    /// 尾端批次执行 <see cref="UndoAsync"/>；驱逐/显式丢弃时回调
+    /// <see cref="OnEvicted"/> 回收批次独占资源。删除批与 AI 文本替换批共用
+    /// 同一条 LIFO、20 批驱逐与保存失败回滚语义。
+    /// </summary>
+    private interface IUndoableBatch
+    {
+        /// <summary>撤销本批并持久化；返回 false 表示撤销未落盘（状态已回滚）。</summary>
+        Task<bool> UndoAsync(CancellationToken cancellationToken);
+
+        /// <summary>批次被驱逐或显式丢弃时回收独占资源（文本批无资源，no-op）。</summary>
+        void OnEvicted();
+    }
+
+    /// <summary>
+    /// 删除批：既有撤销删除语义原样迁入——按锚点插回原分类并持久化，保存失败
+    /// 回到删除状态；驱逐/丢弃时清理批次内图片文件（保留到撤销机会消失）。
+    /// </summary>
+    private sealed class UndoableDeleteBatch(BoardMutationService owner, RemovedBoardItems removed)
+        : IUndoableBatch
+    {
+        public async Task<bool> UndoAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                owner._board.RestoreInsert(removed);
+                await owner._store.SaveBoardAsync(owner._board.CreateSnapshot(), cancellationToken);
+                owner._showStatus("已恢复最近删除的内容。");
+                return true;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _ = owner._board.RemoveMany(removed.RemovedItems.Select(item => item.Id).ToArray());
+                owner._showStatus("撤销未保存，内容保持删除状态。");
+                return false;
+            }
+            catch
+            {
+                _ = owner._board.RemoveMany(removed.RemovedItems.Select(item => item.Id).ToArray());
+                throw;
+            }
+        }
+
+        public void OnEvicted() => owner.DeleteImagesBestEffort(removed);
+    }
+
+    /// <summary>
+    /// AI 文本替换批：撤销＝把捕获的原文写回同一条字段变更保存管线（失败时
+    /// 保留整理后文字并提示）；条目已被删除时该批作废消费（原文随卡片删除消失）。
+    /// 无独占资源，驱逐 no-op。
+    /// </summary>
+    private sealed class UndoableTextBatch(BoardMutationService owner, Guid itemId, string originalText)
+        : IUndoableBatch
+    {
+        public async Task<bool> UndoAsync(CancellationToken cancellationToken)
+        {
+            if (owner._board.FindItem(itemId) is not { Kind: BoardItemKind.Text } item)
+            {
+                return true;
+            }
+
+            var organized = item.Text ?? string.Empty;
+            var restored = await owner.SaveItemFieldChangeAsync(
+                cancellationToken,
+                apply: () => owner._board.UpdateText(itemId, originalText),
+                restore: () => owner._board.UpdateText(itemId, organized),
+                failureStatus: "撤销未保存，卡片保持整理后的内容。");
+            if (restored)
+            {
+                owner._showStatus("已恢复卡片原文。");
+            }
+
+            return restored;
+        }
+
+        public void OnEvicted()
+        {
+        }
+    }
 }

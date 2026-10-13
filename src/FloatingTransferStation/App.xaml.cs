@@ -113,8 +113,10 @@ public partial class App : Application
                 boardOperationGate,
                 pluginCatalog);
             // DeepSeek 接入地基（1.27.0）：显式装配，别处不做隐藏加密调用或请求构造。
+            // AI 整理编排（1.41.0）复用同一客户端实例（契约 #28 唯一模型口径）。
             var secretProtector = new DpapiSecretProtector();
             var deepSeekClient = new DeepSeekClient();
+            var aiTextOrganizer = new AiTextOrganizer(deepSeekClient);
             // 检查更新与一键更新（契约 #26）：更新服务组合根装配单例，UI 只做接线。
             var updateService = new UpdateService();
             window = new MainWindow(
@@ -138,6 +140,7 @@ public partial class App : Application
                     : null,
                 secretProtector: secretProtector,
                 deepSeekClient: deepSeekClient,
+                aiTextOrganizer: aiTextOrganizer,
                 updateService: updateService);
             MainWindow = window;
             // 先显示收起态窗口：分类轨只依赖已装载的偏好与设置，板面数据转入

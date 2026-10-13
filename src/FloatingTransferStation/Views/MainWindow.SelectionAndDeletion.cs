@@ -125,6 +125,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        // AI 整理钮（1.41.0）：合成与 UIA 自动化路径的整理入口，与手势层
+        // OperationsAiOrganize 会话共用 BeginCardAiOrganizeAsync；不触碰选择集合。
+        if (Equals(button.CommandParameter, CardGestureZones.AiOrganizeCommand))
+        {
+            await BeginCardAiOrganizeAsync(item);
+            return;
+        }
+
         if (!Equals(button.CommandParameter, CardGestureZones.TogglePinCommand))
         {
             return;
@@ -406,7 +414,7 @@ public partial class MainWindow : Window
     /// 面板持有键盘焦点时 Ctrl+Z 的撤销入口(内部方法供 STA 测试直达);
     /// 状态提示由 BoardMutationService 统一负责。
     /// </summary>
-    internal Task<bool> UndoLastDeleteFromPanelAsync() => _mutations.UndoLastDeleteAsync();
+    internal Task<bool> UndoLastFromPanelAsync() => _mutations.UndoLastAsync();
 
     /// <summary>
     /// 垃圾桶按钮的可访问名称与提示:有选择时始终是「删除已选 N 项」;
@@ -664,7 +672,7 @@ public partial class MainWindow : Window
             _viewModel.IsPanelExpanded)
         {
             e.Handled = true;
-            await UndoLastDeleteFromPanelAsync();
+            await UndoLastFromPanelAsync();
             return;
         }
 

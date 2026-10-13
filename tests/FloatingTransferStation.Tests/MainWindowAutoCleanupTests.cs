@@ -54,7 +54,7 @@ public sealed class MainWindowAutoCleanupTests
             ((MainWindowViewModel)window.DataContext).StatusText);
         Assert.IsNull(preferencesStore.LastSaved, "TTL 判定幂等，清扫成功无需记账落盘。");
         Assert.AreEqual(1, GetStore(window).SaveCount, "清扫必须单次原子保存。");
-        Assert.AreEqual(1, GetMutations(window).PendingUndoDeleteCount, "清扫必须单批可撤销。");
+        Assert.AreEqual(1, GetMutations(window).PendingUndoCount, "清扫必须单批可撤销。");
         Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count);
         Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
         Assert.AreEqual(1, board.Items(BoardCategory.Inbox).Count, "置顶卡超龄也绝不清理。");
@@ -243,7 +243,7 @@ public sealed class MainWindowAutoCleanupTests
             File.Exists(imagePath),
             "清扫批次进入撤销栈期间图片文件必须保留(既有撤销栈生命周期,不立即删)。");
 
-        GetMutations(window).DiscardUndoableDeletes();
+        GetMutations(window).DiscardUndoableBatches();
 
         Assert.IsFalse(File.Exists(imagePath), "丢弃撤销栈后图片文件按既有规则清理。");
     }

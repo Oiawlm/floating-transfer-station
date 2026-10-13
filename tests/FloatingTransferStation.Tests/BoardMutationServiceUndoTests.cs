@@ -20,11 +20,12 @@ public sealed class BoardMutationServiceUndoTests
         var messages = new List<string>();
         var service = new BoardMutationService(board, store, messages.Add);
 
-        var undone = await service.UndoLastDeleteAsync();
+        var undone = await service.UndoLastAsync();
 
         Assert.IsFalse(undone);
         Assert.AreEqual(0, store.SaveCount);
-        CollectionAssert.AreEqual(new[] { "没有可撤销的删除。" }, messages);
+        // 1.41.0 撤销栈泛化为可撤销操作批：空栈提示随之泛化（删除批语义不变）。
+        CollectionAssert.AreEqual(new[] { "没有可撤销的操作。" }, messages);
     }
 
     [TestMethod]
@@ -42,7 +43,7 @@ public sealed class BoardMutationServiceUndoTests
         var service = new BoardMutationService(board, store, messages.Add);
 
         Assert.IsTrue(await service.DeleteManyAsync([second.Id]));
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
 
         CollectionAssert.AreEqual(
             originalIds,
@@ -51,7 +52,7 @@ public sealed class BoardMutationServiceUndoTests
         Assert.IsTrue(board.Items(BoardCategory.Inbox).Single(item => item.Id == first.Id).IsPinned);
         Assert.AreEqual(2, store.SaveCount);
         CollectionAssert.AreEqual(new[] { "已恢复最近删除的内容。" }, messages);
-        Assert.AreEqual(0, service.PendingUndoDeleteCount);
+        Assert.AreEqual(0, service.PendingUndoCount);
     }
 
     [TestMethod]
@@ -67,7 +68,7 @@ public sealed class BoardMutationServiceUndoTests
         Assert.IsTrue(await service.DeleteManyAsync([deleted.Id]));
         var newer = board.AddText("删除后新收集");
 
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
 
         var current = board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray();
         CollectionAssert.AreEqual(new[] { deleted.Id, newer.Id, older.Id }, current,
@@ -86,7 +87,7 @@ public sealed class BoardMutationServiceUndoTests
         var service = new BoardMutationService(board, store, _ => { });
 
         Assert.IsTrue(await service.DeleteManyAsync([inboxA.Id, inboxB.Id, promptA.Id]));
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
 
         CollectionAssert.AreEqual(
             new[] { inboxB.Id, inboxA.Id },
@@ -111,7 +112,7 @@ public sealed class BoardMutationServiceUndoTests
         // 删除后用户把锚点置顶:锚点换区,恢复项不得落进置顶区。
         board.SetPinnedMany([normalAnchor.Id], true);
 
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
 
         var current = board.Items(BoardCategory.Inbox);
         Assert.AreEqual(2, current.Count);
@@ -137,7 +138,7 @@ public sealed class BoardMutationServiceUndoTests
         CollectionAssert.AreEqual(new[] { kept.Id }, afterDelete);
         store.FailSave = true;
 
-        var undone = await service.UndoLastDeleteAsync();
+        var undone = await service.UndoLastAsync();
 
         Assert.IsFalse(undone);
         CollectionAssert.AreEqual(afterDelete, board.Items(BoardCategory.Inbox).Select(other => other.Id).ToArray(),
@@ -163,7 +164,7 @@ public sealed class BoardMutationServiceUndoTests
             Assert.IsTrue(await service.DeleteManyAsync([item.Id]));
         }
 
-        Assert.AreEqual(20, service.PendingUndoDeleteCount, "栈容量 20:最旧批次被驱逐。");
+        Assert.AreEqual(20, service.PendingUndoCount, "栈容量 20:最旧批次被驱逐。");
         Assert.IsFalse(File.Exists(oldestPath), "被驱逐批次的图片文件应立即清理。");
         Assert.AreEqual(1, store.DeleteCount);
     }
@@ -193,16 +194,16 @@ public sealed class BoardMutationServiceUndoTests
         // 第 21 批(最新,含图片)入栈:最旧图片批被驱逐,最新批的图片必须幸存。
         Assert.IsTrue(await service.DeleteManyAsync([newestImage.Id]));
 
-        Assert.AreEqual(20, service.PendingUndoDeleteCount, "第 21 批入栈驱逐最旧一批。");
+        Assert.AreEqual(20, service.PendingUndoCount, "第 21 批入栈驱逐最旧一批。");
         Assert.IsFalse(File.Exists(oldestPath), "被驱逐批次的图片文件应立即清理。");
         Assert.IsTrue(File.Exists(newestPath), "非驱逐批次的图片不受驱逐影响。");
         Assert.AreEqual(1, store.DeleteCount);
 
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
         Assert.AreEqual(newestImage.Id, board.Items(BoardCategory.Inbox).Single().Id,
             "驱逐最旧批后,撤销得的仍是最近一批,而非次旧批。");
         Assert.IsTrue(File.Exists(newestPath), "撤销恢复后最新批的图片文件仍然存在。");
-        Assert.AreEqual(19, service.PendingUndoDeleteCount);
+        Assert.AreEqual(19, service.PendingUndoCount);
     }
 
     [TestMethod]
@@ -220,19 +221,19 @@ public sealed class BoardMutationServiceUndoTests
         Assert.IsTrue(await service.DeleteManyAsync([latest.Id]));
         store.FailSave = true;
 
-        Assert.IsFalse(await service.UndoLastDeleteAsync());
+        Assert.IsFalse(await service.UndoLastAsync());
         Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count,
             "多批下撤销保存失败:本批回到删除态,无恢复残留。");
-        Assert.AreEqual(1, service.PendingUndoDeleteCount, "旧批仍在栈,后续仍可撤销。");
+        Assert.AreEqual(1, service.PendingUndoCount, "旧批仍在栈,后续仍可撤销。");
         CollectionAssert.AreEqual(new[] { "撤销未保存，内容保持删除状态。" }, messages);
 
         store.FailSave = false;
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
         CollectionAssert.AreEqual(
             new[] { earlier.Id },
             board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
             "失败后的下一次撤销恢复旧批;保存失败批保持删除态且已被消费,不再回到栈。");
-        Assert.AreEqual(0, service.PendingUndoDeleteCount);
+        Assert.AreEqual(0, service.PendingUndoCount);
     }
 
     [TestMethod]
@@ -249,7 +250,7 @@ public sealed class BoardMutationServiceUndoTests
         var service = new BoardMutationService(board, store, _ => { });
 
         Assert.IsTrue(await service.ClearCategoryAsync(BoardCategory.Reference));
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
 
         var current = board.Items(BoardCategory.Reference).Select(item => item.Id).ToArray();
         CollectionAssert.AreEqual(new[] { pinned.Id, last.Id, first.Id }, current,
@@ -269,20 +270,20 @@ public sealed class BoardMutationServiceUndoTests
 
         Assert.IsTrue(await service.DeleteManyAsync([earlier.Id]));
         Assert.IsTrue(await service.DeleteManyAsync([latest.Id]));
-        Assert.AreEqual(2, service.PendingUndoDeleteCount);
+        Assert.AreEqual(2, service.PendingUndoCount);
 
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
         CollectionAssert.AreEqual(
             new[] { latest.Id },
             board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
             "第一次撤销必须恢复最近删除的一批,而不是最旧的一批。");
 
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
         CollectionAssert.AreEqual(
             new[] { latest.Id, earlier.Id },
             board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
             "再次撤销按后进先出恢复前一批,回到删除前的布局。");
-        Assert.AreEqual(0, service.PendingUndoDeleteCount);
+        Assert.AreEqual(0, service.PendingUndoCount);
     }
 
     [TestMethod]
@@ -303,19 +304,19 @@ public sealed class BoardMutationServiceUndoTests
         Assert.IsTrue(board.Items(BoardCategory.Inbox).Single().IsPinned, "自动清扫只删非置顶,置顶卡保留。");
 
         Assert.IsTrue(await service.DeleteManyAsync([pinned.Id]));
-        Assert.AreEqual(2, service.PendingUndoDeleteCount, "清扫批与置顶卡删除批共栈。");
+        Assert.AreEqual(2, service.PendingUndoCount, "清扫批与置顶卡删除批共栈。");
 
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
         Assert.IsTrue(board.Items(BoardCategory.Inbox).Single(item => item.Id == pinned.Id).IsPinned,
             "一次撤销必须恢复被删的置顶卡且置顶属性保留(落置顶区),而不是旧清扫批。");
-        Assert.AreEqual(1, service.PendingUndoDeleteCount, "清扫批仍在栈,未被弹出。");
+        Assert.AreEqual(1, service.PendingUndoCount, "清扫批仍在栈,未被弹出。");
 
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
         CollectionAssert.AreEqual(
             new[] { pinned.Id, expired.Id },
             board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
             "再次撤销恢复清扫批(置顶区在前,普通区按锚点插回)。");
-        Assert.AreEqual(0, service.PendingUndoDeleteCount);
+        Assert.AreEqual(0, service.PendingUndoCount);
     }
 
     [TestMethod]
@@ -332,10 +333,127 @@ public sealed class BoardMutationServiceUndoTests
         Assert.IsTrue(await service.DeleteManyAsync([image.Id]));
         Assert.IsTrue(File.Exists(imagePath));
 
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
 
         Assert.IsTrue(File.Exists(imagePath), "撤销恢复后条目回归看板,文件必须仍然存在。");
         Assert.AreSame(image, board.Items(BoardCategory.Inbox).Single());
+    }
+
+    [TestMethod]
+    public async Task ReplaceItemTextUndoable_ThenUndoRestoresOriginalText()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("原始转写稿");
+        var store = new MutationStore(directory.Root);
+        var messages = new List<string>();
+        var service = new BoardMutationService(board, store, messages.Add);
+
+        Assert.IsTrue(await service.ReplaceItemTextUndoableAsync(item.Id, "整理后的文本"));
+        Assert.AreEqual("整理后的文本", board.FindItem(item.Id)!.Text);
+        Assert.AreEqual(1, service.PendingUndoCount, "AI 文本替换必须压入撤销批。");
+        Assert.AreEqual(1, store.SaveCount);
+
+        Assert.IsTrue(await service.UndoLastAsync());
+        Assert.AreEqual("原始转写稿", board.FindItem(item.Id)!.Text, "Ctrl+Z 必须恢复替换前的原文。");
+        Assert.AreEqual(0, service.PendingUndoCount);
+        Assert.AreEqual(2, store.SaveCount);
+        CollectionAssert.AreEqual(new[] { "已恢复卡片原文。" }, messages);
+
+        // 幂等与守卫：不存在的条目、与原文相同的结果都不落盘不入栈。
+        Assert.IsFalse(await service.ReplaceItemTextUndoableAsync(Guid.NewGuid(), "无此条目"));
+        Assert.IsTrue(await service.ReplaceItemTextUndoableAsync(item.Id, "原始转写稿"), "同文本不触发保存。");
+        Assert.AreEqual(2, store.SaveCount);
+        Assert.AreEqual(0, service.PendingUndoCount);
+    }
+
+    [TestMethod]
+    public async Task UndoStack_DeleteAndTextBatchesMixInLifoOrder()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var first = board.AddText("第一张原文");
+        var second = board.AddText("第二张原文");
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        // 时序：替换第二张 → 删除第一张 → 替换第一张所在撤销批之下。
+        Assert.IsTrue(await service.ReplaceItemTextUndoableAsync(second.Id, "第二张整理后"));
+        Assert.IsTrue(await service.DeleteManyAsync([first.Id]));
+        Assert.IsTrue(await service.ReplaceItemTextUndoableAsync(second.Id, "第二张再次整理后"));
+        Assert.AreEqual(3, service.PendingUndoCount);
+
+        // LIFO：先撤销最近的文本批，再撤销删除批，最后撤销最旧文本批。
+        Assert.IsTrue(await service.UndoLastAsync());
+        Assert.AreEqual("第二张整理后", board.FindItem(second.Id)!.Text, "最近文本批先恢复。");
+        Assert.IsTrue(await service.UndoLastAsync());
+        Assert.IsNotNull(board.FindItem(first.Id), "删除批随后恢复条目。");
+        Assert.AreEqual("第二张整理后", board.FindItem(second.Id)!.Text);
+        Assert.IsTrue(await service.UndoLastAsync());
+        Assert.AreEqual("第二张原文", board.FindItem(second.Id)!.Text, "最旧文本批最后恢复。");
+        Assert.AreEqual(0, service.PendingUndoCount);
+    }
+
+    [TestMethod]
+    public async Task UndoStack_EvictionDropsOldestTextBatchHarmlessly()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        // 21 个文本替换批（同一张卡反复整理）：第 21 批驱逐最旧文本批，无害。
+        var item = board.AddText("原文零");
+        for (var round = 1; round <= 21; round++)
+        {
+            Assert.IsTrue(await service.ReplaceItemTextUndoableAsync(item.Id, $"原文{round}"));
+        }
+
+        Assert.AreEqual(20, service.PendingUndoCount, "栈容量 20：最旧文本批被驱逐。");
+        // 驱逐的文本批无独占资源（不清理图片文件），条目仍在、当前文本不受影响。
+        Assert.AreEqual("原文21", board.FindItem(item.Id)!.Text);
+        Assert.AreEqual(0, store.DeleteCount, "文本批驱逐不得触发图片清理。");
+        // 最旧批（第 2 轮，捕获原文1）已被驱逐到栈底之外；最近批捕获原文20。
+        Assert.IsTrue(await service.UndoLastAsync());
+        Assert.AreEqual("原文20", board.FindItem(item.Id)!.Text);
+    }
+
+    [TestMethod]
+    public async Task ReplaceItemText_SaveFailureKeepsTextAndDoesNotEnterStack()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("原文");
+        var store = new MutationStore(directory.Root);
+        var messages = new List<string>();
+        var service = new BoardMutationService(board, store, messages.Add);
+
+        store.FailSave = true;
+        Assert.IsFalse(await service.ReplaceItemTextUndoableAsync(item.Id, "整理后"));
+        Assert.AreEqual("原文", board.FindItem(item.Id)!.Text, "保存失败必须还原原文。");
+        Assert.AreEqual(0, service.PendingUndoCount, "保存失败不得进入撤销栈。");
+        CollectionAssert.AreEqual(new[] { "内容未保存，已还原原文本。" }, messages);
+    }
+
+    [TestMethod]
+    public async Task UndoTextBatch_ItemAlreadyDeletedIsConsumedAsVoid()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("将被删除的原文");
+        var store = new MutationStore(directory.Root);
+        var messages = new List<string>();
+        var service = new BoardMutationService(board, store, messages.Add);
+
+        Assert.IsTrue(await service.ReplaceItemTextUndoableAsync(item.Id, "整理后"));
+        // 绕过撤销栈直接移除（模拟外部装载竞态）：文本批撤销时条目已不存在。
+        _ = board.RemoveMany([item.Id]);
+        store.FailSave = true;
+
+        Assert.IsTrue(await service.UndoLastAsync(), "条目已删的文本批作废消费，不报失败。");
+        Assert.AreEqual(0, service.PendingUndoCount);
+        Assert.IsNull(board.FindItem(item.Id));
+        Assert.AreEqual(1, store.SaveCount, "作废批不得再写盘。");
     }
 
     private sealed class MutationStore : IBoardStore
