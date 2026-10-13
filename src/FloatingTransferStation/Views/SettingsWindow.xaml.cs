@@ -50,6 +50,14 @@ public partial class SettingsWindow : Window
             new ComboBoxItem { Content = "深色", Tag = ThemePreference.Dark }
         };
         ThemeComboBox.SelectedIndex = (int)host.CurrentPreferences.ThemeMode;
+        PinnedDividerComboBox.ItemsSource = new[]
+        {
+            new ComboBoxItem { Content = "无", Tag = PinnedDividerStyle.None },
+            new ComboBoxItem { Content = "实线", Tag = PinnedDividerStyle.Solid },
+            new ComboBoxItem { Content = "虚线", Tag = PinnedDividerStyle.Dashed },
+            new ComboBoxItem { Content = "强调条", Tag = PinnedDividerStyle.AccentBar }
+        };
+        PinnedDividerComboBox.SelectedIndex = (int)host.CurrentPreferences.PinnedDivider;
         AnimationsToggle.IsChecked = host.CurrentPreferences.AnimationsEnabled;
         StartupToggle.IsChecked = host.StartupManager.IsEnabled();
         GlobalHotkeyToggle.IsChecked = host.CurrentPreferences.GlobalHotkeyEnabled;
@@ -455,6 +463,17 @@ public partial class SettingsWindow : Window
         }
 
         _host.ApplyPreferences(_host.CurrentPreferences with { ThemeMode = mode });
+    }
+
+    private void PinnedDividerComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isSynchronizingControls ||
+            PinnedDividerComboBox.SelectedItem is not ComboBoxItem { Tag: PinnedDividerStyle style })
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with { PinnedDivider = style });
     }
 
     private void AnimationsToggle_Checked(object sender, RoutedEventArgs e) =>

@@ -615,16 +615,82 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ListBoxItem">
-          <Border Background="{TemplateBinding Background}"
-                  BorderBrush="{TemplateBinding BorderBrush}"
-                  BorderThickness="{TemplateBinding BorderThickness}">
-            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
-          </Border>
+          <!-- 根 Grid 背景透传：保持既有整条容器可命中（含分隔行 0 的间隙带）。 -->
+          <Grid Background="{TemplateBinding Background}">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <!-- 置顶分区分隔元素（契约 #27）：宿主在容器模板行 0，与卡片同轴参与布局。
+                 两轴正交——「边界可见性」由下方模板触发器按 StartsNormalRegion 驱动
+                 （基态塌缩；Recycling 复用下触发器随 DataContext 重评，禁止代码后置
+                 逐容器设状态）；「四态外观」由 Style 槽位资源经 DynamicResource 承载
+                 （MainWindow 按偏好换装）。None 态以零高+空描边实现零渲染——即使
+                 触发器命中也无任何像素与布局占位，边界卡外距与既有间距完全一致。 -->
+            <Line x:Name="PinnedDivider"
+                  Grid.Row="0"
+                  X1="0" Y1="0" X2="1" Y2="0"
+                  Stretch="Fill"
+                  UseLayoutRounding="True"
+                  SnapsToDevicePixels="True"
+                  IsHitTestVisible="False"
+                  Visibility="Collapsed"
+                  Style="{DynamicResource PinnedDividerActiveStyle}" />
+            <Border Grid.Row="1"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}">
+              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+            </Border>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding StartsNormalRegion}" Value="True">
+              <Setter TargetName="PinnedDivider" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+          </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
   </Style>
+
+  <!-- 置顶分区分隔的四态外观（契约 #27，默认实线）：槽位资源 PinnedDividerActiveStyle
+       的候选样式集，MainWindow 按偏好把其中之一装进窗口级槽位（唯一换装管线
+       ApplyPreferences）。行 0 与行 1 的呼吸空间：上方 4 DIP（末张置顶卡下距）
+       + 8 DIP 上边距、下方 2 DIP 下边距 + 10 DIP（边界卡既有上距），两侧各
+       12 DIP（Fluent Divider 节奏）；左右 12 DIP 与卡片外距对齐。None 态零高
+       +空描边，触发器命中也不渲染（「无」= 升级前的纯间距观感）。 -->
+  <Style x:Key="PinnedDividerNoneStyle" TargetType="Line">
+    <Setter Property="Height" Value="0" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Stroke" Value="{x:Null}" />
+  </Style>
+
+  <Style x:Key="PinnedDividerSolidStyle" TargetType="Line">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Margin" Value="12,8,12,2" />
+    <Setter Property="Stroke" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="StrokeThickness" Value="1" />
+  </Style>
+
+  <Style x:Key="PinnedDividerDashedStyle" TargetType="Line">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Margin" Value="12,8,12,2" />
+    <Setter Property="Stroke" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="StrokeThickness" Value="1" />
+    <Setter Property="StrokeDashArray" Value="4 3" />
+  </Style>
+
+  <Style x:Key="PinnedDividerAccentBarStyle" TargetType="Line">
+    <Setter Property="Height" Value="2" />
+    <Setter Property="Margin" Value="12,8,12,2" />
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="StrokeThickness" Value="2" />
+  </Style>
+
+  <!-- 槽位资源默认值（=Solid）：模板在未经 MainWindow 换装时也自洽，
+       运行时由 ApplyPreferences 在窗口级装槽覆盖（同名键窗口级优先）。 -->
+  <Style x:Key="PinnedDividerActiveStyle" TargetType="Line" BasedOn="{StaticResource PinnedDividerSolidStyle}" />
 
   <!-- 卡片根容器：承载外距、分区起始于普通区的额外上距与悬停上浮（渲染位移），
        自身不携带 Effect，避免整棵子树进入 Effect 中间位图。 -->

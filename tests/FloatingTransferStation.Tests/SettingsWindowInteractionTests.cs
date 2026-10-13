@@ -926,6 +926,98 @@ public sealed class SettingsWindowInteractionTests
         }
     }
 
+    [STATestMethod]
+    public void PinnedDividerComboBox_OffersFourBuiltInStylesDefaultingToSolid()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var combo = settings.FindName("PinnedDividerComboBox") as ComboBox;
+            Assert.IsNotNull(combo);
+            var items = combo.Items.OfType<ComboBoxItem>().ToArray();
+            CollectionAssert.AreEqual(
+                new[] { "无", "实线", "虚线", "强调条" },
+                items.Select(item => (string)item.Content!).ToArray(),
+                "四个内置样式必须按冻结顺序呈现。");
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    PinnedDividerStyle.None,
+                    PinnedDividerStyle.Solid,
+                    PinnedDividerStyle.Dashed,
+                    PinnedDividerStyle.AccentBar
+                },
+                items.Select(item => item.Tag).ToArray(),
+                "选项 Tag 必须对应枚举值。");
+            Assert.AreEqual("实线", ((ComboBoxItem)combo.SelectedItem).Content, "默认选中实线。");
+            Assert.IsNull(preferencesStore.LastSaved, "构造期初始化守卫不得触发保存。");
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void PinnedDividerComboBox_AppliesImmediatelyPersistsAndSurvivesReopen()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { PinnedDivider = PinnedDividerStyle.Dashed }
+        };
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            new FakeStartupManager(),
+            preferencesStore.Seeded);
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var combo = settings.FindName("PinnedDividerComboBox") as ComboBox;
+            Assert.IsNotNull(combo);
+            Assert.AreEqual("虚线", ((ComboBoxItem)combo.SelectedItem).Content, "种子偏好必须回显到下拉。");
+
+            combo.SelectedIndex = (int)PinnedDividerStyle.AccentBar;
+            CompleteLayout(window);
+
+            Assert.AreEqual(
+                PinnedDividerStyle.AccentBar,
+                window.CurrentPreferences.PinnedDivider,
+                "改动必须立即生效。");
+            Assert.AreEqual(
+                PinnedDividerStyle.AccentBar,
+                preferencesStore.LastSaved!.PinnedDivider,
+                "改动必须立即落偏好文件。");
+
+            // 重开设置窗：显示值必须来自已保存偏好而非控件残留。
+            CloseWindow(settings);
+            var reopened = OpenSettings(window);
+            var reopenedCombo = reopened.FindName("PinnedDividerComboBox") as ComboBox;
+            Assert.IsNotNull(reopenedCombo);
+            Assert.AreEqual(
+                "强调条",
+                ((ComboBoxItem)reopenedCombo.SelectedItem).Content,
+                "重开设置窗必须反映已保存的新值。");
+            CloseWindow(reopened);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
     private sealed class IdleClipboardReader : IClipboardReader
     {
         public Task<ClipboardSnapshot> ReadAsync(CancellationToken cancellationToken = default) =>

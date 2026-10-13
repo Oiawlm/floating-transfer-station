@@ -7,6 +7,15 @@ public enum ThemePreference
     Dark
 }
 
+/// <summary>置顶区与普通区之间的分隔样式（默认实线；无 = 保持既有纯间距）。</summary>
+public enum PinnedDividerStyle
+{
+    None = 0,
+    Solid = 1,
+    Dashed = 2,
+    AccentBar = 3
+}
+
 /// <summary>垃圾桶按钮在无选择时的左键行为（1.15.0 起，默认只清非置顶）。</summary>
 public enum TrashNoSelectionLeftClickAction
 {
@@ -40,6 +49,8 @@ public enum TrashNoSelectionRightClickAction
 /// 由窗口侧整组回落默认定位（契约 #24）。
 /// 1.35.0 起新增自动检查更新开关（默认开启；关=停自动检查定时器，开=恢复节奏，
 /// 手动检查不受影响），旧配置缺字段按未知成员回落默认开启。
+/// 置顶分隔样式（默认实线）让置顶区与普通区之间的边界可见：旧用户升级后从纯间距
+/// 变为实线（用户裁决「必须有标识」），「无」样式可回到升级前的纯间距观感。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -59,7 +70,8 @@ public sealed record AppPreferences(
     double? SettingsWindowTop = null,
     double? SettingsWindowWidth = null,
     double? SettingsWindowHeight = null,
-    bool AutoUpdateCheckEnabled = true)
+    bool AutoUpdateCheckEnabled = true,
+    PinnedDividerStyle PinnedDivider = PinnedDividerStyle.Solid)
 {
     public static AppPreferences Default { get; } = new();
 }
