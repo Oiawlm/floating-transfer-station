@@ -1949,7 +1949,7 @@ public sealed partial class MainWindowInteractionTests
                 "trash-left-click-clears-non-pinned.png",
                 "FTS_DELIVERY_EVIDENCE_DIR");
 
-            PumpDispatcherUntil(window.Dispatcher, window.UndoLastDeleteFromPanelAsync());
+            PumpDispatcherUntil(window.Dispatcher, window.UndoLastFromPanelAsync());
             CompleteLayout(window);
 
             // 清空前 = [置顶, 普通二, 普通一]（新卡插在普通区顶部）；整体撤销按原序恢复。
@@ -1993,7 +1993,7 @@ public sealed partial class MainWindowInteractionTests
                 "已清空全部 2 项（可 Ctrl+Z 撤销）",
                 ((MainWindowViewModel)window.DataContext).StatusText);
 
-            PumpDispatcherUntil(window.Dispatcher, window.UndoLastDeleteFromPanelAsync());
+            PumpDispatcherUntil(window.Dispatcher, window.UndoLastFromPanelAsync());
             CompleteLayout(window);
 
             CollectionAssert.AreEquivalent(

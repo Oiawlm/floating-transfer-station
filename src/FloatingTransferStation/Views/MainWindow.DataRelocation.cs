@@ -34,7 +34,7 @@ public partial class MainWindow
             await host.DrainPendingOperationsAsync();
             host._dailyReviews?.StopWatching();
             await host._mutations.SaveForShutdownAsync(() => host._store.SaveSettingsAsync(host._settings));
-            host._mutations.DiscardUndoableDeletes();
+            host._mutations.DiscardUndoableBatches();
             host.StopClipboardListening();
             operationCancellation.Dispose();
         }

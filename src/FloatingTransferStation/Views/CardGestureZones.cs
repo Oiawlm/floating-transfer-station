@@ -33,4 +33,11 @@ public static class CardGestureZones
     /// 备注交互条左键绝不 toggle 选中，右键语义与既有命中层分区一致。
     /// </summary>
     public const string NoteStripCommand = "CardNoteStrip";
+
+    /// <summary>
+    /// AI 整理钮（1.41.0）：单击按内置提示词整理该卡全文并直接替换正文
+    /// （Ctrl+Z 恢复原文）。独立意图会话，模式同置顶/删除/备注钮——不参与
+    /// 双击窗、不记双击痕迹、滑离释放取消意图；左键绝不 toggle 选中。
+    /// </summary>
+    public const string AiOrganizeCommand = "AiOrganize";
 }

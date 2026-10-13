@@ -52,6 +52,11 @@ public partial class MainWindow
         /// 与右半选择手势不同的独立意图；模式照抄 OperationsPin——不参与
         /// 双击窗、不记双击痕迹、滑离释放取消意图。</summary>
         OperationsNote,
+
+        /// <summary>右半·AI 整理钮（1.41.0）：单击按内置提示词整理该卡全文并
+        /// 直接替换正文，与右半选择手势不同的独立意图；模式照抄
+        /// OperationsPin——不参与双击窗、不记双击痕迹、滑离释放取消意图。</summary>
+        OperationsAiOrganize,
     }
 
     /// <summary>
@@ -137,7 +142,9 @@ public partial class MainWindow
                     ? CardHitZone.OperationsDelete
                     : Equals(hitButton.CommandParameter, CardGestureZones.NoteStripCommand)
                         ? CardHitZone.OperationsNote
-                        : CardHitZone.Operations;
+                        : Equals(hitButton.CommandParameter, CardGestureZones.AiOrganizeCommand)
+                            ? CardHitZone.OperationsAiOrganize
+                            : CardHitZone.Operations;
             _pressButton = hitButton;
             _dragThresholdCrossed = false;
             _pressModifiers = Keyboard.Modifiers;
@@ -238,6 +245,13 @@ public partial class MainWindow
             {
                 BeginCardNoteEditing(item, noteContainer, _pressStartPosition);
             }
+        }
+        else if (_pressZone == CardHitZone.OperationsAiOrganize)
+        {
+            // AI 整理钮是独立意图（1.41.0）：单击整理该卡全文并直接替换正文，
+            // 绝不 toggle 选中；语义与 BoardList_ButtonClick 的 AiOrganize 分支
+            // 共用同一实现（合成与 UIA 自动化路径）。
+            _ = BeginCardAiOrganizeAsync(item);
         }
         else if (_pressZone == CardHitZone.Operations)
         {

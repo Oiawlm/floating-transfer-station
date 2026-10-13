@@ -373,7 +373,7 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(offset, viewer.VerticalOffset, 0.5, "单卡删除不得滚动列表。");
 
             // Ctrl+Z 经窗口撤销入口整卡恢复（锚点插回原位）。
-            Assert.IsTrue(await window.UndoLastDeleteFromPanelAsync());
+            Assert.IsTrue(await window.UndoLastFromPanelAsync());
             CompleteLayout(window);
             Assert.AreEqual(target.Id, board.Items(BoardCategory.Inbox)[3].Id, "撤销必须把被删卡片插回原位。");
         }

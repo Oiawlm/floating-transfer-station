@@ -23,7 +23,7 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
 
-            Assert.IsFalse(await window.UndoLastDeleteFromPanelAsync());
+            Assert.IsFalse(await window.UndoLastFromPanelAsync());
             Assert.AreEqual(0, store.SaveCount, "空栈撤销不得保存。");
 
             var mutations = GetPrivateField<BoardMutationService>(window, "_mutations");
@@ -32,7 +32,7 @@ public sealed partial class MainWindowInteractionTests
                 new[] { keep.Id },
                 board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
 
-            Assert.IsTrue(await window.UndoLastDeleteFromPanelAsync());
+            Assert.IsTrue(await window.UndoLastFromPanelAsync());
 
             CollectionAssert.AreEqual(
                 new[] { deleted.Id, keep.Id },
@@ -66,13 +66,13 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(await mutations.DeleteManyAsync([earlier.Id]));
             Assert.IsTrue(await mutations.DeleteManyAsync([latest.Id]));
 
-            Assert.IsTrue(await window.UndoLastDeleteFromPanelAsync(), "Ctrl+Z 必须恢复最近删除的一张。");
+            Assert.IsTrue(await window.UndoLastFromPanelAsync(), "Ctrl+Z 必须恢复最近删除的一张。");
             CollectionAssert.AreEqual(
                 new[] { latest.Id },
                 board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
             Assert.AreEqual(3, store.SaveCount);
 
-            Assert.IsTrue(await window.UndoLastDeleteFromPanelAsync());
+            Assert.IsTrue(await window.UndoLastFromPanelAsync());
             CollectionAssert.AreEqual(
                 new[] { latest.Id, earlier.Id },
                 board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),

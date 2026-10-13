@@ -66,4 +66,27 @@ public sealed class BoardItemPreviewTextTests
         Assert.AreEqual(item.Text, roundTripped.Items[0].Text);
         Assert.AreEqual(item.PreviewText, roundTripped.Items[0].PreviewText, "预览由全文重建，不依赖持久化。");
     }
+
+    [TestMethod]
+    public void IsAiOrganizing_RaisesNotificationAndStaysOutOfSnapshot()
+    {
+        var item = BoardItem.CreateText("在途整理的卡片", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        var raised = new List<string?>();
+        ((INotifyPropertyChanged)item).PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        Assert.IsFalse(item.IsAiOrganizing);
+        item.BeginAiOrganize();
+        Assert.IsTrue(item.IsAiOrganizing);
+        item.EndAiOrganize();
+        Assert.IsFalse(item.IsAiOrganizing);
+        CollectionAssert.AreEqual(
+            new[] { nameof(BoardItem.IsAiOrganizing), nameof(BoardItem.IsAiOrganizing) },
+            raised,
+            "Begin/End 各恰好通知一次。");
+
+        var snapshot = item.CloneForSnapshot();
+        Assert.IsFalse(
+            JsonSerializer.Serialize(snapshot).Contains("isAiOrganizing", StringComparison.Ordinal),
+            "AI 整理在途标志是会话状态，不得进入快照。");
+    }
 }

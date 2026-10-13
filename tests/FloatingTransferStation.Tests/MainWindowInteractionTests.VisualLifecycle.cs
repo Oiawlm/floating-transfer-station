@@ -1120,14 +1120,17 @@ public sealed partial class MainWindowInteractionTests
                 .Where(candidate => ReferenceEquals(candidate.Tag, item))
                 .ToArray();
             // 1.28.0 起备注交互条两枚按钮（点击面/添加备注钮）同以条目为 Tag；
-            // 右上操作条 1.29.0 起四枚（备注/置顶/选择/删除，#19 矩阵扩展备注钮行）。
-            Assert.HasCount(5, buttons);
+            // 右上操作条 1.29.0 起四枚（备注/置顶/选择/删除，#19 矩阵扩展备注钮行），
+            // 1.41.0 起追加 AI 整理钮（#16/#19 修订：基座网格＋追加行网格）。
+            Assert.HasCount(6, buttons);
             var pinButton = buttons.Single(
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.TogglePinCommand));
             var selectionButton = buttons.Single(
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.ToggleSelectionCommand));
             var deleteButton = buttons.Single(
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.DeleteCardCommand));
+            var aiButton = buttons.Single(
+                candidate => Equals(candidate.CommandParameter, CardGestureZones.AiOrganizeCommand));
             Assert.HasCount(2, buttons.Where(
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.NoteStripCommand)));
             var noteButton = buttons.Single(candidate => candidate.Name == "CardOperationNoteButton");
@@ -1149,6 +1152,17 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsInstanceOfType(((Viewbox)noteButton.Content).Child, typeof(System.Windows.Shapes.Path));
             Assert.AreEqual("添加备注", noteButton.ToolTip);
             Assert.AreEqual("备注", System.Windows.Automation.AutomationProperties.GetName(noteButton));
+            // 1.41.0 AI 整理钮（追加行左格 (2,0)）：30×30、基态塌缩、未悬停不可命中，
+            // 意图参数 AiOrganizeCommand；可见性矩阵由 CardAi 测试文件锁定。
+            Assert.AreEqual("CardOperationAiOrganizeButton", aiButton.Name);
+            Assert.AreEqual(30d, aiButton.Width);
+            Assert.AreEqual(30d, aiButton.Height);
+            Assert.AreEqual(0d, aiButton.Opacity);
+            Assert.IsFalse(aiButton.IsHitTestVisible);
+            Assert.AreEqual(Visibility.Collapsed, aiButton.Visibility, "AI 钮基态必须塌缩（非纯 Opacity 隐藏）。");
+            Assert.AreEqual("AI 整理", aiButton.ToolTip);
+            Assert.AreEqual("AI 整理", System.Windows.Automation.AutomationProperties.GetName(aiButton));
+            Assert.IsTrue(aiButton.IsEnabled, "忙态防点击穿透：按钮恒不禁用（防抖在入口守卫）。");
             Assert.AreEqual(30d, pinButton.Width);
             Assert.AreEqual(30d, pinButton.Height);
             Assert.AreEqual(0d, pinButton.Opacity);
@@ -1184,9 +1198,25 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(0, Grid.GetColumn(pinButton));
             Assert.AreEqual(2, Grid.GetRow(noteButton));
             Assert.AreEqual(1, Grid.GetColumn(noteButton));
-            Assert.AreEqual(HorizontalAlignment.Right, contentGrid.HorizontalAlignment);
-            Assert.AreEqual(VerticalAlignment.Top, contentGrid.VerticalAlignment);
-            var operationsZone = contentGrid.Parent as Grid;
+            // 1.41.0 起右列为垂直 StackPanel（基座网格＋AI 追加行网格）：右上锚定
+            // 移至 StackPanel（对齐唯一来源），基座网格在等宽栈内拉伸填充。
+            var operationsStack = contentGrid.Parent as StackPanel;
+            Assert.IsNotNull(operationsStack);
+            Assert.AreEqual(Orientation.Vertical, operationsStack.Orientation);
+            Assert.AreEqual(HorizontalAlignment.Right, operationsStack.HorizontalAlignment);
+            Assert.AreEqual(VerticalAlignment.Top, operationsStack.VerticalAlignment);
+            Assert.AreEqual(HorizontalAlignment.Stretch, contentGrid.HorizontalAlignment);
+            var appendRow = aiButton.Parent as Grid;
+            Assert.IsNotNull(appendRow);
+            Assert.AreEqual(2, appendRow.ColumnDefinitions.Count);
+            Assert.AreEqual(new GridLength(30), appendRow.ColumnDefinitions[0].Width);
+            Assert.AreEqual(new GridLength(30), appendRow.ColumnDefinitions[1].Width);
+            Assert.HasCount(1, appendRow.RowDefinitions);
+            Assert.AreEqual(new GridLength(30), appendRow.RowDefinitions[0].Height);
+            Assert.AreEqual(0, Grid.GetRow(aiButton));
+            Assert.AreEqual(0, Grid.GetColumn(aiButton), "AI 钮占追加行左格，右格固定留空。");
+            Assert.AreEqual(appendRow.Parent, operationsStack, "追加行与基座网格同属右列 StackPanel。");
+            var operationsZone = operationsStack.Parent as Grid;
             Assert.IsNotNull(operationsZone);
             Assert.AreEqual(CardGestureZones.OperationsZone, operationsZone.Tag as string);
             var hitLayer = operationsZone.Parent as Grid;

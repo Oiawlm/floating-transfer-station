@@ -124,6 +124,7 @@ public partial class MainWindow : Window
         DataDirectoryChangeService? dataDirectoryChangeService = null,
         ISecretProtector? secretProtector = null,
         DeepSeekClient? deepSeekClient = null,
+        AiTextOrganizer? aiTextOrganizer = null,
         IUpdateService? updateService = null)
     {
         InitializeComponent();
@@ -136,6 +137,9 @@ public partial class MainWindow : Window
         // 未注入时用真实实现兜底（与 _startupManager/_globalHotkeySource 同法）。
         _secretProtector = secretProtector ?? new DpapiSecretProtector();
         _deepSeekClient = deepSeekClient ?? new DeepSeekClient();
+        // AI 整理编排（1.41.0）复用同一客户端实例；组合根显式装配，测试可注入
+        // 挂假 HttpMessageHandler 客户端的编排器（全离线）。
+        _aiTextOrganizer = aiTextOrganizer ?? new AiTextOrganizer(_deepSeekClient);
         _updateService = updateService ?? new UpdateService();
         _operationGate = operationGate;
         _dataDirectoryChangeService = dataDirectoryChangeService;

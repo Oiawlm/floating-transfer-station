@@ -230,14 +230,14 @@ public sealed class BoardMutationServiceTests
             new[] { keep.Id },
             board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
         Assert.AreEqual(1, store.SaveCount);
-        Assert.AreEqual(1, service.PendingUndoDeleteCount);
+        Assert.AreEqual(1, service.PendingUndoCount);
         Assert.IsTrue(File.Exists(imagePath), "删除入撤销栈期间图片文件必须保留,保证撤销后缩略图可用。");
 
-        service.DiscardUndoableDeletes();
+        service.DiscardUndoableBatches();
 
         Assert.IsFalse(File.Exists(imagePath));
         Assert.AreEqual(1, store.DeleteCount);
-        Assert.AreEqual(0, service.PendingUndoDeleteCount);
+        Assert.AreEqual(0, service.PendingUndoCount);
     }
 
     [TestMethod]
@@ -381,7 +381,7 @@ public sealed class BoardMutationServiceTests
         Assert.AreEqual(1, store.SaveCount);
         Assert.IsTrue(File.Exists(path), "撤销栈持有期间文件保留。");
 
-        service.DiscardUndoableDeletes();
+        service.DiscardUndoableBatches();
 
         Assert.IsFalse(File.Exists(path));
         Assert.AreEqual(1, store.DeleteCount);
@@ -448,11 +448,11 @@ public sealed class BoardMutationServiceTests
         Assert.AreEqual(1, store.SaveCount);
         Assert.IsFalse(store.LastPersistedSnapshot!.Items.Any(
             item => item.Category == BoardCategory.Prompt));
-        Assert.AreEqual(1, service.PendingUndoDeleteCount);
+        Assert.AreEqual(1, service.PendingUndoCount);
         Assert.IsTrue(File.Exists(imagePath), "清空入撤销栈期间图片文件保留。");
         Assert.IsEmpty(messages);
 
-        service.DiscardUndoableDeletes();
+        service.DiscardUndoableBatches();
 
         Assert.IsFalse(File.Exists(imagePath));
         Assert.AreEqual(1, store.DeleteCount);
@@ -510,7 +510,7 @@ public sealed class BoardMutationServiceTests
         Assert.AreEqual(0, store.DeleteCount, "清空即时不再触碰文件,清理延迟到丢弃撤销栈。");
         Assert.IsEmpty(messages);
 
-        service.DiscardUndoableDeletes();
+        service.DiscardUndoableBatches();
 
         Assert.AreEqual(2, store.DeleteCount);
         CollectionAssert.AreEqual(
@@ -625,7 +625,7 @@ public sealed class BoardMutationServiceTests
                 .Select(item => item.Id)
                 .ToArray());
         Assert.AreSame(keep, board.Items(BoardCategory.Reference).Single());
-        Assert.AreEqual(1, service.PendingUndoDeleteCount, "被清空条目必须整批进入撤销栈。");
+        Assert.AreEqual(1, service.PendingUndoCount, "被清空条目必须整批进入撤销栈。");
     }
 
     [TestMethod]
@@ -641,7 +641,7 @@ public sealed class BoardMutationServiceTests
         Assert.IsFalse(await service.ClearNonPinnedAsync(BoardCategory.Inbox));
         Assert.AreEqual(0, store.SaveCount);
         Assert.AreSame(pinned, board.Items(BoardCategory.Inbox).Single());
-        Assert.AreEqual(0, service.PendingUndoDeleteCount, "空操作不得进入撤销栈。");
+        Assert.AreEqual(0, service.PendingUndoCount, "空操作不得进入撤销栈。");
     }
 
     [TestMethod]
@@ -664,7 +664,7 @@ public sealed class BoardMutationServiceTests
             before.Select(item => item.Id).ToArray(),
             board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
         CollectionAssert.AreEquivalent(new[] { "清空未保存，内容已恢复。" }, messages);
-        Assert.AreEqual(0, service.PendingUndoDeleteCount);
+        Assert.AreEqual(0, service.PendingUndoCount);
     }
 
     [TestMethod]
@@ -682,7 +682,7 @@ public sealed class BoardMutationServiceTests
         Assert.IsTrue(await service.ClearNonPinnedAsync(BoardCategory.Inbox));
         var later = board.AddText("清空后新增");
 
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
 
         // 清空前 = [置顶, 普通二, 普通一]（新卡在上）；清空后新增位于普通区顶部；
         // 撤销按锚点插回：普通一跟在普通二之后、新增保持最上。
@@ -712,7 +712,7 @@ public sealed class BoardMutationServiceTests
         Assert.IsTrue(outcome.Saved);
         Assert.AreEqual(2, outcome.RemovedCount);
         Assert.AreEqual(1, store.SaveCount, "跨分类清扫必须单次原子保存。");
-        Assert.AreEqual(1, service.PendingUndoDeleteCount, "跨分类清扫必须进单批撤销（可整批 Ctrl+Z）。");
+        Assert.AreEqual(1, service.PendingUndoCount, "跨分类清扫必须进单批撤销（可整批 Ctrl+Z）。");
         CollectionAssert.AreEqual(
             new[] { imagePinned.Id },
             store.LastPersistedSnapshot!.Items
@@ -739,7 +739,7 @@ public sealed class BoardMutationServiceTests
         Assert.IsTrue(outcome.Saved);
         Assert.AreEqual(0, outcome.RemovedCount);
         Assert.AreEqual(0, store.SaveCount, "幂等空操作不得写盘。");
-        Assert.AreEqual(0, service.PendingUndoDeleteCount);
+        Assert.AreEqual(0, service.PendingUndoCount);
         Assert.AreSame(pinned, board.Items(BoardCategory.Inbox).Single());
     }
 
@@ -777,7 +777,7 @@ public sealed class BoardMutationServiceTests
         Assert.AreSame(promptPinned, board.Items(BoardCategory.Prompt)[0]);
         Assert.AreSame(promptNormal, board.Items(BoardCategory.Prompt)[1]);
         Assert.AreSame(referenceNormal, board.Items(BoardCategory.Reference).Single());
-        Assert.AreEqual(0, service.PendingUndoDeleteCount, "保存失败不得进入撤销栈。");
+        Assert.AreEqual(0, service.PendingUndoCount, "保存失败不得进入撤销栈。");
         Assert.AreEqual(0, store.SaveCount);
         CollectionAssert.AreEqual(new[] { "清空未保存，内容已恢复。" }, messages);
     }
@@ -795,10 +795,10 @@ public sealed class BoardMutationServiceTests
         var outcome = await service.ClearNonPinnedAsync(AutoCleanupSchedule.SweepCategories);
 
         Assert.IsTrue(outcome.Saved);
-        Assert.IsTrue(await service.UndoLastDeleteAsync());
+        Assert.IsTrue(await service.UndoLastAsync());
         Assert.AreSame(imageNormal, board.Items(BoardCategory.CustomerOriginal).Single());
         Assert.AreSame(promptNormal, board.Items(BoardCategory.Prompt).Single());
-        Assert.AreEqual(0, service.PendingUndoDeleteCount);
+        Assert.AreEqual(0, service.PendingUndoCount);
     }
 
     [TestMethod]
@@ -829,7 +829,7 @@ public sealed class BoardMutationServiceTests
         Assert.IsTrue(outcome.Saved);
         Assert.AreEqual(2, outcome.RemovedCount, "只有超龄普通项到期；超龄置顶与未满期保留。");
         Assert.AreEqual(1, store.SaveCount, "清扫必须单次原子保存。");
-        Assert.AreEqual(1, service.PendingUndoDeleteCount, "清扫必须单批可撤销。");
+        Assert.AreEqual(1, service.PendingUndoCount, "清扫必须单批可撤销。");
         // 做旧经快照回合重建条目实例，按 Id 断言而非实例同一。
         CollectionAssert.AreEqual(
             new[] { expiredPinned.Id },
@@ -838,7 +838,7 @@ public sealed class BoardMutationServiceTests
             new[] { freshNormal.Id },
             board.Items(BoardCategory.CustomerOriginal).Select(item => item.Id).ToArray());
 
-        Assert.IsTrue(await service.UndoLastDeleteAsync(), "被清扫批次必须可整批撤销恢复。");
+        Assert.IsTrue(await service.UndoLastAsync(), "被清扫批次必须可整批撤销恢复。");
         // 锚点插回（契约 #11）：新卡插普通区顶部，删除时显示序为 [新鲜, 超龄]，
         // 撤销按删除时显示序插回原位，不重排其余内容。
         CollectionAssert.AreEqual(
@@ -873,7 +873,7 @@ public sealed class BoardMutationServiceTests
             new[] { expiredNormal.Id },
             board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
             "保存失败整批恢复原内容。");
-        Assert.AreEqual(0, service.PendingUndoDeleteCount, "保存失败不得进入撤销栈。");
+        Assert.AreEqual(0, service.PendingUndoCount, "保存失败不得进入撤销栈。");
         Assert.AreEqual(0, store.SaveCount);
         CollectionAssert.AreEqual(new[] { "清空未保存，内容已恢复。" }, messages);
     }
