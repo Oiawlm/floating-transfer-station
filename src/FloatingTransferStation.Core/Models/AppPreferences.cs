@@ -42,8 +42,9 @@ public enum TrashNoSelectionRightClickAction
 /// （入库满期即删、判据幂等），原成对的调度记账时间戳字段随间隔清扫语义删除，
 /// 旧文件残留的时间戳成员按未知成员忽略、不影响加载；
 /// 1.27.0 起新增 DeepSeek 接入地基：DeepSeekApiKeyProtected 存 DPAPI（CurrentUser）
-/// 加密后的 API Key 密文（base64；null = 未配置，明文绝不落盘），DeepSeekModel 为
-/// 模型 ID 自由字符串（默认轻量模型，官方日后改 ID 不破坏旧配置）；
+/// 加密后的 API Key 密文（base64；null = 未配置，明文绝不落盘）；模型恒为
+/// DeepSeekClient.DefaultModel（deepseek-flash，契约 #28），随模型选择机制删除的
+/// 旧 deepSeekModel 字段按未知成员忽略、不影响加载；
 /// 设置窗口几何（双栏改造起）持久化为 WPF DIP 值（null = 首次运行用默认定位），
 /// 旧配置文件缺字段免迁移加载，非法值（非有限数/非正尺寸/完全落在所有显示器之外）
 /// 由窗口侧整组回落默认定位（契约 #24）。
@@ -65,7 +66,6 @@ public sealed record AppPreferences(
     string? PluginsDirectoryOverride = null,
     bool AutoCleanupEnabled = true,
     string? DeepSeekApiKeyProtected = null,
-    string DeepSeekModel = DeepSeekModels.Flash,
     double? SettingsWindowLeft = null,
     double? SettingsWindowTop = null,
     double? SettingsWindowWidth = null,

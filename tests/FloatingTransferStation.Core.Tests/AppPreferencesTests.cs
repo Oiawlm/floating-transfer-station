@@ -179,25 +179,21 @@ public sealed class AppPreferencesTests
     }
 
     [TestMethod]
-    public void Default_HasNoDeepSeekKeyAndUsesClientDefaultModel()
+    public void Default_HasNoDeepSeekKeyAndOmitsModelField()
     {
         Assert.IsNull(AppPreferences.Default.DeepSeekApiKeyProtected, "默认不得携带任何 API Key（密文或明文）。");
-        Assert.AreEqual("deepseek-flash", AppPreferences.Default.DeepSeekModel);
-        // DeepSeekClient.DefaultModel 的值钉死由编译期保证：它是 const（=DeepSeekModels.Flash），
-        // 值若偏离 "deepseek-flash" 会被 MSTEST0032 分析器在本断言处折叠判恒真报错。
-        Assert.AreEqual(
-            DeepSeekClient.DefaultModel,
-            AppPreferences.Default.DeepSeekModel,
-            "偏好默认模型必须与客户端默认模型一致。");
+        // 模型选择机制已删除（契约 #28）：偏好不再承载模型，序列化不得出现 deepSeekModel。
+        Assert.IsFalse(
+            JsonSerializer.Serialize(AppPreferences.Default)
+                .Contains("deepSeekModel", StringComparison.Ordinal));
     }
 
     [TestMethod]
-    public void JsonRoundTrip_PreservesDeepSeekKeyAndModel()
+    public void JsonRoundTrip_PreservesDeepSeekKey()
     {
         var preferences = AppPreferences.Default with
         {
-            DeepSeekApiKeyProtected = "AQAAANCMnd8BFdERjHoAwGiClCAABFAKE-CIPHER",
-            DeepSeekModel = "deepseek-v4-pro"
+            DeepSeekApiKeyProtected = "AQAAANCMnd8BFdERjHoAwGiClCAABFAKE-CIPHER"
         };
 
         var restored = JsonSerializer.Deserialize<AppPreferences>(
@@ -205,7 +201,6 @@ public sealed class AppPreferencesTests
 
         Assert.AreEqual(preferences, restored);
         Assert.AreEqual("AQAAANCMnd8BFdERjHoAwGiClCAABFAKE-CIPHER", restored!.DeepSeekApiKeyProtected);
-        Assert.AreEqual("deepseek-v4-pro", restored.DeepSeekModel);
     }
 
     [TestMethod]
@@ -222,7 +217,25 @@ public sealed class AppPreferencesTests
 
         Assert.IsNotNull(restored);
         Assert.IsNull(restored.DeepSeekApiKeyProtected, "1.27.0 之前的 preferences.json 必须回落到未配置。");
-        Assert.AreEqual("deepseek-flash", restored.DeepSeekModel, "缺模型字段必须回落默认模型。");
+    }
+
+    [TestMethod]
+    public async Task LegacyPreferencesFile_WithRetiredDeepSeekModelField_LoadsViaProductionStore()
+    {
+        // 模型选择机制删除（契约 #28）：老 preferences.json 里的 deepSeekModel 残留键必须被
+        // 生产读取路径（LocalStore 的 JsonOptions，未映射成员跳过）忽略，不得让加载失败
+        // 或回落到损坏兜底（与 autoCleanupLastRunAtUtc 退役同口径）。
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        Directory.CreateDirectory(Path.GetDirectoryName(paths.PreferencesFile)!);
+        await File.WriteAllTextAsync(
+            paths.PreferencesFile,
+            """{"themeMode":"Dark","deepSeekModel":"deepseek-v4-pro"}""");
+        using var store = new LocalStore(paths, new AtomicTextWriter());
+
+        var loaded = await store.LoadPreferencesAsync();
+
+        Assert.AreEqual(ThemePreference.Dark, loaded.ThemeMode, "其余偏好必须照常读取。");
     }
 
     [TestMethod]

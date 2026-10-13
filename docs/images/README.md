@@ -1,6 +1,6 @@
 # README 演示资产与再生步骤
 
-本目录存放 README 引用的演示资产（真实应用画面，非生成图）。素材取自 **1.12.0 安装版**（Windows 11，浅色主题）；`panel-anatomy.png` 已于 **1.40.0**（保持展开按钮图标改「贴缘面板」）重录：底图为真实 WPF 渲染管线的测试证据输出（`FTS_PANEL_ANATOMY_EVIDENCE_DIR`，沿 settings-window.png 先例；480 DIP 宽面板种子），锚点取自测试进程内 TransformToAncestor 几何，引线/文案由脚本绘制。UI 变化后按本文步骤重录对应资产即可，不要用截图工具随手补图。
+本目录存放 README 引用的演示资产（真实应用画面，非生成图）。素材取自 **1.12.0 安装版**（Windows 11，浅色主题）；`panel-anatomy.png` 已于 **1.41.0**（保持展开按钮图标改「贴缘面板」）重录：底图为真实 WPF 渲染管线的测试证据输出（`FTS_PANEL_ANATOMY_EVIDENCE_DIR`，沿 settings-window.png 先例；480 DIP 宽面板种子），锚点取自测试进程内 TransformToAncestor 几何，引线/文案由脚本绘制。UI 变化后按本文步骤重录对应资产即可，不要用截图工具随手补图。
 
 ## 资产清单
 
@@ -13,6 +13,9 @@
 | `edge-collapse-hold.gif` | 600×1054 | 288 KB | 移开收起 → 移入展开 → 保持展开开/关，原速 11.0s | 成组区「不挡工作区」 |
 | `review-tab.gif` | 600×1054 | 156 KB | 复盘标签输入 → 切前一天 → 切回，内容仍在 | 复盘段落之后 |
 | `settings-window.png` | 384×976 | - | 设置窗口一屏（含 1.25.0「标签顺序」节与 TTL 自动清理说明；由真实 WPF 控件渲染的测试证据再生，`FTS_RELEASE_125_EVIDENCE_DIR`） | 成组区「设置」 |
+| `settings-category-order-dark.png` | 680×600 | 16 KB | 「标签顺序」节深色主题（行画刷随主题实时跟随的深色实时适配证据；真实 WPF 控件渲染，`FTS_PLUGIN_SETTINGS_EVIDENCE_DIR`） | 成组区「标签顺序」（Issue #140） |
+| `settings-plugins-dark.png` | 680×600 | 43 KB | 插件区块深色主题（插件行画刷随主题实时跟随的深色实时适配证据；真实 WPF 控件渲染，`FTS_PLUGIN_SETTINGS_EVIDENCE_DIR`） | 成组区「插件」深色链接（Issue #140） |
+| `settings-ai-test-success.png` / `settings-ai-dark.png` / `settings-ai-test-failure.png` | 680×600 | 41/39/39 KB | AI 设置节三态（成功/深色/失败；模型收敛后重拍——无模型下拉，Key 掩码 + 测试连接反馈；真实 WPF 控件渲染，`FTS_RELEASE_127_EVIDENCE_DIR`） | 成组区「AI 设置（DeepSeek）」（Issue #141） |
 | `plugins-section.png` | 570×265 | 27 KB | 插件区块（「整理空白」默认关闭） | 成组区「插件」 |
 | `theme-light-dark.png` | 900×790 | 160 KB | 同一展开态面板的浅色/深色双联 | 成组区「主题」 |
 | `batch-copy-images.gif` | 680×546 | 77 KB | 资源管理器 Ctrl 多选三张复制，面板按来源顺序出卡 | 成组区「批量复制」 |

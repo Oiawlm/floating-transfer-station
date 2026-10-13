@@ -10,11 +10,11 @@
 
 ## 下载与安装
 
-在 [1.39.0 发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.39.0) 下载 Windows 安装程序：
+在 [1.40.0 发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.40.0) 下载 Windows 安装程序：
 
 | 平台 | 下载 | 状态 |
 |---|---|---|
-| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.39.0/FloatingTransferStation-Setup-1.39.0.exe) | 正式版 |
+| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.40.0/FloatingTransferStation-Setup-1.40.0.exe) | 正式版 |
 
 发行页同时提供 `SHA256SUMS.txt`。Windows 无需另装 .NET。
 
@@ -53,7 +53,7 @@ Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自
 *发现新版本：头部最左「更新」按钮点亮，点击即自动下载安装并重启*
 
 - **设置**：点击面板头部的齿轮按钮可打开设置窗口（左导航 + 右内容页双栏布局，可拖拽缩放）：左侧导航 5 组——外观（主题：跟随系统/浅色/深色、界面动效、置顶分隔：无/实线/虚线/强调条）、面板（标签顺序：拖动行或用上移/下移按钮调整「图片、复盘、文本、待分类」四个标签的显示顺序、内容复制手势（右键卡片操作区复制、`Ctrl + C` 复制选中）、垃圾桶按钮无选择时的左右键行为）、通用（开机自启、全局快捷键 `Ctrl + Alt + V` 唤起面板，默认关闭）、数据与维护（自动清理：默认开启，非置顶卡片入库满 24 小时自动删除、数据目录、插件管理）、AI 设置（DeepSeek）；页脚常驻关于与退出应用。改动立即生效并自动保存；窗口大小与位置跨会话记忆（可拖动边缘自由缩放，恢复时按所在显示器自动钳回工作区）。某页内容超出可视高度时页内出现滚动条。
-- **AI 设置（DeepSeek）**：设置窗口的「AI 设置」节可填入 DeepSeek 官方国内 API 的 Key（在 [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) 创建），选择模型（默认 `deepseek-flash`，即 DeepSeek V4.1 Flash；可选 `deepseek-v4-pro`，即 DeepSeek V4 Pro），并用「测试连接」就地验证 Key、余额与网络（结果直接显示；Key 为空时不会发送任何请求）。Key 经 Windows 系统加密（DPAPI）后只保存在本机 preferences.json，界面只显示掩码；输入后焦点离开即自动保存，清空后失焦即删除。卡片上的 AI 整理动作将在后续版本接入。
+- **AI 设置（DeepSeek）**：设置窗口的「AI 设置」节可填入 DeepSeek 官方国内 API 的 Key（在 [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) 创建），并用「测试连接」就地验证 Key、余额与网络（请求统一使用 `deepseek-flash` 模型，结果直接显示；Key 为空时不会发送任何请求）。Key 经 Windows 系统加密（DPAPI）后只保存在本机 preferences.json，界面只显示掩码；输入后焦点离开即自动保存，清空后失焦即删除。卡片上的 AI 整理动作将在后续版本接入。
 - **更改存储位置**：设置中的「数据目录」支持在应用内更换内容存储位置——选择一个父文件夹，应用会在其中创建并管理「悬浮中转站Data」，按安装器同一迁移协议完整复制、校验并原子发布，更新登记后自动重启；旧目录在下次启动并通过安全校验后自动清理。迁移失败时原目录与登记保持原状。「插件目录」也可以改为任意文件夹（默认在数据目录的 `plugins/`），更改保存后重启生效。
 - **插件**：把带 `plugin.json` 清单的插件文件夹放进插件目录（默认为数据目录的 `plugins/`，可在设置中改为任意文件夹）即可出现在设置的插件区块；声明式文本整理插件默认关闭，启用后在文字入库前按序应用正则规则（自动采集与外部拖入共用），正则按行匹配（`^`/`$` 锚定每行），规则失败或结果被清空时保留原文；内建"整理空白"示例插件，用户目录中的同名插件会覆盖内建版本。
 - **本地保存**：内容、顺序、置顶状态、分类名称和窗口位置保存在本机。
@@ -100,15 +100,21 @@ Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自
 
 *默认实线：置顶区与普通区之间的分隔标识；虚线见 [pinned-divider-dashed.png](docs/images/pinned-divider-dashed.png)，强调条见 [pinned-divider-accent-bar.png](docs/images/pinned-divider-accent-bar.png)，关闭（纯间距）见 [pinned-divider-none.png](docs/images/pinned-divider-none.png)，设置 → 外观的「置顶分隔」节见 [settings-pinned-divider-section.png](docs/images/settings-pinned-divider-section.png)*
 
+**标签顺序**
+
+<img src="docs/images/settings-category-order-dark.png" width="360" alt="设置窗口面板页「标签顺序」节深色主题：四行标签卡片随深色主题实时切换画刷">
+
+*「标签顺序」节深色主题：拖动行或用上移/下移按钮调整四个标签的显示顺序，行画刷随主题实时跟随*
+
 **插件**
 
 <img src="docs/images/plugins-section.png" width="550" alt="设置窗口插件区块：内建「整理空白」示例插件，默认关闭">
 
-*声明式插件默认关闭，放入即出现在设置里*
+*声明式插件默认关闭，放入即出现在设置里；深色主题见 [settings-plugins-dark.png](docs/images/settings-plugins-dark.png)（插件行画刷随主题实时跟随）*
 
 **AI 设置（DeepSeek）**
 
-<img src="docs/images/settings-ai-test-success.png" width="550" alt="设置窗口 AI 设置节：掩码显示的 API Key、模型选择与测试连接成功反馈">
+<img src="docs/images/settings-ai-test-success.png" width="550" alt="设置窗口 AI 设置节：掩码显示的 API Key 与测试连接成功反馈（模型固定 deepseek-flash）">
 
 *AI 设置节：Key 掩码保存（图中为假 Key），「测试连接」就地反馈结果；深色主题见 [settings-ai-dark.png](docs/images/settings-ai-dark.png)，失败提示见 [settings-ai-test-failure.png](docs/images/settings-ai-test-failure.png)*
 

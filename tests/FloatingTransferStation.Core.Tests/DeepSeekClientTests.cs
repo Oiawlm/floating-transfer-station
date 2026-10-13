@@ -66,7 +66,7 @@ public sealed class DeepSeekClientTests
 
         await client.ChatAsync(
             new DeepSeekChatRequest(
-                "deepseek-v4-pro",
+                DeepSeekClient.DefaultModel,
                 [new DeepSeekChatMessage("user", "ping")],
                 MaxTokens: 16,
                 Thinking: DeepSeekThinking.Disabled),
@@ -79,7 +79,7 @@ public sealed class DeepSeekClientTests
         Assert.AreEqual("Bearer", request.Headers.Authorization!.Scheme);
         Assert.AreEqual(ApiKey, request.Headers.Authorization.Parameter);
         var body = JsonDocument.Parse(handler.LastRequestBody!).RootElement;
-        Assert.AreEqual("deepseek-v4-pro", body.GetProperty("model").GetString());
+        Assert.AreEqual(DeepSeekClient.DefaultModel, body.GetProperty("model").GetString());
         Assert.AreEqual(16, body.GetProperty("max_tokens").GetInt32());
         Assert.AreEqual("disabled", body.GetProperty("thinking").GetProperty("type").GetString());
         Assert.AreEqual("user", body.GetProperty("messages")[0].GetProperty("role").GetString());
@@ -238,7 +238,7 @@ public sealed class DeepSeekClientTests
             (_, _) => throw new AssertFailedException("空 key 不得发起请求。"));
         var client = new DeepSeekClient(handler);
 
-        var result = await client.TestConnectionAsync("", "deepseek-flash");
+        var result = await client.TestConnectionAsync("  ");
 
         Assert.IsFalse(result.IsSuccess);
         Assert.AreEqual("请先填写 API Key。", result.Message);
@@ -246,20 +246,25 @@ public sealed class DeepSeekClientTests
     }
 
     [TestMethod]
-    public async Task TestConnectionAsync_Success_ReportsModelWithElapsedAndLightweightRequest()
+    public async Task TestConnectionAsync_Success_UsesClientDefaultModelWithLightweightRequest()
     {
-        var handler = RespondWith(HttpStatusCode.OK, SuccessBody("deepseek-v4-pro"));
+        // 响应体模型显式取 DefaultModel：请求体断言才是锁定目标，响应侧不再隐式耦合。
+        var handler = RespondWith(HttpStatusCode.OK, SuccessBody(DeepSeekClient.DefaultModel));
         var client = new DeepSeekClient(handler);
 
-        var result = await client.TestConnectionAsync(ApiKey, "deepseek-v4-pro");
+        var result = await client.TestConnectionAsync(ApiKey);
 
         Assert.IsTrue(result.IsSuccess);
-        Assert.AreEqual("deepseek-v4-pro", result.Model);
+        Assert.AreEqual(DeepSeekClient.DefaultModel, result.Model);
         Assert.IsTrue(result.Elapsed >= TimeSpan.Zero);
         StringAssert.Contains(result.Message, "连接成功");
-        StringAssert.Contains(result.Message, "deepseek-v4-pro");
+        StringAssert.Contains(result.Message, DeepSeekClient.DefaultModel);
         StringAssert.Contains(result.Message, "耗时");
         var body = JsonDocument.Parse(handler.LastRequestBody!).RootElement;
+        Assert.AreEqual(
+            DeepSeekClient.DefaultModel,
+            body.GetProperty("model").GetString(),
+            "请求体模型必须固定为客户端默认模型（契约 #28）。");
         Assert.AreEqual(16, body.GetProperty("max_tokens").GetInt32());
         Assert.AreEqual("disabled", body.GetProperty("thinking").GetProperty("type").GetString());
     }
@@ -270,7 +275,7 @@ public sealed class DeepSeekClientTests
         var handler = RespondWith(HttpStatusCode.Unauthorized, "{}");
         var client = new DeepSeekClient(handler);
 
-        var result = await client.TestConnectionAsync(ApiKey, null);
+        var result = await client.TestConnectionAsync(ApiKey);
 
         Assert.IsFalse(result.IsSuccess);
         Assert.AreEqual("API Key 无效。", result.Message);

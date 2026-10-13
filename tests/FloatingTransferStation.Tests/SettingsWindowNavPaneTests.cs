@@ -217,6 +217,50 @@ public sealed class SettingsWindowNavPaneTests
     }
 
     [STATestMethod]
+    public void WindowShell_OpaqueFallbackFollowsLiveThemeSwitch()
+    {
+        // Mica 失败的不透明壳兜底（具名方法，可直调）：驱动真实兜底实现，随后活切主题，
+        // 壳背景必须跟随新字典的 WindowShellOpaqueBrush（探针实证旧的一次性赋值会定格
+        // 在兜底瞬间的旧主题实例——Issue #140）。
+        var directory = new TestDirectory();
+        var store = new RecordingPreferencesStore();
+        var startup = new FakeStartupManager();
+        var window = CreateWindow(directory, store, startup, preferences: null);
+        SettingsWindow? settings = null;
+        try
+        {
+            window.Show();
+            settings = new SettingsWindow(window);
+            var fallback = typeof(SettingsWindow).GetMethod(
+                "ApplyWindowShellOpaqueFallback",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.IsNotNull(fallback, "SettingsWindow 必须有不透明壳兜底方法。");
+            fallback.Invoke(settings, null);
+            settings.Show();
+            CompleteLayout(settings);
+
+            var shell = (Border)settings.FindName("WindowShell")!;
+            settings.ApplyTheme(DesignTheme.Dark);
+            CompleteLayout(settings);
+            Assert.AreSame(
+                settings.FindResource("WindowShellOpaqueBrush"),
+                shell.Background,
+                "深色下不透明壳兜底必须跟随新字典（不定格兜底瞬间的旧主题实例）。");
+            settings.ApplyTheme(DesignTheme.Light);
+            CompleteLayout(settings);
+            Assert.AreSame(
+                settings.FindResource("WindowShellOpaqueBrush"),
+                shell.Background,
+                "浅色下不透明壳兜底必须跟随新字典。");
+        }
+        finally
+        {
+            settings?.Close();
+            window.Close();
+        }
+    }
+
+    [STATestMethod]
     public void NavPane_AllPagesRenderAcrossBothThemes()
     {
         var (window, settings) = OpenSettings();

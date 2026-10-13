@@ -4,7 +4,6 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using FloatingTransferStation.Models;
 
 namespace FloatingTransferStation.Services;
 
@@ -96,7 +95,8 @@ public sealed record DeepSeekConnectionTestResult(
 
 /// <summary>
 /// DeepSeek 官方国内 API（https://api.deepseek.com）的 HTTP 客户端，仓库首个网络消费者。
-/// 无状态：API Key 与模型都按调用参数传入，设置变更即生效，客户端不持有任何配置。
+/// 无状态：API Key 按调用参数传入，设置变更即生效；模型恒为 <see cref="DefaultModel"/>
+/// （deepseek-flash，生产代码唯一模型字面量点，契约 #28），客户端不持有任何配置。
 /// HttpClient 在实例内复用（组合根只创建一个实例）；测试可注入假 HttpMessageHandler，
 /// 全程不真联网。明文 Key 只经内存传递，绝不写入日志、异常消息或任何持久化。
 /// </summary>
@@ -106,8 +106,8 @@ public sealed class DeepSeekClient
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
 
-    /// <summary>官方当前轻量模型，也是设置页的默认选择（与 AppPreferences 默认值一致）。</summary>
-    public const string DefaultModel = DeepSeekModels.Flash;
+    /// <summary>唯一产品模型（deepseek-flash）：线上请求的 model 字段恒等于此值。</summary>
+    public const string DefaultModel = "deepseek-flash";
 
     private static readonly JsonSerializerOptions RequestJsonOptions = new()
     {
@@ -196,11 +196,11 @@ public sealed class DeepSeekClient
     /// <summary>
     /// 测试连接：key 为空走本地校验；否则发送最小 chat completion
     /// （user「ping」、max_tokens=16、thinking disabled——thinking 默认开启且代价高），
-    /// 成功结果含模型名与耗时，失败结果含映射后的中文文案。
+    /// 请求体模型固定 <see cref="DefaultModel"/>，成功结果含模型名与耗时，失败结果含
+    /// 映射后的中文文案。
     /// </summary>
     public async Task<DeepSeekConnectionTestResult> TestConnectionAsync(
         string apiKey,
-        string? model,
         CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -214,7 +214,7 @@ public sealed class DeepSeekClient
         }
 
         var request = new DeepSeekChatRequest(
-            string.IsNullOrWhiteSpace(model) ? DefaultModel : model,
+            DefaultModel,
             [new DeepSeekChatMessage("user", "ping")],
             MaxTokens: 16,
             Thinking: DeepSeekThinking.Disabled);
