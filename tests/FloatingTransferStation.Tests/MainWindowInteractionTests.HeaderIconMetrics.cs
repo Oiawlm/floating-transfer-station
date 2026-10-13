@@ -16,6 +16,8 @@ public sealed partial class MainWindowInteractionTests
     /// 全部断言基于布局几何（TransformToAncestor），不依赖渲染时钟，Debug/Release 均确定。
     /// 修复前失败：垃圾桶图标因 Viewbox 钉在 20×20 内容格左上而偏 (-2,-2) DIP，
     /// 恢复按钮因 Viewbox 把 11×11 几何放大满格、描边同步放大导致光学超格。
+    /// 描边家族（恢复默认、保持展开「贴缘面板」）只锁家族规范（14.5×14.5 + 1.5 描边、居中、
+    /// 墨迹足印），不锁定 Path 字形——字形正确性由真实渲染截图取证承担。
     /// </summary>
     [STATestMethod]
     public void HeaderActionIcons_AreCenteredAndOpticallyConsistent()
@@ -34,20 +36,10 @@ public sealed partial class MainWindowInteractionTests
             AssertFillIconCentered(window, "SettingsButton", expectedSize: 16d);
             AssertFillIconCentered(window, "DeleteContentButton", expectedSize: 16d);
 
-            // 恢复按钮：描边图标，几何显式 14.5×14.5 + 1.5 描边 = 墨迹足印约 16 DIP。
-            var reset = (Button)window.FindName("ResetWindowButton")!;
-            var resetPath = FindDescendants<ShapesPath>(reset).Single();
-            var resetRect = BoundsIn(resetPath, reset);
-            AssertCenteredWithin(resetRect, reset, "恢复按钮图标", 1.0d);
-            Assert.AreEqual(14.5d, resetPath.ActualWidth, 0.1, "恢复按钮几何宽度应为 14.5 DIP。");
-            Assert.AreEqual(14.5d, resetPath.ActualHeight, 0.1, "恢复按钮几何高度应为 14.5 DIP。");
-            Assert.AreEqual(1.5d, resetPath.StrokeThickness, 0.01, "恢复按钮描边应保持 1.5 DIP。");
-            var resetInk = Math.Max(
-                resetRect.Width + resetPath.StrokeThickness,
-                resetRect.Height + resetPath.StrokeThickness);
-            Assert.IsTrue(
-                resetInk is >= 13.5 and <= 17.5,
-                $"恢复按钮墨迹足印应在 13.5–17.5 DIP，实际 {resetInk:F1}。");
+            // 描边家族（几何显式 14.5×14.5 + 1.5 描边 = 墨迹足印约 16 DIP）：
+            // 恢复默认按钮与保持展开按钮（贴缘面板图标）同一规范。
+            AssertStrokeIconCentered(window, "ResetWindowButton", "恢复按钮图标");
+            AssertStrokeIconCentered(window, "PanelHoldButton", "保持展开按钮图标");
         }
         finally
         {
@@ -120,6 +112,29 @@ public sealed partial class MainWindowInteractionTests
         // 0.5 DIP 容差吸收高 DPI 显示器上的布局取整。
         Assert.AreEqual(expectedSize, rect.Width, 0.5, $"{buttonName} 图标宽度应约为 {expectedSize} DIP。");
         Assert.AreEqual(expectedSize, rect.Height, 0.5, $"{buttonName} 图标高度应约为 {expectedSize} DIP。");
+    }
+
+    private static void AssertStrokeIconCentered(MainWindow window, string buttonName, string label)
+    {
+        var button = window.FindName(buttonName) as Button;
+        Assert.IsNotNull(button, $"找不到头部按钮 {buttonName}。");
+        var path = FindDescendants<ShapesPath>(button!).Single();
+        var rect = BoundsIn(path, button!);
+        AssertCenteredWithin(rect, button!, label, 1.0d);
+        // 家族规范声明：显式 14.5×14.5 元素框。Uniform 拉伸把「几何 + 1.5 描边」装进该框：
+        // 渲染高度恒撑满 14.5（方形字形如恢复按钮宽度同为 14.5，窄字形如保持展开
+        // 「贴缘面板」的宽度由字形宽高比决定），描边粗细不随拉伸缩放。
+        Assert.AreEqual(14.5d, path.Width, 0.01, $"{label}元素框宽度应显式 14.5 DIP。");
+        Assert.AreEqual(14.5d, path.Height, 0.01, $"{label}元素框高度应显式 14.5 DIP。");
+        Assert.AreEqual(14.5d, path.ActualHeight, 0.1, $"{label}渲染高度应为 14.5 DIP。");
+        Assert.IsTrue(
+            path.ActualWidth is > 4d and <= 14.5d,
+            $"{label}渲染宽度应在 4–14.5 DIP（Uniform 拉伸下由字形宽高比决定），实际 {path.ActualWidth:F1}。");
+        Assert.AreEqual(1.5d, path.StrokeThickness, 0.01, $"{label}描边应保持 1.5 DIP。");
+        var ink = Math.Max(rect.Width + path.StrokeThickness, rect.Height + path.StrokeThickness);
+        Assert.IsTrue(
+            ink is >= 13.5 and <= 17.5,
+            $"{label}墨迹足印应在 13.5–17.5 DIP，实际 {ink:F1}。");
     }
 
     private static bool IsIconViewbox(Viewbox viewbox) =>
