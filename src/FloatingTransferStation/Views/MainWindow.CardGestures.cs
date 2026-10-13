@@ -79,10 +79,13 @@ public partial class MainWindow
         var source = e.OriginalSource as DependencyObject;
 
         // 编辑中的卡片是编辑表面（1.22.0 前由覆盖层整卡接管：编辑期卡片对
-        // 手势不可交互，保持同等语义）：文本区按下交给编辑器（放置光标/选择，
-        // TextBox 自行标记已处理，ListBoxItem 的默认选择语义不会介入）；其余
-        // 区域的按下整卡吞掉（防止冒泡到 ListBoxItem 触发默认选择），不冲刷
-        // 会话、不启动按压/拖拽会话、不作手势分发。
+        // 手势不可交互，保持同等语义）：编辑器上的按下交给编辑器（放置光标/
+        // 选择，TextBox 自行标记已处理，ListBoxItem 的默认选择语义不会
+        // 介入）；编辑器外的按下=终结会话并吞掉（与点击其他卡片同一提交
+        // 语义——先经既有 CommitCardTextEditing 冲刷，再整卡吞掉：防
+        // ListBoxItem 默认选择、防折叠重排期误启拖拽/分发；一次点击只做
+        // 「退出编辑」一件事，不启动按压/拖拽会话、不作手势分发、不写
+        // 双击痕迹，随后的下一次点击恢复正常交互）。
         if (TryGetEditingCardContainer() is { } editingContainer &&
             (ReferenceEquals(source, editingContainer) ||
              source is not null && editingContainer.IsAncestorOf(source)))
@@ -90,6 +93,7 @@ public partial class MainWindow
             ResetCardPressState();
             if (FindAncestor<System.Windows.Controls.TextBox>(source) is null)
             {
+                CommitCardTextEditing();
                 e.Handled = true;
             }
 

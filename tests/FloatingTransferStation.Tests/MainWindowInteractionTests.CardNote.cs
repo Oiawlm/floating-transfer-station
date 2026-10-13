@@ -1188,6 +1188,196 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void CardNote_ClickOutsideEditorOnEditingCardCommitsSession()
+    {
+        // 编辑表面提交语义（Issue #134）：备注编辑中，点击本卡非编辑器区域
+        // （正文显示区命中源）= 提交会话并退出编辑，与点击其他卡片同一冲刷
+        // 路径；该次点击被消费，选中集不变、无双重提交。
+        using var directory = new TestDirectory();
+        var store = new RecordingCardEditStore(directory.Root);
+        var board = new BoardService();
+        var item = board.AddText("编辑中点击本卡", BoardCategory.Inbox);
+        item.Note = "原备注";
+        var other = board.AddText("另一张卡", BoardCategory.Inbox);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            RaiseNoteStripClick(window, item, "CardNoteEntryButton");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var editor = CardNoteEditorOf(ContainerOf(window, item));
+            Assert.IsTrue(item.IsEditingNote, "前置条件：备注编辑已开启。");
+            Assert.IsTrue(editor.IsKeyboardFocused, "前置条件：备注编辑器持焦。");
+            editor.Text = "点击本卡提交的备注";
+
+            // 点击本卡正文区命中源（编辑器外）：预览按下进入编辑表面分支。
+            var zone = ZoneHitSource(window, item, CardGestureZones.ContentZone);
+            var timestamp = NextIsolatedClickTimestamp();
+            zone.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseDownEvent, zone, timestamp));
+            zone.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseUpEvent, zone, timestamp + 5));
+            PumpUntil(window, () => item.Note == "点击本卡提交的备注", "点击本卡非编辑器区必须提交备注会话。");
+
+            Assert.IsFalse(item.IsEditingNote, "提交后必须退出编辑态。");
+            Assert.IsFalse(editor.IsVisible, "编辑器必须收起。");
+            Assert.AreEqual(1, store.SaveCount, "提交恰好持久化一次（幂等，无双重提交）。");
+            CollectionAssert.AreEqual(
+                Array.Empty<BoardItem>(),
+                ((ListBox)window.FindName("BoardList")).SelectedItems.Cast<BoardItem>().ToArray(),
+                "被消费的点击不得改变选中集。");
+            Assert.IsFalse(other.IsEditingNote, "其他卡片不受影响。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_ClickOnPinButtonWhileNoteEditingCommitsWithoutTogglingPin()
+    {
+        // D6（Issue #134）：备注编辑中点击本卡置顶钮=仅退出编辑——编辑表面
+        // 分支先于按钮分支终结会话并吞掉，按钮意图不执行、置顶状态不变。
+        using var directory = new TestDirectory();
+        var store = new RecordingCardEditStore(directory.Root);
+        var board = new BoardService();
+        var item = board.AddText("置顶钮只退出编辑", BoardCategory.Inbox);
+        item.Note = "置顶钮备注";
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            RaiseNoteStripClick(window, item, "CardNoteEntryButton");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var editor = CardNoteEditorOf(ContainerOf(window, item));
+            Assert.IsTrue(item.IsEditingNote, "前置条件：备注编辑已开启。");
+            editor.Text = "置顶钮提交的备注";
+            Assert.IsFalse(item.IsPinned, "前置条件：卡片未置顶。");
+
+            var pinButton = FindDescendants<Button>(ContainerOf(window, item))
+                .Single(button => Equals(button.CommandParameter, CardGestureZones.TogglePinCommand));
+            var timestamp = NextIsolatedClickTimestamp();
+            pinButton.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseDownEvent, pinButton, timestamp));
+            pinButton.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseUpEvent, pinButton, timestamp + 5));
+            PumpUntil(window, () => item.Note == "置顶钮提交的备注", "点击置顶钮必须提交备注会话。");
+
+            Assert.IsFalse(item.IsEditingNote, "提交后必须退出编辑态。");
+            Assert.IsFalse(item.IsPinned, "被消费的点击不得执行置顶意图。");
+            Assert.AreEqual(1, store.SaveCount, "提交恰好持久化一次。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_DragZonePressWhileNoteEditingCommitsWithoutStartingDrag()
+    {
+        // D6（Issue #134）：备注编辑中在拖拽区（左半）按下并移动越过拖拽阈值
+        // =仅退出编辑——按下被编辑表面消费（无按压会话，拖拽判定源为空），
+        // 后续移动对拖拽判定不可达；卡片与面板均不位移。真实输入管线
+        // （Win32 消息直驱按下 + 真实光标位移）与契约 #13 同源。
+        using var directory = new TestDirectory();
+        var store = new RecordingCardEditStore(directory.Root);
+        var board = new BoardService();
+        var item = board.AddText("拖拽区只退出编辑", BoardCategory.Inbox);
+        item.Note = "拖拽区备注";
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            RaiseNoteStripClick(window, item, "CardNoteEntryButton");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            var editor = CardNoteEditorOf(ContainerOf(window, item));
+            Assert.IsTrue(item.IsEditingNote, "前置条件：备注编辑已开启。");
+            editor.Text = "拖拽区提交的备注";
+
+            var container = ContainerOf(window, item);
+            var list = (ListBox)window.FindName("BoardList");
+            window.Topmost = true;
+            CompleteLayout(window);
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            var pressPoint = new Point(24, container.ActualHeight * 0.75);
+            var pressScreen = container.PointToScreen(pressPoint);
+            var savedCursor = SaveCursorPosition();
+            var positionBefore = default(Point);
+            var windowLeftBefore = 0d;
+            var windowTopBefore = 0d;
+
+            try
+            {
+                // 悬停落位（注入消息要求光标在窗口上）→ 左半拖拽区真实按下。
+                HoverRealAt(window, container, pressPoint);
+                var downClient = new NativePoint((int)Math.Round(pressScreen.X), (int)Math.Round(pressScreen.Y));
+                Assert.IsTrue(ScreenToClient(hwnd, ref downClient), "屏幕点到客户区换算必须成功。");
+                Assert.IsTrue(
+                    PostMessage(hwnd, WmLeftButtonDown, MkLbutton, MakeLParam(downClient.X, downClient.Y)),
+                    "投递按下消息失败。");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(50));
+
+                Assert.IsNull(
+                    GetPrivateField<BoardItem?>(window, "_pressItem"),
+                    "编辑表面消费按下后不得存在按压会话（拖拽判定源必须为空）。");
+                PumpUntil(window, () => item.Note == "拖拽区提交的备注", "拖拽区按下必须提交备注会话。");
+
+                // 位移基线在提交后采样：把「编辑器收起的布局定稿」与「拖拽位移」
+                // 两类变化分开（T7 评审建议），断言只锁定后者。
+                CompleteLayout(window);
+                positionBefore = container.TranslatePoint(new Point(0, 0), list);
+                windowLeftBefore = window.Left;
+                windowTopBefore = window.Top;
+
+                // 越过拖拽阈值的真实位移（+80 DIP 纵向）再抬起：若按压会话
+                // 存在，此位移将启动面板拖拽（DoDragDrop）——断言其未发生。
+                var movePhysical = (int)Math.Round(
+                    container.PointToScreen(new Point(0, 80)).Y -
+                    container.PointToScreen(new Point(0, 0)).Y);
+                Assert.IsTrue(SetCursorPos((int)Math.Round(pressScreen.X) + 7, (int)Math.Round(pressScreen.Y) + 5));
+                Assert.IsTrue(SetCursorPos((int)Math.Round(pressScreen.X), (int)Math.Round(pressScreen.Y) + movePhysical));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                var upClient = new NativePoint(
+                    (int)Math.Round(pressScreen.X),
+                    (int)Math.Round(pressScreen.Y) + movePhysical);
+                Assert.IsTrue(ScreenToClient(hwnd, ref upClient));
+                Assert.IsTrue(PostMessage(hwnd, WmLeftButtonUp, 0, MakeLParam(upClient.X, upClient.Y)));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+
+            CompleteLayout(window);
+            var positionAfter = container.TranslatePoint(new Point(0, 0), list);
+            Assert.AreEqual(positionBefore.X, positionAfter.X, 0.5, "拖拽不得启动：卡片横向不得位移。");
+            Assert.AreEqual(positionBefore.Y, positionAfter.Y, 0.5, "拖拽不得启动：卡片纵向不得位移。");
+            Assert.AreEqual(windowLeftBefore, window.Left, 0.5, "面板不得进入拖拽轨道（窗口横向位置不变）。");
+            Assert.AreEqual(windowTopBefore, window.Top, 0.5, "面板不得进入拖拽轨道（窗口纵向位置不变）。");
+            Assert.IsFalse(item.IsEditingNote, "会话已终结。");
+            Assert.AreEqual(1, store.SaveCount, "提交恰好持久化一次。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void CardOperationMatrix_NoteButtonRow()
     {
         // 契约 #19 扩展：备注钮行——图片卡恒无（Kind 门控）；已置顶 ∧ 未选中 ∧
