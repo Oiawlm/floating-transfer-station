@@ -260,13 +260,19 @@ public sealed partial class MainWindowInteractionTests
 
                 // 真实键盘 Ctrl+Z：先把窗口带到前台（Windows 前台锁定下 Activate
                 // 可能被拒；真实鼠标点击是既有先例的激活路径，点击点落在卡片左半
-                // 无选择语义区），再注入真实修饰键状态（SendInput 硬件级，WPF 才能
-                // 读到 Control 修饰键）。
+                // 无选择语义区），前台校验通过后才注入真实修饰键状态（SendInput
+                // 硬件级，WPF 才能读到 Control 修饰键；未取得前台即注入会把按键
+                // 误送进用户的其他应用，宁可测试失败也不冒这个险）。
                 var activationPoint = container.PointToScreen(new Point(12, container.ActualHeight * 0.5));
                 Assert.IsTrue(
                     SetCursorPos((int)Math.Round(activationPoint.X), (int)Math.Round(activationPoint.Y)),
                     "激活点击的光标落位必须成功。");
                 ClickBySendInput(window);
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                Assert.AreEqual(
+                    hwnd,
+                    GetForegroundWindow(),
+                    "键盘注入前测试窗口必须已持有前台。");
                 PressCtrlZBySendInput(window);
                 PumpUntil(window, () => item.Text == LongCardText, "真实键盘 Ctrl+Z 必须恢复替换前的原文。");
                 Assert.AreEqual("已恢复卡片原文。", viewModel.StatusText);
@@ -467,6 +473,9 @@ public sealed partial class MainWindowInteractionTests
 
     [DllImport("user32.dll", EntryPoint = "SendInput")]
     private static extern uint SendKeyboardInput(uint inputCount, KeyboardInput[] inputs, int size);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetForegroundWindow();
 
     /// <summary>INPUT 的键盘变体：数组步长必须等于 sizeof(INPUT)（联合体按最大
     /// 成员 MOUSEINPUT 计 40 字节，x64），否则 SendInput 以参数无效拒绝注入。</summary>

@@ -85,7 +85,10 @@ public partial class MainWindow
                 return;
             }
 
-            if (await _mutations.ReplaceItemTextUndoableAsync(item.Id, outcome.OrganizedText!))
+            if (await _mutations.ReplaceItemTextUndoableAsync(
+                    item.Id,
+                    outcome.OrganizedText!,
+                    originalText))
             {
                 ShowStatus("整理完成，Ctrl + Z 可恢复原文。");
             }
@@ -93,6 +96,12 @@ public partial class MainWindow
         catch (OperationCanceledException)
         {
             // 退出排空：取消即静默结束（状态由 finally 清理），不打扰收尾。
+        }
+        catch (Exception)
+        {
+            // 非取消异常（保存管线对非 IO 异常原样上抛）兜底为用户可见反馈，
+            // 不让手势路径的 fire-and-forget 任务静默吞掉失败。
+            ShowStatus("AI 整理失败：整理结果未能保存。");
         }
         finally
         {

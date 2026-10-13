@@ -456,6 +456,50 @@ public sealed class BoardMutationServiceUndoTests
         Assert.AreEqual(1, store.SaveCount, "作废批不得再写盘。");
     }
 
+    [TestMethod]
+    public async Task UndoTextBatch_DoesNotClobberManualEditAfterReplace()
+    {
+        // T7 评审 M1：AI 整理完成后用户手工改文（手工编辑不进撤销栈，#22 口径），
+        // 随后的 Ctrl+Z 不得越过后进的手工编辑把正文拉回整理前——批作废消费。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("原始转写稿");
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        Assert.IsTrue(await service.ReplaceItemTextUndoableAsync(item.Id, "整理后的文本"));
+        Assert.IsTrue(await service.UpdateItemTextAsync(item.Id, "手工改过的文本", default));
+
+        Assert.IsTrue(await service.UndoLastAsync(), "正文已非本批写入值：批作废消费，不报失败。");
+        Assert.AreEqual(
+            "手工改过的文本",
+            board.FindItem(item.Id)!.Text,
+            "撤销不得覆盖整理完成后的手工编辑。");
+        Assert.AreEqual(0, service.PendingUndoCount);
+    }
+
+    [TestMethod]
+    public async Task ReplaceItemText_ExpectedCurrentTextMismatchAbandonsInsideGate()
+    {
+        // T7 评审 m1：门外前置比对存在让出窗口——期望原文在门内复检，不符即
+        // 放弃替换并提示，不落盘、不入栈。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("原始转写稿");
+        var store = new MutationStore(directory.Root);
+        var messages = new List<string>();
+        var service = new BoardMutationService(board, store, messages.Add);
+
+        Assert.IsFalse(await service.ReplaceItemTextUndoableAsync(
+            item.Id,
+            "整理后的文本",
+            expectedCurrentText: "过期的期望原文"));
+        Assert.AreEqual("原始转写稿", board.FindItem(item.Id)!.Text, "期望不符必须放弃替换。");
+        Assert.AreEqual(0, service.PendingUndoCount);
+        Assert.AreEqual(0, store.SaveCount, "放弃路径不得写盘。");
+        CollectionAssert.AreEqual(new[] { "卡片内容已变化，整理结果已放弃。" }, messages);
+    }
+
     private sealed class MutationStore : IBoardStore
     {
         public MutationStore(string root) => ImagesDirectory = Path.Combine(root, "images");

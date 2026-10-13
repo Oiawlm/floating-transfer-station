@@ -21,6 +21,7 @@ public sealed record AiOrganizeOutcome(bool IsSuccess, string? OrganizedText, st
 /// </summary>
 public sealed class AiTextOrganizer
 {
+    /// <summary>2 万字上限按 UTF-16 码元计（代理对按 2 计，含大量 emoji 略保守的已知近似）。</summary>
     private const int MaxInputLength = 20_000;
     private const int MaxOutputTokens = 32_768;
     private const double OrganizeTemperature = 0.3;
@@ -78,11 +79,19 @@ public sealed class AiTextOrganizer
 
     /// <summary>
     /// 输出契约的确定性实现（非启发式）：Trim 首尾空白；若整体被单个 Markdown
-    /// 围栏包裹（首行 ``` 开头 ∧ 末行恰为 ```）则剥掉这一层围栏后再 Trim。
+    /// 围栏包裹（首行 ``` 开头 ∧ 末行恰为 ```）则剥掉这一层围栏后再 Trim；只剩
+    /// 围栏记号与空白的内容按空结果处理。已知边界（评审登记）：用户正文本身
+    /// 整体恰为一个围栏块时同被剥除——确定性规则无法区分「模型包裹」与「正文
+    /// 即围栏」，提示词已显式禁止围栏输出，剥除是输出契约的确定性代价。
     /// </summary>
     private static string Normalize(string? content)
     {
         var text = (content ?? string.Empty).Trim();
+        if (text.Length > 0 && text.All(c => c == '`' || char.IsWhiteSpace(c)))
+        {
+            return string.Empty;
+        }
+
         var lines = text.Split('\n');
         if (lines.Length >= 2 &&
             lines[0].StartsWith("```", StringComparison.Ordinal) &&

@@ -275,10 +275,14 @@ public sealed class BoardMutationService
     /// 不平行复制持久化路径；保存失败内存还原原文并提示、不入栈。原文在应用
     /// 变更前捕获（<c>BoardService.UpdateText</c> 原地改 <c>item.Text</c>）。
     /// 条目不存在或整理结果与原文相同时不落盘（幂等）。
+    /// <paramref name="expectedCurrentText"/> 非空时在门内复检当前正文：等待
+    /// 门期间正文被其他路径修改（手工编辑等）则放弃本次替换并提示（并发守卫
+    /// 的原子闭合——调用方在门外做的前置比对存在让出窗口）。
     /// </summary>
     public Task<bool> ReplaceItemTextUndoableAsync(
         Guid itemId,
         string newText,
+        string? expectedCurrentText = null,
         CancellationToken cancellationToken = default) =>
         _operationGate.RunAsync(async () =>
         {
@@ -289,6 +293,13 @@ public sealed class BoardMutationService
             }
 
             var original = item.Text ?? string.Empty;
+            if (expectedCurrentText is not null &&
+                !string.Equals(original, expectedCurrentText, StringComparison.Ordinal))
+            {
+                _showStatus("卡片内容已变化，整理结果已放弃。");
+                return false;
+            }
+
             if (string.Equals(original, newText, StringComparison.Ordinal))
             {
                 return true;
@@ -304,7 +315,7 @@ public sealed class BoardMutationService
                 return false;
             }
 
-            RecordUndoableBatch(new UndoableTextBatch(this, itemId, original));
+            RecordUndoableBatch(new UndoableTextBatch(this, itemId, original, newText));
             return true;
         }, cancellationToken);
 
@@ -538,11 +549,16 @@ public sealed class BoardMutationService
 
     /// <summary>
     /// AI 文本替换批：撤销＝把捕获的原文写回同一条字段变更保存管线（失败时
-    /// 保留整理后文字并提示）；条目已被删除时该批作废消费（原文随卡片删除消失）。
-    /// 无独占资源，驱逐 no-op。
+    /// 保留整理后文字并提示）。作废消费的两个条件（批消费但不写盘、不覆盖）：
+    /// 条目已被删除（原文随卡片消失）；或撤销时正文已不是本批写入的整理结果
+    /// ——之后的手工编辑不进撤销栈（#22 口径），其结果是用户的最新状态，本批
+    /// 撤销不得越过后进的手工编辑把正文拉回整理前。无独占资源，驱逐 no-op。
     /// </summary>
-    private sealed class UndoableTextBatch(BoardMutationService owner, Guid itemId, string originalText)
-        : IUndoableBatch
+    private sealed class UndoableTextBatch(
+        BoardMutationService owner,
+        Guid itemId,
+        string originalText,
+        string replacedText) : IUndoableBatch
     {
         public async Task<bool> UndoAsync(CancellationToken cancellationToken)
         {
@@ -551,11 +567,16 @@ public sealed class BoardMutationService
                 return true;
             }
 
-            var organized = item.Text ?? string.Empty;
+            if (!string.Equals(item.Text ?? string.Empty, replacedText, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            var current = item.Text ?? string.Empty;
             var restored = await owner.SaveItemFieldChangeAsync(
                 cancellationToken,
                 apply: () => owner._board.UpdateText(itemId, originalText),
-                restore: () => owner._board.UpdateText(itemId, organized),
+                restore: () => owner._board.UpdateText(itemId, current),
                 failureStatus: "撤销未保存，卡片保持整理后的内容。");
             if (restored)
             {

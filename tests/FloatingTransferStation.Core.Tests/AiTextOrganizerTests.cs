@@ -90,6 +90,19 @@ public sealed class AiTextOrganizerTests
     }
 
     [TestMethod]
+    public async Task OrganizeAsync_FenceOnlyContentFailsAsEmpty()
+    {
+        // 只剩围栏记号（单行退化）＝空结果，不得把围栏记号当正文落板。
+        var handler = RespondWith(HttpStatusCode.OK, CompletionBody("```"));
+        var organizer = new AiTextOrganizer(new DeepSeekClient(handler));
+
+        var outcome = await organizer.OrganizeAsync("原文", ApiKey);
+
+        Assert.IsFalse(outcome.IsSuccess);
+        Assert.AreEqual("整理结果为空，未应用。", outcome.ErrorMessage);
+    }
+
+    [TestMethod]
     public async Task OrganizeAsync_EmptyResultFailsWithoutReplacing()
     {
         var handler = RespondWith(HttpStatusCode.OK, CompletionBody("  \n "));
