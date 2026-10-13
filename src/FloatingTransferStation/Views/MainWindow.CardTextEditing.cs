@@ -413,7 +413,9 @@ public partial class MainWindow
         _viewModel.ActivePanel?.Items.FirstOrDefault(item => item.Id == itemId) ??
         _board.FindItem(itemId);
 
-    /// <summary>编辑中卡片的容器（未编辑或锚点未实现时为 null）。手势层用它识别编辑表面。</summary>
+    /// <summary>编辑中卡片的容器（未编辑或锚点未实现时为 null）。手势层用它识别
+    /// 编辑表面：编辑器内的按下交给编辑器；编辑器外的按下=终结会话并吞掉
+    /// （防 ListBoxItem 默认选择、防折叠重排期误启拖拽/分发）。</summary>
     private ListBoxItem? TryGetEditingCardContainer() =>
         _editingCardItemId is { } itemId
             ? TryGetEditingCardContainerCore(itemId)

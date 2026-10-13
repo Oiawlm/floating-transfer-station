@@ -236,7 +236,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CardEditing_DoubleClickWhileEditingDoesNotReenter()
+    public void CardEditing_ClickOnEditingCardCommitsAndDoubleTapDoesNotReenter()
     {
         using var directory = new TestDirectory();
         var store = new RecordingCardEditStore(directory.Root);
@@ -254,21 +254,38 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             EditorInput(window, item).Text = "手动改动";
 
-            // 已有编辑时再次双击（同一张卡）：编辑表面吞掉手势（编辑器持有该
-            // 按下、手势层不标记已处理），不重置种子文本。原始预览事件模拟
-            // 双击（不经由断言 Handled 的助手——编辑卡的按下有意不被认领）。
+            // 编辑中双击（同一张卡、编辑器外按下）：编辑表面语义=终结会话并
+            // 吞掉——首击提交会话（草稿持久化为正文），该次点击被消费（不写
+            // 双击痕迹且作废既有痕迹）；第二击按普通单击处理（无痕迹配对、
+            // 不判双击），不直接进入正文编辑。首击时间戳刻意紧跟进入编辑的
+            // 双击（落在其双击窗内）：进入手势的痕迹仍在，若被消费的点击
+            // 不作废痕迹，第二击将与陈旧痕迹配对误判双击、重开编辑器
+            // （D4 角落）。原始预览事件模拟双击（不经由断言 Handled 的助手
+            // ——编辑卡的按下语义就是「吞掉」，Handled 断言无区分度）。
             var zone = ZoneHitSource(window, item, CardGestureZones.ContentZone);
-            var firstClick = NextIsolatedClickTimestamp();
+            var firstClick = NextPairedClickTimestamp();
             zone.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseDownEvent, zone, firstClick));
             zone.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseUpEvent, zone, firstClick + 5));
             var secondClick = NextPairedClickTimestamp();
             zone.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseDownEvent, zone, secondClick));
             zone.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseUpEvent, zone, secondClick + 5));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             CompleteLayout(window);
 
-            Assert.IsTrue(EditorInput(window, item).IsVisible);
-            Assert.AreEqual("手动改动", EditorInput(window, item).Text, "编辑中的双击不得重置编辑器内容。");
-            Assert.IsTrue(EditorInput(window, item).IsKeyboardFocused);
+            Assert.IsFalse(item.IsEditing, "首击必须终结编辑会话（提交语义）。");
+            AssertNoVisibleCardEditor(window);
+            Assert.AreEqual("手动改动", board.FindItem(item.Id)!.Text, "首击必须把草稿提交为正文。");
+            Assert.AreEqual(1, store.SaveCount, "提交恰好持久化一次（无双重提交）。");
+            Assert.IsFalse(
+                EditorInput(window, item).IsKeyboardFocused,
+                "第二击按普通单击处理，不得把焦点送回编辑器（无重入）。");
+
+            // 随后的下一次交互恢复正常（D2 收尾）：隔开双击窗后再次双击，
+            // 必须正常重入编辑且种子为已提交的正文（手势机器无残留状态）。
+            RaiseCardDoubleClick(ZoneHitSource(window, item, CardGestureZones.ContentZone));
+            CompleteLayout(window);
+            Assert.IsTrue(item.IsEditing, "正常双击必须能重新进入编辑（无残留状态卡死）。");
+            Assert.AreEqual("手动改动", EditorInput(window, item).Text, "重入编辑的种子必须是已提交的正文。");
         }
         finally
         {

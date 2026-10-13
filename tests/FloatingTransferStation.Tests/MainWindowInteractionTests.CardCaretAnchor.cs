@@ -120,7 +120,7 @@ public sealed partial class MainWindowInteractionTests
                     editor.GetLineIndexFromCharacterIndex(editor.CaretIndex),
                     "光标行号必须为第一行。");
 
-                // 编辑表面会吞掉后续点击：先提交退出，再在第二行行中心双击——
+                // 编辑表面会吞掉并终结会话：先提交退出，再在第二行行中心双击——
                 // 跨行偏移验证映射走的确实是点击坐标而非固定文首。
                 window.CommitCardTextForTest();
                 CompleteLayout(window);
