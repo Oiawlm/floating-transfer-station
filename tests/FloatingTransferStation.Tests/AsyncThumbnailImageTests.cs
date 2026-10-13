@@ -116,11 +116,11 @@ public sealed class AsyncThumbnailImageTests
         var warmed = (BitmapSource?)AsyncThumbnailImage.SharedConverter.Convert(
             path,
             typeof(BitmapSource),
-            512,
+            256,
             System.Globalization.CultureInfo.InvariantCulture);
         Assert.IsNotNull(warmed);
 
-        var control = new AsyncThumbnailImage { SourcePath = path, DecodeWidth = 512 };
+        var control = new AsyncThumbnailImage { DecodeHeight = 256, SourcePath = path };
 
         Assert.AreSame(warmed, control.Source);
         Assert.IsTrue(((BitmapSource)control.Source!).IsFrozen);
@@ -132,7 +132,7 @@ public sealed class AsyncThumbnailImageTests
         using var directory = new TestDirectory();
         var path = Path.Combine(directory.Root, "cold.png");
         WritePng(path, width: 1200, height: 600);
-        var control = new AsyncThumbnailImage { DecodeWidth = 512 };
+        var control = new AsyncThumbnailImage { DecodeHeight = 256 };
         control.SourcePath = path;
 
         Assert.IsNull(control.Source, "未命中缓存时应先显示占位而不是旧图。");
@@ -146,15 +146,6 @@ public sealed class AsyncThumbnailImageTests
     }
 
     [STATestMethod]
-    public void BucketUp_RoundsPixelsUpToHundredTwentyEightSteps()
-    {
-        Assert.AreEqual(128, AsyncThumbnailImage.BucketUp(1));
-        Assert.AreEqual(128, AsyncThumbnailImage.BucketUp(128));
-        Assert.AreEqual(256, AsyncThumbnailImage.BucketUp(129));
-        Assert.AreEqual(896, AsyncThumbnailImage.BucketUp(775));
-    }
-
-    [STATestMethod]
     public void RapidPathChanges_OnlyLatestDecodedImageIsApplied()
     {
         using var directory = new TestDirectory();
@@ -162,7 +153,7 @@ public sealed class AsyncThumbnailImageTests
         var tall = Path.Combine(directory.Root, "tall.png");
         WritePng(wide, width: 1200, height: 600);
         WritePng(tall, width: 600, height: 1200);
-        var control = new AsyncThumbnailImage { DecodeWidth = 512 };
+        var control = new AsyncThumbnailImage { DecodeHeight = 256 };
 
         control.SourcePath = wide;
         control.SourcePath = tall;
@@ -171,8 +162,8 @@ public sealed class AsyncThumbnailImageTests
 
         var source = (BitmapSource?)control.Source;
         Assert.IsNotNull(source);
-        Assert.AreEqual(512, source.PixelWidth);
-        Assert.AreEqual(1024, source.PixelHeight, "只应应用最新路径(高图)的解码结果。");
+        Assert.AreEqual(128, source.PixelWidth);
+        Assert.AreEqual(256, source.PixelHeight, "只应应用最新路径(高图)的解码结果。");
     }
 
     [STATestMethod]

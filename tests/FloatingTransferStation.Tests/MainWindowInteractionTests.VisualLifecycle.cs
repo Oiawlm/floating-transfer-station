@@ -1358,7 +1358,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void ImageCard_UsesThumbnailConverterAtFiveHundredTwelvePixelsWithoutLockingFile()
+    public void ImageCard_UsesThumbnailConverterAtDisplayHeightAnchorWithoutLockingFile()
     {
         using var directory = new TestDirectory();
         var imagePath = Path.Combine(
@@ -1390,11 +1390,15 @@ public sealed partial class MainWindowInteractionTests
             var source = image.Source as BitmapSource;
 
             Assert.IsNotNull(source);
-            var pixelWidth = source.PixelWidth;
+            var pixelHeight = source.PixelHeight;
             var lockError = TryDeleteFile(imagePath);
 
             Assert.IsNull(lockError, "The image binding must not retain a source-file handle.");
-            Assert.IsTrue(pixelWidth <= 512);
+            // 解码高以显示高 120 DIP × DPI 为锚（1.10.1 时代的 512 宽基线已由
+            // 显示高定标取代）：解码尺寸有界且贴合显示需求，不按原尺寸全量解码。
+            var scale = VisualTreeHelper.GetDpi(image).PixelsPerDip;
+            var expectedHeight = (int)Math.Ceiling(120d * Math.Max(1d, scale));
+            Assert.AreEqual(expectedHeight, pixelHeight);
             Assert.AreEqual(120d, image.Height);
             Assert.AreEqual(Stretch.Uniform, image.Stretch);
             Assert.IsFalse(File.Exists(imagePath));

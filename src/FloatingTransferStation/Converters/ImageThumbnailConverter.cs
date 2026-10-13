@@ -6,11 +6,11 @@ namespace FloatingTransferStation.Converters;
 
 public sealed class ImageThumbnailConverter : IValueConverter
 {
-    private const int DefaultDecodeWidth = 512;
+    private const int DefaultDecodeHeight = 256;
     private const int MaxDecodeWidth = 2048;
     private const int MaxDecodeHeight = 2048;
-    // 容量按解码字节计费：典型列表缩略图（≤512 宽桶）约 0.3-1.2 MiB/张，
-    // 256 条/64 MiB 覆盖百余张近期图片，来回滚动不反复重解码。
+    // 容量按解码字节计费：按显示高定标后典型列表缩略图（≤240 高桶）约
+    // 0.1-0.5 MiB/张，256 条/64 MiB 覆盖数百张近期图片，来回滚动不反复重解码。
     private const int MaxCachedThumbnails = 256;
     private const long MaxCachedPixelBytes = 64L * 1024 * 1024;
     private readonly object _cacheLock = new();
@@ -28,7 +28,7 @@ public sealed class ImageThumbnailConverter : IValueConverter
             return null;
         }
 
-        return ConvertPath(path, GetDecodeWidth(parameter));
+        return ConvertPath(path, GetDecodeHeight(parameter));
     }
 
     /// <summary>
@@ -39,7 +39,7 @@ public sealed class ImageThumbnailConverter : IValueConverter
     /// 线程阻塞在文件系统调用上（数据目录位于云盘/网络盘时毫秒级/次）。
     /// 文件真实有效性由后台解码路径 <see cref="Convert"/> 兜底校验。
     /// </summary>
-    public bool TryGetCachedThumbnail(string path, int decodeWidth, out BitmapSource? image)
+    public bool TryGetCachedThumbnail(string path, int decodeHeight, out BitmapSource? image)
     {
         image = null;
         if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
@@ -49,7 +49,7 @@ public sealed class ImageThumbnailConverter : IValueConverter
 
         try
         {
-            var key = new CacheKey(path, Math.Clamp(decodeWidth, 1, MaxDecodeWidth));
+            var key = new CacheKey(path, Math.Clamp(decodeHeight, 1, MaxDecodeHeight));
             lock (_cacheLock)
             {
                 if (!_cache.TryGetValue(key, out var cached))
@@ -70,7 +70,7 @@ public sealed class ImageThumbnailConverter : IValueConverter
     }
 
     /// <summary>
-    /// 应用侧主动失效：驱逐该路径全部解码宽度的缓存条目。原地重写受管图片
+    /// 应用侧主动失效：驱逐该路径全部解码高的缓存条目。原地重写受管图片
     /// （目前仅启动时的零透明度修复）后必须调用，并使在途解码结果不再入缓存，
     /// 避免按旧内容读出的位图在驱逐后回写复活。
     /// </summary>
@@ -103,13 +103,13 @@ public sealed class ImageThumbnailConverter : IValueConverter
         }
     }
 
-    private BitmapSource? ConvertPath(string path, int decodeWidth)
+    private BitmapSource? ConvertPath(string path, int decodeHeight)
     {
         // 此方法只应从后台线程调用（并发由调用方限流）：文件有效性与解码都在
         // UI 线程之外，锁只覆盖缓存簿记，不覆盖解码本身。
         try
         {
-            var key = new CacheKey(path, Math.Clamp(decodeWidth, 1, MaxDecodeWidth));
+            var key = new CacheKey(path, Math.Clamp(decodeHeight, 1, MaxDecodeHeight));
             long versionAtRead;
             var file = new FileInfo(key.Path);
             lock (_cacheLock)
@@ -143,7 +143,7 @@ public sealed class ImageThumbnailConverter : IValueConverter
 
             var length = file.Length;
             var lastWriteTime = file.LastWriteTimeUtc;
-            var image = LoadThumbnail(key.Path, key.Width);
+            var image = LoadThumbnail(key.Path, key.Height);
             // Reserve at least 32 bits per pixel, including formats WPF expands when rendering.
             var pixelBytes = ((long)image.PixelWidth * Math.Max(32, image.Format.BitsPerPixel) + 7) / 8 * image.PixelHeight;
             if (pixelBytes <= MaxCachedPixelBytes)
@@ -207,7 +207,7 @@ public sealed class ImageThumbnailConverter : IValueConverter
         _cachedPixelBytes -= node.Value.PixelBytes;
     }
 
-    private static BitmapSource LoadThumbnail(string path, int decodeWidth)
+    private static BitmapSource LoadThumbnail(string path, int decodeHeight)
     {
         using var stream = File.OpenRead(path);
         var decoder = BitmapDecoder.Create(
@@ -215,19 +215,21 @@ public sealed class ImageThumbnailConverter : IValueConverter
             BitmapCreateOptions.DelayCreation,
             BitmapCacheOption.None);
         var frame = decoder.Frames[0];
-        var limitHeight = (long)frame.PixelHeight * decodeWidth > (long)frame.PixelWidth * MaxDecodeHeight;
+        // 解码高按显示高定标；极端宽长图按高解码会超出解码宽上限，改按宽上限
+        // 解码（高度随之更小，显示仍由 Uniform 收缩，不会欠采样）。
+        var limitWidth = (long)frame.PixelWidth * decodeHeight > (long)frame.PixelHeight * MaxDecodeWidth;
         stream.Position = 0;
 
         var image = new BitmapImage();
         image.BeginInit();
         image.CacheOption = BitmapCacheOption.OnLoad;
-        if (limitHeight)
+        if (limitWidth)
         {
-            image.DecodePixelHeight = MaxDecodeHeight;
+            image.DecodePixelWidth = MaxDecodeWidth;
         }
         else
         {
-            image.DecodePixelWidth = decodeWidth;
+            image.DecodePixelHeight = decodeHeight;
         }
 
         image.StreamSource = stream;
@@ -236,16 +238,16 @@ public sealed class ImageThumbnailConverter : IValueConverter
         return image;
     }
 
-    private readonly record struct CacheKey(string Path, int Width);
+    private readonly record struct CacheKey(string Path, int Height);
 
     private sealed class CacheKeyComparer : IEqualityComparer<CacheKey>
     {
         // NTFS 路径大小写不敏感；不同大小写的同一文件不应占据两份缓存。
         public bool Equals(CacheKey x, CacheKey y) =>
-            x.Width == y.Width && string.Equals(x.Path, y.Path, StringComparison.OrdinalIgnoreCase);
+            x.Height == y.Height && string.Equals(x.Path, y.Path, StringComparison.OrdinalIgnoreCase);
 
         public int GetHashCode(CacheKey obj) =>
-            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Path), obj.Width);
+            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Path), obj.Height);
     }
 
     private readonly record struct CacheEntry(
@@ -255,16 +257,16 @@ public sealed class ImageThumbnailConverter : IValueConverter
         BitmapSource Image,
         long PixelBytes);
 
-    private static int GetDecodeWidth(object? parameter)
+    private static int GetDecodeHeight(object? parameter)
     {
-        if (parameter is int numericWidth)
+        if (parameter is int numericHeight)
         {
-            return Math.Clamp(numericWidth, 1, MaxDecodeWidth);
+            return Math.Clamp(numericHeight, 1, MaxDecodeHeight);
         }
 
         return parameter is string text &&
-               int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedWidth)
-            ? Math.Clamp(parsedWidth, 1, MaxDecodeWidth)
-            : DefaultDecodeWidth;
+               int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedHeight)
+            ? Math.Clamp(parsedHeight, 1, MaxDecodeHeight)
+            : DefaultDecodeHeight;
     }
 }

@@ -265,7 +265,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CardThumbnail_DecodesAtBucketedDisplayWidthAfterLayout()
+    public void CardThumbnail_DecodesAtDisplayHeightAnchoredSizeAfterLayout()
     {
         using var directory = new TestDirectory();
         var imagePath = Path.Combine(directory.Root, "wide-card.png");
@@ -290,12 +290,13 @@ public sealed partial class MainWindowInteractionTests
             }
 
             var source = (BitmapSource?)thumbnail.Source;
-            Assert.IsNotNull(source, "布局完成后应按显示宽度解码缩略图。");
+            Assert.IsNotNull(source, "布局完成后应按显示高解码缩略图。");
             var scale = VisualTreeHelper.GetDpi(thumbnail).PixelsPerDip;
-            var pixels = (int)Math.Ceiling(thumbnail.ActualWidth * Math.Max(1d, scale));
-            // 解码宽 = max(基线 512, 显示宽×DPI 的 128px 上取桶)，上限 1024。
-            var expected = Math.Max(512, Math.Min(((pixels + 127) / 128) * 128, 1024));
-            Assert.AreEqual(expected, source.PixelWidth, "解码宽应贴合显示宽度×DPI 的桶（不低于基线）。");
+            // 解码高 = ceil(显示高 × DPI)：卡片模板恒 120 DIP 高、Uniform 显示高
+            // 不超过该值，宽随文件纵横比——与面板宽无关，一次解码到位。
+            var expected = (int)Math.Ceiling(120d * Math.Max(1d, scale));
+            Assert.AreEqual(expected, source.PixelHeight, "解码高应贴合显示高×DPI（向上取整）。");
+            Assert.AreEqual(expected * 2, source.PixelWidth, "解码宽按文件纵横比随解码高定标。");
             Assert.IsTrue(source.IsFrozen);
         }
         finally
