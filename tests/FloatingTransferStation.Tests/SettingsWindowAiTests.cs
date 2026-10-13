@@ -13,7 +13,8 @@ namespace FloatingTransferStation.Tests;
 /// <summary>
 /// 设置窗口「AI 设置」节（1.27.0 DeepSeek 接入地基）的交互守护：
 /// Key 失焦保存密文（断言不含明文）、空输入清除、显示/隐藏切换不落盘明文、
-/// 模型切换即时生效、测试连接就地文案、解密失败降级。明文 Key 只用假值。
+/// 无模型选择 UI（模型恒为 DeepSeekClient.DefaultModel，契约 #28）、测试连接
+/// 就地文案、解密失败降级。明文 Key 只用假值。
 /// </summary>
 [TestClass]
 public sealed class SettingsWindowAiTests
@@ -117,8 +118,8 @@ public sealed class SettingsWindowAiTests
     private static TextBox PlainBox(Window settings) =>
         (TextBox)settings.FindName("DeepSeekKeyPlainBox");
 
-    private static ComboBox ModelComboBox(Window settings) =>
-        (ComboBox)settings.FindName("DeepSeekModelComboBox");
+    private static Button TestButton(Window settings) =>
+        (Button)settings.FindName("DeepSeekTestButton");
 
     private static TextBlock StatusText(Window settings) =>
         (TextBlock)settings.FindName("DeepSeekStatusText");
@@ -138,7 +139,7 @@ public sealed class SettingsWindowAiTests
             var keyBox = KeyBox(settings);
             keyBox.Focus();
             keyBox.Password = PlainFakeKey;
-            Keyboard.Focus(ModelComboBox(settings));
+            Keyboard.Focus((RadioButton)settings.FindName("SettingsNavAi")!);
             PumpUntil(settings.Dispatcher, () => preferencesStore.LastSaved is not null);
 
             var saved = preferencesStore.LastSaved!;
@@ -184,7 +185,7 @@ public sealed class SettingsWindowAiTests
             var keyBox = KeyBox(settings);
             keyBox.Focus();
             keyBox.Password = string.Empty;
-            Keyboard.Focus(ModelComboBox(settings));
+            Keyboard.Focus((RadioButton)settings.FindName("SettingsNavAi")!);
             PumpUntil(settings.Dispatcher, () => preferencesStore.LastSaved is not null);
 
             Assert.IsNull(
@@ -297,26 +298,24 @@ public sealed class SettingsWindowAiTests
     }
 
     [STATestMethod]
-    public void ModelSwitch_AppliesImmediatelyAndPersists()
+    public void AiSection_HasNoModelSelector()
     {
+        // 模型收敛（契约 #28）：AI 节只配置 API Key，无模型下拉与提示行；
+        // 模型恒为 DeepSeekClient.DefaultModel，线上请求 model 字段由此唯一派生。
         using var directory = new TestDirectory();
-        var preferencesStore = new RecordingPreferencesStore();
-        var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeSecretProtector());
         try
         {
             var settings = OpenSettings(window);
             CompleteLayout(settings);
-            var comboBox = ModelComboBox(settings);
-            Assert.AreEqual("deepseek-flash", window.CurrentPreferences.DeepSeekModel);
 
-            comboBox.SelectedIndex = 1;
-            PumpUntil(settings.Dispatcher, () => preferencesStore.LastSaved is not null);
-
-            Assert.AreEqual("deepseek-v4-pro", window.CurrentPreferences.DeepSeekModel);
+            Assert.IsNull(settings.FindName("DeepSeekModelComboBox"), "模型下拉必须随选择机制整体删除。");
+            Assert.IsNull(settings.FindName("DeepSeekModelHintText"), "模型提示行必须随选择机制整体删除。");
+            var aiPage = (StackPanel)settings.FindName("AiPage")!;
             Assert.AreEqual(
-                "deepseek-v4-pro",
-                preferencesStore.LastSaved!.DeepSeekModel,
-                "模型切换必须即时持久化（契约 #5）。");
+                0,
+                FindDescendants<ComboBox>(aiPage).Count(),
+                "AI 页不得残留任何 ComboBox（含单选项变体，那是补丁不是收敛）。");
         }
         finally
         {
@@ -325,19 +324,35 @@ public sealed class SettingsWindowAiTests
     }
 
     [STATestMethod]
-    public void ModelHint_ShowsOfficialDisplayNameMapping()
+    public void TestConnection_SendsClientDefaultModelWithoutSelectionState()
     {
+        // 连接测试请求体模型必须恒等于 DeepSeekClient.DefaultModel（契约 #28），
+        // 与设置页当前状态无关（无选择状态可依）。
         using var directory = new TestDirectory();
-        var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeSecretProtector());
+        var protector = new FakeSecretProtector();
+        var preferencesStore = new RecordingPreferencesStore();
+        var handler = new StubHttpMessageHandler();
+        handler.Respond = (_, _) => HandlerResponse(200, SuccessBody(DeepSeekClient.DefaultModel));
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            protector,
+            new DeepSeekClient(handler));
         try
         {
             var settings = OpenSettings(window);
             CompleteLayout(settings);
-            RevealAiSection(settings);
-            var hint = (TextBlock)settings.FindName("DeepSeekModelHintText");
+            KeyBox(settings).Password = PlainFakeKey;
 
-            StringAssert.Contains(hint.Text, "deepseek-flash（DeepSeek V4.1 Flash）");
-            StringAssert.Contains(hint.Text, "deepseek-v4-pro（DeepSeek V4 Pro）");
+            TestButton(settings).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpUntil(settings.Dispatcher, () => StatusText(settings).Visibility == Visibility.Visible);
+
+            StringAssert.Contains(StatusText(settings).Text, "连接成功");
+            var body = System.Text.Json.JsonDocument.Parse(handler.LastRequestBody!).RootElement;
+            Assert.AreEqual(
+                DeepSeekClient.DefaultModel,
+                body.GetProperty("model").GetString(),
+                "连接测试必须以客户端默认模型发起。");
         }
         finally
         {
@@ -567,6 +582,24 @@ public sealed class SettingsWindowAiTests
             new Action(() => frame.Continue = false));
         Dispatcher.PushFrame(frame);
         window.UpdateLayout();
+    }
+
+    private static IEnumerable<T> FindDescendants<T>(DependencyObject parent) where T : DependencyObject
+    {
+        var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent);
+        for (var index = 0; index < count; index++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, index);
+            if (child is T match)
+            {
+                yield return match;
+            }
+
+            foreach (var nested in FindDescendants<T>(child))
+            {
+                yield return nested;
+            }
+        }
     }
 
     private static void CloseQuietly(MainWindow window)

@@ -81,25 +81,8 @@ public partial class SettingsWindow : Window
         TrashRightClickComboBox.SelectedItem = ((ComboBoxItem[])TrashRightClickComboBox.ItemsSource)
             .Single(item => Equals(item.Tag, host.CurrentPreferences.TrashNoSelectionRightClick));
 
-        // AI 设置（1.27.0）：模型候选来自 Core 层目录（官方现行 ID 为先），存储值为
-        // 自由字符串，旧配置或官方新增 ID 原样呈现为一项，不破坏。
-        var deepSeekModelItems = DeepSeekModels.All
-            .Select(id => new ComboBoxItem { Content = id, Tag = id })
-            .ToList();
-        var storedDeepSeekModel = host.CurrentPreferences.DeepSeekModel;
-        if (!string.IsNullOrEmpty(storedDeepSeekModel) &&
-            deepSeekModelItems.All(item =>
-                !string.Equals((string)item.Tag, storedDeepSeekModel, StringComparison.Ordinal)))
-        {
-            deepSeekModelItems.Add(new ComboBoxItem { Content = storedDeepSeekModel, Tag = storedDeepSeekModel });
-        }
-
-        DeepSeekModelComboBox.ItemsSource = deepSeekModelItems;
-        DeepSeekModelComboBox.SelectedItem = deepSeekModelItems.FirstOrDefault(
-            item => string.Equals((string)item.Tag, storedDeepSeekModel, StringComparison.Ordinal))
-            ?? deepSeekModelItems[0];
-        DeepSeekModelHintText.Text = DeepSeekModels.HintText;
-
+        // AI 设置（1.27.0）：仅配置 API Key；模型恒为 DeepSeekClient.DefaultModel
+        // （deepseek-flash，契约 #28），无选择 UI。
         // 存量 Key 解密后入框（明文只在内存）；解密失败按未配置降级并就地提示。
         var storedDeepSeekKey = host.CurrentPreferences.DeepSeekApiKeyProtected;
         if (!string.IsNullOrEmpty(storedDeepSeekKey))
@@ -250,9 +233,7 @@ public partial class SettingsWindow : Window
             _host.CurrentTheme == DesignTheme.Dark);
         if (!_micaApplied)
         {
-            WindowShell.Background =
-                TryFindResource("WindowShellOpaqueBrush") as System.Windows.Media.Brush
-                ?? WindowShell.Background;
+            ApplyWindowShellOpaqueFallback();
         }
 
         // 系统级缩放/最大化（契约 #24，Issue #106）：WM_EXITSIZEMOVE 是「结束才落盘」
@@ -264,6 +245,14 @@ public partial class SettingsWindow : Window
 
         RestorePlacementOrDefault();
     }
+
+    /// <summary>
+    /// 材质不可用（旧系统）时回退到不透明壳，避免透明像素露出黑底；
+    /// 动态资源引用让兜底随主题活切换跟随新字典（对齐全仓 DynamicResource 语义），
+    /// 不定格在兜底瞬间的旧主题实例（探针实证一次性赋值会过期）。
+    /// </summary>
+    private void ApplyWindowShellOpaqueFallback() =>
+        WindowShell.SetResourceReference(Border.BackgroundProperty, "WindowShellOpaqueBrush");
 
     // ---- 几何持久化与恢复（契约 #24，Issue #106）----
 
@@ -719,17 +708,6 @@ public partial class SettingsWindow : Window
         _isDeepSeekKeyVisible = !_isDeepSeekKeyVisible;
     }
 
-    private void DeepSeekModelComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_isSynchronizingControls ||
-            DeepSeekModelComboBox.SelectedItem is not ComboBoxItem { Tag: string model })
-        {
-            return;
-        }
-
-        _host.ApplyPreferences(_host.CurrentPreferences with { DeepSeekModel = model });
-    }
-
     private async void DeepSeekTestButton_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
@@ -743,10 +721,9 @@ public partial class SettingsWindow : Window
         DeepSeekTestButton.Content = "测试中…";
         try
         {
-            // 直接测当前输入框内容（含未保存的新输入），模型取当前选中项。
-            var result = await _host.TestDeepSeekConnectionAsync(
-                ReadDeepSeekKeyInput(),
-                ResolveDeepSeekModel());
+            // 直接测当前输入框内容（含未保存的新输入）；模型恒为客户端默认
+            // （deepseek-flash，契约 #28），无选择状态。
+            var result = await _host.TestDeepSeekConnectionAsync(ReadDeepSeekKeyInput());
             ShowDeepSeekStatus(result.Message, isError: !result.IsSuccess);
         }
         catch (OperationCanceledException)
@@ -769,11 +746,6 @@ public partial class SettingsWindow : Window
     private string ReadDeepSeekKeyInput() => (_isDeepSeekKeyVisible
         ? DeepSeekKeyPlainBox.Text
         : DeepSeekKeyBox.Password).Trim();
-
-    private string ResolveDeepSeekModel() =>
-        DeepSeekModelComboBox.SelectedItem is ComboBoxItem { Tag: string model }
-            ? model
-            : DeepSeekClient.DefaultModel;
 
     private void ShowDeepSeekStatus(string message, bool isError = true)
     {
@@ -989,17 +961,18 @@ public partial class SettingsWindow : Window
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        // 卡片行语言与「标签顺序」行同族：Card 底 + Border 描边 + 圆角 4，颜色走主题键。
+        // 卡片行语言与「标签顺序」行同族：Card 底 + Border 描边 + 圆角 4，颜色走主题键；
+        // 画刷经动态资源引用解析（对齐全仓 DynamicResource 语义），主题活切换即跟随。
         var surface = new Border
         {
-            Background = TryFindResource("CardBrush") as System.Windows.Media.Brush,
-            BorderBrush = TryFindResource("BorderBrush") as System.Windows.Media.Brush,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(10, 8, 10, 8),
             Margin = new Thickness(0, 0, 0, 6),
             Child = row
         };
+        surface.SetResourceReference(Border.BackgroundProperty, "CardBrush");
+        surface.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
 
         var title = entry.Manifest is { } manifest
             ? $"{manifest.Name}  {manifest.Version}"
@@ -1012,20 +985,20 @@ public partial class SettingsWindow : Window
         var titleBlock = new TextBlock
         {
             Text = title,
-            Foreground = TryFindResource("PrimaryTextBrush") as System.Windows.Media.Brush,
             FontSize = 13,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
-        var detailBrush = entry.Manifest is null
-            ? TryFindResource("DangerBrush") as System.Windows.Media.Brush
-            : TryFindResource("SecondaryTextBrush") as System.Windows.Media.Brush;
+        titleBlock.SetResourceReference(TextElement.ForegroundProperty, "PrimaryTextBrush");
         var detailBlock = new TextBlock
         {
             Text = detail,
-            Foreground = detailBrush,
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap
         };
+        // 描述键随行状态选定（清单非法=DangerBrush），值经动态引用随字典换装。
+        detailBlock.SetResourceReference(
+            TextElement.ForegroundProperty,
+            entry.Manifest is null ? "DangerBrush" : "SecondaryTextBrush");
         textPanel.Children.Add(titleBlock);
         textPanel.Children.Add(detailBlock);
         Grid.SetColumn(textPanel, 0);

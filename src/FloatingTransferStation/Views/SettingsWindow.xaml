@@ -682,19 +682,12 @@
                                Foreground="{DynamicResource AccentBrush}"
                                RequestNavigate="RepoLink_RequestNavigate">platform.deepseek.com/api_keys</Hyperlink><Run Text=" 创建；焦点离开输入框即自动保存，清空后失焦即删除已存 Key。" />
                   </TextBlock>
-                  <TextBlock Text="模型" Style="{StaticResource RowCaptionStyle}" Margin="0,10,0,4" />
-                  <ComboBox x:Name="DeepSeekModelComboBox"
-                            Style="{StaticResource ThemedComboBoxStyle}"
-                            AutomationProperties.Name="DeepSeek 模型"
-                            SelectionChanged="DeepSeekModelComboBox_SelectionChanged" />
-                  <TextBlock x:Name="DeepSeekModelHintText"
-                             Style="{StaticResource NoteCaptionStyle}" />
                   <Button x:Name="DeepSeekTestButton"
                           Style="{StaticResource ThemedActionButtonStyle}"
                           Content="测试连接"
                           Margin="0,10,0,0"
                           HorizontalAlignment="Left"
-                          ToolTip="用当前输入的 API Key 与模型发起一次最小请求"
+                          ToolTip="用当前输入的 API Key 发起一次最小请求"
                           AutomationProperties.Name="测试 DeepSeek 连接"
                           Click="DeepSeekTestButton_Click" />
                   <TextBlock x:Name="DeepSeekStatusText"

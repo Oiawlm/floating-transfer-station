@@ -26,15 +26,15 @@ public partial class MainWindow : Window, ISettingsHost
     public ISecretProtector SecretProtector => _secretProtector;
 
     /// <summary>
-    /// DeepSeek 连接测试：客户端无状态，key 与模型按设置页当前输入传入；
-    /// 按后台任务惯例追踪，退出冲刷会等待本次请求（受客户端 30 秒超时约束）。
+    /// DeepSeek 连接测试：客户端无状态，key 按设置页当前输入传入，模型恒为
+    /// DeepSeekClient.DefaultModel；按后台任务惯例追踪，退出冲刷会等待本次请求
+    /// （受客户端 30 秒超时约束）。
     /// </summary>
     public Task<DeepSeekConnectionTestResult> TestDeepSeekConnectionAsync(
         string apiKey,
-        string model,
         CancellationToken cancellationToken = default)
     {
-        var operation = _deepSeekClient.TestConnectionAsync(apiKey, model, cancellationToken);
+        var operation = _deepSeekClient.TestConnectionAsync(apiKey, cancellationToken);
         TrackPendingOperation(operation);
         return operation;
     }

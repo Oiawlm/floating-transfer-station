@@ -433,6 +433,127 @@ public sealed class SettingsWindowPluginTests
         }
     }
 
+    [STATestMethod]
+    public void PluginRows_FollowLiveThemeSwitchWithoutRebuild()
+    {
+        // 契约 #24 修订锁定：插件行是代码构建的，画刷必须经动态资源引用解析——
+        // 构建后活切主题，卡片底/描边/标题/描述跟随新字典；清单非法行描述
+        // 恒走 DangerBrush（键随行状态、值随字典换装）。
+        using var directory = new TestDirectory();
+        var catalog = CreateCatalog(directory, brokenPluginId: "broken-one");
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), catalog);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            AssertPluginRowBrushesFollowLiveThemeSwitch(settings);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>深色实时适配发布证据（FTS_PLUGIN_SETTINGS_EVIDENCE_DIR 设置时产出
+    /// 真实 WPF 渲染截图）：「面板 → 标签顺序」节与「数据与维护 → 插件」区块各一张
+    /// 深色截图，画面证明代码构建行画刷已跟随深色字典（Issue #140）。</summary>
+    [STATestMethod]
+    public void Evidence_CaptureDarkSectionsFollowTheme()
+    {
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_PLUGIN_SETTINGS_EVIDENCE_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_PLUGIN_SETTINGS_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        using var directory = new TestDirectory();
+        var catalog = CreateCatalog(directory);
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), catalog);
+        try
+        {
+            var settings = OpenSettings(window);
+            DesignThemeManager.Apply(settings, DesignTheme.Dark);
+            CompleteLayout(settings);
+
+            var panelNav = (RadioButton)settings.FindName("SettingsNavPanel")!;
+            panelNav.IsChecked = true;
+            CompleteLayout(settings);
+            ((Border)((StackPanel)settings.FindName("CategoryOrderList")!).Children[0]).BringIntoView();
+            CompleteLayout(settings);
+            SaveVisualEvidence(settings, "settings-category-order-dark.png");
+
+            var dataNav = (RadioButton)settings.FindName("SettingsNavData")!;
+            dataNav.IsChecked = true;
+            CompleteLayout(settings);
+            ((StackPanel)settings.FindName("PluginListPanel")!).Children.OfType<Border>().First().BringIntoView();
+            CompleteLayout(settings);
+            SaveVisualEvidence(settings, "settings-plugins-dark.png");
+        }
+        finally
+        {
+            CloseLeftoverSettings(window);
+        }
+    }
+
+    /// <summary>对合法行与清单非法行断言两组主题的画刷跟随：与 FindResource 结果同例，且两主题实例互异。</summary>
+    private static void AssertPluginRowBrushesFollowLiveThemeSwitch(SettingsWindow settings)
+    {
+        var panel = (StackPanel)settings.FindName("PluginListPanel")!;
+        Assert.AreEqual(2, panel.Children.Count, "前置条件：一个合法插件行 + 一个清单非法插件行。");
+        // 目录条目顺序不保证（既有 BrokenPlugin 用例同款判别）：按开关 Tag 区分两行。
+        var surfaces = panel.Children.OfType<Border>().ToList();
+        var validSurface = surfaces.Single(
+            surface => ((Grid)surface.Child).Children.OfType<CheckBox>().Single().Tag as string == "demo-tidy");
+        var brokenSurface = surfaces.Single(surface => surface != validSurface);
+        var validText = ((Grid)validSurface.Child).Children.OfType<StackPanel>().First();
+        var brokenText = ((Grid)brokenSurface.Child).Children.OfType<StackPanel>().First();
+        var validTitle = validText.Children.OfType<TextBlock>().First();
+        var validDetail = validText.Children.OfType<TextBlock>().Last();
+        var brokenTitle = brokenText.Children.OfType<TextBlock>().First();
+        var brokenDetail = brokenText.Children.OfType<TextBlock>().Last();
+
+        var initial = CurrentThemeIsDark(settings) ? DesignTheme.Dark : DesignTheme.Light;
+        var other = initial == DesignTheme.Dark ? DesignTheme.Light : DesignTheme.Dark;
+
+        DesignThemeManager.Apply(settings, other);
+        CompleteLayout(settings);
+        var otherCard = (System.Windows.Media.Brush)settings.FindResource("CardBrush");
+        var otherBorder = (System.Windows.Media.Brush)settings.FindResource("BorderBrush");
+        var otherPrimary = (System.Windows.Media.Brush)settings.FindResource("PrimaryTextBrush");
+        var otherSecondary = (System.Windows.Media.Brush)settings.FindResource("SecondaryTextBrush");
+        var otherDanger = (System.Windows.Media.Brush)settings.FindResource("DangerBrush");
+        Assert.AreSame(otherCard, validSurface.Background, $"切到 {other} 后合法行卡片底必须解析到新主题 CardBrush。");
+        Assert.AreSame(otherBorder, validSurface.BorderBrush, $"切到 {other} 后合法行描边必须解析到新主题 BorderBrush。");
+        Assert.AreSame(otherPrimary, validTitle.Foreground, $"切到 {other} 后插件标题必须解析到新主题 PrimaryTextBrush。");
+        Assert.AreSame(otherSecondary, validDetail.Foreground, $"切到 {other} 后合法行描述必须解析到新主题 SecondaryTextBrush。");
+        Assert.AreSame(otherCard, brokenSurface.Background, $"切到 {other} 后非法行卡片底必须解析到新主题 CardBrush。");
+        Assert.AreSame(otherBorder, brokenSurface.BorderBrush, $"切到 {other} 后非法行描边必须解析到新主题 BorderBrush。");
+        Assert.AreSame(otherPrimary, brokenTitle.Foreground, $"切到 {other} 后非法行标题必须解析到新主题 PrimaryTextBrush。");
+        Assert.AreSame(otherDanger, brokenDetail.Foreground, $"切到 {other} 后非法行描述必须解析到新主题 DangerBrush。");
+
+        DesignThemeManager.Apply(settings, initial);
+        CompleteLayout(settings);
+        var initialCard = (System.Windows.Media.Brush)settings.FindResource("CardBrush");
+        var initialBorder = (System.Windows.Media.Brush)settings.FindResource("BorderBrush");
+        var initialPrimary = (System.Windows.Media.Brush)settings.FindResource("PrimaryTextBrush");
+        var initialSecondary = (System.Windows.Media.Brush)settings.FindResource("SecondaryTextBrush");
+        var initialDanger = (System.Windows.Media.Brush)settings.FindResource("DangerBrush");
+        Assert.AreNotSame(otherCard, initialCard, "两主题字典的画刷必须是不同实例（前置 sanity）。");
+        Assert.AreSame(initialCard, validSurface.Background, $"切回 {initial} 后合法行卡片底必须跟随。");
+        Assert.AreSame(initialBorder, validSurface.BorderBrush);
+        Assert.AreSame(initialPrimary, validTitle.Foreground);
+        Assert.AreSame(initialSecondary, validDetail.Foreground);
+        Assert.AreSame(initialCard, brokenSurface.Background);
+        Assert.AreSame(initialBorder, brokenSurface.BorderBrush);
+        Assert.AreSame(initialPrimary, brokenTitle.Foreground);
+        Assert.AreSame(initialDanger, brokenDetail.Foreground);
+    }
+
+    private static bool CurrentThemeIsDark(Window window) =>
+        (window.Resources.MergedDictionaries[1].Source?.OriginalString ?? string.Empty)
+            .Replace('\\', '/')
+            .EndsWith("Resources/DesignTheme.Dark.xaml", StringComparison.Ordinal);
+
     private sealed class IdleClipboardReader : IClipboardReader
     {
         public Task<ClipboardSnapshot> ReadAsync(CancellationToken cancellationToken = default) =>

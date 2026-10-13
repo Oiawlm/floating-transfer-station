@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -57,11 +58,13 @@ public partial class SettingsWindow
         {
             Height = CategoryOrderPitch,
             CornerRadius = new CornerRadius(4),
-            Background = TryFindResource("CardBrush") as Brush,
-            BorderBrush = TryFindResource("BorderBrush") as Brush,
             BorderThickness = new Thickness(1),
             Tag = category
         };
+        // 行画刷经动态资源引用解析（对齐全仓 DynamicResource 语义，先例
+        // MainWindow.Updates.cs）：主题活切换即跟随新字典，不定格在构建瞬间。
+        row.SetResourceReference(Border.BackgroundProperty, "CardBrush");
+        row.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
         var grid = new Grid { Background = Brushes.Transparent };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -74,14 +77,15 @@ public partial class SettingsWindow
             Cursor = Cursors.SizeAll,
             Background = Brushes.Transparent
         };
-        handle.Child = new TextBlock
+        var handleGlyph = new TextBlock
         {
             Text = "⋮⋮",
             FontSize = 12,
-            Foreground = TryFindResource("SecondaryTextBrush") as Brush,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
+        handleGlyph.SetResourceReference(TextElement.ForegroundProperty, "SecondaryTextBrush");
+        handle.Child = handleGlyph;
         AutomationProperties.SetName(handle, $"拖动「{name}」调整顺序");
         handle.MouseLeftButtonDown += CategoryOrderHandle_MouseLeftButtonDown;
         Grid.SetColumn(handle, 0);
@@ -92,9 +96,9 @@ public partial class SettingsWindow
             Text = name,
             FontSize = 13,
             Margin = new Thickness(4, 0, 8, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            Foreground = TryFindResource("PrimaryTextBrush") as Brush
+            VerticalAlignment = VerticalAlignment.Center
         };
+        label.SetResourceReference(TextElement.ForegroundProperty, "PrimaryTextBrush");
         AutomationProperties.SetName(label, $"标签{name}");
         Grid.SetColumn(label, 1);
         grid.Children.Add(label);

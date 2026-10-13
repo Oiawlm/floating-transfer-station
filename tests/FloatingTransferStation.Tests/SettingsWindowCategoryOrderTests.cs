@@ -535,6 +535,82 @@ public sealed class SettingsWindowCategoryOrderTests
         }
     }
 
+    [STATestMethod]
+    public void OrderRows_FollowLiveThemeSwitchWithoutRebuild()
+    {
+        // 契约 #21 活切换锁定：行是代码构建的，画刷必须经动态资源引用解析——
+        // 构建后活切主题，行背景/描边/文字与按钮画刷跟随新字典，无需重开窗口或重建行。
+        using var directory = new TestDirectory();
+        var (window, store) = CreateContext(directory, s => s);
+
+        try
+        {
+            window.Show();
+            var settings = OpenSettingsWindow(window);
+            CompleteLayout(window);
+            AssertOrderRowBrushesFollowLiveThemeSwitch(settings);
+
+            // 提交重建行后同样成立（上移触发 PopulateCategoryOrderSection 重建行）。
+            var secondRow = GetOrderRows(settings)[1];
+            FindDescendants<Button>(secondRow).Single(b => Equals(b.Content, "↑"))
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            PumpUntilCompleted(window.Dispatcher).GetAwaiter().GetResult();
+            CompleteLayout(window);
+            AssertOrderRowBrushesFollowLiveThemeSwitch(settings);
+            _ = store;
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    /// <summary>对首行断言两组主题的画刷跟随：与 FindResource 结果同例，且两主题实例互异。</summary>
+    private static void AssertOrderRowBrushesFollowLiveThemeSwitch(SettingsWindow settings)
+    {
+        var row = GetOrderRows(settings)[0];
+        var label = FindDescendants<TextBlock>(row)
+            .Single(t => AutomationProperties.GetName(t)!.StartsWith("标签"));
+        var handleGlyph = FindDescendants<TextBlock>(row).Single(t => t.Text == "⋮⋮");
+        var moveUp = FindDescendants<Button>(row).Single(b => Equals(b.Content, "↑"));
+
+        var initial = CurrentThemeIsDark(settings) ? DesignTheme.Dark : DesignTheme.Light;
+        var other = initial == DesignTheme.Dark ? DesignTheme.Light : DesignTheme.Dark;
+
+        DesignThemeManager.Apply(settings, other);
+        CompleteLayout(settings);
+        var otherCard = (Brush)settings.FindResource("CardBrush");
+        var otherBorder = (Brush)settings.FindResource("BorderBrush");
+        var otherPrimary = (Brush)settings.FindResource("PrimaryTextBrush");
+        var otherSecondary = (Brush)settings.FindResource("SecondaryTextBrush");
+        Assert.AreSame(otherCard, row.Background, $"切到 {other} 后行背景必须解析到新主题 CardBrush。");
+        Assert.AreSame(otherBorder, row.BorderBrush, $"切到 {other} 后行描边必须解析到新主题 BorderBrush。");
+        Assert.AreSame(otherPrimary, label.Foreground, $"切到 {other} 后标签名必须解析到新主题 PrimaryTextBrush。");
+        Assert.AreSame(otherSecondary, handleGlyph.Foreground, $"切到 {other} 后拖拽把手必须解析到新主题 SecondaryTextBrush。");
+        Assert.AreSame(
+            otherPrimary,
+            moveUp.Foreground,
+            $"切到 {other} 后上移按钮前景必须经 ThemedActionButtonStyle 的 DynamicResource 跟随。");
+
+        DesignThemeManager.Apply(settings, initial);
+        CompleteLayout(settings);
+        var initialCard = (Brush)settings.FindResource("CardBrush");
+        var initialBorder = (Brush)settings.FindResource("BorderBrush");
+        var initialPrimary = (Brush)settings.FindResource("PrimaryTextBrush");
+        var initialSecondary = (Brush)settings.FindResource("SecondaryTextBrush");
+        Assert.AreNotSame(otherCard, initialCard, "两主题字典的画刷必须是不同实例（前置 sanity）。");
+        Assert.AreSame(initialCard, row.Background, $"切回 {initial} 后行背景必须跟随。");
+        Assert.AreSame(initialBorder, row.BorderBrush);
+        Assert.AreSame(initialPrimary, label.Foreground);
+        Assert.AreSame(initialSecondary, handleGlyph.Foreground);
+        Assert.AreSame(initialPrimary, moveUp.Foreground);
+    }
+
+    private static bool CurrentThemeIsDark(Window window) =>
+        (window.Resources.MergedDictionaries[1].Source?.OriginalString ?? string.Empty)
+            .Replace('\\', '/')
+            .EndsWith("Resources/DesignTheme.Dark.xaml", StringComparison.Ordinal);
+
     /// <summary>等待真实光标操作被 WPF 处理（WM_MOUSEMOVE 结算）。</summary>
     private static void PumpFor(SettingsWindow settings, TimeSpan duration)
     {
