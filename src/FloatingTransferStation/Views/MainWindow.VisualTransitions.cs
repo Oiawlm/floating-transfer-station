@@ -41,21 +41,31 @@ public partial class MainWindow : Window
 
     private void RestoreScrollOffset(BoardCategory category)
     {
-        var version = ++_scrollRestoreVersion;
-        Dispatcher.BeginInvoke(
-            DispatcherPriority.Loaded,
-            new Action(() =>
-            {
-                if (version != _scrollRestoreVersion ||
-                    _viewModel.ActivePanel?.Category != category ||
-                    FindDescendant<ScrollViewer>(BoardList) is not { } viewer)
-                {
-                    return;
-                }
+        // 同步恢复：换绑后 ScrollableHeight 是旧分类的陈旧值，直接滚动会被钳错；
+        // 先完成一轮布局建立真实 extent，再滚到保存偏移并完成新一轮容器生成。
+        // 两轮布局都发生在内容淡入启动之前——首帧直接落在最终偏移，不存在
+        // 「偏移 0 生成→首帧→再滚→再生成」的闪现、跳变与首帧后重活。版本号
+        // 递增使在途的异步恢复（搜索跳转等）照旧被本次恢复取代。
+        _scrollRestoreVersion++;
+        if (_viewModel.ActivePanel?.Category != category ||
+            FindDescendant<ScrollViewer>(BoardList) is not { } viewer)
+        {
+            return;
+        }
 
-                viewer.ScrollToVerticalOffset(
-                    _scrollState.GetClamped(category, viewer.ScrollableHeight));
-            }));
+        if (!BoardList.IsMeasureValid)
+        {
+            BoardList.UpdateLayout();
+        }
+
+        var offset = _scrollState.GetClamped(category, viewer.ScrollableHeight);
+        if (Math.Abs(viewer.VerticalOffset - offset) <= 0.5)
+        {
+            return;
+        }
+
+        viewer.ScrollToVerticalOffset(offset);
+        viewer.UpdateLayout();
     }
 
     private void CategoryTab_MouseEnter(object sender, MouseEventArgs e)
@@ -152,8 +162,8 @@ public partial class MainWindow : Window
         _viewModel.SetPanelExpanded(true);
         UpdateStatusPresentation();
         CategoryRail.UpdateLayout();
-        AnimateRevealedCategoryTabs();
         RestoreScrollOffset(category);
+        AnimateRevealedCategoryTabs();
         AnimatePanelContent(isCategorySwitch: false);
     }
 

@@ -11,7 +11,7 @@ namespace FloatingTransferStation.Tests;
 public sealed class ImageThumbnailConverterTests
 {
     [STATestMethod]
-    public void Convert_ExplicitTextWidthDecodesProportionallyAndReleasesSourceFile()
+    public void Convert_ExplicitTextHeightDecodesProportionallyAndReleasesSourceFile()
     {
         Assert.AreEqual(ApartmentState.STA, Thread.CurrentThread.GetApartmentState());
         using var directory = new TestDirectory();
@@ -26,8 +26,8 @@ public sealed class ImageThumbnailConverterTests
             CultureInfo.InvariantCulture);
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(512, result.PixelWidth);
-        Assert.AreEqual(256, result.PixelHeight);
+        Assert.AreEqual(1024, result.PixelWidth);
+        Assert.AreEqual(512, result.PixelHeight);
         Assert.IsTrue(result.IsFrozen);
 
         File.Delete(path);
@@ -35,7 +35,7 @@ public sealed class ImageThumbnailConverterTests
     }
 
     [STATestMethod]
-    public void Convert_NoWidthUsesDefault()
+    public void Convert_NoHeightUsesDefault()
     {
         using var directory = new TestDirectory();
         var path = Path.Combine(directory.Root, "default.png");
@@ -54,7 +54,7 @@ public sealed class ImageThumbnailConverterTests
     }
 
     [STATestMethod]
-    public void Convert_NumericWidthIsSupported()
+    public void Convert_NumericHeightIsSupported()
     {
         using var directory = new TestDirectory();
         var path = Path.Combine(directory.Root, "numeric.png");
@@ -68,33 +68,33 @@ public sealed class ImageThumbnailConverterTests
             CultureInfo.InvariantCulture);
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(300, result.PixelWidth);
-        Assert.AreEqual(150, result.PixelHeight);
+        Assert.AreEqual(600, result.PixelWidth);
+        Assert.AreEqual(300, result.PixelHeight);
     }
 
     [STATestMethod]
-    public void Convert_InvalidWidthUsesDefault()
+    public void Convert_InvalidHeightUsesDefault()
     {
         using var directory = new TestDirectory();
-        var path = Path.Combine(directory.Root, "invalid-width.png");
+        var path = Path.Combine(directory.Root, "invalid-height.png");
         WritePng(path, width: 1200, height: 600);
         var converter = new ImageThumbnailConverter();
 
         var result = (BitmapSource?)converter.Convert(
             path,
             typeof(BitmapSource),
-            "not-a-width",
+            "not-a-height",
             CultureInfo.InvariantCulture);
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(512, result.PixelWidth);
+        Assert.AreEqual(256, result.PixelHeight);
     }
 
     [STATestMethod]
-    public void Convert_NonPositiveWidthIsClampedToOne()
+    public void Convert_NonPositiveHeightIsClampedToOne()
     {
         using var directory = new TestDirectory();
-        var path = Path.Combine(directory.Root, "minimum-width.png");
+        var path = Path.Combine(directory.Root, "minimum-height.png");
         WritePng(path, width: 1200, height: 600);
         var converter = new ImageThumbnailConverter();
 
@@ -105,15 +105,15 @@ public sealed class ImageThumbnailConverterTests
             CultureInfo.InvariantCulture);
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(1, result.PixelWidth);
+        Assert.AreEqual(1, result.PixelHeight);
     }
 
     [STATestMethod]
-    public void Convert_NumericWidthAbovePreviewMaximumIsClamped()
+    public void Convert_NumericHeightAbovePreviewMaximumIsClamped()
     {
         using var directory = new TestDirectory();
-        var path = Path.Combine(directory.Root, "maximum-numeric-width.png");
-        WritePng(path, width: 4096, height: 2);
+        var path = Path.Combine(directory.Root, "maximum-numeric-height.png");
+        WritePng(path, width: 2, height: 4096);
         var converter = new ImageThumbnailConverter();
 
         var result = (BitmapSource?)converter.Convert(
@@ -123,15 +123,15 @@ public sealed class ImageThumbnailConverterTests
             CultureInfo.InvariantCulture);
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(2048, result.PixelWidth);
+        Assert.AreEqual(2048, result.PixelHeight);
     }
 
     [STATestMethod]
-    public void Convert_TextWidthAbovePreviewMaximumIsClamped()
+    public void Convert_TextHeightAbovePreviewMaximumIsClamped()
     {
         using var directory = new TestDirectory();
-        var path = Path.Combine(directory.Root, "maximum-text-width.png");
-        WritePng(path, width: 4096, height: 2);
+        var path = Path.Combine(directory.Root, "maximum-text-height.png");
+        WritePng(path, width: 2, height: 4096);
         var converter = new ImageThumbnailConverter();
 
         var result = (BitmapSource?)converter.Convert(
@@ -141,35 +141,39 @@ public sealed class ImageThumbnailConverterTests
             CultureInfo.InvariantCulture);
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(2048, result.PixelWidth);
+        Assert.AreEqual(2048, result.PixelHeight);
     }
 
     [STATestMethod]
-    [DataRow(64, 8192, 512, 16)]
-    [DataRow(1, 8192, 1, 1)]
-    public void Convert_TallImageCapsDecodedHeightAndPreservesAspectRatio(int width, int height, int decodeWidth, int expectedWidth)
+    [DataRow(8192, 64, 512, 16)]
+    [DataRow(16384, 8, 2048, 1)]
+    public void Convert_WideImageCapsDecodedWidthAndPreservesAspectRatio(
+        int width,
+        int height,
+        int decodeHeight,
+        int expectedHeight)
     {
         using var directory = new TestDirectory();
-        var path = Path.Combine(directory.Root, "tall.png");
+        var path = Path.Combine(directory.Root, "wide.png");
         WritePng(path, width, height);
         var converter = new ImageThumbnailConverter();
 
         var result = (BitmapSource?)converter.Convert(
             path,
             typeof(BitmapSource),
-            decodeWidth,
+            decodeHeight,
             CultureInfo.InvariantCulture);
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(2048, result.PixelHeight);
-        Assert.AreEqual(expectedWidth, result.PixelWidth);
+        Assert.AreEqual(2048, result.PixelWidth);
+        Assert.AreEqual(expectedHeight, result.PixelHeight);
         Assert.IsTrue(result.IsFrozen);
         File.Delete(path);
         Assert.IsFalse(File.Exists(path));
     }
 
     [STATestMethod]
-    public void Convert_SmallImageRetainsRequestedWidth()
+    public void Convert_SmallImageUpscalesToRequestedHeight()
     {
         using var directory = new TestDirectory();
         var path = Path.Combine(directory.Root, "small.png");
@@ -179,12 +183,12 @@ public sealed class ImageThumbnailConverterTests
         var result = (BitmapSource?)converter.Convert(path, typeof(BitmapSource), 512, CultureInfo.InvariantCulture);
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(512, result.PixelWidth);
-        Assert.AreEqual(256, result.PixelHeight);
+        Assert.AreEqual(1024, result.PixelWidth);
+        Assert.AreEqual(512, result.PixelHeight);
     }
 
     [STATestMethod]
-    public void Convert_UnchangedFileReusesFrozenPreviewForEquivalentWidths()
+    public void Convert_UnchangedFileReusesFrozenPreviewForEquivalentHeights()
     {
         using var directory = new TestDirectory();
         var path = Path.Combine(directory.Root, "reused.png");
@@ -202,10 +206,10 @@ public sealed class ImageThumbnailConverterTests
     }
 
     [STATestMethod]
-    public void Convert_DifferentWidthsKeepIndependentPreviews()
+    public void Convert_DifferentHeightsKeepIndependentPreviews()
     {
         using var directory = new TestDirectory();
-        var path = Path.Combine(directory.Root, "widths.png");
+        var path = Path.Combine(directory.Root, "heights.png");
         WritePng(path, width: 1200, height: 600);
         var converter = new ImageThumbnailConverter();
 
@@ -213,7 +217,7 @@ public sealed class ImageThumbnailConverterTests
         var second = (BitmapSource?)converter.Convert(path, typeof(BitmapSource), 300, CultureInfo.InvariantCulture);
 
         Assert.IsNotNull(second);
-        Assert.AreEqual(300, second.PixelWidth);
+        Assert.AreEqual(300, second.PixelHeight);
         Assert.AreNotSame(first, second);
         Assert.AreSame(first, converter.Convert(path, typeof(BitmapSource), 512, CultureInfo.InvariantCulture));
     }
@@ -234,8 +238,8 @@ public sealed class ImageThumbnailConverterTests
 
         Assert.IsNotNull(second);
         Assert.AreNotSame(first, second);
-        Assert.AreEqual(512, second.PixelWidth);
-        Assert.AreEqual(1024, second.PixelHeight);
+        Assert.AreEqual(256, second.PixelWidth);
+        Assert.AreEqual(512, second.PixelHeight);
     }
 
     [STATestMethod]
@@ -251,7 +255,7 @@ public sealed class ImageThumbnailConverterTests
 
         WritePng(path, width: 16, height: 8);
         File.SetLastWriteTimeUtc(path, timestamp.AddMinutes(1));
-        var second = converter.Convert(path, typeof(BitmapSource), 512, CultureInfo.InvariantCulture);
+        var second = (BitmapSource?)converter.Convert(path, typeof(BitmapSource), 512, CultureInfo.InvariantCulture);
 
         Assert.AreEqual(length, new FileInfo(path).Length);
         Assert.IsNotNull(second);
@@ -275,13 +279,13 @@ public sealed class ImageThumbnailConverterTests
 
         WritePng(path, width: 16, height: 8);
         File.SetLastWriteTimeUtc(path, timestamp);
-        var recovered = converter.Convert(path, typeof(BitmapSource), 512, CultureInfo.InvariantCulture);
+        var recovered = (BitmapSource?)converter.Convert(path, typeof(BitmapSource), 512, CultureInfo.InvariantCulture);
         Assert.IsNotNull(recovered);
         Assert.AreNotSame(first, recovered);
     }
 
     [STATestMethod]
-    public void Convert_ConcurrentRequestsSettleOnOneCachedInstancePerWidth()
+    public void Convert_ConcurrentRequestsSettleOnOneCachedInstancePerHeight()
     {
         using var directory = new TestDirectory();
         var path = Path.Combine(directory.Root, "concurrent.png");
@@ -303,17 +307,17 @@ public sealed class ImageThumbnailConverterTests
             var image = images[index];
             Assert.IsNotNull(image);
             Assert.IsTrue(image.IsFrozen);
-            Assert.AreEqual(index % 2 == 0 ? 512 : 300, image.PixelWidth);
+            Assert.AreEqual(index % 2 == 0 ? 512 : 300, image.PixelHeight);
         }
 
-        // 并发未命中各自解码（解码在锁外），但收敛后同一宽度只剩一个缓存实例。
-        var canonicalWide = (BitmapSource?)converter.Convert(path, typeof(BitmapSource), 512, CultureInfo.InvariantCulture);
-        var canonicalNarrow = (BitmapSource?)converter.Convert(path, typeof(BitmapSource), 300, CultureInfo.InvariantCulture);
-        Assert.IsNotNull(canonicalWide);
-        Assert.IsNotNull(canonicalNarrow);
-        Assert.AreSame(canonicalWide, converter.Convert(path, typeof(BitmapSource), 512, CultureInfo.InvariantCulture));
-        Assert.AreSame(canonicalNarrow, converter.Convert(path, typeof(BitmapSource), 300, CultureInfo.InvariantCulture));
-        Assert.AreNotSame(canonicalWide, canonicalNarrow);
+        // 并发未命中各自解码（解码在锁外），但收敛后同一解码高只剩一个缓存实例。
+        var canonicalTall = (BitmapSource?)converter.Convert(path, typeof(BitmapSource), 512, CultureInfo.InvariantCulture);
+        var canonicalShort = (BitmapSource?)converter.Convert(path, typeof(BitmapSource), 300, CultureInfo.InvariantCulture);
+        Assert.IsNotNull(canonicalTall);
+        Assert.IsNotNull(canonicalShort);
+        Assert.AreSame(canonicalTall, converter.Convert(path, typeof(BitmapSource), 512, CultureInfo.InvariantCulture));
+        Assert.AreSame(canonicalShort, converter.Convert(path, typeof(BitmapSource), 300, CultureInfo.InvariantCulture));
+        Assert.AreNotSame(canonicalTall, canonicalShort);
 
         File.Delete(path);
         Assert.IsFalse(File.Exists(path));
