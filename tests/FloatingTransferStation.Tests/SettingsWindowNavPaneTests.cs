@@ -16,19 +16,19 @@ namespace FloatingTransferStation.Tests;
 /// <summary>
 /// 设置窗口双栏外壳（契约 #24）：左导航 5 组的冻结顺序、SelectionItem 语义、
 /// ↑/↓/Home/End 键盘切换、Tab 可达性与双主题渲染。页锚定控件按冻结表：
-/// 外观=ThemeComboBox、面板=CategoryOrderHost、通用=StartupToggle、
-/// 数据与维护=AutoCleanupToggle、AI=DeepSeekKeyBox。
+/// 外观=主题/动效/置顶分隔（外观组新增节走 Issue 修订），面板=CategoryOrderHost、
+/// 通用=StartupToggle、数据与维护=AutoCleanupToggle、AI=DeepSeekKeyBox。
 /// </summary>
 [TestClass]
 public sealed class SettingsWindowNavPaneTests
 {
-    private static readonly (string AutomationName, string AnchorName)[] FrozenPages =
+    private static readonly (string AutomationName, string[] AnchorNames)[] FrozenPages =
     [
-        ("外观", "ThemeComboBox"),
-        ("面板", "CategoryOrderHost"),
-        ("通用", "StartupToggle"),
-        ("数据与维护", "AutoCleanupToggle"),
-        ("AI", "DeepSeekKeyBox")
+        ("外观", ["ThemeComboBox", "AnimationsToggle", "PinnedDividerComboBox"]),
+        ("面板", ["CategoryOrderHost"]),
+        ("通用", ["StartupToggle"]),
+        ("数据与维护", ["AutoCleanupToggle"]),
+        ("AI", ["DeepSeekKeyBox"])
     ];
 
     private static readonly string[] PageNames =
@@ -70,16 +70,16 @@ public sealed class SettingsWindowNavPaneTests
             var nav = AssertNavList(settings);
             var items = nav.Children.OfType<RadioButton>().ToArray();
             Keyboard.Focus(items[0]);
-            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorName)!).IsVisible);
+            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorNames[0])!).IsVisible);
 
             SendNavKey(nav, Key.Down);
             Assert.IsTrue(items[1].IsChecked == true, "↓ 应把选中推进到第二项。");
-            Assert.IsFalse(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorName)!).IsVisible);
-            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[1].AnchorName)!).IsVisible);
+            Assert.IsFalse(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorNames[0])!).IsVisible);
+            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[1].AnchorNames[0])!).IsVisible);
 
             SendNavKey(nav, Key.Down);
             Assert.IsTrue(items[2].IsChecked == true, "↓ 应继续推进到第三项。");
-            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[2].AnchorName)!).IsVisible);
+            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[2].AnchorNames[0])!).IsVisible);
         }
         finally
         {
@@ -99,7 +99,7 @@ public sealed class SettingsWindowNavPaneTests
             Keyboard.Focus(items[0]);
             SendNavKey(nav, Key.Up);
             Assert.IsTrue(items[^1].IsChecked == true, "首项按 ↑ 应循环回末项。");
-            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[^1].AnchorName)!).IsVisible);
+            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[^1].AnchorNames[^1])!).IsVisible);
         }
         finally
         {
@@ -121,7 +121,7 @@ public sealed class SettingsWindowNavPaneTests
             Assert.IsTrue(items[^1].IsChecked == true, "End 应选中末项（AI）。");
             SendNavKey(nav, Key.Home);
             Assert.IsTrue(items[0].IsChecked == true, "Home 应回到首项（外观）。");
-            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorName)!).IsVisible);
+            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorNames[0])!).IsVisible);
         }
         finally
         {
@@ -174,8 +174,8 @@ public sealed class SettingsWindowNavPaneTests
             provider.Select();
             CompleteLayout(settings);
             Assert.IsTrue(items[3].IsChecked == true, "UIA Select() 应选中「数据与维护」。");
-            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[3].AnchorName)!).IsVisible);
-            Assert.IsFalse(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorName)!).IsVisible);
+            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[3].AnchorNames[0])!).IsVisible);
+            Assert.IsFalse(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorNames[0])!).IsVisible);
         }
         finally
         {
@@ -198,7 +198,7 @@ public sealed class SettingsWindowNavPaneTests
                 "深色主题字典应整本替换生效。");
             var nav = AssertNavList(settings);
             Assert.IsTrue(nav.IsVisible, "深色下导航轨保持可见。");
-            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorName)!).IsVisible);
+            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorNames[0])!).IsVisible);
 
             window.ApplyPreferences(window.CurrentPreferences with { ThemeMode = ThemePreference.Light });
             CompleteLayout(settings);
@@ -207,7 +207,7 @@ public sealed class SettingsWindowNavPaneTests
                     "DesignTheme.Light.xaml",
                     StringComparison.OrdinalIgnoreCase),
                 "浅色主题字典应整本替换生效。");
-            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorName)!).IsVisible);
+            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorNames[0])!).IsVisible);
         }
         finally
         {
@@ -232,10 +232,14 @@ public sealed class SettingsWindowNavPaneTests
                 {
                     items[index].IsChecked = true;
                     CompleteLayout(settings);
-                    var anchor = (FrameworkElement)settings.FindName(FrozenPages[index].AnchorName)!;
-                    Assert.IsTrue(
-                        anchor.IsVisible,
-                        $"{theme} 主题下第 {index} 页（{FrozenPages[index].AutomationName}）锚定控件必须可见。");
+                    foreach (var anchorName in FrozenPages[index].AnchorNames)
+                    {
+                        var anchor = (FrameworkElement)settings.FindName(anchorName)!;
+                        Assert.IsTrue(
+                            anchor.IsVisible,
+                            $"{theme} 主题下第 {index} 页（{FrozenPages[index].AutomationName}）锚定控件 {anchorName} 必须可见。");
+                    }
+
                     Assert.IsTrue(items[index].IsChecked == true);
                 }
             }
@@ -259,7 +263,7 @@ public sealed class SettingsWindowNavPaneTests
             var items = nav.Children.OfType<RadioButton>().ToArray();
             Keyboard.Focus(items[0]);
             SendNavKey(nav, Key.Down);
-            var anchor = (FrameworkElement)settings.FindName(FrozenPages[1].AnchorName)!;
+            var anchor = (FrameworkElement)settings.FindName(FrozenPages[1].AnchorNames[0])!;
             Assert.IsTrue(anchor.IsVisible, "动效关闭时页切换必须即时可见（无淡入等待）。");
             Assert.AreEqual(
                 1d,
@@ -288,7 +292,7 @@ public sealed class SettingsWindowNavPaneTests
             SendNavKey(nav, Key.End);
             SendNavKey(nav, Key.Down);
             Assert.IsTrue(items[0].IsChecked == true, "末项按 ↓ 应正向回绕到首项。");
-            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorName)!).IsVisible, "正向回绕须同步切页。");
+            Assert.IsTrue(((FrameworkElement)settings.FindName(FrozenPages[0].AnchorNames[0])!).IsVisible, "正向回绕须同步切页。");
             Assert.AreEqual(
                 items[0],
                 Keyboard.FocusedElement,

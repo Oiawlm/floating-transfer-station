@@ -316,7 +316,7 @@
                             SelectionChanged="ThemeComboBox_SelectionChanged" />
                 </StackPanel>
               </Border>
-              <Border Style="{StaticResource SettingsCardStyle}" Margin="0">
+              <Border Style="{StaticResource SettingsCardStyle}">
                 <StackPanel>
                   <TextBlock Text="动效" Style="{StaticResource SectionTitleStyle}" />
                   <Grid Background="Transparent">
@@ -334,6 +334,17 @@
                               Checked="AnimationsToggle_Checked"
                               Unchecked="AnimationsToggle_Unchecked" />
                   </Grid>
+                </StackPanel>
+              </Border>
+              <Border Style="{StaticResource SettingsCardStyle}" Margin="0">
+                <StackPanel>
+                  <TextBlock Text="置顶分隔" Style="{StaticResource SectionTitleStyle}" />
+                  <ComboBox x:Name="PinnedDividerComboBox"
+                            Style="{StaticResource ThemedComboBoxStyle}"
+                            AutomationProperties.Name="置顶分隔样式"
+                            SelectionChanged="PinnedDividerComboBox_SelectionChanged" />
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="选择置顶区与普通区之间的分隔样式；改动立即生效并自动保存。" />
                 </StackPanel>
               </Border>
             </StackPanel>

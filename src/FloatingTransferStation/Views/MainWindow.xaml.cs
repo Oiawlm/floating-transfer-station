@@ -143,6 +143,7 @@ public partial class MainWindow : Window
         _activeDesignTheme = ResolveTheme(_preferences.ThemeMode);
         DesignThemeManager.Apply(this, _activeDesignTheme);
         ApplyAnimationsPreference(_preferences.AnimationsEnabled);
+        ApplyPinnedDividerPreference(_preferences.PinnedDivider);
         SetResourceReference(
             ClientAreaAnimationsEnabledProperty,
             SystemParameters.ClientAreaAnimationKey);
