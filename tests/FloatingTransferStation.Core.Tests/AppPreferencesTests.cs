@@ -300,4 +300,56 @@ public sealed class AppPreferencesTests
         Assert.IsTrue(restored.AutoUpdateCheckEnabled, "旧 preferences.json 缺字段时必须回落到默认开启。");
         Assert.IsFalse(restored.AutoCleanupEnabled, "测试数据里的旧字段语义不受新字段影响。");
     }
+
+    [TestMethod]
+    public void Default_UsesSolidPinnedDivider()
+    {
+        Assert.AreEqual(PinnedDividerStyle.Solid, AppPreferences.Default.PinnedDivider);
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesPinnedDividerPreference()
+    {
+        // LocalStore 以 camelCase + 字符串枚举持久化，四值都走同一份选项验证往返。
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        foreach (var style in new[]
+                 {
+                     PinnedDividerStyle.None,
+                     PinnedDividerStyle.Solid,
+                     PinnedDividerStyle.Dashed,
+                     PinnedDividerStyle.AccentBar
+                 })
+        {
+            var preferences = AppPreferences.Default with { PinnedDivider = style };
+
+            var restored = JsonSerializer.Deserialize<AppPreferences>(
+                JsonSerializer.Serialize(preferences, storeOptions), storeOptions);
+
+            Assert.AreEqual(preferences, restored);
+            Assert.AreEqual(style, restored!.PinnedDivider);
+        }
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutPinnedDividerField_FallsBackToSolid()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","autoUpdateCheckEnabled":false}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.AreEqual(
+            PinnedDividerStyle.Solid,
+            restored.PinnedDivider,
+            "旧 preferences.json 缺字段时必须回落到默认实线（升级后边界可见）。");
+    }
 }
