@@ -256,11 +256,14 @@ public sealed partial class MainWindowInteractionTests
 
             // 编辑中双击（同一张卡、编辑器外按下）：编辑表面语义=终结会话并
             // 吞掉——首击提交会话（草稿持久化为正文），该次点击被消费（不写
-            // 双击痕迹）；第二击按普通单击处理（无痕迹配对、不判双击），不
-            // 直接进入正文编辑。原始预览事件模拟双击（不经由断言 Handled 的
-            // 助手——编辑卡的按下语义就是「吞掉」，Handled 断言无区分度）。
+            // 双击痕迹且作废既有痕迹）；第二击按普通单击处理（无痕迹配对、
+            // 不判双击），不直接进入正文编辑。首击时间戳刻意紧跟进入编辑的
+            // 双击（落在其双击窗内）：进入手势的痕迹仍在，若被消费的点击
+            // 不作废痕迹，第二击将与陈旧痕迹配对误判双击、重开编辑器
+            // （D4 角落）。原始预览事件模拟双击（不经由断言 Handled 的助手
+            // ——编辑卡的按下语义就是「吞掉」，Handled 断言无区分度）。
             var zone = ZoneHitSource(window, item, CardGestureZones.ContentZone);
-            var firstClick = NextIsolatedClickTimestamp();
+            var firstClick = NextPairedClickTimestamp();
             zone.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseDownEvent, zone, firstClick));
             zone.RaiseEvent(NewMouseButtonEventArgs(Mouse.PreviewMouseUpEvent, zone, firstClick + 5));
             var secondClick = NextPairedClickTimestamp();

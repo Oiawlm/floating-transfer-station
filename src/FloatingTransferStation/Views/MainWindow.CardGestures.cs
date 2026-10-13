@@ -85,7 +85,10 @@ public partial class MainWindow
         // 语义——先经既有 CommitCardTextEditing 冲刷，再整卡吞掉：防
         // ListBoxItem 默认选择、防折叠重排期误启拖拽/分发；一次点击只做
         // 「退出编辑」一件事，不启动按压/拖拽会话、不作手势分发、不写
-        // 双击痕迹，随后的下一次点击恢复正常交互）。
+        // 双击痕迹，随后的下一次点击恢复正常交互）。被消费的点击同时
+        // 作废双击痕迹（与拖拽同哲学）：否则进入编辑那记双击的陈旧痕迹
+        // 会在「退出编辑后立即再击」的极快序列里与第二击配对、误判双击
+        // 重开编辑器（D4：第二击按普通单击处理）。
         if (TryGetEditingCardContainer() is { } editingContainer &&
             (ReferenceEquals(source, editingContainer) ||
              source is not null && editingContainer.IsAncestorOf(source)))
@@ -94,6 +97,7 @@ public partial class MainWindow
             if (FindAncestor<System.Windows.Controls.TextBox>(source) is null)
             {
                 CommitCardTextEditing();
+                _lastCardClick = null;
                 e.Handled = true;
             }
 
