@@ -108,12 +108,12 @@
 - **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardHalves.cs`（`CardHalves_HitLayerSplitsCardContentIntoEqualHalves` 等）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardGestures.cs`（含 `CardGestures_OperationsZoneRapidRepeatClicksToggleEachTime`，Win32 消息直驱）。
 - **关联**：CHANGELOG 1.18.0/1.28.0（无独立 spec，如实标注）；1.28.0 修订 Issue Oiawlm/floating-transfer-station#93。
 
-### 15. 大数据量显示根因契约（1.19.0 起）
+### 15. 大数据量显示根因契约（1.19.0 起；2026-10-13 修订补充展开路径成本有界断言）
 
-- **断言**：显示路径对条目数 N 的开销有界——批量结构变更以单 Reset 事件重排（不逐条广播）；显示层只绑定有界预览（600 字符）而全文保留用于搜索/编辑/复制/拖出；缩略图缓存命中为纯内存查询（UI 线程零磁盘 I/O），受管图片重写后主动失效；虚拟化列表只实现可见容器；入场动画仅限真正新入库内容。
-- **由来**：1.19.0「东西一多就卡」根因修复——卡顿成本全部来自随 N 线性/平方增长的开销（启动 5264ms→1101ms、8 万字排版 470.8ms→4.3ms 等）。
-- **锁定**：`tests/FloatingTransferStation.Tests/BoardServiceBatchNotificationTests.cs`（单 Reset）、`tests/FloatingTransferStation.Core.Tests/BoardItemPreviewTextTests.cs`（有界预览）、`tests/FloatingTransferStation.Tests/AsyncThumbnailImageTests.cs`（缓存与解码桶宽）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardRendering.cs`（`BoardList_RealizesOnlyVisibleContainersForLargeCategories`、`BatchStructuralChange_DoesNotResetScrollToTop`）。
-- **关联**：CHANGELOG 1.19.0（无独立 spec，如实标注）。
+- **断言**：显示路径对条目数 N 的开销有界——批量结构变更以单 Reset 事件重排（不逐条广播）；显示层只绑定有界预览（600 字符）而全文保留用于搜索/编辑/复制/拖出；缩略图缓存命中为纯内存查询（UI 线程零磁盘 I/O），受管图片重写后主动失效；虚拟化列表只实现可见容器；入场动画仅限真正新入库内容。**展开路径补充（2026-10-13）**：悬停展开为一次同步事务——深偏移滚动恢复在展开 tick 内完成（tick 返回即终态偏移，其后零容器再生成、零偏移跳变，首帧即最终位置；同分类再展开与顶部分类恢复为 no-op）；缩略图解码尺寸以显示高为唯一锚（解码高 = ceil(显示高×DPI)、宽随文件纵横比、与面板宽无关），每张可见图片冷展开仅解码一次（禁止「基线先行＋布局后升档」双解码路径，禁止按宽度取桶）；跨屏 DPI 升高按解码高增大重解一次、降低沿用已解码位图由 GPU 缩放；冷展开解码字节与图片总数无关（只随可见容器数与 DPI 线性）。
+- **由来**：1.19.0「东西一多就卡」根因修复——卡顿成本全部来自随 N 线性/平方增长的开销（启动 5264ms→1101ms、8 万字排版 470.8ms→4.3ms 等）。2026-10-13「悬停图片标签展开明显卡顿」根因修复——本轮消除与 N 无关、每次展开都要付的绝对成本：解码宽桶机制在竖版截图上 6.3× 线性过采样（冷切换展开 8.8MB 解码＋2 次 Gen2 全量 GC），与深偏移恢复的双轮容器生成（20 vs 9 轮、解码应用 2.2×、首帧后约 20-60ms 阻塞＋内容跳变）；修复后同一基准 9 轮持平顶部分类、解码 1.1MB（-87%）、工作窗最大帧间隙 205ms→29ms。维护者本地调研底稿 RESEARCH-PANEL-EXPAND-PERF-20261013 与基准执行日志（可复跑：`dotnet test --filter FullyQualifiedName~PanelExpandPerf`）。
+- **锁定**：`tests/FloatingTransferStation.Tests/BoardServiceBatchNotificationTests.cs`（单 Reset）、`tests/FloatingTransferStation.Core.Tests/BoardItemPreviewTextTests.cs`（有界预览）、`tests/FloatingTransferStation.Tests/AsyncThumbnailImageTests.cs`（缓存与解码高定标）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardRendering.cs`（`BoardList_RealizesOnlyVisibleContainersForLargeCategories`、`BatchStructuralChange_DoesNotResetScrollToTop`、`CardThumbnail_DecodesAtDisplayHeightAnchoredSizeAfterLayout` 显示高锚解码尺寸）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.ExpandPipeline.cs`（`ExpandWithSavedDeepOffset_RestoresScrollInsideTickWithoutPostTickRegeneration` 恢复入 tick 且其后零再生成零跳变、`ColdExpandImageCategory_DecodesEachVisibleImageExactlyOnce` 冷展开每图唯一一次解码、`ExpandImageCategory_RealizesViewportBoundedContainerCount` 深偏移展开容器数有界）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.PanelExpandPerf.cs`（可复跑数值基准）。
+- **关联**：CHANGELOG 1.19.0 与未发布区（无独立 spec，如实标注）。
 
 ## 三、本次新增（16–17，1.20.0）
 
