@@ -345,10 +345,9 @@ public partial class MainWindow : Window
             _activeDesignTheme == DesignTheme.Dark);
         if (!_micaApplied && WindowShell is not null)
         {
-            // 材质不可用（旧系统）时回退到不透明壳，避免透明像素露出黑底。
-            WindowShell.Background =
-                TryFindResource("WindowShellOpaqueBrush") as System.Windows.Media.Brush
-                ?? WindowShell.Background;
+            // 材质不可用（旧系统）时回退到不透明壳，避免透明像素露出黑底；
+            // 动态资源引用让兜底随主题活切换跟随新字典，不定格旧主题实例。
+            WindowShell.SetResourceReference(Border.BackgroundProperty, "WindowShellOpaqueBrush");
         }
     }
 

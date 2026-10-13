@@ -42,12 +42,12 @@ public interface ISettingsHost
     ISecretProtector SecretProtector { get; }
 
     /// <summary>
-    /// DeepSeek 连接测试（1.27.0）：以传入的 key 与模型发起最小 chat completion
-    /// （按后台任务惯例追踪，退出冲刷会等待），结果含就地反馈的中文文案。
+    /// DeepSeek 连接测试（1.27.0）：以传入的 key 发起最小 chat completion（模型恒为
+    /// DeepSeekClient.DefaultModel，按后台任务惯例追踪，退出冲刷会等待），结果含
+    /// 就地反馈的中文文案。
     /// </summary>
     Task<DeepSeekConnectionTestResult> TestDeepSeekConnectionAsync(
         string apiKey,
-        string model,
         CancellationToken cancellationToken = default);
 
     /// <summary>
