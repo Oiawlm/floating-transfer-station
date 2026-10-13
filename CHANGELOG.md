@@ -4,6 +4,8 @@
 
 ## 未发布
 
+## 1.40.0
+
 - 设置窗标签顺序与插件区块深色主题实时适配（设计契约 #21/#24 补锁定，记录 Issue #140）：设置窗口开着切主题时，「面板 → 标签顺序」节与「数据与维护 → 插件」区块的行不再定格在构建瞬间的浅色画刷——两区块代码构建行的画刷改为动态资源引用（`SetResourceReference`，对齐全仓 DynamicResource 语义），主题活切换即跟随新字典，无需重开窗口；清单非法插件行的错误红字（DangerBrush）与 Mica 不可用时的不透明壳兜底（探针实证同样会过期）一并收编为动态跟随。
 - AI 模型收敛为唯一 deepseek-flash（设计契约 #28，记录 Issue #141）：AI 设置仅配置 API Key——模型目录类、偏好字段、下拉与提示行、连接测试的模型参数全链路删除，线上请求 `model` 字段恒等于 `DeepSeekClient.DefaultModel`（deepseek-flash，生产代码唯一模型字面量点）。此前设置页会把存量偏好里的旧模型 ID 追加为下拉第三项（「出现三个模型」的根源）；存量模型选择随升级忽略（旧 preferences.json 的 `deepSeekModel` 键静默忽略、免迁移），统一使用 deepseek-flash。
 
