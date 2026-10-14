@@ -28,6 +28,15 @@ public sealed partial class MainWindowInteractionTests
     [STATestMethod]
     public void PanelExpandPerf_ExpandFromHoverBenchmark()
     {
+        // 基准是本机测量工具：CI 共享 runner 的慢速 I/O 会让九个重窗口生命周期
+        // （大数据集生成＋逐窗口优雅关闭的落盘保存）偶发撞共享泵超时，测量数字
+        // 在共享 runner 上也没有可比性。CI 环境跳过（与发布证据测试的环境跳过
+        // 同例），本地照常全量运行；权威前后对比数字出自本机。
+        if (Environment.GetEnvironmentVariable("CI") == "true")
+        {
+            Assert.Inconclusive("CI 共享 runner 跳过展开性能基准（本机测量工具）。");
+        }
+
         using var directory = new TestDirectory();
         var imagesDirectory = Path.Combine(directory.Root, "images");
         Directory.CreateDirectory(imagesDirectory);
