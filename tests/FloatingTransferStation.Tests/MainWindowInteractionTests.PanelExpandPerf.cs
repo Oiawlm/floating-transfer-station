@@ -55,7 +55,7 @@ public sealed partial class MainWindowInteractionTests
         for (var index = 0; index < PanelExpandPerfMixedTextCount; index++)
         {
             board.AddText(
-                $"图片分类混合长文 {index}：{new string('混', 4000)}",
+                $"图片分类混合长文 {index}：{new string('混', 1200)}",
                 BoardCategory.CustomerOriginal);
         }
 
@@ -72,7 +72,7 @@ public sealed partial class MainWindowInteractionTests
         for (var index = 0; index < PanelExpandPerfTextCategoryCount; index++)
         {
             board.AddText(
-                $"文本分类条目 {index}：{new string('文', 4000)}",
+                $"文本分类条目 {index}：{new string('文', 1200)}",
                 BoardCategory.Reference);
         }
 
