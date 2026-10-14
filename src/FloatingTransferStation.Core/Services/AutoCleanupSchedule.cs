@@ -19,10 +19,14 @@ namespace FloatingTransferStation.Services;
 public static class AutoCleanupSchedule
 {
     /// <summary>
-    /// 档位 → 保留时长的全仓唯一映射：switch 表达式穷尽全部成员、无兜底臂，
-    /// 新增档位漏映射在质量门 -warnaserror 下即编译失败。除本映射与测试期望
-    /// 值外，生产代码任何位置不得再出现清理时长的小时数字面量。
+    /// 档位 → 保留时长的全仓唯一映射：switch 表达式穷尽全部命名成员、无兜底臂，
+    /// 新增档位漏映射（CS8509）在质量门 -warnaserror 下即编译失败。CS8524（未命名
+    /// 枚举值，仅手改 preferences.json 写入越界整数才会出现）显式豁免：该值让本
+    /// 表达式抛 SwitchExpressionException，由巡检漏斗既有异常安全吞掉（跳过当次
+    /// 清扫），设置窗 Tag 匹配则回落默认档——用户重选档位即写回合法值自愈。
+    /// 除本映射与测试期望值外，生产代码任何位置不得再出现清理时长的小时数字面量。
     /// </summary>
+#pragma warning disable CS8524 // switch 表达式不处理未命名枚举值（见上：漏映射 CS8509 仍为编译错误）
     public static TimeSpan GetRetentionDuration(AutoCleanupRetention retention) => retention switch
     {
         AutoCleanupRetention.TwoHours => TimeSpan.FromHours(2),
@@ -33,6 +37,7 @@ public static class AutoCleanupSchedule
         AutoCleanupRetention.TwelveHours => TimeSpan.FromHours(12),
         AutoCleanupRetention.TwentyFourHours => TimeSpan.FromHours(24),
     };
+#pragma warning restore CS8524
 
     /// <summary>
     /// 清扫范围 = 全部内容分类（BoardCategoryCatalog.Ordered）显式排除复盘分类。
