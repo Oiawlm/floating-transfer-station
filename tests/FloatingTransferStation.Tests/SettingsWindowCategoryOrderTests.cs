@@ -604,6 +604,97 @@ public sealed class SettingsWindowCategoryOrderTests
         }
     }
 
+    /// <summary>松手帧序列取证（FTS_CATEGORYORDER_DROP_FRAMES_DIR 设置时产出，
+    /// 2026-10-14 Issue #153）：真实输入拖拽松手，保存被门挂起期间逐帧渲染捕获
+    /// 设置窗口壳层——未修复代码该时段为旧序帧（用户看到的闪帧本体），修复后为
+    /// 稳定目标序；放行保存后再捕对照帧。帧序列落指定目录供慢放检视，不提交。</summary>
+    [STATestMethod]
+    public void Evidence_CaptureCategoryOrderDropFrames()
+    {
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_CATEGORYORDER_DROP_FRAMES_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_CATEGORYORDER_DROP_FRAMES_DIR，跳过松手帧序列取证。");
+        }
+
+        using var directory = new TestDirectory();
+        var (window, store) = CreateContext(directory, s => s, new GatedSettingsBoardStore(directory.Root));
+
+        try
+        {
+            window.Show();
+            var settings = OpenSettingsWindow(window);
+            CompleteLayout(window);
+            var handle = FindHandle(GetOrderRows(settings)[0]);
+            var shell = (Border)settings.FindName("WindowShell")!;
+
+            store.HoldNextSave();
+            Assert.IsTrue(GetCursorPos(out var savedCursor), "测试环境必须支持读取真实光标。");
+            try
+            {
+                RealInputDragFirstRowToIndex2(settings, handle);
+                // 让松手消息结算进入保存挂起（提交链已在同消息内完成上屏）。
+                PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(60));
+                CaptureShellFrames(settings, shell, "drop-pending", 12);
+            }
+            finally
+            {
+                store.ReleaseSave();
+                SetCursorPos(savedCursor.X, savedCursor.Y);
+            }
+
+            PumpUntilCompleted(window.Dispatcher).GetAwaiter().GetResult();
+            CompleteLayout(window);
+            CaptureShellFrames(settings, shell, "after-save", 4);
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    /// <summary>逐帧渲染捕获：每帧以 Render 优先级渲染一拍后抓取壳层位图，帧间以
+    /// Background 优先级让渡；帧文件名带序号便于慢放逐帧检视。</summary>
+    private static void CaptureShellFrames(SettingsWindow settings, Border shell, string phase, int frameCount)
+    {
+        for (var index = 1; index <= frameCount; index++)
+        {
+            var frame = new DispatcherFrame();
+            _ = settings.Dispatcher.BeginInvoke(
+                DispatcherPriority.Render,
+                new Action(() =>
+                {
+                    SaveShellFrame(shell, $"{phase}-frame-{index:D2}.png");
+                    _ = settings.Dispatcher.BeginInvoke(
+                        DispatcherPriority.Background,
+                        new Action(() => frame.Continue = false));
+                }));
+            Dispatcher.PushFrame(frame);
+        }
+    }
+
+    private static void SaveShellFrame(Border shell, string fileName)
+    {
+        var directory = Environment.GetEnvironmentVariable("FTS_CATEGORYORDER_DROP_FRAMES_DIR");
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(directory);
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            (int)Math.Ceiling(shell.ActualWidth),
+            (int)Math.Ceiling(shell.ActualHeight),
+            96,
+            96,
+            System.Windows.Media.PixelFormats.Pbgra32);
+        bitmap.Render(shell);
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using var stream = File.Create(Path.Combine(directory, fileName));
+        encoder.Save(stream);
+    }
+
     private static void ExpandDefaultCapture(MainWindow window)
     {
         // 直接驱动视图模型展开默认接收分类（布局定稿后截壳层）。
