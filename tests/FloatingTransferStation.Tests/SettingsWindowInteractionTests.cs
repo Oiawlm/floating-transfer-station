@@ -1018,6 +1018,110 @@ public sealed class SettingsWindowInteractionTests
         }
     }
 
+    [STATestMethod]
+    public void AutoCleanupRetentionComboBox_OffersSevenTiersDefaultingToTwentyFourHours()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var combo = settings.FindName("AutoCleanupRetentionComboBox") as ComboBox;
+            Assert.IsNotNull(combo);
+            var items = combo.Items.OfType<ComboBoxItem>().ToArray();
+            CollectionAssert.AreEqual(
+                new[] { "2 小时", "4 小时", "6 小时", "8 小时", "10 小时", "12 小时", "24 小时" },
+                items.Select(item => (string)item.Content!).ToArray(),
+                "七个档位必须按升序呈现，文案由唯一时长映射派生。");
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    AutoCleanupRetention.TwoHours,
+                    AutoCleanupRetention.FourHours,
+                    AutoCleanupRetention.SixHours,
+                    AutoCleanupRetention.EightHours,
+                    AutoCleanupRetention.TenHours,
+                    AutoCleanupRetention.TwelveHours,
+                    AutoCleanupRetention.TwentyFourHours
+                },
+                items.Select(item => item.Tag).ToArray(),
+                "选项 Tag 必须对应枚举档位（枚举序≠显示序，匹配只认 Tag）。");
+            Assert.AreEqual("24 小时", ((ComboBoxItem)combo.SelectedItem).Content, "默认选中 24 小时。");
+            Assert.IsTrue(combo.IsEnabled, "总开关默认开启，下拉可用。");
+            Assert.IsNull(preferencesStore.LastSaved, "构造期初始化守卫不得触发保存。");
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void AutoCleanupRetentionComboBox_AppliesImmediatelyPersistsAndDisabledWithToggleOff()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var combo = settings.FindName("AutoCleanupRetentionComboBox") as ComboBox;
+            Assert.IsNotNull(combo);
+            var toggle = settings.FindName("AutoCleanupToggle") as CheckBox;
+            Assert.IsNotNull(toggle);
+
+            combo.SelectedIndex = 0;
+            CompleteLayout(window);
+
+            Assert.AreEqual(
+                AutoCleanupRetention.TwoHours,
+                window.CurrentPreferences.AutoCleanupRetention,
+                "档位改动必须立即生效。");
+            Assert.AreEqual(
+                AutoCleanupRetention.TwoHours,
+                preferencesStore.LastSaved!.AutoCleanupRetention,
+                "档位改动必须立即落偏好文件。");
+
+            toggle.IsChecked = false;
+            CompleteLayout(window);
+
+            Assert.IsFalse(combo.IsEnabled, "总开关关闭时保留下拉置灰。");
+
+            toggle.IsChecked = true;
+            CompleteLayout(window);
+
+            Assert.IsTrue(combo.IsEnabled, "总开关重新开启时下拉恢复可用。");
+
+            // 重开设置窗：选中项必须来自已保存偏好，禁用态跟随总开关（先停在关闭态再关窗）。
+            toggle.IsChecked = false;
+            CompleteLayout(window);
+            Assert.IsFalse(combo.IsEnabled);
+            CloseWindow(settings);
+            var reopened = OpenSettings(window);
+            var reopenedCombo = reopened.FindName("AutoCleanupRetentionComboBox") as ComboBox;
+            Assert.IsNotNull(reopenedCombo);
+            Assert.AreEqual(
+                "2 小时",
+                ((ComboBoxItem)reopenedCombo.SelectedItem).Content,
+                "重开设置窗必须反映已保存的档位。");
+            Assert.IsFalse(reopenedCombo.IsEnabled, "总开关关闭状态下重开设置窗下拉同样置灰。");
+            CloseWindow(reopened);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
     private sealed class IdleClipboardReader : IClipboardReader
     {
         public Task<ClipboardSnapshot> ReadAsync(CancellationToken cancellationToken = default) =>
