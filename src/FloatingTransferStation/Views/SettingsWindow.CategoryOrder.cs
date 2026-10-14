@@ -151,10 +151,18 @@ public partial class SettingsWindow
     /// <summary>统一提交路径（拖拽松手与上移/下移共用，<paramref name="order"/>
     /// 为目标序）：宿主乐观契约先同步应用目标序，故发起提交后立即重建行即目标序
     /// （松手同一 UI 消息内上屏）；await 完成（＝持久化完成）后仅当面板行序与宿主
-    /// 当前序不一致时二次重建——唯一来源＝保存失败回弹。提交期间忽略重复触发
-    /// （防快速连点丢步）。</summary>
+    /// 当前序不一致时二次重建——唯一来源＝保存失败回弹。单飞语义在本入口收口：
+    /// 上一提交仍在途时丢弃本次触发（防快速连点丢步，也防拖拽与按钮交叠提交
+    /// 交错——顺序列表为全量快照，并发提交与失败回滚的组合会产生持久分歧），
+    /// 面板复位到宿主当前序。</summary>
     private async Task CommitCategoryOrderAsync(IReadOnlyList<BoardCategory> order)
     {
+        if (_isCategoryOrderCommitInFlight)
+        {
+            PopulateCategoryOrderSection();
+            return;
+        }
+
         _isCategoryOrderCommitInFlight = true;
         try
         {

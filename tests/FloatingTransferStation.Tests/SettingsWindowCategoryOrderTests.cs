@@ -268,60 +268,18 @@ public sealed class SettingsWindowCategoryOrderTests
             CompleteLayout(window);
 
             var handle = FindHandle(GetOrderRows(settings)[0]);
-            var hwnd = new System.Windows.Interop.WindowInteropHelper(settings).Handle;
-            var screen = handle.PointToScreen(
-                new Point(handle.ActualWidth / 2, handle.ActualHeight / 2));
 
-            // 移动真实光标前保存位置，finally 恢复：不恢复会污染后续测试的
-            // 光标状态（既有真实输入测试的同款约定）。
+            // 真实消息直驱拖拽（契约 #13 同源管线，与 A/B 共用助手）。
             Assert.IsTrue(GetCursorPos(out var savedCursor), "测试环境必须支持读取真实光标。");
             try
             {
-                RunRealInputDrag();
+                RealInputDragFirstRowToIndex2(settings, handle);
+                PumpUntilCompleted(window.Dispatcher).GetAwaiter().GetResult();
+                CompleteLayout(window);
             }
             finally
             {
                 SetCursorPos(savedCursor.X, savedCursor.Y);
-            }
-
-            void RunRealInputDrag()
-            {
-                // 强制位移预热（SetCursorPos 到原位不产生 WM_MOUSEMOVE）再精确落点。
-                Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X) + 7, (int)Math.Round(screen.Y) + 5));
-                Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y)));
-                PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(120));
-
-                // 真实消息直驱按下（契约 #13 同源管线）：MouseDevice 认为按键真按下，
-                // 捕获、移动与抬起全程走生产拖拽路径，不用合成路由事件近似。
-                var downClient = new NativePoint((int)Math.Round(screen.X), (int)Math.Round(screen.Y));
-                Assert.IsTrue(ScreenToClient(hwnd, ref downClient));
-                Assert.IsTrue(PostMessage(
-                    hwnd,
-                    WmLeftButtonDown,
-                    MkLbutton,
-                    MakeLParam(downClient.X, downClient.Y)),
-                    "投递按下消息失败。");
-                PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(120));
-                Assert.IsTrue(handle.IsMouseCaptured, "真实按下后把手必须捕获鼠标进入拖拽会话。");
-
-                // 真实光标下移 75 DIP（行距 34：拖起行中心落到第 2 行带 → 落点索引 2）。
-                // PointToScreen 差值把 DIP 位移换算为物理像素，多档 DPI 下判定一致。
-                var moveDownPhysical = (int)Math.Round(
-                    handle.PointToScreen(new Point(0, 75)).Y -
-                    handle.PointToScreen(new Point(0, 0)).Y);
-                Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X) + 7, (int)Math.Round(screen.Y) + 5));
-                Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y) + moveDownPhysical));
-                PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(150));
-                Assert.AreEqual(
-                    2,
-                    GetSessionTargetIndex(settings),
-                    "真实移动必须驱动落点指示到第 2 行带。");
-
-                var upClient = new NativePoint((int)Math.Round(screen.X), (int)Math.Round(screen.Y) + moveDownPhysical);
-                Assert.IsTrue(ScreenToClient(hwnd, ref upClient));
-                Assert.IsTrue(PostMessage(hwnd, WmLeftButtonUp, 0, MakeLParam(upClient.X, upClient.Y)));
-                PumpUntilCompleted(window.Dispatcher).GetAwaiter().GetResult();
-                CompleteLayout(window);
             }
 
             var expected = new[]

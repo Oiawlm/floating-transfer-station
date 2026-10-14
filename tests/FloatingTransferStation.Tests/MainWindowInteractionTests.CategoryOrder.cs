@@ -205,4 +205,91 @@ public sealed partial class MainWindowInteractionTests
         (WindowSettings)typeof(MainWindow)
             .GetField("_settings", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(window)!;
+
+    private static void WriteHostSettings(MainWindow window, WindowSettings settings) =>
+        typeof(MainWindow)
+            .GetField("_settings", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(window, settings);
+
+    [STATestMethod]
+    public void ApplyCategoryOrderAsync_OlderFailureDoesNotStompNewerCommitOrUngatedMutations()
+    {
+        // 测试 D（回滚守卫＋字段级回滚锁定，Issue #153）：commit1 保存挂起期间
+        // commit2 同步生效（门后排队）且发生不经保存信号量的设置突变（模拟宽高
+        // 拖拽直改内存设置）→ commit1 失败落地——守卫拦截 VM 回滚（显示序保持
+        // commit2 序，旧失败不得踩新提交），字段级回滚仅回写 CategoryOrder（突变
+        // 保留）→ commit2 随后保存成功，内存/显示/持久化三方一致。
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new GatedSettingsBoardStore(directory.Root);
+        var board = new BoardService();
+        var capture = new DefaultCaptureCategoryState();
+        capture.Set(BoardCategory.Prompt);
+        var window = CreateWindow(board, store, WindowSettings.Default, capture);
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            var firstCommitOrder = new[]
+            {
+                BoardCategory.Reference,
+                BoardCategory.Prompt,
+                BoardCategory.CustomerOriginal,
+                BoardCategory.Inbox
+            };
+            var secondCommitOrder = new[]
+            {
+                BoardCategory.Inbox,
+                BoardCategory.Reference,
+                BoardCategory.Prompt,
+                BoardCategory.CustomerOriginal
+            };
+
+            store.HoldNextSave();
+            var firstInvoke = window.Dispatcher.InvokeAsync(() => window.ApplyCategoryOrderAsync(firstCommitOrder));
+            PumpDispatcherUntil(window.Dispatcher, firstInvoke.Task);
+            Assert.AreEqual(1, store.SettingsSaveCount, "前置：commit1 已进入保存并被门挂起。");
+
+            var secondInvoke = window.Dispatcher.InvokeAsync(() => window.ApplyCategoryOrderAsync(secondCommitOrder));
+            PumpDispatcherUntil(window.Dispatcher, secondInvoke.Task);
+            var second = secondInvoke.Result;
+            CollectionAssert.AreEqual(
+                secondCommitOrder,
+                window.CurrentDisplayOrder.ToArray(),
+                "前置：commit2 乐观前缀已生效（commit1 仍挂起）。");
+
+            // 模拟保存挂起期间不经信号量的设置突变（宽高拖拽直改内存设置）。
+            var mutated = ReadHostSettings(window) with { PanelWidth = 512 };
+            WriteHostSettings(window, mutated);
+
+            store.ReleaseSave(new IOException("模拟 settings.json 写盘失败。"));
+            PumpDispatcherUntil(window.Dispatcher, second);
+
+            CollectionAssert.AreEqual(
+                secondCommitOrder,
+                window.CurrentDisplayOrder.ToArray(),
+                "commit1 失败必须被守卫拦截，显示序保持 commit2 序。");
+            var finalSettings = ReadHostSettings(window);
+            CollectionAssert.AreEqual(
+                secondCommitOrder,
+                finalSettings.DisplayOrder.ToArray(),
+                "commit2 随后保存成功，内存设置基准必须是 commit2 序。");
+            Assert.AreEqual(
+                512d,
+                finalSettings.PanelWidth,
+                "字段级回滚必须保留保存挂起期间的其他设置突变。");
+            Assert.IsNotNull(store.LastSettings);
+            CollectionAssert.AreEqual(
+                secondCommitOrder,
+                store.LastSettings!.DisplayOrder.ToArray(),
+                "持久化终态必须是 commit2 序。");
+            Assert.AreEqual(512d, store.LastSettings.PanelWidth, "持久化终态必须携带挂起期间的突变。");
+        }
+        finally
+        {
+            store.ReleaseSave();
+            CloseWindowWithoutSaving(window);
+        }
+    }
 }
