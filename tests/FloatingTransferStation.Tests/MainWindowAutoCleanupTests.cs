@@ -8,10 +8,11 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 自动清理漏斗（1.25.0，逐卡 24 小时 TTL 语义）：装载闸门、装载补跑与巡检即删
-/// 存量超龄卡（边界含等于）、未满期/未来时间戳保留、复盘条目永不触碰、关闭/在途/
-/// 开关关闭无动作，以及关闭序列停表。时间一律显式传参,不依赖真实时钟。
-/// 漏斗与生产一致地驱动在窗口 Dispatcher 上（ShowStatus 触碰依赖属性）。
+/// 自动清理漏斗（逐卡 TTL 语义；保留时长 2026-10-14 起为用户可选档位，默认 24 小时）：
+/// 装载闸门、装载补跑与巡检即删存量超龄卡（边界含等于）、未满期/未来时间戳保留、
+/// 复盘条目永不触碰、关闭/在途/开关关闭无动作，以及关闭序列停表。时间一律显式
+/// 传参,不依赖真实时钟。漏斗与生产一致地驱动在窗口 Dispatcher 上（ShowStatus
+/// 触碰依赖属性）。
 /// </summary>
 [TestClass]
 public sealed class MainWindowAutoCleanupTests
@@ -113,7 +114,8 @@ public sealed class MainWindowAutoCleanupTests
         AddNonPinnedItems(board);
         SetField(window, "_boardLoadSucceeded", true);
         var now = DateTimeOffset.UtcNow;
-        board.SetAllItemsCreatedAt(now - AutoCleanupSchedule.CleanupInterval);
+        board.SetAllItemsCreatedAt(
+            now - AutoCleanupSchedule.GetRetentionDuration(AutoCleanupRetention.TwentyFourHours));
 
         InvokeCheck(window, now);
 
