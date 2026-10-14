@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/FloatingTransferStation.Core/FloatingTransferStation.Core.csproj" />
     <Project Path="src/FloatingTransferStation/FloatingTransferStation.csproj" />
+    <Project Path="src/FloatingTransferStation.IconTool/FloatingTransferStation.IconTool.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/FloatingTransferStation.Core.Tests/FloatingTransferStation.Core.Tests.csproj" />

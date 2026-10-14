@@ -31,6 +31,7 @@ CloseApplications=yes
 RestartApplications=no
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\src\FloatingTransferStation\Assets\AppIcon.ico
 AppMutex={#MyAppMutexName}
 
 [Files]
