@@ -40,9 +40,10 @@ public partial class MainWindow : Window, ISettingsHost
     }
 
     /// <summary>
-    /// 采纳新的标签显示顺序：设置窗口「标签顺序」节提交（拖拽/上移下移）即重排
-    /// 面板标签轨并走分类改名同一条 settings.json 原子保存链路（契约 #5 设置改动
-    /// 即时生效并自动保存）；保存失败恢复内存原顺序并经状态条提示。
+    /// 采纳新的标签显示顺序（乐观提交契约）：同步应用内存与显示顺序——调用方拿到
+    /// 任务时面板标签轨已是目标序；返回任务完成＝settings.json 原子持久化完成
+    /// （契约 #5 设置改动即时生效并自动保存）；持久化失败回滚内存与显示顺序并经
+    /// 状态条提示。
     /// </summary>
     public async Task ApplyCategoryOrderAsync(IReadOnlyList<BoardCategory> displayOrder)
     {
@@ -54,19 +55,30 @@ public partial class MainWindow : Window, ISettingsHost
 
     private async Task ApplyCategoryOrderCoreAsync(IReadOnlyList<BoardCategory> displayOrder)
     {
+        // 乐观上屏：经 WindowSettings.DisplayOrder 校验收敛后同步重排（async 方法
+        // 同步执行到首个 await，故先于保存信号量与磁盘写生效），保存挂起期间
+        // 显示序已是目标序。
+        var committedOrder = _settings.WithCategoryOrder(displayOrder).DisplayOrder;
+        _viewModel.ApplyCategoryOrder(committedOrder);
         await _settingsSaveGate.WaitAsync();
         try
         {
-            var originalOrder = _settings.CategoryOrder;
+            var originalSettings = _settings;
             _settings = _settings.WithCategoryOrder(displayOrder);
             try
             {
                 await _store.SaveSettingsAsync(_settings);
-                _viewModel.ApplyCategoryOrder(_settings.DisplayOrder);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                _settings = _settings with { CategoryOrder = originalOrder };
+                _settings = originalSettings;
+                // 回滚守卫：仅当显示序仍停留在本次提交序时才回滚，防旧提交的失败
+                // 踩掉其后已生效的新提交（顺序列表为全量快照，写入按终态幂等）。
+                if (CurrentDisplayOrder.SequenceEqual(committedOrder))
+                {
+                    _viewModel.ApplyCategoryOrder(_settings.DisplayOrder);
+                }
+
                 ShowStatus("标签顺序暂未保存。");
             }
         }

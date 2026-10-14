@@ -18,9 +18,11 @@ namespace FloatingTransferStation.Views;
 /// 「界面动效」关闭时退化为瞬时换位），2px 强调色指示线标记落点；浅/深主题用
 /// 主题字典画刷，不硬编码颜色。上移/下移按钮为无障碍等价操作（WCAG 2.5.7）。
 /// 拖拽会话中的 Esc 由本节优先消费并回弹原序不提交（处理顺序在设置窗口既有
-/// Esc 关窗路径之前），捕获丢失/失焦同样回弹。提交经宿主
-/// <see cref="ISettingsHost.ApplyCategoryOrderAsync"/>：settings.json 原子保存 +
-/// 面板标签轨即时重排；保存失败宿主保持原顺序，重建行即回弹。
+/// Esc 关窗路径之前），捕获丢失/失焦同样回弹。拖拽松手与上移/下移走同一条统一
+/// 提交路径：宿主 <see cref="ISettingsHost.ApplyCategoryOrderAsync"/> 为乐观契约
+/// （同步应用目标序），发起提交即按目标序重建行——松手同一 UI 消息内上屏，无
+/// 旧序中间帧；settings.json 原子保存挂起于其后，保存失败宿主回滚，面板按回滚
+/// 序二次重建即回弹（唯一允许的第二次重建）。
 /// </summary>
 public partial class SettingsWindow
 {
@@ -146,8 +148,37 @@ public partial class SettingsWindow
     private async void CategoryOrderMoveDownButton_Click(object sender, RoutedEventArgs e) =>
         await MoveCategoryOrderBy(sender, delta: 1);
 
+    /// <summary>统一提交路径（拖拽松手与上移/下移共用，<paramref name="order"/>
+    /// 为目标序）：宿主乐观契约先同步应用目标序，故发起提交后立即重建行即目标序
+    /// （松手同一 UI 消息内上屏）；await 完成（＝持久化完成）后仅当面板行序与宿主
+    /// 当前序不一致时二次重建——唯一来源＝保存失败回弹。提交期间忽略重复触发
+    /// （防快速连点丢步）。</summary>
+    private async Task CommitCategoryOrderAsync(IReadOnlyList<BoardCategory> order)
+    {
+        _isCategoryOrderCommitInFlight = true;
+        try
+        {
+            var apply = _host.ApplyCategoryOrderAsync(order);
+            PopulateCategoryOrderSection();
+            await apply;
+            if (!CategoryOrderRowsMatchHost())
+            {
+                PopulateCategoryOrderSection();
+            }
+        }
+        finally
+        {
+            _isCategoryOrderCommitInFlight = false;
+        }
+    }
+
+    private bool CategoryOrderRowsMatchHost() =>
+        CategoryOrderList.Children.Cast<Border>()
+            .Select(row => (BoardCategory)row.Tag)
+            .SequenceEqual(_host.CurrentDisplayOrder);
+
     /// <summary>上移/下移等价操作（WCAG 2.5.7）：提交后把焦点还给同分类的对应
-    /// 按钮，保持键盘连续操作；提交期间忽略重复触发（防快速连点丢步）。</summary>
+    /// 按钮，保持键盘连续操作。</summary>
     private async Task MoveCategoryOrderBy(object sender, int delta)
     {
         if (_categoryOrderDrag is not null ||
@@ -166,16 +197,7 @@ public partial class SettingsWindow
         }
 
         (order[index], order[target]) = (order[target], order[index]);
-        _isCategoryOrderCommitInFlight = true;
-        try
-        {
-            await _host.ApplyCategoryOrderAsync(order);
-            PopulateCategoryOrderSection();
-        }
-        finally
-        {
-            _isCategoryOrderCommitInFlight = false;
-        }
+        await CommitCategoryOrderAsync(order);
 
         if (TryFindCategoryOrderButton(category, delta) is { } button)
         {
@@ -320,17 +342,18 @@ public partial class SettingsWindow
         var sourceIndex = session.SourceIndex;
         var targetIndex = session.TargetIndex;
         EndCategoryOrderDragSession(session.CaptureElement);
-        // 先按宿主当前顺序重建行复位拖拽视觉，再提交：保存期间 UI 不停在拖拽态；
-        // 保存失败时宿主保持原顺序，重建即回弹。
-        PopulateCategoryOrderSection();
-        if (targetIndex != sourceIndex)
+        if (targetIndex == sourceIndex)
+        {
+            // 纯点击（无移动）：仅复位拖拽视觉，不提交。
+            PopulateCategoryOrderSection();
+        }
+        else
         {
             var order = _host.CurrentDisplayOrder.ToList();
             var moved = order[sourceIndex];
             order.RemoveAt(sourceIndex);
             order.Insert(targetIndex, moved);
-            await _host.ApplyCategoryOrderAsync(order);
-            PopulateCategoryOrderSection();
+            await CommitCategoryOrderAsync(order);
         }
 
         e.Handled = true;

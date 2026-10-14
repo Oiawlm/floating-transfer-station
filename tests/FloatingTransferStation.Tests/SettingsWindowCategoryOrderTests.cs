@@ -18,7 +18,8 @@ namespace FloatingTransferStation.Tests;
 /// 设置窗口「标签顺序」节（1.25.0）锁定测试：四行固定列表按显示顺序渲染（名字随
 /// 分类名）；上移/下移按钮为无障碍等价操作且提交即落 settings.json（契约 #5）；
 /// 拖拽提交换序；拖拽会话中的 Esc 由节优先消费（回弹原序不提交、不关窗）；捕获
-/// 丢失回弹原序。
+/// 丢失回弹原序。乐观提交契约（2026-10-14 修订，Issue #153）：保存挂起期间面板
+/// 已是目标序（松手同一 UI 消息内上屏、无旧序帧），失败回弹是唯一二次重建。
 /// </summary>
 [TestClass]
 public sealed class SettingsWindowCategoryOrderTests
@@ -288,7 +289,7 @@ public sealed class SettingsWindowCategoryOrderTests
                 // 强制位移预热（SetCursorPos 到原位不产生 WM_MOUSEMOVE）再精确落点。
                 Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X) + 7, (int)Math.Round(screen.Y) + 5));
                 Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y)));
-                PumpFor(settings, TimeSpan.FromMilliseconds(120));
+                PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(120));
 
                 // 真实消息直驱按下（契约 #13 同源管线）：MouseDevice 认为按键真按下，
                 // 捕获、移动与抬起全程走生产拖拽路径，不用合成路由事件近似。
@@ -300,7 +301,7 @@ public sealed class SettingsWindowCategoryOrderTests
                     MkLbutton,
                     MakeLParam(downClient.X, downClient.Y)),
                     "投递按下消息失败。");
-                PumpFor(settings, TimeSpan.FromMilliseconds(120));
+                PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(120));
                 Assert.IsTrue(handle.IsMouseCaptured, "真实按下后把手必须捕获鼠标进入拖拽会话。");
 
                 // 真实光标下移 75 DIP（行距 34：拖起行中心落到第 2 行带 → 落点索引 2）。
@@ -310,7 +311,7 @@ public sealed class SettingsWindowCategoryOrderTests
                     handle.PointToScreen(new Point(0, 0)).Y);
                 Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X) + 7, (int)Math.Round(screen.Y) + 5));
                 Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y) + moveDownPhysical));
-                PumpFor(settings, TimeSpan.FromMilliseconds(150));
+                PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(150));
                 Assert.AreEqual(
                     2,
                     GetSessionTargetIndex(settings),
@@ -343,6 +344,188 @@ public sealed class SettingsWindowCategoryOrderTests
             CloseAll(window);
         }
     }
+
+    [STATestMethod]
+    public void DragCommit_WhileSavePending_PanelAlreadyShowsTargetOrder()
+    {
+        // 测试 A（乐观上屏锁定，Issue #153）：真实输入拖拽松手后保存挂起未完成时，
+        // 面板行序必须已是目标序（松手同一 UI 消息内重建，无旧序中间帧），指示线
+        // 隐藏、无半透明残留；放行保存后行序稳定、持久化序==目标序。红绿证据：
+        // 未修复代码在挂起断言处失败（面板为旧序）。
+        using var directory = new TestDirectory();
+        var (window, store) = CreateContext(directory, s => s, new GatedSettingsBoardStore(directory.Root));
+
+        try
+        {
+            window.Show();
+            var settings = OpenSettingsWindow(window);
+            CompleteLayout(window);
+            var handle = FindHandle(GetOrderRows(settings)[0]);
+            var targetOrder = new[]
+            {
+                BoardCategory.Reference,
+                BoardCategory.Prompt,
+                BoardCategory.CustomerOriginal,
+                BoardCategory.Inbox
+            };
+
+            store.HoldNextSave();
+            try
+            {
+                Assert.IsTrue(GetCursorPos(out var savedCursor), "测试环境必须支持读取真实光标。");
+                try
+                {
+                    RealInputDragFirstRowToIndex2(settings, handle);
+                    PumpUntilCondition(settings.Dispatcher, () => store.SettingsSaveCount == 1);
+                }
+                finally
+                {
+                    SetCursorPos(savedCursor.X, savedCursor.Y);
+                }
+
+                AssertRowsInOrder(settings, targetOrder, "保存挂起期间面板必须已显示目标序（乐观上屏）。");
+                Assert.AreEqual(
+                    Visibility.Collapsed,
+                    ((FrameworkElement)settings.FindName("CategoryOrderInsertionIndicator")!).Visibility,
+                    "保存挂起期间插入指示线必须已隐藏。");
+                Assert.IsTrue(
+                    GetOrderRows(settings).All(row => row.Opacity == 1),
+                    "保存挂起期间不得残留半透明拖起行。");
+
+                store.ReleaseSave();
+                PumpUntilCompleted(window.Dispatcher).GetAwaiter().GetResult();
+                CompleteLayout(window);
+
+                AssertRowsInOrder(settings, targetOrder, "保存完成后行序必须稳定在目标序（不得二次跳动）。");
+                Assert.IsNotNull(store.LastSettings);
+                CollectionAssert.AreEqual(
+                    targetOrder,
+                    store.LastSettings!.DisplayOrder.ToArray(),
+                    "放行后持久化序必须等于目标序。");
+            }
+            finally
+            {
+                // 断言失败（红路径）时放行残留挂起：关闭冲刷会等待 pending 提交与
+                // 保存信号量，不放行会以清理超时掩盖断言失败。绿路径此调用无副作用。
+                store.ReleaseSave();
+            }
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    [STATestMethod]
+    public void DragCommit_SaveFailureAfterPending_ReboundsPanelAndHostOrder()
+    {
+        // 测试 B（失败回弹锁定，Issue #153）：保存挂起期间面板为乐观目标序；放行并
+        // 令保存抛 IOException 后——面板回弹原序（唯一允许的第二次重建）、宿主
+        // CurrentDisplayOrder 回原序、状态条提示出现。
+        using var directory = new TestDirectory();
+        var (window, store) = CreateContext(directory, s => s, new GatedSettingsBoardStore(directory.Root));
+
+        try
+        {
+            window.Show();
+            var settings = OpenSettingsWindow(window);
+            CompleteLayout(window);
+            var handle = FindHandle(GetOrderRows(settings)[0]);
+            var originalOrder = window.CurrentDisplayOrder.ToArray();
+            var targetOrder = new[]
+            {
+                BoardCategory.Reference,
+                BoardCategory.Prompt,
+                BoardCategory.CustomerOriginal,
+                BoardCategory.Inbox
+            };
+
+            store.HoldNextSave();
+            try
+            {
+                Assert.IsTrue(GetCursorPos(out var savedCursor), "测试环境必须支持读取真实光标。");
+                try
+                {
+                    RealInputDragFirstRowToIndex2(settings, handle);
+                    PumpUntilCondition(settings.Dispatcher, () => store.SettingsSaveCount == 1);
+                }
+                finally
+                {
+                    SetCursorPos(savedCursor.X, savedCursor.Y);
+                }
+
+                AssertRowsInOrder(settings, targetOrder, "前置：挂起期间面板必须是乐观目标序。");
+
+                store.ReleaseSave(new IOException("模拟 settings.json 写盘失败。"));
+                PumpUntilCompleted(window.Dispatcher).GetAwaiter().GetResult();
+                CompleteLayout(window);
+
+                AssertRowsInOrder(settings, originalOrder, "保存失败后面板必须回弹原序。");
+                CollectionAssert.AreEqual(
+                    originalOrder,
+                    window.CurrentDisplayOrder.ToArray(),
+                    "保存失败后宿主显示顺序必须回滚原序。");
+                Assert.IsTrue(
+                    ((MainWindowViewModel)window.DataContext).StatusText.Contains("标签顺序暂未保存。"),
+                    "保存失败必须经状态条提示。");
+            }
+            finally
+            {
+                // 断言失败（红路径）时兜底放行并清除失败注入，理由同测试 A。
+                store.ReleaseSave();
+            }
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    /// <summary>真实消息直驱把首行拖到落点索引 2 后投递抬起消息（与既有
+    /// DragCommit_RealInputMoveDownSwapsRowsAndPersists 同源管线）；不等待提交链路
+    /// 排空，由调用方按需泵——乐观上屏与挂起断言须在排空前观察。</summary>
+    private static void RealInputDragFirstRowToIndex2(SettingsWindow settings, FrameworkElement handle)
+    {
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(settings).Handle;
+        var screen = handle.PointToScreen(
+            new Point(handle.ActualWidth / 2, handle.ActualHeight / 2));
+
+        Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X) + 7, (int)Math.Round(screen.Y) + 5));
+        Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y)));
+        PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(120));
+
+        var downClient = new NativePoint((int)Math.Round(screen.X), (int)Math.Round(screen.Y));
+        Assert.IsTrue(ScreenToClient(hwnd, ref downClient));
+        Assert.IsTrue(PostMessage(
+            hwnd,
+            WmLeftButtonDown,
+            MkLbutton,
+            MakeLParam(downClient.X, downClient.Y)),
+            "投递按下消息失败。");
+        PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(120));
+        Assert.IsTrue(handle.IsMouseCaptured, "真实按下后把手必须捕获鼠标进入拖拽会话。");
+
+        var moveDownPhysical = (int)Math.Round(
+            handle.PointToScreen(new Point(0, 75)).Y -
+            handle.PointToScreen(new Point(0, 0)).Y);
+        Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X) + 7, (int)Math.Round(screen.Y) + 5));
+        Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y) + moveDownPhysical));
+        PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(150));
+        Assert.AreEqual(2, GetSessionTargetIndex(settings), "真实移动必须驱动落点指示到第 2 行带。");
+
+        var upClient = new NativePoint((int)Math.Round(screen.X), (int)Math.Round(screen.Y) + moveDownPhysical);
+        Assert.IsTrue(ScreenToClient(hwnd, ref upClient));
+        Assert.IsTrue(PostMessage(hwnd, WmLeftButtonUp, 0, MakeLParam(upClient.X, upClient.Y)));
+    }
+
+    private static void AssertRowsInOrder(
+        SettingsWindow settings,
+        IReadOnlyList<BoardCategory> expected,
+        string message) =>
+        CollectionAssert.AreEqual(
+            expected.ToArray(),
+            GetOrderRows(settings).Select(row => (BoardCategory)row.Tag).ToArray(),
+            message);
 
     [DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
@@ -612,10 +795,10 @@ public sealed class SettingsWindowCategoryOrderTests
             .EndsWith("Resources/DesignTheme.Dark.xaml", StringComparison.Ordinal);
 
     /// <summary>等待真实光标操作被 WPF 处理（WM_MOUSEMOVE 结算）。</summary>
-    private static void PumpFor(SettingsWindow settings, TimeSpan duration)
+    private static void PumpFor(Dispatcher dispatcher, TimeSpan duration)
     {
         var frame = new DispatcherFrame();
-        var timer = new DispatcherTimer(DispatcherPriority.Background, settings.Dispatcher)
+        var timer = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
         {
             Interval = duration
         };
@@ -626,6 +809,19 @@ public sealed class SettingsWindowCategoryOrderTests
         };
         timer.Start();
         Dispatcher.PushFrame(frame);
+    }
+
+    /// <summary>泵 Dispatcher 直至条件成立或超时：用于等待真实输入消息链推进到
+    /// 确定性状态（如保存链路已进入挂起），避免固定时长的竞态。</summary>
+    private static void PumpUntilCondition(Dispatcher dispatcher, Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            PumpFor(dispatcher, TimeSpan.FromMilliseconds(20));
+        }
+
+        Assert.IsTrue(condition(), "等待条件未在超时内满足。");
     }
 
     private static void PumpUntil(Dispatcher dispatcher, Task task)
@@ -666,11 +862,12 @@ public sealed class SettingsWindowCategoryOrderTests
         task.GetAwaiter().GetResult();
     }
 
-    private static (MainWindow Window, RecordingSettingsBoardStore Store) CreateContext(
+    private static (MainWindow Window, GatedSettingsBoardStore Store) CreateContext(
         TestDirectory directory,
-        Func<WindowSettings, WindowSettings> configureSettings)
+        Func<WindowSettings, WindowSettings> configureSettings,
+        GatedSettingsBoardStore? store = null)
     {
-        var store = new RecordingSettingsBoardStore(directory.Root);
+        store ??= new GatedSettingsBoardStore(directory.Root);
         var board = new BoardService();
         var normalizer = new ImageNormalizer(store.ImagesDirectory);
         var operationGate = new BoardOperationGate();
@@ -791,30 +988,5 @@ public sealed class SettingsWindowCategoryOrderTests
     {
         public Task<ClipboardSnapshot> ReadAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new ClipboardSnapshot(0, null, [], null));
-    }
-
-    private sealed class RecordingSettingsBoardStore(string root) : IBoardStore
-    {
-        public int SettingsSaveCount { get; private set; }
-        public WindowSettings? LastSettings { get; private set; }
-        public string ImagesDirectory { get; } = Path.Combine(root, "images");
-
-        public Task<BoardSnapshot> LoadBoardAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new BoardSnapshot());
-
-        public Task SaveBoardAsync(BoardSnapshot snapshot, CancellationToken cancellationToken = default) =>
-            Task.CompletedTask;
-
-        public Task<WindowSettings> LoadSettingsAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(WindowSettings.Default);
-
-        public Task SaveSettingsAsync(WindowSettings settings, CancellationToken cancellationToken = default)
-        {
-            SettingsSaveCount++;
-            LastSettings = settings;
-            return Task.CompletedTask;
-        }
-
-        public bool TryDeleteImage(string? absolutePath) => true;
     }
 }
