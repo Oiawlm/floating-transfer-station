@@ -129,10 +129,17 @@ public sealed partial class MainWindowInteractionTests
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
         window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+        var savedCursor = SaveCursorPosition();
 
         try
         {
             window.Show();
+            // 真实光标是跨测试的全局状态：贴边窗口左移会令停在窗口矩形内的遗留
+            // 光标触发真实 MouseLeave → 收起定时器在随后的泵窗内提交，广播处理
+            // 便按「已收起」贴齐（CI 偶发 418→58）。先移离窗口再断言几何基线。
+            Assert.IsTrue(
+                SetCursorPos(10, 10),
+                "几何断言前必须把真实光标移离窗口。");
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var work = SystemParameters.WorkArea;
@@ -154,6 +161,7 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
+            RestoreCursorPosition(savedCursor);
             CloseWindow(window);
         }
     }
@@ -164,10 +172,16 @@ public sealed partial class MainWindowInteractionTests
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
         window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+        var savedCursor = SaveCursorPosition();
 
         try
         {
             window.Show();
+            // 与 DisplayChange 用例同因：遗留的真实光标停在窗口矩形内时，窗口
+            // 左移触发的真实 MouseLeave 会让广播按「已收起」贴齐。先移离窗口。
+            Assert.IsTrue(
+                SetCursorPos(10, 10),
+                "几何断言前必须把真实光标移离窗口。");
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var work = SystemParameters.WorkArea;
@@ -195,6 +209,7 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
+            RestoreCursorPosition(savedCursor);
             CloseWindow(window);
         }
     }
