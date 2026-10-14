@@ -63,7 +63,7 @@ public partial class MainWindow : Window, ISettingsHost
         await _settingsSaveGate.WaitAsync();
         try
         {
-            var originalSettings = _settings;
+            var originalOrder = _settings.CategoryOrder;
             _settings = _settings.WithCategoryOrder(displayOrder);
             try
             {
@@ -71,7 +71,9 @@ public partial class MainWindow : Window, ISettingsHost
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                _settings = originalSettings;
+                // 只回滚顺序字段（读 catch 时当前 _settings）：保存挂起期间宽高拖拽/
+                // 复位等不经信号量的设置突变必须保留；整体快照回滚会踩掉它们。
+                _settings = _settings with { CategoryOrder = originalOrder };
                 // 回滚守卫：仅当显示序仍停留在本次提交序时才回滚，防旧提交的失败
                 // 踩掉其后已生效的新提交（顺序列表为全量快照，写入按终态幂等）。
                 if (CurrentDisplayOrder.SequenceEqual(committedOrder))
