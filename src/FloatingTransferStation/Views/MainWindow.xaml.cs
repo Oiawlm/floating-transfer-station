@@ -214,6 +214,16 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// 采纳后台装载期间完成的首选项迁移结果（快捷启动版本戳，#30）：同步退出
+    /// 保存用的首选项基准，防止后续任意一次偏好保存把已落盘的版本戳回退到旧值
+    /// （戳回退会让一次性名称归位在下次启动重放、覆盖用户的启动标签改名）。
+    /// </summary>
+    internal void AdoptMigratedPreferences(AppPreferences preferences)
+    {
+        _preferences = preferences;
+    }
+
     private void StatusTimer_Tick(object? sender, EventArgs e)
     {
         _statusTimer.Stop();

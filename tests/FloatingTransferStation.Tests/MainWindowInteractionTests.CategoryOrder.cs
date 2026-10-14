@@ -34,7 +34,7 @@ public sealed partial class MainWindowInteractionTests
         };
         var settings = WindowSettings.Default.WithCategoryOrder(customOrder);
         var capture = new DefaultCaptureCategoryState();
-        capture.Set(BoardCategory.Prompt);
+        capture.Set(BoardCategory.CustomerOriginal);
         var window = CreateWindow(board, store, settings, capture);
 
         try
@@ -42,8 +42,8 @@ public sealed partial class MainWindowInteractionTests
             window.Show();
             CompleteLayout(window);
 
-            // 收起把手行号 = 默认接收分类在显示顺序中的位置（此处 Prompt=第 2 行）。
-            var expectedRow = customOrder.IndexOf(BoardCategory.Prompt);
+            // 收起把手行号 = 默认接收分类在显示顺序中的位置（此处 CustomerOriginal=第 1 行）。
+            var expectedRow = customOrder.IndexOf(BoardCategory.CustomerOriginal);
             Assert.AreEqual(
                 SystemParameters.WorkArea.Top + WindowSettings.Default.Top + (expectedRow * 160),
                 window.Top,
@@ -131,7 +131,7 @@ public sealed partial class MainWindowInteractionTests
         var store = new GatedSettingsBoardStore(directory.Root);
         var board = new BoardService();
         var capture = new DefaultCaptureCategoryState();
-        capture.Set(BoardCategory.Prompt);
+        capture.Set(BoardCategory.CustomerOriginal);
         var window = CreateWindow(board, store, WindowSettings.Default, capture);
 
         try
@@ -224,7 +224,7 @@ public sealed partial class MainWindowInteractionTests
         var store = new GatedSettingsBoardStore(directory.Root);
         var board = new BoardService();
         var capture = new DefaultCaptureCategoryState();
-        capture.Set(BoardCategory.Prompt);
+        capture.Set(BoardCategory.CustomerOriginal);
         var window = CreateWindow(board, store, WindowSettings.Default, capture);
 
         try

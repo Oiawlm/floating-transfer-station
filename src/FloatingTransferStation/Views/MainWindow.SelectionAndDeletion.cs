@@ -45,7 +45,8 @@ public partial class MainWindow : Window
         // 早于搜索退出与焦点转移——它们的中间状态不应干扰提交流径。
         EndCardEditSessionForViewChange();
 
-        if (IsReviewActive() && category != DailyReviewMigration.ReviewCategory)
+        // 冲刷仍是复盘特有行为，键在角色（#30）：离开复盘表面即冲刷未保存复盘。
+        if (IsReviewActive() && BoardCategoryCatalog.RoleOf(category) != CategoryRole.Review)
         {
             TrackPendingOperation(FlushReviewAsync());
         }
@@ -67,7 +68,7 @@ public partial class MainWindow : Window
             AttachCardEntrance(activePanel.Items);
         }
 
-        UpdateReviewSurface();
+        UpdatePanelSurface();
     }
 
     private void RecordUserSelection()

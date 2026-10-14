@@ -64,18 +64,25 @@ public sealed class AutoCleanupScheduleTests
     }
 
     [TestMethod]
-    public void SweepCategories_IsExactlyTheThreeContentCategoriesWithoutReview()
+    public void SweepCategories_IsExactlyTheContentBucketRolesWithoutReviewAndLauncher()
     {
+        // #18 修订（Issue #162）：清扫范围 = 仅内容桶角色——复盘与快捷启动标签
+        // 永不触碰（即使超龄、即使降级期残留内容）。
         CollectionAssert.AreEqual(
             new[]
             {
                 BoardCategory.CustomerOriginal,
-                BoardCategory.Prompt,
                 BoardCategory.Inbox
             },
             AutoCleanupSchedule.SweepCategories.ToArray());
         Assert.IsFalse(
             AutoCleanupSchedule.SweepCategories.Contains(DailyReviewMigration.ReviewCategory),
             "复盘复用的分类绝不能进入清扫范围。");
+        Assert.IsFalse(
+            AutoCleanupSchedule.SweepCategories.Contains(QuickLaunchMigration.LauncherCategory),
+            "快捷启动复用的分类绝不能进入清扫范围。");
+        Assert.IsTrue(
+            AutoCleanupSchedule.SweepCategories.All(BoardCategoryCatalog.IsContentBucket),
+            "清扫清单必须与角色机制的 IsContentBucket 完全一致。");
     }
 }

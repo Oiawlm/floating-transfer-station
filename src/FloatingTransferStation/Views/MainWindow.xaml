@@ -570,6 +570,12 @@
           </Grid>
         </Border>
 
+        <!-- 快捷启动表面（#30）：瓦片网格宿主，与 BoardList 同格互斥（UpdatePanelSurface 三态分发）。 -->
+        <Border x:Name="LauncherContentHost"
+                Grid.Row="1"
+                Background="Transparent"
+                Visibility="Collapsed" />
+
         <Canvas Grid.Row="1"
                 Background="Transparent"
                 IsHitTestVisible="False">

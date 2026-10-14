@@ -141,7 +141,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!IsReviewCategoryEnabled() || category.Category != DailyReviewMigration.ReviewCategory)
+        // 默认接收角色闸（#30）：只有内容桶可设为剪贴板落点——复盘与启动标签
+        // 经角色机制统一排除（Core 侧 Set 守卫 + 装载期修复为纵深）。
+        if (BoardCategoryCatalog.IsContentBucket(category.Category))
         {
             _viewModel.SetDefaultCaptureCategory(category.Category);
         }

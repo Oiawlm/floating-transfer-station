@@ -229,9 +229,11 @@ public partial class MainWindow : Window
     {
         HideInsertionIndicator();
         ClearCategoryDropTargets();
-        if (IsReviewCategoryEnabled() && sender is Border { DataContext: CategoryViewModel reviewCategory } &&
-            reviewCategory.Category == DailyReviewMigration.ReviewCategory)
+        if (sender is Border { DataContext: CategoryViewModel tabCategory } &&
+            !BoardCategoryCatalog.IsContentBucket(tabCategory.Category))
         {
+            // 复盘与启动标签不接收卡片/内容拖入（#30 排除面，Effects.None）；
+            // 启动标签的文件拖入导入走瓦片表面分流，不经标签轨接收。
             e.Effects = DragDropEffects.None;
             e.Handled = true;
             return;
@@ -371,8 +373,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (IsReviewCategoryEnabled() && category.Category == DailyReviewMigration.ReviewCategory)
+        if (sender is Border { DataContext: CategoryViewModel dropTabCategory } &&
+            !BoardCategoryCatalog.IsContentBucket(dropTabCategory.Category))
         {
+            // 复盘与启动标签不接收卡片/内容拖入（#30 排除面）；拖放效果在
+            // DragOver 已判 None，此处为纵深。
             ClearExternalDragPayload();
             HideExternalDropRail();
             return;

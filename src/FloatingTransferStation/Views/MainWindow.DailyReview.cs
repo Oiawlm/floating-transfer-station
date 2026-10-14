@@ -34,13 +34,22 @@ public partial class MainWindow
         IsReviewCategoryEnabled() &&
         _viewModel.ActivePanel?.Category == DailyReviewMigration.ReviewCategory;
 
-    private void UpdateReviewSurface()
+    /// <summary>
+    /// 表面三态分发（#30）：按激活标签角色切换 BoardList / ReviewContentHost /
+    /// LauncherContentHost 三者互斥可见；批量置顶/删除按钮只属于内容桶表面
+    /// （复盘与启动隐藏——启动的排除由瓦片表面结构性承载）。复盘表面额外持有
+    /// 文档装载与文件监视生命周期。
+    /// </summary>
+    private void UpdatePanelSurface()
     {
+        var activeCategory = _viewModel.ActivePanel?.Category;
         var isReview = IsReviewActive();
+        var isLauncher = activeCategory == QuickLaunchMigration.LauncherCategory;
         ReviewContentHost.Visibility = isReview ? Visibility.Visible : Visibility.Collapsed;
-        BoardList.Visibility = isReview ? Visibility.Collapsed : Visibility.Visible;
-        InsertionIndicator.Visibility = isReview ? Visibility.Collapsed : Visibility.Visible;
-        if (isReview)
+        LauncherContentHost.Visibility = isLauncher ? Visibility.Visible : Visibility.Collapsed;
+        BoardList.Visibility = isReview || isLauncher ? Visibility.Collapsed : Visibility.Visible;
+        InsertionIndicator.Visibility = isReview || isLauncher ? Visibility.Collapsed : Visibility.Visible;
+        if (isReview || isLauncher)
         {
             BatchPinButton.Visibility = Visibility.Collapsed;
         }
@@ -48,7 +57,7 @@ public partial class MainWindow
         {
             UpdateBatchPinButton();
         }
-        DeleteContentButton.Visibility = isReview ? Visibility.Collapsed : Visibility.Visible;
+        DeleteContentButton.Visibility = isReview || isLauncher ? Visibility.Collapsed : Visibility.Visible;
 
         if (!isReview)
         {

@@ -245,7 +245,7 @@ public sealed class PanelStateMachineTests
         var viewModel = new MainWindowViewModel(new BoardService());
 
         CollectionAssert.AreEqual(
-            new[] { "图片", "文本1", "文本", "待分类" },
+            new[] { "图片", "文本1", "启动", "待分类" },
             viewModel.Categories.Select(category => category.DisplayName).ToArray());
         viewModel.Activate(BoardCategory.Reference);
         Assert.AreEqual("文本1", viewModel.ActivePanel!.DisplayName);
@@ -295,13 +295,48 @@ public sealed class PanelStateMachineTests
         Assert.AreEqual(BoardCategory.Inbox, viewModel.DefaultCapturePanel.Category);
         Assert.AreEqual(1, viewModel.Categories.Count(category => category.IsDefaultCapture));
 
-        Assert.IsTrue(viewModel.SetDefaultCaptureCategory(BoardCategory.Prompt));
-        Assert.IsFalse(viewModel.SetDefaultCaptureCategory(BoardCategory.Prompt));
+        Assert.IsTrue(viewModel.SetDefaultCaptureCategory(BoardCategory.CustomerOriginal));
+        Assert.IsFalse(viewModel.SetDefaultCaptureCategory(BoardCategory.CustomerOriginal));
 
-        Assert.AreEqual(BoardCategory.Prompt, state.Current);
-        Assert.AreEqual(BoardCategory.Prompt, viewModel.DefaultCapturePanel.Category);
+        Assert.AreEqual(BoardCategory.CustomerOriginal, state.Current);
+        Assert.AreEqual(BoardCategory.CustomerOriginal, viewModel.DefaultCapturePanel.Category);
         Assert.AreEqual(BoardCategory.CustomerOriginal, viewModel.ActivePanel!.Category);
         Assert.AreEqual(1, viewModel.Categories.Count(category => category.IsDefaultCapture));
+    }
+
+    [TestMethod]
+    public void DefaultCaptureCategory_RejectsNonContentBucketRoles()
+    {
+        // #30（Issue #162）：默认接收只能落在内容桶——复盘与快捷启动标签拒绝。
+        var state = new DefaultCaptureCategoryState();
+        var viewModel = new MainWindowViewModel(new BoardService(), state);
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => viewModel.SetDefaultCaptureCategory(BoardCategory.Reference));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => viewModel.SetDefaultCaptureCategory(BoardCategory.Prompt));
+        Assert.AreEqual(BoardCategory.Inbox, state.Current);
+        Assert.AreEqual(BoardCategory.Inbox, viewModel.DefaultCapturePanel.Category);
+    }
+
+    [TestMethod]
+    public void DefaultCaptureCategory_LoadTimeRepairsNonContentBucketCurrent()
+    {
+        // 装载期修复（#30）：历史会话态指向非内容桶时，构造归位 Inbox
+        // （反射播种历史值——Set 已有角色守卫无法直达）。
+        var state = new DefaultCaptureCategoryState();
+        var currentField = typeof(DefaultCaptureCategoryState).GetField(
+            "_current",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.IsNotNull(currentField);
+        currentField.SetValue(state, (int)BoardCategory.Prompt);
+
+        var viewModel = new MainWindowViewModel(new BoardService(), state);
+
+        Assert.AreEqual(BoardCategory.Inbox, viewModel.DefaultCapturePanel.Category);
+        Assert.AreEqual(
+            1,
+            viewModel.Categories.Count(category => category.IsDefaultCapture));
     }
 
     [TestMethod]
@@ -312,14 +347,14 @@ public sealed class PanelStateMachineTests
             new DefaultCaptureCategoryState());
         viewModel.SetPanelExpanded(true);
         viewModel.Activate(BoardCategory.CustomerOriginal);
-        viewModel.SetDefaultCaptureCategory(BoardCategory.Prompt);
+        viewModel.SetDefaultCaptureCategory(BoardCategory.Inbox);
         viewModel.Categories.Single(
             category => category.Category == BoardCategory.Reference).IsDropTarget = true;
 
         Assert.IsTrue(viewModel.Categories.Single(
             category => category.Category == BoardCategory.CustomerOriginal).IsActive);
         Assert.IsTrue(viewModel.Categories.Single(
-            category => category.Category == BoardCategory.Prompt).IsDefaultCapture);
+            category => category.Category == BoardCategory.Inbox).IsDefaultCapture);
         Assert.IsTrue(viewModel.Categories.Single(
             category => category.Category == BoardCategory.Reference).IsDropTarget);
     }

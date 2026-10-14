@@ -360,7 +360,7 @@ public sealed partial class MainWindowInteractionTests
         var selected = board.AddText("selected");
         var store = new RecordingBoardStore(directory.Root);
         var defaultCategory = new DefaultCaptureCategoryState();
-        defaultCategory.Set(BoardCategory.Reference);
+        defaultCategory.Set(BoardCategory.CustomerOriginal);
         var window = CreateWindow(board, store, WindowSettings.Default, defaultCategory);
 
         try
@@ -388,7 +388,7 @@ public sealed partial class MainWindowInteractionTests
             CollectionAssert.AreEqual(
                 new[] { selected },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
-            Assert.AreEqual(BoardCategory.Reference, defaultCategory.Current);
+            Assert.AreEqual(BoardCategory.CustomerOriginal, defaultCategory.Current);
             Assert.AreEqual(0, store.SaveCount);
             Assert.IsNull(store.LastSavedSettings);
 

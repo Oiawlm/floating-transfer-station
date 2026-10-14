@@ -36,6 +36,14 @@ public sealed class MainWindowViewModel : ObservableObject
         DefaultCaptureCategoryState? defaultCaptureCategory = null)
     {
         _defaultCaptureCategory = defaultCaptureCategory ?? new DefaultCaptureCategoryState();
+        // 装载期修复（#30）：默认接收只能落在内容桶——历史会话态指向非内容桶
+        // （如旧版本设到 Prompt 槽位）时归位 Inbox，保证收起把手与 ◎ 标记不落在
+        // 复盘/启动标签上。默认接收无持久化（装载期必为 Inbox），此处是纵深。
+        if (!BoardCategoryCatalog.IsContentBucket(_defaultCaptureCategory.Current))
+        {
+            _defaultCaptureCategory.Set(BoardCategory.Inbox);
+        }
+
         _categories = BoardCategoryCatalog.Ordered
             .Select(category => new CategoryViewModel(
                 category,
