@@ -51,8 +51,9 @@ public interface ISettingsHost
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 采纳新的标签显示顺序：立即重排面板标签轨并异步原子持久化到 settings.json；
-    /// 持久化失败经状态条提示并恢复原顺序。
+    /// 采纳新的标签显示顺序（乐观提交契约）：同步应用内存与显示顺序（首个 await
+    /// 之前生效，调用方拿到任务时面板标签轨已是目标序）；返回任务完成＝
+    /// settings.json 原子持久化完成；持久化失败回滚内存与显示顺序并经状态条提示。
     /// </summary>
     Task ApplyCategoryOrderAsync(IReadOnlyList<BoardCategory> displayOrder);
 }
