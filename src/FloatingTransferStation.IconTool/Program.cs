@@ -22,10 +22,7 @@ internal sealed class Program
 
             IconSpec spec = IconSpec.Load(options.SpecPath);
 
-            if (options.PreviewDirectory is not null)
-            {
-                EnsureNoPreviewNameConflict(options, spec);
-            }
+            EnsureNoPreviewNameConflict(options, spec);
 
             IReadOnlyList<RenderedIconFrame> frames = IconRenderer.Render(spec);
             byte[] icoBytes = IconWriter.Encode(frames);
@@ -169,13 +166,18 @@ internal sealed class Program
 
     private static void EnsureNoPreviewNameConflict(CliOptions options, IconSpec spec)
     {
+        if (options.PreviewDirectory is not string previewDirectory)
+        {
+            return;
+        }
+
         IEnumerable<string> previewNames = spec.Frames
             .Select(frame => $"app-icon-{frame.Size.ToString(CultureInfo.InvariantCulture)}.png")
             .Append("preview-sheet.png");
 
         foreach (string name in previewNames)
         {
-            string previewPath = Path.Combine(options.PreviewDirectory, name);
+            string previewPath = Path.Combine(previewDirectory, name);
 
             if (SamePath(previewPath, options.SpecPath) ||
                 SamePath(previewPath, options.IcoPath))
