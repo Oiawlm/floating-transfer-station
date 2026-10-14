@@ -4,6 +4,8 @@
 
 ## 未发布
 
+## 1.46.0
+
 - 新增应用图标（右侧竖线＝屏幕边缘/轨道，贴边直角长方形＝悬浮面板，配色 A：线 `#44356F`、面板 `#9C8CFF`）：规格 JSON（`src/FloatingTransferStation/Assets/AppIcon/app-icon.json`）是唯一事实源，新仓库内生成器工程 `FloatingTransferStation.IconTool`（零 NuGet 依赖，WPF 离屏渲染）按「母版＋逐尺寸手调覆盖＋20px 派生规则」确定性生成 8 档帧（16/20/24/32/48/64/128/256，256 用 PNG 帧、其余 32bpp DIB），重跑逐字节一致；`AppIconContractTests` 锁定帧集、ICO 结构、16px 逐像素与 256 母版几何/配色/贴边契约。主工程 `<ApplicationIcon>` 与安装器 `SetupIconFile` 接线后，exe、开始菜单、控制面板卸载条目、任务管理器与安装向导随之上妆；两窗口 `WindowStyle=None` 且不进任务栏，窗口层零改动。
 
 ## 1.45.0
