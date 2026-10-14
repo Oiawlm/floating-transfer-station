@@ -517,9 +517,10 @@ public sealed class BoardService
     /// <summary>
     /// 清除非置顶条目的唯一移除管线（手工清空与自动清扫共用）：置顶区顺序原样保留；
     /// 给出 <paramref name="expiryCutoffUtc"/> 时只移除入库满期（CreatedAt ≤ 截止）
-    /// 的非置顶条目（逐卡 24h TTL，自动清扫语义），为 null 时移除全部非置顶条目
-    /// （手工「清空非置顶」语义）。返回被移除内容与各分类完整顺序（供保存失败整批
-    /// 回滚与整批撤销复用）；没有可移除条目时为空操作。同一分类重复出现天然幂等。
+    /// 的非置顶条目（逐卡 TTL，自动清扫语义，截止由所选保留时长档位推导），为 null
+    /// 时移除全部非置顶条目（手工「清空非置顶」语义）。返回被移除内容与各分类完整
+    /// 顺序（供保存失败整批回滚与整批撤销复用）；没有可移除条目时为空操作。同一
+    /// 分类重复出现天然幂等。
     /// </summary>
     public RemovedBoardItems RemoveNonPinned(
         IReadOnlyCollection<BoardCategory> categories,

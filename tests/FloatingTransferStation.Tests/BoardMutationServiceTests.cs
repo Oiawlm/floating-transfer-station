@@ -814,7 +814,7 @@ public sealed class BoardMutationServiceTests
         var expiredPinned = board.AddText("超龄置顶", BoardCategory.Prompt);
         board.SetPinnedMany([expiredPinned.Id], true);
         var now = DateTimeOffset.UtcNow;
-        var cutoff = now - AutoCleanupSchedule.CleanupInterval;
+        var cutoff = now - AutoCleanupSchedule.GetRetentionDuration(AutoCleanupRetention.TwentyFourHours);
         board.SetItemCreatedAt(expiredNormal.Id, cutoff);
         board.SetItemCreatedAt(freshNormal.Id, cutoff.AddSeconds(1));
         board.SetItemCreatedAt(expiredPromptNormal.Id, cutoff);
@@ -857,7 +857,7 @@ public sealed class BoardMutationServiceTests
         var board = new BoardService();
         var expiredNormal = board.AddText("超龄普通", BoardCategory.Inbox);
         var now = DateTimeOffset.UtcNow;
-        var cutoff = now - AutoCleanupSchedule.CleanupInterval;
+        var cutoff = now - AutoCleanupSchedule.GetRetentionDuration(AutoCleanupRetention.TwentyFourHours);
         board.SetItemCreatedAt(expiredNormal.Id, cutoff);
         var store = new MutationStore(directory.Root) { FailSave = true };
         var messages = new List<string>();

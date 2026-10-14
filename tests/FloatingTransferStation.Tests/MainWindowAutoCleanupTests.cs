@@ -8,10 +8,11 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 自动清理漏斗（1.25.0，逐卡 24 小时 TTL 语义）：装载闸门、装载补跑与巡检即删
-/// 存量超龄卡（边界含等于）、未满期/未来时间戳保留、复盘条目永不触碰、关闭/在途/
-/// 开关关闭无动作，以及关闭序列停表。时间一律显式传参,不依赖真实时钟。
-/// 漏斗与生产一致地驱动在窗口 Dispatcher 上（ShowStatus 触碰依赖属性）。
+/// 自动清理漏斗（逐卡 TTL 语义；保留时长 2026-10-14 起为用户可选档位，默认 24 小时）：
+/// 装载闸门、装载补跑与巡检即删存量超龄卡（边界含等于）、未满期/未来时间戳保留、
+/// 复盘条目永不触碰、关闭/在途/开关关闭无动作，以及关闭序列停表。时间一律显式
+/// 传参,不依赖真实时钟。漏斗与生产一致地驱动在窗口 Dispatcher 上（ShowStatus
+/// 触碰依赖属性）。
 /// </summary>
 [TestClass]
 public sealed class MainWindowAutoCleanupTests
@@ -113,7 +114,8 @@ public sealed class MainWindowAutoCleanupTests
         AddNonPinnedItems(board);
         SetField(window, "_boardLoadSucceeded", true);
         var now = DateTimeOffset.UtcNow;
-        board.SetAllItemsCreatedAt(now - AutoCleanupSchedule.CleanupInterval);
+        board.SetAllItemsCreatedAt(
+            now - AutoCleanupSchedule.GetRetentionDuration(AutoCleanupRetention.TwentyFourHours));
 
         InvokeCheck(window, now);
 
@@ -161,6 +163,89 @@ public sealed class MainWindowAutoCleanupTests
             new[] { reviewEntry.Id },
             board.Items(DailyReviewMigration.ReviewCategory).Select(item => item.Id).ToArray(),
             "复盘复用的 Reference 分类不在清扫范围（SweepCategories 结构性排除）。");
+    }
+
+    [STATestMethod]
+    public void CheckAutoCleanup_TwoHourTier_ExpiresAtBoundaryAndKeepsYoungerCards()
+    {
+        // 2 小时档：恰满 2h 即到期（边界含等于在新档位复刻），差一秒未满期保留。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            CreatePreferences(enabled: true, retention: AutoCleanupRetention.TwoHours));
+        var board = GetBoard(window);
+        var pinned = board.AddText("置顶保留", BoardCategory.Prompt);
+        var boundary = board.AddText("恰满 2h", BoardCategory.CustomerOriginal);
+        var younger = board.AddText("不足 2h", BoardCategory.CustomerOriginal);
+        board.SetPinnedMany([pinned.Id], true);
+        SetField(window, "_boardLoadSucceeded", true);
+        var now = DateTimeOffset.UtcNow;
+        var duration = AutoCleanupSchedule.GetRetentionDuration(AutoCleanupRetention.TwoHours);
+        board.SetItemCreatedAt(boundary.Id, now - duration);
+        board.SetItemCreatedAt(younger.Id, now - duration + TimeSpan.FromSeconds(1));
+        board.SetItemCreatedAt(pinned.Id, now - duration);
+
+        InvokeCheck(window, now);
+
+        CollectionAssert.AreEqual(
+            new[] { younger.Id },
+            board.Items(BoardCategory.CustomerOriginal).Select(item => item.Id).ToArray(),
+            "恰满 2h 即到期，不足 2h 保留。");
+        CollectionAssert.AreEqual(
+            new[] { pinned.Id },
+            board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray(),
+            "超龄置顶卡在短档位下同样豁免。");
+    }
+
+    [STATestMethod]
+    public void CheckAutoCleanup_ShortenedTier_SweepsOverstockedCardsOnNextCheckOnly()
+    {
+        // 需求②：改短档位不在改设置的瞬间触发；超龄存量卡在下一次检查时一次性追溯清理。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        var board = GetBoard(window);
+        AddNonPinnedItems(board);
+        SetField(window, "_boardLoadSucceeded", true);
+        var now = DateTimeOffset.UtcNow;
+        board.AgeAllItems(now, hoursOld: 3);
+
+        window.ApplyPreferences(
+            AppPreferences.Default with { AutoCleanupRetention = AutoCleanupRetention.TwoHours });
+
+        Assert.AreEqual(0, GetStore(window).SaveCount, "改设置不得在瞬间触发清扫。");
+        AssertNonPinnedItemsIntact(board);
+
+        InvokeCheck(window, now);
+
+        Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count, "改短档位后下次检查清超龄存量。");
+        Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
+        Assert.AreEqual(1, board.Items(BoardCategory.Inbox).Count, "置顶卡在追溯清理时同样豁免。");
+    }
+
+    [STATestMethod]
+    public void CheckAutoCleanup_DisabledWithShortTier_DoesNothing()
+    {
+        // 开关关闭与档位正交：无论档位多短，关闭即不清。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            CreatePreferences(enabled: false, retention: AutoCleanupRetention.TwoHours));
+        var board = GetBoard(window);
+        AddNonPinnedItems(board);
+        board.AgeAllItems(DateTimeOffset.UtcNow, hoursOld: 25);
+        SetField(window, "_boardLoadSucceeded", true);
+        var now = DateTimeOffset.UtcNow;
+
+        InvokeCheck(window, now);
+
+        Assert.IsNull(preferencesStore.LastSaved);
+        Assert.AreEqual(0, GetStore(window).SaveCount);
+        AssertNonPinnedItemsIntact(board);
     }
 
     [STATestMethod]
@@ -398,8 +483,14 @@ public sealed class MainWindowAutoCleanupTests
         return window;
     }
 
-    private static AppPreferences CreatePreferences(bool enabled) =>
-        AppPreferences.Default with { AutoCleanupEnabled = enabled };
+    private static AppPreferences CreatePreferences(
+        bool enabled,
+        AutoCleanupRetention retention = AutoCleanupRetention.TwentyFourHours) =>
+        AppPreferences.Default with
+        {
+            AutoCleanupEnabled = enabled,
+            AutoCleanupRetention = retention
+        };
 
     private static BoardItem AddNonPinnedItems(BoardService board)
     {

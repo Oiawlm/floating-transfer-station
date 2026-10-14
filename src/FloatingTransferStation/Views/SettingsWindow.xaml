@@ -543,8 +543,24 @@
                               Checked="AutoCleanupToggle_Checked"
                               Unchecked="AutoCleanupToggle_Unchecked" />
                   </Grid>
+                  <Grid Background="Transparent" Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="保留时长"
+                               Style="{StaticResource RowCaptionStyle}"
+                               Margin="0,0,8,0" />
+                    <ComboBox x:Name="AutoCleanupRetentionComboBox"
+                              Grid.Column="1"
+                              Style="{StaticResource ThemedComboBoxStyle}"
+                              MaxDropDownHeight="240"
+                              AutomationProperties.Name="自动清理保留时长"
+                              SelectionChanged="AutoCleanupRetentionComboBox_SelectionChanged" />
+                  </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="每张非置顶卡片入库满 24 小时自动删除（升级后首次检查即清理已超龄的存量卡片）；置顶卡片与「复盘」内容不受影响；可 Ctrl+Z 撤销（仅本次运行内）；每小时检查一次。" />
+                             Text="每张非置顶卡片入库满所选时长即自动删除；置顶卡片与「复盘」内容不受影响；可 Ctrl+Z 撤销（仅本次运行内）；每小时检查一次，改短时长后已超龄的卡片在下次检查时清理；默认 24 小时。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}">
