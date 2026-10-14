@@ -5,13 +5,16 @@ using FloatingTransferStation.Services;
 namespace FloatingTransferStation.Views;
 
 /// <summary>
-/// 自动清理（1.25.0 起为逐卡 24 小时 TTL 语义）：每张非置顶卡片入库满 24 小时即删
-/// （存量超龄卡首次检查即删），置顶与复盘内容绝不触碰。触发 = 板装载成功后的启动
-/// 补跑 + 常驻 1 小时巡检计时器；休眠、重启与时钟校正下的延迟由此收敛为最长约
-/// 1 小时。安全前置条件收敛在漏斗内部，不靠调用点自觉：板未装载成功绝不清扫
-/// （看不见内容时不删除）、在途不重入、开关关闭即返回。清扫走既有删除路径：
-/// 单次原子保存、单批撤销栈（可 Ctrl+Z，仅本次运行内）、图片文件按撤销栈既有
-/// 生命周期；TTL 判定天然幂等，无需「上次运行」记账（1.23.0 的间隔清扫记账已删）。
+/// 自动清理（逐卡 TTL 语义；保留时长 2026-10-14 起为用户可选档位，默认 24 小时）：
+/// 每张非置顶卡片入库满所选档位的保留时长即删（改短档位后超龄存量卡在下次检查时
+/// 追溯清理），置顶与复盘内容绝不触碰。触发 = 板装载成功后的启动补跑 + 常驻
+/// 1 小时巡检计时器（节奏与档位无关）；休眠、重启与时钟校正下的延迟由此收敛为
+/// 最长约 1 小时。安全前置条件收敛在漏斗内部，不靠调用点自觉：板未装载成功绝不
+/// 清扫（看不见内容时不删除）、在途不重入、开关关闭即返回。档位与开关同样在每次
+/// 检查时从 <c>_preferences</c> 现读（契约 #5 即时生效；改设置不在瞬间触发清扫）。
+/// 清扫走既有删除路径：单次原子保存、单批撤销栈（可 Ctrl+Z，仅本次运行内）、
+/// 图片文件按撤销栈既有生命周期；TTL 判定天然幂等，无需「上次运行」记账
+/// （1.23.0 的间隔清扫记账已删）。
 /// </summary>
 public partial class MainWindow : Window
 {
@@ -76,7 +79,9 @@ public partial class MainWindow : Window
         _isAutoCleanupCheckInFlight = true;
         try
         {
-            var cutoff = AutoCleanupSchedule.GetExpiryCutoff(nowUtc ?? DateTimeOffset.UtcNow);
+            var cutoff = AutoCleanupSchedule.GetExpiryCutoff(
+                nowUtc ?? DateTimeOffset.UtcNow,
+                _preferences.AutoCleanupRetention);
             var outcome = await _mutations.ClearNonPinnedAsync(AutoCleanupSchedule.SweepCategories, cutoff);
             if (!outcome.Saved)
             {

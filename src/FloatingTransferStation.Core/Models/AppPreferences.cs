@@ -31,6 +31,19 @@ public enum TrashNoSelectionRightClickAction
     NoAction = 2
 }
 
+/// <summary>自动清理保留时长档位（默认 24 小时；零值=默认档，其余成员按档位
+/// 升序——不写显式值，JSON 沿字符串枚举惯例按名落盘，数值无持久化含义）。</summary>
+public enum AutoCleanupRetention
+{
+    TwentyFourHours,
+    TwoHours,
+    FourHours,
+    SixHours,
+    EightHours,
+    TenHours,
+    TwelveHours
+}
+
 /// <summary>
 /// 用户偏好首版：主题模式（跟随系统/浅色/深色）与动效开关；
 /// 1.10.0 起新增全局快捷键唤起开关（默认关闭，仅用户显式开启时注册系统热键）；
@@ -52,6 +65,10 @@ public enum TrashNoSelectionRightClickAction
 /// 手动检查不受影响），旧配置缺字段按未知成员回落默认开启。
 /// 置顶分隔样式（默认实线）让置顶区与普通区之间的边界可见：旧用户升级后从纯间距
 /// 变为实线（用户裁决「必须有标识」），「无」样式可回到升级前的纯间距观感。
+/// 自动清理保留时长（默认 24 小时，2026-10-14 用户裁决档位 2/4/6/8/10/12/24 小时）
+/// 取代 1.25.0 起的固定 24 小时：巡检节奏仍固定每小时、与档位无关，改短档位后
+/// 已超龄的存量卡在下一次检查时一次性追溯清理；旧配置缺字段回落默认 24 小时，
+/// 老用户升级零感知。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -71,7 +88,8 @@ public sealed record AppPreferences(
     double? SettingsWindowWidth = null,
     double? SettingsWindowHeight = null,
     bool AutoUpdateCheckEnabled = true,
-    PinnedDividerStyle PinnedDivider = PinnedDividerStyle.Solid)
+    PinnedDividerStyle PinnedDivider = PinnedDividerStyle.Solid,
+    AutoCleanupRetention AutoCleanupRetention = AutoCleanupRetention.TwentyFourHours)
 {
     public static AppPreferences Default { get; } = new();
 }

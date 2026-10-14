@@ -29,7 +29,9 @@ public sealed class AutoCleanupIsolationTests
         var mutations = new BoardMutationService(board, store, _ => { });
         var outcome = await mutations.ClearNonPinnedAsync(
             AutoCleanupSchedule.SweepCategories,
-            AutoCleanupSchedule.GetExpiryCutoff(DateTimeOffset.UtcNow));
+            AutoCleanupSchedule.GetExpiryCutoff(
+                DateTimeOffset.UtcNow,
+                AutoCleanupRetention.TwentyFourHours));
 
         Assert.IsTrue(outcome.Saved);
         Assert.AreEqual(3, outcome.RemovedCount);

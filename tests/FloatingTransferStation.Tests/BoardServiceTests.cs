@@ -628,7 +628,7 @@ public sealed class BoardServiceTests
         var expiredNormal = board.AddText("超龄普通", BoardCategory.Prompt);
         var freshNormal = board.AddText("新鲜普通", BoardCategory.Prompt);
         board.SetPinnedMany([expiredPinned.Id], true);
-        var cutoff = now - AutoCleanupSchedule.CleanupInterval;
+        var cutoff = now - AutoCleanupSchedule.GetRetentionDuration(AutoCleanupRetention.TwentyFourHours);
         board.SetItemCreatedAt(expiredPinned.Id, cutoff);
         board.SetItemCreatedAt(expiredNormal.Id, cutoff);
         board.SetItemCreatedAt(freshNormal.Id, cutoff.AddSeconds(1));
@@ -650,7 +650,7 @@ public sealed class BoardServiceTests
         var board = new BoardService();
         var now = DateTimeOffset.UtcNow;
         var future = board.AddText("未来时间戳", BoardCategory.Prompt);
-        var cutoff = now - AutoCleanupSchedule.CleanupInterval;
+        var cutoff = now - AutoCleanupSchedule.GetRetentionDuration(AutoCleanupRetention.TwentyFourHours);
         board.SetItemCreatedAt(future.Id, now.AddHours(2));
 
         var removed = board.RemoveNonPinned([BoardCategory.Prompt], cutoff);

@@ -365,4 +365,53 @@ public sealed class AppPreferencesTests
             restored.PinnedDivider,
             "旧 preferences.json 缺字段时必须回落到默认实线（升级后边界可见）。");
     }
+
+    [TestMethod]
+    public void Default_UsesTwentyFourHourAutoCleanupRetention()
+    {
+        Assert.AreEqual(
+            AutoCleanupRetention.TwentyFourHours,
+            AppPreferences.Default.AutoCleanupRetention,
+            "自动清理保留时长默认 24 小时（老用户升级零感知）。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesAutoCleanupRetentionPreference()
+    {
+        // LocalStore 以 camelCase + 字符串枚举持久化，七档都走同一份选项验证往返。
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        foreach (var retention in Enum.GetValues<AutoCleanupRetention>())
+        {
+            var preferences = AppPreferences.Default with { AutoCleanupRetention = retention };
+
+            var restored = JsonSerializer.Deserialize<AppPreferences>(
+                JsonSerializer.Serialize(preferences, storeOptions), storeOptions);
+
+            Assert.AreEqual(preferences, restored);
+            Assert.AreEqual(retention, restored!.AutoCleanupRetention);
+        }
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutAutoCleanupRetentionField_FallsBackToTwentyFourHours()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","autoCleanupEnabled":false}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.AreEqual(
+            AutoCleanupRetention.TwentyFourHours,
+            restored.AutoCleanupRetention,
+            "旧 preferences.json 缺字段时必须回落到默认 24 小时。");
+    }
 }

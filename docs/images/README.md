@@ -13,6 +13,8 @@
 | `edge-collapse-hold.gif` | 600×1054 | 288 KB | 移开收起 → 移入展开 → 保持展开开/关，原速 11.0s | 成组区「不挡工作区」 |
 | `review-tab.gif` | 600×1054 | 156 KB | 复盘标签输入 → 切前一天 → 切回，内容仍在 | 复盘段落之后 |
 | `settings-window.png` | 384×976 | - | 设置窗口一屏（含 1.25.0「标签顺序」节与 TTL 自动清理说明；由真实 WPF 控件渲染的测试证据再生，`FTS_RELEASE_125_EVIDENCE_DIR`） | 成组区「设置」 |
+| `settings-auto-cleanup-retention-tiers.png` | 1020×900 | 92 KB | 「数据与维护 → 自动清理」卡片「保留时长」下拉展开（七档 2–24 小时全量可见、默认 24 小时高亮；真实应用 `FTS_PREVIEW_DATA_DIR` 隔离启动取证，Issue #152） | 本表登记（PR 引用） |
+| `settings-auto-cleanup-retention-disabled.png` | 1020×900 | 90 KB | 同卡片总开关关闭态（保留下拉置灰、已选档位仍回显；同上取证） | 本表登记（PR 引用） |
 | `settings-category-order-dark.png` | 680×600 | 16 KB | 「标签顺序」节深色主题（行画刷随主题实时跟随的深色实时适配证据；真实 WPF 控件渲染，`FTS_PLUGIN_SETTINGS_EVIDENCE_DIR`） | 成组区「标签顺序」（Issue #140） |
 | `settings-plugins-dark.png` | 680×600 | 43 KB | 插件区块深色主题（插件行画刷随主题实时跟随的深色实时适配证据；真实 WPF 控件渲染，`FTS_PLUGIN_SETTINGS_EVIDENCE_DIR`） | 成组区「插件」深色链接（Issue #140） |
 | `settings-ai-test-success.png` / `settings-ai-dark.png` / `settings-ai-test-failure.png` | 680×600 | 41/39/39 KB | AI 设置节三态（成功/深色/失败；模型收敛后重拍——无模型下拉，Key 掩码 + 测试连接反馈；真实 WPF 控件渲染，`FTS_RELEASE_127_EVIDENCE_DIR`） | 成组区「AI 设置（DeepSeek）」（Issue #141） |

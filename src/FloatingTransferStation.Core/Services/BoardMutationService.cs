@@ -453,8 +453,9 @@ public sealed class BoardMutationService
     /// 跨分类清空非置顶条目（单次原子操作）：一次移除、一次保存、一批撤销
     /// （可整批 Ctrl+Z）；保存失败所有分类整批回滚并提示，不进撤销栈。
     /// 给出 <paramref name="expiryCutoffUtc"/> 时只移除入库满期的非置顶条目
-    /// （逐卡 24h TTL，自动清扫路径）；为 null 时移除全部非置顶条目（手工清空路径，
-    /// 语义不变）。全部分类无可移除条目时不写盘，返回 Saved=true、RemovedCount=0。
+    /// （逐卡 TTL，自动清扫路径，截止由所选保留时长档位推导）；为 null 时移除全部
+    /// 非置顶条目（手工清空路径，语义不变）。全部分类无可移除条目时不写盘，返回
+    /// Saved=true、RemovedCount=0。
     /// </summary>
     public Task<ClearNonPinnedOutcome> ClearNonPinnedAsync(
         IReadOnlyCollection<BoardCategory> categories,

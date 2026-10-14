@@ -65,6 +65,32 @@ public partial class SettingsWindow : Window
         RightClickCopyToggle.IsChecked = host.CurrentPreferences.RightClickCardCopyEnabled;
         CtrlCCopyToggle.IsChecked = host.CurrentPreferences.CopySelectionWithCtrlCEnabled;
         AutoCleanupToggle.IsChecked = host.CurrentPreferences.AutoCleanupEnabled;
+        // 档位显示文案由唯一映射派生（全仓小时数字面量只允许出现在映射与测试期望），
+        // 枚举序≠显示序（零值是默认档 24h），选中项一律按 Tag 匹配、不依赖下标；
+        // 总开关关闭时下拉置灰（档位仍照常持久化）。
+        var retentionItems = new[]
+        {
+            AutoCleanupRetention.TwoHours,
+            AutoCleanupRetention.FourHours,
+            AutoCleanupRetention.SixHours,
+            AutoCleanupRetention.EightHours,
+            AutoCleanupRetention.TenHours,
+            AutoCleanupRetention.TwelveHours,
+            AutoCleanupRetention.TwentyFourHours
+        }.Select(tier => new ComboBoxItem
+        {
+            Content = $"{AutoCleanupSchedule.GetRetentionDuration(tier).TotalHours:0} 小时",
+            Tag = tier
+        }).ToArray();
+        AutoCleanupRetentionComboBox.ItemsSource = retentionItems;
+        AutoCleanupRetentionComboBox.SelectedItem =
+            retentionItems.FirstOrDefault(item =>
+                item.Tag is AutoCleanupRetention tier &&
+                tier == host.CurrentPreferences.AutoCleanupRetention)
+            ?? retentionItems.Single(item =>
+                item.Tag is AutoCleanupRetention tier &&
+                tier == AutoCleanupRetention.TwentyFourHours);
+        AutoCleanupRetentionComboBox.IsEnabled = host.CurrentPreferences.AutoCleanupEnabled;
         TrashLeftClickComboBox.ItemsSource = new[]
         {
             new ComboBoxItem { Content = "清空非置顶", Tag = TrashNoSelectionLeftClickAction.ClearNonPinned },
@@ -610,6 +636,19 @@ public partial class SettingsWindow : Window
         {
             AutoCleanupEnabled = enabled
         });
+        // 总开关关闭时保留时长下拉置灰；开启恢复（窗口每次打开都重建，初值在构造同步块）。
+        AutoCleanupRetentionComboBox.IsEnabled = enabled;
+    }
+
+    private void AutoCleanupRetentionComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isSynchronizingControls ||
+            AutoCleanupRetentionComboBox.SelectedItem is not ComboBoxItem { Tag: AutoCleanupRetention retention })
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with { AutoCleanupRetention = retention });
     }
 
     private void AutoUpdateCheckToggle_Checked(object sender, RoutedEventArgs e) =>
