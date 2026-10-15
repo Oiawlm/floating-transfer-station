@@ -30,7 +30,7 @@ public sealed partial class MainWindowInteractionTests
         var store = new LocalStore(paths, new AtomicTextWriter());
         var board = new BoardService();
         var category = new DefaultCaptureCategoryState();
-        category.Set(BoardCategory.Reference);
+        category.Set(BoardCategory.CustomerOriginal);
         var window = CreateWindow(board, store, new WindowSettings(400, 440, 0), category,
             new ImageNormalizer(store.ImagesDirectory), reader);
 
@@ -43,7 +43,7 @@ public sealed partial class MainWindowInteractionTests
             window.ClientAreaAnimationsEnabled = false;
             window.ShowActivated = false;
             window.Topmost = false;
-            ExpandCategory(window, BoardCategory.Reference);
+            ExpandCategory(window, BoardCategory.CustomerOriginal);
             window.Left = -10000;
             window.Top = -10000;
             window.Show();
@@ -54,7 +54,7 @@ public sealed partial class MainWindowInteractionTests
             PumpDispatcherUntil(window.Dispatcher, capture);
             CompleteLayout(window);
 
-            var item = board.Items(BoardCategory.Reference).Single();
+            var item = board.Items(BoardCategory.CustomerOriginal).Single();
             Assert.AreEqual(1, board.CreateSnapshot().Items.Count);
             Assert.AreEqual(BoardItemKind.Image, item.Kind);
             Assert.IsTrue(File.Exists(item.ImageAbsolutePath));
@@ -66,7 +66,7 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(320, image.Width);
             Assert.AreEqual(180, image.Height);
             var viewModel = (MainWindowViewModel)window.DataContext;
-            Assert.AreEqual(BoardCategory.Reference, viewModel.ActivePanel!.Category);
+            Assert.AreEqual(BoardCategory.CustomerOriginal, viewModel.ActivePanel!.Category);
             Assert.AreEqual(string.Empty, viewModel.StatusText);
             Assert.AreEqual(Visibility.Collapsed, ((Border)window.FindName("StatusOverlay")).Visibility);
             var list = (ListBox)window.FindName("BoardList");

@@ -45,7 +45,8 @@ public partial class MainWindow : Window
         // 早于搜索退出与焦点转移——它们的中间状态不应干扰提交流径。
         EndCardEditSessionForViewChange();
 
-        if (IsReviewActive() && category != DailyReviewMigration.ReviewCategory)
+        // 冲刷仍是复盘特有行为，键在角色（#30）：离开复盘表面即冲刷未保存复盘。
+        if (IsReviewActive() && BoardCategoryCatalog.RoleOf(category) != CategoryRole.Review)
         {
             TrackPendingOperation(FlushReviewAsync());
         }
@@ -67,7 +68,7 @@ public partial class MainWindow : Window
             AttachCardEntrance(activePanel.Items);
         }
 
-        UpdateReviewSurface();
+        UpdatePanelSurface();
     }
 
     private void RecordUserSelection()
@@ -626,6 +627,15 @@ public partial class MainWindow : Window
 
     private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // 快捷启动键盘层级（#30 §一）：①改名编辑器原生 → ②编辑态 → ③查看态
+        // （Enter/Space 启动、方向键导航、Delete 无操作）；消费后短路既有窗口级处理
+        // （Ctrl+Z/F 等窗口级命令在层级④，未被启动表面消费时照常到达）。
+        if (HandleLauncherPreviewKey(e))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.F2 &&
             e.KeyboardDevice.Modifiers == ModifierKeys.None &&
             !_isClosing &&

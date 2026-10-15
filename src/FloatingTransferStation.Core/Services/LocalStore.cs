@@ -5,7 +5,7 @@ using FloatingTransferStation.Models;
 
 namespace FloatingTransferStation.Services;
 
-public sealed partial class LocalStore : IBoardStore, IDailyReviewStore, IPreferencesStore
+public sealed partial class LocalStore : IBoardStore, IDailyReviewStore, IPreferencesStore, ILauncherStore
 {
     private readonly AppPaths _paths;
     private readonly IAtomicTextWriter _writer;
@@ -184,13 +184,14 @@ public sealed partial class LocalStore : IBoardStore, IDailyReviewStore, IPrefer
     private async Task<T> LoadWithBackupAsync<T>(
         string primaryPath,
         Func<T> fallback,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        JsonSerializerOptions? options = null)
     {
         if (File.Exists(primaryPath))
         {
             try
             {
-                return await ReadAsync<T>(primaryPath, fallback, cancellationToken).ConfigureAwait(false);
+                return await ReadAsync(primaryPath, fallback, cancellationToken, options).ConfigureAwait(false);
             }
             catch (JsonException)
             {
@@ -203,7 +204,7 @@ public sealed partial class LocalStore : IBoardStore, IDailyReviewStore, IPrefer
 
         try
         {
-            return await ReadAsync(primaryPath + ".bak", fallback, cancellationToken).ConfigureAwait(false);
+            return await ReadAsync(primaryPath + ".bak", fallback, cancellationToken, options).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -214,7 +215,8 @@ public sealed partial class LocalStore : IBoardStore, IDailyReviewStore, IPrefer
     private async Task<T> ReadAsync<T>(
         string path,
         Func<T> fallback,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        JsonSerializerOptions? options = null)
     {
         if (!File.Exists(path))
         {
@@ -222,7 +224,7 @@ public sealed partial class LocalStore : IBoardStore, IDailyReviewStore, IPrefer
         }
 
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return await JsonSerializer.DeserializeAsync<T>(stream, _jsonOptions, cancellationToken).ConfigureAwait(false)
+        return await JsonSerializer.DeserializeAsync<T>(stream, options ?? _jsonOptions, cancellationToken).ConfigureAwait(false)
                ?? fallback();
     }
 

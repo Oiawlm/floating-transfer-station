@@ -84,6 +84,15 @@ public sealed class PanelStateMachine
         IsExpanded = false;
     }
 
+    /// <summary>启动后排队收起的强制提交（#30，Issue #162）：抑制条件已在等待期逐一
+    /// 重验（面板仍展开/同会话/无文本编辑/无对话框/非编辑模式/保持展开关/无更新失败），
+    /// 指针在内不是抑制项——收起后指针停留期间的悬停抑制由再展开抑制窗另行承载。</summary>
+    public void ForceCollapse()
+    {
+        PendingCategory = null;
+        IsExpanded = false;
+    }
+
     public bool TryCollapse()
     {
         if (_pointerInside || _dragInProgress || _textEditingActive || _panelHoldActive || !IsExpanded)

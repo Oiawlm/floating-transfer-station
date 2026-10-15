@@ -214,7 +214,9 @@ public sealed partial class MainWindowInteractionTests
             current.RaiseEvent(NewDragEventArgs(data, DragDrop.DragEnterEvent, current));
             CompleteLayout(window);
 
-            foreach (var category in viewModel.Categories.Where(candidate => !candidate.IsDefaultCapture))
+            foreach (var category in viewModel.Categories.Where(
+                         candidate => !candidate.IsDefaultCapture &&
+                             BoardCategoryCatalog.IsContentBucket(candidate.Category)))
             {
                 var next = FindCategoryTab(window, category);
                 current.RaiseEvent(NewDragEventArgs(data, DragDrop.DragLeaveEvent, current));
@@ -233,6 +235,21 @@ public sealed partial class MainWindowInteractionTests
                     category,
                     viewModel.Categories.Single(candidate => candidate.IsDropTarget));
                 current = next;
+            }
+
+            // 复盘与启动标签对内容拖入一律拒绝（#30 排除面）：Effects.None 且不设投放目标。
+            foreach (var category in viewModel.Categories.Where(
+                         candidate => !BoardCategoryCatalog.IsContentBucket(candidate.Category)))
+            {
+                var rejectedTab = FindCategoryTab(window, category);
+                var rejectedEnter = NewDragEventArgs(data, DragDrop.DragEnterEvent, rejectedTab);
+                rejectedTab.RaiseEvent(rejectedEnter);
+                CompleteLayout(window);
+
+                Assert.AreEqual(DragDropEffects.None, rejectedEnter.Effects);
+                Assert.AreNotSame(
+                    category,
+                    viewModel.Categories.SingleOrDefault(candidate => candidate.IsDropTarget));
             }
 
             current.RaiseEvent(NewDragEventArgs(data, DragDrop.DragLeaveEvent, current));
@@ -425,14 +442,14 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
-            var prompt = viewModel.Categories.Single(
-                category => category.Category == BoardCategory.Prompt);
-            var promptTab = FindCategoryTab(window, prompt);
+            var customer = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.CustomerOriginal);
+            var customerTab = FindCategoryTab(window, customer);
             var data = new DataObject();
             data.SetData(DragPayloadService.InternalItemIdFormat, moved.Id.ToString("D"));
-            var drop = NewDragEventArgs(data, DragDrop.DropEvent, promptTab);
+            var drop = NewDragEventArgs(data, DragDrop.DropEvent, customerTab);
 
-            promptTab.RaiseEvent(drop);
+            customerTab.RaiseEvent(drop);
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
 
             Assert.IsTrue(
@@ -612,7 +629,7 @@ public sealed partial class MainWindowInteractionTests
         var board = new BoardService();
         var store = new RecordingBoardStore(directory.Root);
         var state = new DefaultCaptureCategoryState();
-        state.Set(BoardCategory.Reference);
+        state.Set(BoardCategory.Inbox);
         var window = CreateWindow(board, store, WindowSettings.Default, state);
 
         try
@@ -624,20 +641,20 @@ public sealed partial class MainWindowInteractionTests
             var defaultTab = FindCollapsedCategoryTab(window);
             defaultTab.RaiseEvent(NewDragEventArgs(data, DragDrop.DragEnterEvent, defaultTab));
             CompleteLayout(window);
-            var prompt = viewModel.Categories.Single(
-                category => category.Category == BoardCategory.Prompt);
-            var promptTab = FindCategoryTab(window, prompt);
-            promptTab.RaiseEvent(NewDragEventArgs(data, DragDrop.DragOverEvent, promptTab));
-            var drop = NewDragEventArgs(data, DragDrop.DropEvent, promptTab);
+            var customer = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.CustomerOriginal);
+            var customerTab = FindCategoryTab(window, customer);
+            customerTab.RaiseEvent(NewDragEventArgs(data, DragDrop.DragOverEvent, customerTab));
+            var drop = NewDragEventArgs(data, DragDrop.DropEvent, customerTab);
 
-            promptTab.RaiseEvent(drop);
+            customerTab.RaiseEvent(drop);
             PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
             CompleteLayout(window);
 
             Assert.AreEqual(DragDropEffects.Copy, drop.Effects);
             Assert.IsTrue(drop.Handled);
-            Assert.AreEqual(BoardCategory.Reference, state.Current);
-            Assert.AreEqual("只进入提示词", board.Items(BoardCategory.Prompt).Single().Text);
+            Assert.AreEqual(BoardCategory.Inbox, state.Current);
+            Assert.AreEqual("只进入提示词", board.Items(BoardCategory.CustomerOriginal).Single().Text);
             Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
             Assert.IsFalse(viewModel.IsExternalDropRailVisible);
             Assert.IsFalse(viewModel.IsPanelExpanded);
@@ -787,10 +804,10 @@ public sealed partial class MainWindowInteractionTests
             collapsedTab.RaiseEvent(NewDragEventArgs(data, DragDrop.DragEnterEvent, collapsedTab));
             CompleteLayout(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
-            var prompt = viewModel.Categories.Single(
-                category => category.Category == BoardCategory.Prompt);
-            var promptTab = FindCategoryTab(window, prompt);
-            promptTab.RaiseEvent(NewDragEventArgs(data, DragDrop.DropEvent, promptTab));
+            var customer = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.CustomerOriginal);
+            var customerTab = FindCategoryTab(window, customer);
+            customerTab.RaiseEvent(NewDragEventArgs(data, DragDrop.DropEvent, customerTab));
             CompleteLayout(window);
 
             var popup = window.FindName("CompactStatusPopup") as Popup;
@@ -810,7 +827,7 @@ public sealed partial class MainWindowInteractionTests
                 WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count,
                 window.Height,
                 0.5);
-            Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
+            Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count);
 
             InvokePrivate(window, "StatusTimer_Tick", null, EventArgs.Empty);
 
@@ -844,15 +861,15 @@ public sealed partial class MainWindowInteractionTests
                 collapsedTab));
             CompleteLayout(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
-            var prompt = viewModel.Categories.Single(
-                category => category.Category == BoardCategory.Prompt);
-            var promptTab = FindCategoryTab(window, prompt);
+            var customer = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.CustomerOriginal);
+            var customerTab = FindCategoryTab(window, customer);
             var rejected = NewDragEventArgs(
                 new DataObject("unsupported/custom", new object()),
                 DragDrop.DropEvent,
-                promptTab);
+                customerTab);
 
-            promptTab.RaiseEvent(rejected);
+            customerTab.RaiseEvent(rejected);
             CompleteLayout(window);
 
             Assert.AreEqual(DragDropEffects.None, rejected.Effects);
@@ -860,7 +877,7 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsFalse(viewModel.IsExternalDropRailVisible);
             Assert.IsFalse(viewModel.Categories.Any(category => category.IsDropTarget));
             Assert.AreEqual(0, store.SaveCount);
-            Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
+            Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count);
             Assert.AreEqual(
                 WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count,
                 window.Height,
@@ -878,7 +895,7 @@ public sealed partial class MainWindowInteractionTests
         using var directory = new TestDirectory();
         var board = new BoardService();
         var moved = board.AddText("move me", BoardCategory.Inbox);
-        var existing = board.AddText("existing", BoardCategory.Prompt);
+        var existing = board.AddText("existing", BoardCategory.CustomerOriginal);
         var store = new RecordingBoardStore(directory.Root);
         var window = CreateWindow(board, store, WindowSettings.Default);
         var data = new DataObject();
@@ -890,14 +907,14 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
-            var prompt = viewModel.Categories.Single(
-                category => category.Category == BoardCategory.Prompt);
-            var promptTab = FindCategoryTab(window, prompt);
-            var enter = NewDragEventArgs(data, DragDrop.DragEnterEvent, promptTab);
-            promptTab.RaiseEvent(enter);
-            var drop = NewDragEventArgs(data, DragDrop.DropEvent, promptTab);
+            var customer = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.CustomerOriginal);
+            var customerTab = FindCategoryTab(window, customer);
+            var enter = NewDragEventArgs(data, DragDrop.DragEnterEvent, customerTab);
+            customerTab.RaiseEvent(enter);
+            var drop = NewDragEventArgs(data, DragDrop.DropEvent, customerTab);
 
-            promptTab.RaiseEvent(drop);
+            customerTab.RaiseEvent(drop);
             PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
             CompleteLayout(window);
 
@@ -906,8 +923,8 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsFalse(viewModel.IsExternalDropRailVisible);
             CollectionAssert.AreEqual(
                 new[] { moved.Id, existing.Id },
-                board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray());
-            Assert.AreEqual(BoardCategory.Prompt, viewModel.ActivePanel!.Category);
+                board.Items(BoardCategory.CustomerOriginal).Select(item => item.Id).ToArray());
+            Assert.AreEqual(BoardCategory.CustomerOriginal, viewModel.ActivePanel!.Category);
             Assert.IsTrue(viewModel.IsPanelExpanded);
         }
         finally
@@ -985,7 +1002,7 @@ public sealed partial class MainWindowInteractionTests
         var board = new BoardService();
         var bottom = board.AddText("bottom");
         var top = board.AddText("top");
-        var target = board.AddText("target", BoardCategory.Prompt);
+        var target = board.AddText("target", BoardCategory.CustomerOriginal);
         var store = new RecordingBoardStore(directory.Root)
         {
             SaveFailure = new IOException("Injected failure.")
@@ -1002,12 +1019,12 @@ public sealed partial class MainWindowInteractionTests
             list.SelectedItems.Add(bottom);
             var data = new DragPayloadService().BuildInternalBatch([top, bottom]);
             var viewModel = (MainWindowViewModel)window.DataContext;
-            var promptTab = FindCategoryTab(
+            var customerTab = FindCategoryTab(
                 window,
-                viewModel.Categories.Single(panel => panel.Category == BoardCategory.Prompt));
-            var drop = NewDragEventArgs(data, DragDrop.DropEvent, promptTab);
+                viewModel.Categories.Single(panel => panel.Category == BoardCategory.CustomerOriginal));
+            var drop = NewDragEventArgs(data, DragDrop.DropEvent, customerTab);
 
-            promptTab.RaiseEvent(drop);
+            customerTab.RaiseEvent(drop);
             CompleteLayout(window);
 
             Assert.AreEqual(DragDropEffects.None, drop.Effects);
@@ -1016,7 +1033,7 @@ public sealed partial class MainWindowInteractionTests
                 board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
             CollectionAssert.AreEqual(
                 new[] { target.Id },
-                board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray());
+                board.Items(BoardCategory.CustomerOriginal).Select(item => item.Id).ToArray());
             CollectionAssert.AreEquivalent(
                 new[] { top, bottom },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
@@ -1039,7 +1056,7 @@ public sealed partial class MainWindowInteractionTests
         var selectedTop = board.Items(BoardCategory.Inbox)[8];
         var selectedBottom = board.Items(BoardCategory.Inbox)[9];
         var before = board.Items(BoardCategory.Inbox).ToArray();
-        board.AddText("target", BoardCategory.Prompt);
+        board.AddText("target", BoardCategory.CustomerOriginal);
         var store = new UiThreadFailingFirstSaveBoardStore(directory.Root);
         var window = CreateWindow(board, store, WindowSettings.Default);
 
@@ -1069,12 +1086,12 @@ public sealed partial class MainWindowInteractionTests
                     moveFailed.TrySetResult();
                 }
             };
-            var promptTab = FindCategoryTab(
+            var customerTab = FindCategoryTab(
                 window,
-                viewModel.Categories.Single(panel => panel.Category == BoardCategory.Prompt));
-            var drop = NewDragEventArgs(data, DragDrop.DropEvent, promptTab);
+                viewModel.Categories.Single(panel => panel.Category == BoardCategory.CustomerOriginal));
+            var drop = NewDragEventArgs(data, DragDrop.DropEvent, customerTab);
 
-            promptTab.RaiseEvent(drop);
+            customerTab.RaiseEvent(drop);
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
             CompleteLayout(window);
             store.FailFirstSave();
@@ -1298,7 +1315,7 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
             var first = viewModel.Categories[0];
-            var second = viewModel.Categories[1];
+            var second = viewModel.Categories[3];
             var firstTab = FindCategoryTab(window, first);
             var secondTab = FindCategoryTab(window, second);
             var internalData = new DragPayloadService().Build(item);
@@ -1656,8 +1673,8 @@ public sealed partial class MainWindowInteractionTests
         var movingNormal = board.AddText("moving normal");
         var movingPinned = board.AddText("moving pinned");
         board.SetPinnedMany([movingPinned.Id], true);
-        var existingNormal = board.AddText("existing normal", BoardCategory.Reference);
-        var existingPinned = board.AddText("existing pinned", BoardCategory.Reference);
+        var existingNormal = board.AddText("existing normal", BoardCategory.CustomerOriginal);
+        var existingPinned = board.AddText("existing pinned", BoardCategory.CustomerOriginal);
         board.SetPinnedMany([existingPinned.Id], true);
         var store = new RecordingBoardStore(directory.Root);
         var window = CreateWindow(board, store, WindowSettings.Default);
@@ -1684,17 +1701,17 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(0, store.SaveCount);
 
             var viewModel = (MainWindowViewModel)window.DataContext;
-            var referenceTab = FindCategoryTab(
+            var customerTab = FindCategoryTab(
                 window,
-                viewModel.Categories.Single(panel => panel.Category == BoardCategory.Reference));
-            var drop = NewDragEventArgs(data, DragDrop.DropEvent, referenceTab);
-            referenceTab.RaiseEvent(drop);
+                viewModel.Categories.Single(panel => panel.Category == BoardCategory.CustomerOriginal));
+            var drop = NewDragEventArgs(data, DragDrop.DropEvent, customerTab);
+            customerTab.RaiseEvent(drop);
             PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
             CompleteLayout(window);
 
             CollectionAssert.AreEqual(
                 new[] { movingPinned.Id, existingPinned.Id, movingNormal.Id, existingNormal.Id },
-                board.Items(BoardCategory.Reference).Select(item => item.Id).ToArray());
+                board.Items(BoardCategory.CustomerOriginal).Select(item => item.Id).ToArray());
             Assert.AreEqual(1, store.SaveCount);
         }
         finally
@@ -1712,12 +1729,12 @@ public sealed partial class MainWindowInteractionTests
         _ = Enumerable.Range(0, 10)
             .Select(index => board.AddText(
                 $"normal {index}: {new string('x', 120)}",
-                BoardCategory.Reference))
+                BoardCategory.CustomerOriginal))
             .ToArray();
         var targetPins = Enumerable.Range(0, 16)
             .Select(index => board.AddText(
                 $"pin {index}: {new string('x', 120)}",
-                BoardCategory.Reference))
+                BoardCategory.CustomerOriginal))
             .ToArray();
         board.SetPinnedMany(targetPins.Select(item => item.Id).ToArray(), true);
         var store = new RecordingBoardStore(directory.Root);
@@ -1729,15 +1746,15 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
-            var referenceTab = FindCategoryTab(
+            var customerTab = FindCategoryTab(
                 window,
-                viewModel.Categories.Single(panel => panel.Category == BoardCategory.Reference));
+                viewModel.Categories.Single(panel => panel.Category == BoardCategory.CustomerOriginal));
             var drop = NewDragEventArgs(
                 new DragPayloadService().Build(moving),
                 DragDrop.DropEvent,
-                referenceTab);
+                customerTab);
 
-            referenceTab.RaiseEvent(drop);
+            customerTab.RaiseEvent(drop);
             PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
             CompleteLayout(window);
 

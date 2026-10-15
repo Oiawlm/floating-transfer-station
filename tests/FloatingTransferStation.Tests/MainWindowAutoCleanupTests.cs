@@ -51,13 +51,13 @@ public sealed class MainWindowAutoCleanupTests
         InvokeCheck(window, now);
 
         Assert.AreEqual(
-            "已自动清理 3 张到期卡片，可 Ctrl+Z 撤销（仅本次运行内）",
+            "已自动清理 2 张到期卡片，可 Ctrl+Z 撤销（仅本次运行内）",
             ((MainWindowViewModel)window.DataContext).StatusText);
         Assert.IsNull(preferencesStore.LastSaved, "TTL 判定幂等，清扫成功无需记账落盘。");
         Assert.AreEqual(1, GetStore(window).SaveCount, "清扫必须单次原子保存。");
         Assert.AreEqual(1, GetMutations(window).PendingUndoCount, "清扫必须单批可撤销。");
         Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count);
-        Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
+        Assert.AreEqual(1, board.Items(BoardCategory.Prompt).Count, "启动标签残留不清扫（#18 修订）。");
         Assert.AreEqual(1, board.Items(BoardCategory.Inbox).Count, "置顶卡超龄也绝不清理。");
     }
 
@@ -78,7 +78,7 @@ public sealed class MainWindowAutoCleanupTests
 
         Assert.IsTrue(GetField<bool>(window, "_boardLoadSucceeded"));
         Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count);
-        Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
+        Assert.AreEqual(1, board.Items(BoardCategory.Prompt).Count, "启动标签残留不清扫（#18 修订）。");
         Assert.AreEqual(1, board.Items(BoardCategory.Inbox).Count);
         Assert.IsTrue(
             ((MainWindowViewModel)window.DataContext).StatusText.Contains("到期卡片"),
@@ -120,7 +120,7 @@ public sealed class MainWindowAutoCleanupTests
         InvokeCheck(window, now);
 
         Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count, "恰满 24h 即到期（边界含等于）。");
-        Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
+        Assert.AreEqual(1, board.Items(BoardCategory.Prompt).Count, "启动标签残留不清扫（#18 修订）。");
         Assert.AreEqual(1, board.Items(BoardCategory.Inbox).Count);
     }
 
@@ -221,7 +221,7 @@ public sealed class MainWindowAutoCleanupTests
         InvokeCheck(window, now);
 
         Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count, "改短档位后下次检查清超龄存量。");
-        Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
+        Assert.AreEqual(1, board.Items(BoardCategory.Prompt).Count, "启动标签残留不清扫（#18 修订）。");
         Assert.AreEqual(1, board.Items(BoardCategory.Inbox).Count, "置顶卡在追溯清理时同样豁免。");
     }
 

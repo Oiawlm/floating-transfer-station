@@ -19,14 +19,14 @@ public sealed class CategoryNameMigrationTests
 
         var migrated = await new CategoryNameMigration(store).EnsureAsync(settings);
 
-        Assert.AreEqual("文本", migrated.CategoryName(BoardCategory.Prompt));
+        Assert.AreEqual("启动", migrated.CategoryName(BoardCategory.Prompt));
         Assert.AreEqual("截图", migrated.CategoryName(BoardCategory.CustomerOriginal));
         Assert.AreEqual("文本1", migrated.CategoryName(BoardCategory.Reference));
         Assert.AreEqual("待分类", migrated.CategoryName(BoardCategory.Inbox));
         Assert.AreEqual(CategoryNameMigration.CurrentVersion, migrated.CategoryNameMigrationVersion);
 
         var persisted = await store.LoadSettingsAsync();
-        Assert.AreEqual("文本", persisted.CategoryName(BoardCategory.Prompt));
+        Assert.AreEqual("启动", persisted.CategoryName(BoardCategory.Prompt));
         Assert.AreEqual(CategoryNameMigration.CurrentVersion, persisted.CategoryNameMigrationVersion);
     }
 
@@ -55,7 +55,7 @@ public sealed class CategoryNameMigrationTests
 
         Assert.IsNull(migrated.CategoryNames);
         Assert.AreEqual(CategoryNameMigration.CurrentVersion, migrated.CategoryNameMigrationVersion);
-        Assert.AreEqual("文本", migrated.CategoryName(BoardCategory.Prompt));
+        Assert.AreEqual("启动", migrated.CategoryName(BoardCategory.Prompt));
     }
 
     [TestMethod]
@@ -93,7 +93,7 @@ public sealed class CategoryNameMigrationTests
         var retried = await new CategoryNameMigration(new LocalStore(paths, new AtomicTextWriter()))
             .EnsureAsync(failed);
 
-        Assert.AreEqual("文本", retried.CategoryName(BoardCategory.Prompt));
+        Assert.AreEqual("启动", retried.CategoryName(BoardCategory.Prompt));
         Assert.AreEqual(CategoryNameMigration.CurrentVersion, retried.CategoryNameMigrationVersion);
     }
 

@@ -141,7 +141,10 @@ public partial class App : Application
                 secretProtector: secretProtector,
                 deepSeekClient: deepSeekClient,
                 aiTextOrganizer: aiTextOrganizer,
-                updateService: updateService);
+                updateService: updateService,
+                launcherStore: store,
+                appLauncher: new FloatingTransferStation.Services.AppLauncher(
+                    packagedActivator: new FloatingTransferStation.Launcher.ShellPackagedAppActivator().Activate));
             MainWindow = window;
             // 先显示收起态窗口：分类轨只依赖已装载的偏好与设置，板面数据转入
             // 后台装载，大数据量不再拖住启动到可见的时间（见 LoadBoardInBackgroundAsync）。
@@ -156,6 +159,7 @@ public partial class App : Application
                 board,
                 normalizer,
                 settings,
+                preferences,
                 window,
                 boardOperationGate);
 
@@ -194,6 +198,7 @@ public partial class App : Application
         BoardService board,
         ImageNormalizer normalizer,
         WindowSettings settings,
+        AppPreferences preferences,
         MainWindow window,
         BoardOperationGate operationGate)
     {
@@ -204,11 +209,19 @@ public partial class App : Application
                 var snapshot = await store.LoadBoardAsync();
                 board.Restore(snapshot);
                 var afterReview = await new DailyReviewMigration(store).EnsureAsync(board, settings);
-                return await new CategoryNameMigration(store).EnsureAsync(afterReview);
+                var afterNames = await new CategoryNameMigration(store).EnsureAsync(afterReview);
+                // 快捷启动迁移（#30）链末段：板面收编 → 名称归位 → 版本戳
+                // （首选项戳落 preferences.json，经窗口回采防止后续偏好保存回退戳值）。
+                return await new QuickLaunchMigration(store, store).EnsureAsync(board, afterNames, preferences);
             });
-            if (!ReferenceEquals(migrated, settings))
+            if (!ReferenceEquals(migrated.Settings, settings))
             {
-                await window.Dispatcher.InvokeAsync(() => window.AdoptMigratedSettings(migrated));
+                await window.Dispatcher.InvokeAsync(() => window.AdoptMigratedSettings(migrated.Settings));
+            }
+
+            if (!ReferenceEquals(migrated.Preferences, preferences))
+            {
+                await window.Dispatcher.InvokeAsync(() => window.AdoptMigratedPreferences(migrated.Preferences));
             }
 
             // 板面装载成功：置闸门并补跑一次自动清理巡检（建基线或到期清扫）。

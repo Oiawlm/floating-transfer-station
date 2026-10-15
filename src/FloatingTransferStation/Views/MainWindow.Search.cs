@@ -71,14 +71,14 @@ public partial class MainWindow
         ApplySearchFilter();
     }
 
-    /// <summary>进入搜索态：仅板卡分类（复盘标签不参与，冻结）；清选择、应用过滤、聚焦输入框。</summary>
+    /// <summary>进入搜索态：仅内容桶（复盘与启动标签冻结，#30 排除面）；清选择、应用过滤、聚焦输入框。</summary>
     internal void EnterSearchMode()
     {
         if (_isClosing ||
             !_viewModel.IsPanelExpanded ||
             _viewModel.IsSearchActive ||
             _viewModel.ActivePanel is not { } panel ||
-            panel.Category == DailyReviewMigration.ReviewCategory)
+            !BoardCategoryCatalog.IsContentBucket(panel.Category))
         {
             return;
         }

@@ -16,22 +16,22 @@ public sealed class ExternalDropImportServiceTests
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
-        var existing = board.AddText("existing", BoardCategory.Prompt);
+        var existing = board.AddText("existing", BoardCategory.CustomerOriginal);
         var store = new RecordingBoardStore(directory.Root);
         var messages = new List<string>();
         var defaultCategory = new DefaultCaptureCategoryState();
-        defaultCategory.Set(BoardCategory.Reference);
+        defaultCategory.Set(BoardCategory.Inbox);
         var service = CreateService(directory.Root, board, store, messages);
 
         var imported = await service.ImportAsync(
             new ExternalDropPayload.Text("new prompt"),
-            BoardCategory.Prompt);
+            BoardCategory.CustomerOriginal);
 
         Assert.IsTrue(imported);
-        Assert.AreEqual(BoardCategory.Reference, defaultCategory.Current);
+        Assert.AreEqual(BoardCategory.Inbox, defaultCategory.Current);
         CollectionAssert.AreEqual(
             new[] { "new prompt", existing.Text },
-            board.Items(BoardCategory.Prompt).Select(item => item.Text).ToArray());
+            board.Items(BoardCategory.CustomerOriginal).Select(item => item.Text).ToArray());
         Assert.AreEqual(1, store.SaveCount);
         Assert.IsEmpty(messages);
     }

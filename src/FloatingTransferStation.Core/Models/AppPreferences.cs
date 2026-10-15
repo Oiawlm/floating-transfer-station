@@ -69,6 +69,9 @@ public enum AutoCleanupRetention
 /// 取代 1.25.0 起的固定 24 小时：巡检节奏仍固定每小时、与档位无关，改短档位后
 /// 已超龄的存量卡在下一次检查时一次性追溯清理；旧配置缺字段回落默认 24 小时，
 /// 老用户升级零感知。
+/// 快捷启动迁移版本戳（#30，Issue #162；0 = 未归位）：只门控一次性名称归位
+/// （「文本」→「启动」）——戳 ≥1 后 settings.json 的 CategoryNames["Prompt"]
+/// 是合法用户改名存储；每次启动的存量收编（阶段 1）不受戳门控，防降级泄漏。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -89,7 +92,8 @@ public sealed record AppPreferences(
     double? SettingsWindowHeight = null,
     bool AutoUpdateCheckEnabled = true,
     PinnedDividerStyle PinnedDivider = PinnedDividerStyle.Solid,
-    AutoCleanupRetention AutoCleanupRetention = AutoCleanupRetention.TwentyFourHours)
+    AutoCleanupRetention AutoCleanupRetention = AutoCleanupRetention.TwentyFourHours,
+    int QuickLaunchMigrationVersion = 0)
 {
     public static AppPreferences Default { get; } = new();
 }

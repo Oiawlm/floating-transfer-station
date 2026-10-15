@@ -40,13 +40,15 @@ public static class AutoCleanupSchedule
 #pragma warning restore CS8524
 
     /// <summary>
-    /// 清扫范围 = 全部内容分类（BoardCategoryCatalog.Ordered）显式排除复盘分类。
-    /// 单一权威来源是分类目录本身：未来新增内容分类默认纳入清扫，新增复盘类
-    /// 分类必须在此显式排除（契约测试锁定清单内容）。
+    /// 清扫范围 = 仅内容桶角色（BoardCategoryCatalog.Ordered 中
+    /// <see cref="BoardCategoryCatalog.IsContentBucket"/> 为真的成员；#18 修订，
+    /// Issue #162）：复盘与启动标签永不触碰（即使超龄、即使有残留内容）。
+    /// 单一权威来源是分类目录的角色机制：未来新增内容桶默认纳入清扫，新增
+    /// 复盘/启动类分类天然排除（契约测试锁定清单内容）。
     /// </summary>
     public static IReadOnlyList<BoardCategory> SweepCategories { get; } =
         BoardCategoryCatalog.Ordered
-            .Where(category => category != DailyReviewMigration.ReviewCategory)
+            .Where(BoardCategoryCatalog.IsContentBucket)
             .ToArray();
 
     /// <summary>到期截止时刻 = now − 所选档位的保留时长：CreatedAt ≤ 截止即到期

@@ -84,9 +84,9 @@ public sealed partial class ClipboardCaptureServiceTests
     {
         using var directory = new TestDirectory();
         var state = new DefaultCaptureCategoryState();
-        state.Set(BoardCategory.Prompt);
+        state.Set(BoardCategory.CustomerOriginal);
         var board = new BoardService();
-        board.AddText("older prompt", BoardCategory.Prompt);
+        board.AddText("older prompt", BoardCategory.CustomerOriginal);
         var service = new ClipboardCaptureService(
             new QueueClipboardReader(new ClipboardSnapshot(12, null, [], "new prompt")),
             new FakeImageNormalizer(directory.Root),
@@ -99,7 +99,7 @@ public sealed partial class ClipboardCaptureServiceTests
 
         CollectionAssert.AreEqual(
             new[] { "new prompt", "older prompt" },
-            board.Items(BoardCategory.Prompt).Select(item => item.Text).ToArray());
+            board.Items(BoardCategory.CustomerOriginal).Select(item => item.Text).ToArray());
         Assert.IsTrue(board.Items(BoardCategory.Inbox).Count == 0);
     }
 
@@ -156,7 +156,7 @@ public sealed partial class ClipboardCaptureServiceTests
         var source = Path.Combine(directory.Root, "reference.jpg");
         await File.WriteAllBytesAsync(source, [0x00]);
         var state = new DefaultCaptureCategoryState();
-        state.Set(BoardCategory.Reference);
+        state.Set(BoardCategory.CustomerOriginal);
         var board = new BoardService();
         var service = new ClipboardCaptureService(
             new QueueClipboardReader(new ClipboardSnapshot(14, null, [source], null)),
@@ -168,7 +168,7 @@ public sealed partial class ClipboardCaptureServiceTests
 
         await service.HandleClipboardUpdateAsync();
 
-        Assert.AreEqual(BoardItemKind.Image, board.Items(BoardCategory.Reference).Single().Kind);
+        Assert.AreEqual(BoardItemKind.Image, board.Items(BoardCategory.CustomerOriginal).Single().Kind);
         Assert.IsTrue(board.Items(BoardCategory.Inbox).Count == 0);
     }
 
@@ -191,7 +191,7 @@ public sealed partial class ClipboardCaptureServiceTests
 
         var first = service.HandleClipboardUpdateAsync();
         await reader.FirstReadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        state.Set(BoardCategory.Reference);
+        state.Set(BoardCategory.Inbox);
         var second = service.HandleClipboardUpdateAsync();
         await reader.SecondReadFinished.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
@@ -200,8 +200,7 @@ public sealed partial class ClipboardCaptureServiceTests
         await Task.WhenAll(first, second);
 
         Assert.AreEqual("first", board.Items(BoardCategory.CustomerOriginal).Single().Text);
-        Assert.AreEqual("second", board.Items(BoardCategory.Reference).Single().Text);
-        Assert.IsTrue(board.Items(BoardCategory.Inbox).Count == 0);
+        Assert.AreEqual("second", board.Items(BoardCategory.Inbox).Single().Text);
     }
 
     [TestMethod]
@@ -501,7 +500,7 @@ public sealed partial class ClipboardCaptureServiceTests
         var color = new Rgba32(20, 40, 60, 128);
         var usable = await CreateEncodedImageAsync(2, 2, color);
         var state = new DefaultCaptureCategoryState();
-        state.Set(BoardCategory.Prompt);
+        state.Set(BoardCategory.CustomerOriginal);
         var service = new ClipboardCaptureService(
             new QueueClipboardReader(new ClipboardSnapshot(42, null, [], "ignored text",
             [
@@ -513,7 +512,7 @@ public sealed partial class ClipboardCaptureServiceTests
 
         await service.HandleClipboardUpdateAsync();
 
-        var item = board.Items(BoardCategory.Prompt).Single();
+        var item = board.Items(BoardCategory.CustomerOriginal).Single();
         Assert.AreEqual(BoardItemKind.Image, item.Kind);
         Assert.IsEmpty(board.Items(BoardCategory.Inbox));
         Assert.AreEqual(1, store.SaveCount);

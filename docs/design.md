@@ -74,6 +74,11 @@
 | 显隐淡入淡出 | FadeVisibilityMs | 120 |
 | 删除反馈 | DeleteFeedbackMs | 120 |
 | 新条目交错步长 | ItemEntranceStaggerMs | 40（区间 30–50 取中） |
+| 启动确认脉冲（#30） | LaunchConfirmMs | 250（＝SlowDurationMs，不加档） |
+| 启动项落位（#30） | ItemLandingMs | 250（＝SlowDurationMs，不加档） |
+| 启动后排队收起延迟（#30） | LaunchCollapseDelayMs | 250（时序性延迟，减动效保留） |
+| 单击启动重入门闩（#30） | LaunchReentryLatchMs | 500 |
+| 瓦片入场交错步长/封顶（#30） | TileEntranceStaggerMs / TileEntranceStaggerCap | 40 / 8（min(i,8)×40ms） |
 
 ## 三、缓动曲线
 
@@ -104,6 +109,8 @@
 | CardInsetPx | 12 | 卡片水平内缩 |
 | CardGutterPx | 4 | 卡片纵向间距 |
 | CardPaddingPx | 12 | 卡片内边距 |
+| TilePressScale | 0.96 | 启动瓦片按压缩放（#30） |
+| TileHoverLiftPx | -2 | 启动瓦片悬停抬升位移（#30；区别于卡片 LiftedOffsetPx -1） |
 
 结构性尺寸（轨道宽 58、面板宽 280–640、最小窗高 360 等）不属于设计 token，权威来源是 Core 的 `WindowSettings`。
 

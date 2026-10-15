@@ -364,7 +364,7 @@
                             IsHitTestVisible="False" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="拖动行或用上移/下移按钮调整四个标签的显示顺序；改动立即生效并自动保存。" />
+                             Text="拖拽调整四个标签的显示顺序（图片 / 复盘 / 启动 / 待分类）；仅调整顺序，不能增删。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}">

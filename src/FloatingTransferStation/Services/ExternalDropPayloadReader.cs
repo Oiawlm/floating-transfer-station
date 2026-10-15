@@ -28,9 +28,14 @@ public sealed class ExternalDropPayloadReader
 
         if (hasFileDrop)
         {
+            // #30 r2-M1：保留原始 FileDrop 清单——全图片沿用 ImageFiles；其余文件组
+            // 不再丢弃而是携带原始列表（FileList），解释权归目标角色（内容桶表面
+            // 对 FileList 的既有行为=拒绝，由消费位点只认 Image*/Text 保持）。
             return TryReadImageFiles(data, out var paths)
                 ? new ExternalDropPayload.ImageFiles(paths)
-                : null;
+                : TryReadRawFileList(data, out var rawPaths)
+                    ? new ExternalDropPayload.FileList(rawPaths)
+                    : null;
         }
 
         IReadOnlyList<ClipboardImageCandidate> candidates;
@@ -97,6 +102,27 @@ public sealed class ExternalDropPayloadReader
             };
 
             return paths.Length > 0 && paths.All(ImageFileSupport.IsSupportedStaticImageFile);
+        }
+        catch
+        {
+            paths = [];
+            return false;
+        }
+    }
+
+    private static bool TryReadRawFileList(IDataObject data, out string[] paths)
+    {
+        try
+        {
+            paths = data.GetData(DataFormats.FileDrop, autoConvert: true) switch
+            {
+                string[] array => array.ToArray(),
+                StringCollection collection => collection.Cast<string>().ToArray(),
+                IEnumerable<string> enumerable => enumerable.ToArray(),
+                _ => []
+            };
+
+            return paths.Length > 0;
         }
         catch
         {

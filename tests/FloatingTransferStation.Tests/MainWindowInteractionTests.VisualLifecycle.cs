@@ -784,16 +784,16 @@ public sealed partial class MainWindowInteractionTests
         collapsedTab.RaiseEvent(NewDragEventArgs(data, DragDrop.DragEnterEvent, collapsedTab));
         CompleteLayout(window);
         var viewModel = (MainWindowViewModel)window.DataContext;
-        var prompt = viewModel.Categories.Single(
-            category => category.Category == BoardCategory.Prompt);
-        var promptTab = FindCategoryTab(window, prompt);
-        var drop = NewDragEventArgs(data, DragDrop.DropEvent, promptTab);
-        promptTab.RaiseEvent(drop);
+        var customer = viewModel.Categories.Single(
+            category => category.Category == BoardCategory.CustomerOriginal);
+        var customerTab = FindCategoryTab(window, customer);
+        var drop = NewDragEventArgs(data, DragDrop.DropEvent, customerTab);
+        customerTab.RaiseEvent(drop);
         PumpDispatcherUntil(window.Dispatcher, store.SuccessfulSaveCompleted.Task);
 
         Assert.IsTrue(window.IsEnabled);
         Assert.AreEqual(DragDropEffects.Copy, drop.Effects);
-        Assert.AreEqual("关闭失败后继续拖入", board.Items(BoardCategory.Prompt).Single().Text);
+        Assert.AreEqual("关闭失败后继续拖入", board.Items(BoardCategory.CustomerOriginal).Single().Text);
         Assert.AreEqual(
             "关闭失败后继续拖入",
             store.LastPersistedSnapshot!.Items.Single().Text);
@@ -813,14 +813,14 @@ public sealed partial class MainWindowInteractionTests
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             var viewModel = (MainWindowViewModel)window.DataContext;
-            viewModel.SetDefaultCaptureCategory(BoardCategory.Reference);
+            viewModel.SetDefaultCaptureCategory(BoardCategory.CustomerOriginal);
             CollapseForSetup(window);
 
             var rowHeight = WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count;
-            var expectedTop = SystemParameters.WorkArea.Top + WindowSettings.Default.Top + rowHeight;
+            var expectedTop = SystemParameters.WorkArea.Top + WindowSettings.Default.Top;
             Assert.AreEqual(expectedTop, window.Top, 0.5);
             Assert.AreEqual(rowHeight, window.Height, 0.5);
-            Assert.AreEqual(BoardCategory.Reference, viewModel.DefaultCapturePanel.Category);
+            Assert.AreEqual(BoardCategory.CustomerOriginal, viewModel.DefaultCapturePanel.Category);
         }
         finally
         {

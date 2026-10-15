@@ -34,7 +34,7 @@ public sealed class AutoCleanupIsolationTests
                 AutoCleanupRetention.TwentyFourHours));
 
         Assert.IsTrue(outcome.Saved);
-        Assert.AreEqual(3, outcome.RemovedCount);
+        Assert.AreEqual(2, outcome.RemovedCount, "仅内容桶条目被清扫；启动标签残留不清扫（#18 修订）。");
         CollectionAssert.AreEqual(
             reviewBytesBefore,
             await File.ReadAllBytesAsync(reviewPath),
@@ -48,6 +48,10 @@ public sealed class AutoCleanupIsolationTests
             item.Category == DailyReviewMigration.ReviewCategory &&
             item.Text == "复盘标签条目"),
             "复盘标签条目必须仍持久化在 board.json。");
+        Assert.IsTrue(persisted.Items.Any(item =>
+            item.Category == BoardCategory.Prompt &&
+            item.Text == "文本内容"),
+            "启动标签残留（超龄文本桶旧卡）必须仍持久化在 board.json（#18 修订：永不触碰）。");
         Assert.IsFalse(persisted.Items.Any(item => item.Text == "图片内容"));
         Assert.IsFalse(persisted.Items.Any(item => item.Text == "待分类内容"));
     }

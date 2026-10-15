@@ -710,18 +710,19 @@ public sealed class BoardMutationServiceTests
         var outcome = await service.ClearNonPinnedAsync(AutoCleanupSchedule.SweepCategories);
 
         Assert.IsTrue(outcome.Saved);
-        Assert.AreEqual(2, outcome.RemovedCount);
+        Assert.AreEqual(1, outcome.RemovedCount, "仅内容桶普通项被清扫；启动标签残留不清扫（#18 修订）。");
         Assert.AreEqual(1, store.SaveCount, "跨分类清扫必须单次原子保存。");
         Assert.AreEqual(1, service.PendingUndoCount, "跨分类清扫必须进单批撤销（可整批 Ctrl+Z）。");
         CollectionAssert.AreEqual(
-            new[] { imagePinned.Id },
+            new[] { imagePinned.Id, promptNormal.Id },
             store.LastPersistedSnapshot!.Items
                 .Where(item => item.Category != BoardCategory.Reference)
                 .Select(item => item.Id)
                 .ToArray(),
-            "保存的快照必须已不含被清扫条目(仅存活置顶项,复盘分类另计)。");
+            "保存的快照必须已不含被清扫条目(存活置顶项与启动标签残留,复盘分类另计)。");
         Assert.AreSame(imagePinned, board.Items(BoardCategory.CustomerOriginal).Single());
         Assert.AreSame(referenceNormal, board.Items(BoardCategory.Reference).Single());
+        Assert.AreSame(promptNormal, board.Items(BoardCategory.Prompt).Single(), "启动标签条目永不触碰（#18）。");
     }
 
     [TestMethod]
@@ -765,7 +766,7 @@ public sealed class BoardMutationServiceTests
         var outcome = await service.ClearNonPinnedAsync(AutoCleanupSchedule.SweepCategories);
 
         Assert.IsFalse(outcome.Saved);
-        Assert.AreEqual(2, outcome.RemovedCount);
+        Assert.AreEqual(1, outcome.RemovedCount, "仅内容桶普通项进入清扫批次；启动标签残留不进（#18 修订）。");
         CollectionAssert.AreEqual(
             inboxBefore.Select(item => item.Id).ToArray(),
             board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
@@ -827,13 +828,14 @@ public sealed class BoardMutationServiceTests
             cutoff);
 
         Assert.IsTrue(outcome.Saved);
-        Assert.AreEqual(2, outcome.RemovedCount, "只有超龄普通项到期；超龄置顶与未满期保留。");
+        Assert.AreEqual(1, outcome.RemovedCount, "只有内容桶超龄普通项到期；启动标签超龄项不清扫、超龄置顶与未满期保留（#18 修订）。");
         Assert.AreEqual(1, store.SaveCount, "清扫必须单次原子保存。");
         Assert.AreEqual(1, service.PendingUndoCount, "清扫必须单批可撤销。");
         // 做旧经快照回合重建条目实例，按 Id 断言而非实例同一。
         CollectionAssert.AreEqual(
-            new[] { expiredPinned.Id },
-            board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray());
+            new[] { expiredPinned.Id, expiredPromptNormal.Id },
+            board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray(),
+            "启动标签条目（置顶+超龄普通）永不触碰（#18）。");
         CollectionAssert.AreEqual(
             new[] { freshNormal.Id },
             board.Items(BoardCategory.CustomerOriginal).Select(item => item.Id).ToArray());

@@ -141,7 +141,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!IsReviewCategoryEnabled() || category.Category != DailyReviewMigration.ReviewCategory)
+        // 默认接收角色闸（#30）：只有内容桶可设为剪贴板落点——复盘与启动标签
+        // 经角色机制统一排除（Core 侧 Set 守卫 + 装载期修复为纵深）。
+        if (BoardCategoryCatalog.IsContentBucket(category.Category))
         {
             _viewModel.SetDefaultCaptureCategory(category.Category);
         }
@@ -151,8 +153,20 @@ public partial class MainWindow : Window
     private void ExpandIntentTimer_Tick(object? sender, EventArgs e)
     {
         _expandIntentTimer.Stop();
-        if (_viewModel.IsExternalDropRailVisible ||
-            !_panelState.TryCommitHover(out var category))
+        if (_viewModel.IsExternalDropRailVisible)
+        {
+            return;
+        }
+
+        // 再展开抑制窗（#30）：启动成功收起后，指针离开收起前面板原区域前不悬停展开
+        // （解除条件唯一=指针离开后重新进入，指针停留期间保持抑制）。必须在
+        // TryCommitHover 之前——提交会消费悬停意图并翻转内部展开态，抑制期不得发生。
+        if (TryConsumeReexpandSuppression())
+        {
+            return;
+        }
+
+        if (!_panelState.TryCommitHover(out var category))
         {
             return;
         }
@@ -160,6 +174,13 @@ public partial class MainWindow : Window
         ActivatePanel(category);
         ApplyPlacement(WindowController.Expanded(CurrentWorkArea(), _settings));
         _viewModel.SetPanelExpanded(true);
+        _expandSessionId++;
+        if (category == QuickLaunchMigration.LauncherCategory)
+        {
+            // M1 表面展开动画：收起→展开进入启动标签（重播标记在收起时重置）。
+            PlayLauncherSurfaceEntrance();
+        }
+
         UpdateStatusPresentation();
         CategoryRail.UpdateLayout();
         RestoreScrollOffset(category);
@@ -387,10 +408,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        BeginCollapsedVisualHandoff(WindowController.Collapsed(
-            CurrentWorkArea(),
-            _settings,
-            _viewModel.DefaultCapturePanel.Category));
+        // 收起尾段（#30）：重置交错入场标记（再展开重播）+ 几何交接。
+        CompletePanelCollapseHandoff();
     }
 
     private void CancelPanelCollapseExit()
