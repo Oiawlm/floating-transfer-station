@@ -618,6 +618,41 @@
                       Click="LauncherAddButton_Click" />
             </Grid>
 
+            <!-- ＋ 添加两入口菜单（#30 切片 4）：应用文件… / 已安装应用…；定位锚点在
+                 打开时按发起按钮（工具行＋或空态 CTA）指定，右对齐经 HorizontalOffset 校正。 -->
+            <Popup x:Name="LauncherAddMenu"
+                   Grid.Row="0"
+                   PlacementTarget="{Binding ElementName=LauncherAddButton}"
+                   Placement="Bottom"
+                   VerticalOffset="2"
+                   StaysOpen="False"
+                   PopupAnimation="Fade"
+                   AllowsTransparency="True"
+                   Focusable="False">
+              <Border Background="{DynamicResource HeaderBrush}"
+                      BorderBrush="{DynamicResource BorderBrush}"
+                      BorderThickness="1"
+                      CornerRadius="7"
+                      Padding="4"
+                      Margin="12">
+                <Border.Effect>
+                  <DropShadowEffect BlurRadius="8" ShadowDepth="2" Direction="270" Opacity="0.25" />
+                </Border.Effect>
+                <StackPanel>
+                  <Button x:Name="LauncherAddFileMenuButton"
+                          Content="应用文件…"
+                          Style="{StaticResource LauncherAddMenuButtonStyle}"
+                          AutomationProperties.Name="添加应用文件"
+                          Click="LauncherAddFileMenu_Click" />
+                  <Button x:Name="LauncherAddInstalledMenuButton"
+                          Content="已安装应用…"
+                          Style="{StaticResource LauncherAddMenuButtonStyle}"
+                          AutomationProperties.Name="添加已安装应用"
+                          Click="LauncherAddInstalledMenu_Click" />
+                </StackPanel>
+              </Border>
+            </Popup>
+
             <!-- 空态：内容区垂直居中（插图 + 标题 + 副文案 + CTA，CTA 与工具行＋同一入口）。 -->
             <StackPanel x:Name="LauncherEmptyState"
                         Grid.Row="1"

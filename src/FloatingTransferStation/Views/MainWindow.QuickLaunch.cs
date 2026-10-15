@@ -153,10 +153,38 @@ public partial class MainWindow
         }
     }
 
-    // ---- 添加（＋ 文件选择器，切片 2 单入口；已安装应用选择器切片 4 追加为两选项菜单）----
+    // ---- 添加（＋ 两入口菜单，#30 切片 4：应用文件… / 已安装应用…）----
+
+    /// <summary>已安装应用枚举源（默认 AppsFolder COM 枚举；测试可注入假源）。</summary>
+    private Func<IReadOnlyList<InstalledApp>> _installedAppsSource = InstalledAppsEnumerator.Enumerate;
+
+    /// <summary>选择器对话框显示（测试缝：可替换为非模态驱动并自动确认）。</summary>
+    internal Func<InstalledAppPickerWindow, bool?> _showPickerDialog = static picker => picker.ShowDialog();
 
     private void LauncherAddButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_isClosing || _launchers is null || _launchers.IsReadOnlyFromNewerVersion)
+        {
+            return;
+        }
+
+        if (sender is not Button initiator)
+        {
+            return;
+        }
+
+        // 锚定发起按钮（工具行＋或空态 CTA）；首次打开前 Popup 子元素未进视觉树、
+        // ActualWidth=0，先显式 Measure 取期望宽再算右对齐偏移。
+        LauncherAddMenu.PlacementTarget = initiator;
+        var menuChild = (FrameworkElement)LauncherAddMenu.Child;
+        menuChild.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        LauncherAddMenu.HorizontalOffset = initiator.ActualWidth - menuChild.DesiredSize.Width;
+        LauncherAddMenu.IsOpen = true;
+    }
+
+    private void LauncherAddFileMenu_Click(object sender, RoutedEventArgs e)
+    {
+        LauncherAddMenu.IsOpen = false;
         if (_isClosing || _launchers is null || _launchers.IsReadOnlyFromNewerVersion)
         {
             return;
@@ -183,6 +211,93 @@ public partial class MainWindow
             _launcherDialogOpen = false;
         }
     }
+
+    /// <summary>已安装应用选择器（#30 切片 4）：打开时枚举 AppsFolder（会话内缓存），
+    /// 多选确认后走目录添加协议（去重/上限/落位/状态条与文件导入同一汇报路径）。</summary>
+    private void LauncherAddInstalledMenu_Click(object sender, RoutedEventArgs e)
+    {
+        LauncherAddMenu.IsOpen = false;
+        if (_isClosing || _launchers is null || _launchers.IsReadOnlyFromNewerVersion)
+        {
+            return;
+        }
+
+        IReadOnlyList<InstalledApp> installed;
+        try
+        {
+            installed = _installedAppsSource();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or COMException)
+        {
+            ShowStatus("无法枚举已安装应用。");
+            return;
+        }
+
+        if (installed.Count == 0)
+        {
+            ShowStatus("未枚举到已安装应用。");
+            return;
+        }
+
+        var existingAumids = _launchers.Items
+            .Where(item => item.Kind == LauncherKind.PackagedApp)
+            .Select(item => item.TargetPath)
+            .ToHashSet(StringComparer.Ordinal);
+        var picker = new InstalledAppPickerWindow(CurrentTheme, installed, existingAumids) { Owner = this };
+        _launcherDialogOpen = true;
+        try
+        {
+            if (_showPickerDialog(picker) != true || picker.Selection is not { Count: > 0 } selection)
+            {
+                return;
+            }
+
+            TrackPendingOperation(ImportInstalledAppsAsync(selection));
+        }
+        finally
+        {
+            _launcherDialogOpen = false;
+        }
+    }
+
+    /// <summary>已安装应用导入：PackagedApp 条目（TargetPath=AUMID，永不存包名）＋
+    /// 状态条一次性汇报＋落位动画（与文件导入同路径）。</summary>
+    private async Task ImportInstalledAppsAsync(IReadOnlyList<InstalledApp> apps)
+    {
+        if (_launchers is null)
+        {
+            return;
+        }
+
+        var candidates = apps
+            .Select(app => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.PackagedApp,
+                app.Aumid,
+                app.DisplayName,
+                DateTimeOffset.Now))
+            .ToList();
+
+        var outcome = await _launchers.AddRangeAsync(candidates);
+        // 保存续体可能落在无同步上下文的线程（测试环境）：UI 反馈显式回投 UI 线程。
+        await Dispatcher.InvokeAsync(() =>
+        {
+            if (outcome.AddedCount > 0)
+            {
+                PlayLauncherLandingAsync(outcome.AddedItems);
+            }
+
+            foreach (var duplicate in outcome.Duplicates)
+            {
+                PulseLauncherDuplicate(duplicate);
+            }
+
+            ShowLauncherImportStatus(outcome, skippedTotal: 0);
+        });
+    }
+
+    internal void UseInstalledAppsSourceForTests(Func<IReadOnlyList<InstalledApp>> source) =>
+        _installedAppsSource = source;
 
     /// <summary>文件导入分流（.exe/.lnk 导入，其余跳过计数）＋状态条一次性汇报＋落位动画。</summary>
     private async Task ImportLauncherFilesAsync(IReadOnlyList<string> files, int skippedUnsupportedCount)
@@ -351,7 +466,10 @@ public partial class MainWindow
                 ShowStatus($"无法启动：{result.FailureMessage}");
                 if (result.SuggestReenumerate)
                 {
-                    // 应用未注册（0x80270254/0x80070490）：已安装应用重枚举在切片 4 接线。
+                    // 应用未注册（0x80270254/0x80070490）：重枚举取图（AUMID 条目
+                    // stamp=null 恒走提取路径；失败保留最后成功 PNG，灰态由
+                    // LaunchFailed 承载，#30 §三.6）。
+                    RefreshLauncherIcon(item);
                 }
 
                 break;
@@ -393,11 +511,12 @@ public partial class MainWindow
     }
 
     /// <summary>收起态落地共用尾段（入场重播标记重置 + 几何交接）；面板收起自动退出
-    /// 编辑模式并销毁撤销提示条（#30 §四/§三.7）。</summary>
+    /// 编辑模式并销毁撤销提示条（#30 §四/§三.7）；＋菜单随收起关闭。</summary>
     private void CompletePanelCollapseHandoff()
     {
         ExitLauncherEditMode();
         DestroyLauncherUndoToast();
+        LauncherAddMenu.IsOpen = false;
         ResetLauncherEntranceReplay();
         BeginCollapsedVisualHandoff(WindowController.Collapsed(
             CurrentWorkArea(),
@@ -468,6 +587,29 @@ public partial class MainWindow
         }
 
         _launcherIcons.RequestIcon(item, icon =>
+        {
+            if (icon is not null && !_isClosing)
+            {
+                image.Tag = icon;
+            }
+        });
+    }
+
+    /// <summary>「应用未注册」失败后的重枚举取图：绕过缓存直发提取线程，回填瓦片。</summary>
+    private void RefreshLauncherIcon(LauncherItem item)
+    {
+        if (_launcherIcons is null || _launcherTileContainers.GetValueOrDefault(item.Id) is not { } tile)
+        {
+            return;
+        }
+
+        var image = FindDescendant<Image>(tile);
+        if (image is null)
+        {
+            return;
+        }
+
+        _launcherIcons.RequestRefresh(item, icon =>
         {
             if (icon is not null && !_isClosing)
             {

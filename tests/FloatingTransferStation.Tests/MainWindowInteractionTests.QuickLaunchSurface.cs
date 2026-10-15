@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using FloatingTransferStation.Launcher;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -59,7 +60,8 @@ public sealed partial class MainWindowInteractionTests
         BoardService board,
         LocalStore store,
         RecordingLauncherStarter starter,
-        WindowSettings? settings = null)
+        WindowSettings? settings = null,
+        AppLauncher? appLauncher = null)
     {
         var window = CreateWindow(
             board,
@@ -68,7 +70,7 @@ public sealed partial class MainWindowInteractionTests
             null,
             new ImageNormalizer(store.ImagesDirectory),
             launcherStore: store,
-            appLauncher: new AppLauncher(starter.Invoke));
+            appLauncher: appLauncher ?? new AppLauncher(starter.Invoke));
         return window;
     }
 
@@ -87,6 +89,27 @@ public sealed partial class MainWindowInteractionTests
         }
 
         var window = CreateLauncherWindow(directory, board, store, starter);
+        PumpUntilCondition(
+            window.Dispatcher,
+            () => window.LaunchersForTests() is { } catalog && catalog.Items.Count >= items.Length);
+        return window;
+    }
+
+    private static MainWindow CreateLauncherWindowSync(
+        TestDirectory directory,
+        BoardService board,
+        LocalStore store,
+        RecordingLauncherStarter starter,
+        AppLauncher appLauncher,
+        params LauncherItem[] items)
+    {
+        if (items.Length > 0)
+        {
+            store.SaveAsync(new LauncherStoreData(LauncherStoreData.CurrentVersion, [.. items]))
+                .GetAwaiter().GetResult();
+        }
+
+        var window = CreateLauncherWindow(directory, board, store, starter, appLauncher: appLauncher);
         PumpUntilCondition(
             window.Dispatcher,
             () => window.LaunchersForTests() is { } catalog && catalog.Items.Count >= items.Length);
@@ -691,11 +714,71 @@ public sealed partial class MainWindowInteractionTests
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             CompleteLayout(window);
             SaveWindowShot(window, Path.Combine(outputDirectory, "quicklaunch-edit-mode.png"));
+
+            // ＋ 两入口菜单（切片 4）：Popup 渲染在独立视觉树（PopupRoot），
+            // 截图取菜单面板本体（Popup.Child）。
+            InvokePrivate(window, "ExitLauncherEditMode");
+            CompleteLayout(window);
+            window.LauncherAddButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, window.LauncherAddButton));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            CompleteLayout(window);
+            SaveVisualShot((FrameworkElement)window.LauncherAddMenu.Child, Path.Combine(outputDirectory, "quicklaunch-add-menu.png"));
+            window.LauncherAddMenu.IsOpen = false;
+
+            // 已安装应用选择器（切片 4）：真实枚举前 12 项，非模态显示后截图（勾选两行）。
+            var installed = InstalledAppsEnumerator.Enumerate().Take(12).ToList();
+            if (installed.Count > 0)
+            {
+                window.UseInstalledAppsSourceForTests(() => installed);
+                window._showPickerDialog = picker =>
+                {
+                    picker.Show();
+                    picker.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+                    CompleteLayout(picker);
+                    for (var i = 0; i < Math.Min(2, picker.PickerList.Items.Count); i++)
+                    {
+                        CheckPickerRowForDocs(picker, i);
+                    }
+
+                    CompleteLayout(picker);
+                    SaveVisualShot(
+                        (FrameworkElement)picker.Content,
+                        Path.Combine(outputDirectory, "quicklaunch-picker.png"));
+                    picker.Close();
+                    return false;
+                };
+                window.LauncherAddInstalledMenuButton.RaiseEvent(new RoutedEventArgs(
+                    Button.ClickEvent, window.LauncherAddInstalledMenuButton));
+                CompleteLayout(window);
+            }
         }
         finally
         {
             CloseWindowWithoutSaving(window);
         }
+    }
+
+    private static void CheckPickerRowForDocs(InstalledAppPickerWindow picker, int index)
+    {
+        var container = picker.PickerList.ItemContainerGenerator.ContainerFromIndex(index);
+        var checkBox = FindDescendant<CheckBox>(container);
+        Assert.IsNotNull(checkBox);
+        checkBox.IsChecked = true;
+    }
+
+    private static void SaveVisualShot(FrameworkElement element, string filePath)
+    {
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            (int)Math.Ceiling(element.ActualWidth),
+            (int)Math.Ceiling(element.ActualHeight),
+            96,
+            96,
+            System.Windows.Media.PixelFormats.Pbgra32);
+        bitmap.Render(element);
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using var stream = File.Create(filePath);
+        encoder.Save(stream);
     }
 
     private static void ClickLauncherDeleteButtonForDocs(MainWindow window, LauncherItem item)
