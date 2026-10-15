@@ -234,6 +234,31 @@ public sealed class LauncherCatalog
         }
     }
 
+    /// <summary>撤销重插（#30 §三.7）：按原下标 min(index, 当前数) 重插被删条目
+    /// （其后重排不回退；重新添加同目标与撤销互不影响——去重只在添加时判定）。</summary>
+    public async Task<bool> RestoreAsync(
+        LauncherItem item,
+        int index,
+        CancellationToken cancellationToken = default)
+    {
+        await _mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (IsReadOnlyFromNewerVersion || _items.Any(entry => entry.Id == item.Id))
+            {
+                return false;
+            }
+
+            var working = _items.ToList();
+            working.Insert(Math.Clamp(index, 0, working.Count), item);
+            return await SaveAndPublishAsync(working, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _mutationGate.Release();
+        }
+    }
+
     /// <summary>
     /// 图标戳推进（同一串行协议）：只在图标 PNG 成功发布后调用；保存失败静默还原
     /// （旧图继续有效，陈旧可接受）。

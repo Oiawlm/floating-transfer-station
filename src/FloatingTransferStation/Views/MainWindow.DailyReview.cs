@@ -63,6 +63,12 @@ public partial class MainWindow
             // 启动表面空态/网格与工具行状态随激活刷新（绑定集合变化另行驱动）。
             UpdateLauncherSurfaceState();
         }
+        else if (_launcherEditMode || _launcherUndoTimer.IsEnabled)
+        {
+            // 切标签自动退出编辑模式；提示条与撤销记录随切标签一起销毁（#30 §三.7）。
+            ExitLauncherEditMode();
+            DestroyLauncherUndoToast();
+        }
 
         if (!isReview)
         {

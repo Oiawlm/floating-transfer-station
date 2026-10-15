@@ -138,7 +138,7 @@ public sealed class LauncherItem : INotifyPropertyChanged, IEquatable<LauncherIt
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    private bool SetField<T>(ref T field, T value, [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(value))] string? propertyName = null)
+    private bool SetField<T>(ref T field, T value, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
         {

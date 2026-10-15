@@ -579,6 +579,7 @@
                 Background="Transparent"
                 Visibility="Collapsed"
                 AllowDrop="True"
+                MouseLeftButtonDown="LauncherSurface_MouseLeftButtonDown"
                 DragEnter="LauncherSurface_DragEnter"
                 DragOver="LauncherSurface_DragOver"
                 DragLeave="LauncherSurface_DragLeave"
@@ -683,7 +684,10 @@
                             MouseEnter="LauncherTile_MouseEnter"
                             MouseLeave="LauncherTile_MouseLeave"
                             MouseLeftButtonDown="LauncherTile_MouseLeftButtonDown"
-                            MouseLeftButtonUp="LauncherTile_MouseLeftButtonUp">
+                            MouseLeftButtonUp="LauncherTile_MouseLeftButtonUp"
+                            PreviewMouseMove="LauncherTile_PreviewMouseMove"
+                            GiveFeedback="LauncherTile_GiveFeedback"
+                            QueryContinueDrag="LauncherTile_QueryContinueDrag">
                       <Border.RenderTransform>
                         <TransformGroup>
                           <TranslateTransform />
@@ -706,6 +710,13 @@
                           <RowDefinition Height="Auto" />
                           <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
+                        <!-- 编辑态常驻浅底（#30 §四）：进入编辑模式全体瓦片铺底。 -->
+                        <Border x:Name="TileEditLayer"
+                                Grid.RowSpan="2"
+                                Background="{DynamicResource HoverSurfaceBrush}"
+                                CornerRadius="6"
+                                Opacity="0"
+                                IsHitTestVisible="False" />
                         <Grid Grid.Row="0"
                               Width="48"
                               Height="48"
@@ -726,8 +737,10 @@
                                  Loaded="LauncherTileIcon_Loaded"
                                  Source="{Binding RelativeSource={RelativeSource Self}, Path=Tag}" />
                         </Grid>
-                        <!-- 名称 12px 两行（行高 16、CharacterEllipsis、tooltip 全名）。 -->
-                        <TextBlock Grid.Row="1"
+                        <!-- 名称 12px 两行（行高 16、CharacterEllipsis、tooltip 全名）；
+                             就地改名时被编辑器（DraftName 两行对齐）替换。 -->
+                        <TextBlock x:Name="TileNameText"
+                                   Grid.Row="1"
                                    MaxHeight="32"
                                    FontSize="12"
                                    Foreground="{DynamicResource PrimaryTextBrush}"
@@ -738,6 +751,22 @@
                                    TextTrimming="CharacterEllipsis"
                                    TextWrapping="Wrap"
                                    ToolTip="{Binding DisplayName}" />
+                        <!-- 就地改名编辑器（编辑模式单击瓦片进入；Enter 提交/Esc 取消/
+                             失焦提交；空提交=回退原名；IME 组合守卫与卡片编辑同族）。 -->
+                        <TextBox x:Name="TileNameEditor"
+                                 Grid.Row="1"
+                                 MaxHeight="32"
+                                 FontSize="12"
+                                 TextBlock.LineHeight="16"
+                                 TextBlock.LineStackingStrategy="BlockLineHeight"
+                                 MaxLength="64"
+                                 Padding="2,0"
+                                 Text="{Binding DraftName, UpdateSourceTrigger=Explicit}"
+                                 TextAlignment="Center"
+                                 TextWrapping="Wrap"
+                                 Visibility="Collapsed"
+                                 LostFocus="LauncherTileNameEditor_LostFocus"
+                                 PreviewKeyDown="LauncherTileNameEditor_PreviewKeyDown" />
                         <!-- 警告角标（失败灰态）。 -->
                         <Border x:Name="TileFailedBadge"
                                 Width="16"
@@ -755,6 +784,21 @@
                                      Foreground="{DynamicResource OnAccentBrush}"
                                      Text="!" />
                         </Border>
+                        <!-- 编辑态右上 20×20 × 删除钮（常驻，83ms 淡入；点击删除走
+                             撤销提示条事务，不弹模态）。 -->
+                        <Button x:Name="TileDeleteButton"
+                                Width="20"
+                                Height="20"
+                                Margin="0,-6,-6,0"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Top"
+                                AutomationProperties.Name="删除启动项"
+                                Padding="0"
+                                Click="LauncherTileDeleteButton_Click"
+                                FontSize="11"
+                                Foreground="{DynamicResource DangerBrush}"
+                                Content="✕"
+                                Visibility="Collapsed" />
                       </Grid>
                     </Border>
                   </DataTemplate>
@@ -782,6 +826,38 @@
                        Text="松开以添加"
                        Visibility="Collapsed"
                        IsHitTestVisible="False" />
+
+            <!-- 删除安全网事务（#30 §三.7）：单条最新删除记录 + 4s 撤销提示条；
+                 新删除替换旧记录（旧的不可再恢复，计时重置）；切标签/面板收起一起销毁。 -->
+            <Border x:Name="LauncherUndoToast"
+                    Grid.Row="1"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,0,6"
+                    Padding="12,6"
+                    Background="{DynamicResource StatusSurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Visibility="Collapsed"
+                    views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                    views:FadeAnimation.ManageVisibility="True"
+                    views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.NormalDurationMs}">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="LauncherUndoToastText"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           Foreground="{DynamicResource PrimaryTextBrush}"
+                           Text="已删除" />
+                <Button Margin="10,0,0,0"
+                        Padding="8,2"
+                        FontSize="12"
+                        Style="{StaticResource ThemedActionButtonStyle}"
+                        Content="撤销"
+                        AutomationProperties.Name="撤销删除启动项"
+                        Click="LauncherUndoToast_Click" />
+              </StackPanel>
+            </Border>
           </Grid>
         </Border>
 

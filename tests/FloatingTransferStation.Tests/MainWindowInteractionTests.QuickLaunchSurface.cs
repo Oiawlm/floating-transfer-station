@@ -617,6 +617,112 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
+    // ---- README 文档截图（docs/images）：真实系统应用 + 真实 Shell 图标，
+    // 经 FTS_QUICKLAUNCH_DOCS_DIR 门控本地生成后拷入仓库（与 hero/panel-anatomy 同为真实渲染管线）。 ----
+
+    [STATestMethod]
+    public void QuickLaunch_DocsScreenshots_SurfaceAndEditMode()
+    {
+        var outputDirectory = Environment.GetEnvironmentVariable("FTS_QUICKLAUNCH_DOCS_DIR");
+        if (string.IsNullOrWhiteSpace(outputDirectory))
+        {
+            Assert.Inconclusive("设置 FTS_QUICKLAUNCH_DOCS_DIR 后本地生成 README 截图。");
+            return;
+        }
+
+        Directory.CreateDirectory(outputDirectory);
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var realApps = new[]
+        {
+            (Path: @"C:\Windows\System32\notepad.exe", Name: "记事本"),
+            (Path: @"C:\Windows\System32\calc.exe", Name: "计算器"),
+            (Path: @"C:\Windows\explorer.exe", Name: "文件资源管理器"),
+            (Path: @"C:\Windows\System32\cmd.exe", Name: "命令提示符"),
+            (Path: @"C:\Windows\System32\control.exe", Name: "控制面板"),
+            (Path: @"C:\Program Files\Internet Explorer\iexplore.exe", Name: "Internet Explorer"),
+            (Path: @"C:\Windows\System32\taskmgr.exe", Name: "任务管理器")
+        };
+        var items = realApps
+            .Where(app => File.Exists(app.Path))
+            .Select(app => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.Application,
+                app.Path,
+                app.Name,
+                DateTimeOffset.UtcNow))
+            .ToArray();
+        var window = CreateLauncherWindowSync(directory, board, store, starter, items);
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            Assert.AreEqual(items.Length, window.LaunchersForTests().Items.Count, "前置：启动项已装载。");
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+
+            // 等待真实图标回填（内存缓存命中后瓦片 Image.Source 非空）。
+            PumpUntilCondition(
+                window.Dispatcher,
+                () =>
+                {
+                    CompleteLayout(window);
+                    return window.LaunchersForTests().Items.All(item =>
+                        FindLauncherTile(window, item) is { } tile &&
+                        FindDescendant<Image>(tile)?.Source is not null);
+                });
+            CompleteLayout(window);
+
+            SaveWindowShot(window, Path.Combine(outputDirectory, "quicklaunch-surface-light.png"));
+            DesignThemeManager.Apply(window, DesignTheme.Dark);
+            CompleteLayout(window);
+            SaveWindowShot(window, Path.Combine(outputDirectory, "quicklaunch-surface-dark.png"));
+            DesignThemeManager.Apply(window, DesignTheme.Light);
+
+            // 编辑模式 + 撤销提示条：删除一个瓦片后截图。
+            Assert.IsGreaterThan(1, window.LaunchersForTests().Items.Count, "前置：瓦片充足。");
+            InvokePrivate(window, "EnterLauncherEditMode");
+            var victim = window.LaunchersForTests().Items[1];
+            ClickLauncherDeleteButtonForDocs(window, victim);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            CompleteLayout(window);
+            SaveWindowShot(window, Path.Combine(outputDirectory, "quicklaunch-edit-mode.png"));
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    private static void ClickLauncherDeleteButtonForDocs(MainWindow window, LauncherItem item)
+    {
+        var tile = FindLauncherTile(window, item);
+        Assert.IsNotNull(tile);
+        var button = FindDescendant<Button>(tile);
+        Assert.IsNotNull(button);
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+    }
+
+    private static void SaveWindowShot(MainWindow window, string filePath)
+    {
+        var shell = (Border)window.FindName("WindowShell")!;
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            (int)Math.Ceiling(shell.ActualWidth),
+            (int)Math.Ceiling(shell.ActualHeight),
+            96,
+            96,
+            System.Windows.Media.PixelFormats.Pbgra32);
+        bitmap.Render(shell);
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using var stream = File.Create(filePath);
+        encoder.Save(stream);
+    }
+
     private static void ApplySettingsWidth(MainWindow window, double panelWidth)
     {
         // 表面宽度证据（§六.3）：直接设展开几何宽度（面板宽 + 标签轨 58），

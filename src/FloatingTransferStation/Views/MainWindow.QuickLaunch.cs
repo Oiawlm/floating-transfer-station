@@ -63,6 +63,18 @@ public partial class MainWindow
         _appLauncher = appLauncher ?? new AppLauncher(packagedActivator: new ShellPackagedAppActivator().Activate);
         _launchCollapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(DesignTokens.LaunchCollapseDelayMs) };
         _launchCollapseTimer.Tick += LaunchCollapseTimer_Tick;
+        _launcherUndoTimer.Tick += LauncherUndoTimer_Tick;
+        // 瓦片改名编辑器的 IME 组合标记（组合期的 Esc 属输入法操作，不触发取消；与
+        // 分类改名框同族守卫，#7/#22）。
+        AddHandler(
+            System.Windows.Input.TextCompositionManager.PreviewTextInputStartEvent,
+            new TextCompositionEventHandler((_, args) => _launcherRenameComposing = true));
+        AddHandler(
+            System.Windows.Input.TextCompositionManager.PreviewTextInputUpdateEvent,
+            new TextCompositionEventHandler((_, args) => _launcherRenameComposing = true));
+        AddHandler(
+            System.Windows.Input.TextCompositionManager.PreviewTextInputEvent,
+            new TextCompositionEventHandler((_, args) => _launcherRenameComposing = false));
         TrackPendingOperation(LoadLaunchersAsync(launcherStore));
     }
 
@@ -105,9 +117,23 @@ public partial class MainWindow
     private void OnLauncherItemsChanged()
     {
         UpdateLauncherSurfaceState();
+        // 目录权威计数（_items 在发布前置位）：PublishInline 的 Clear→Add 会让
+        // CollectionChanged 在瞬时空集上触发，不得据此判「删空」。
+        if (_launcherEditMode && _launchers.Count == 0)
+        {
+            // 删空最后瓦片：编辑模式无对象，自动退出（空态工具行编辑钮回到禁用）。
+            ExitLauncherEditMode();
+        }
+
+        if (_launcherEditMode)
+        {
+            UpdateLauncherEditVisuals();
+        }
     }
 
-    /// <summary>空态/网格切换与工具行状态（编辑钮无项目禁用 40% 透明，切片 3 启用编辑）。</summary>
+    /// <summary>空态/网格切换与工具行状态（编辑钮无项目禁用 40% 透明）。全部读目录
+    /// 权威计数——PublishInline 的 Clear→Add 瞬态会让 Items.Count 闪 0（若据此钳制
+    /// 焦点索引会被毒化为 -1）。</summary>
     private void UpdateLauncherSurfaceState()
     {
         if (!IsLauncherSurfaceReady())
@@ -115,14 +141,14 @@ public partial class MainWindow
             return;
         }
 
-        var isEmpty = _launchers.Items.Count == 0;
+        var isEmpty = _launchers.Count == 0;
         LauncherEmptyState.SetCurrentValue(VisibilityProperty, isEmpty ? Visibility.Visible : Visibility.Collapsed);
         LauncherScroll.SetCurrentValue(VisibilityProperty, isEmpty ? Visibility.Collapsed : Visibility.Visible);
         LauncherEditButton.SetCurrentValue(IsEnabledProperty, !isEmpty && !_launchers.IsReadOnlyFromNewerVersion);
         LauncherEditButton.SetCurrentValue(OpacityProperty, isEmpty ? 0.4 : 1.0);
-        if (_launcherFocusedIndex >= _launchers.Items.Count)
+        if (_launcherFocusedIndex >= _launchers.Count)
         {
-            _launcherFocusedIndex = _launchers.Items.Count - 1;
+            _launcherFocusedIndex = _launchers.Count - 1;
             ApplyLauncherFocusVisual();
         }
     }
@@ -255,6 +281,14 @@ public partial class MainWindow
         var pressId = _launcherPressItemId;
         _launcherPressItemId = null;
         AnimateLauncherPressScale(tile, pressed: false);
+        if (_launcherDraggingId is not null)
+        {
+            // 拖拽重排结束（放置=提交；瓦片仍捕获鼠标，需释放）。
+            tile.ReleaseMouseCapture();
+            EndLauncherTileDrag(apply: true);
+            return;
+        }
+
         var displacement = e.GetPosition(this) - _launcherPressStartPosition;
         var isClick = pressId == item.Id &&
             Math.Abs(displacement.X) < 4 &&
@@ -267,6 +301,13 @@ public partial class MainWindow
         e.Handled = true;
         _launcherFocusedIndex = IndexOfLauncherItem(item);
         ApplyLauncherFocusVisual();
+        if (_launcherEditMode)
+        {
+            // 编辑态单击=就地改名（不启动）。
+            BeginLauncherTileRename(item);
+            return;
+        }
+
         if (IsLauncherLaunchLatched(item))
         {
             return;
@@ -351,9 +392,12 @@ public partial class MainWindow
         CompletePanelCollapseHandoff();
     }
 
-    /// <summary>收起态落地共用尾段（入场重播标记重置 + 几何交接）。</summary>
+    /// <summary>收起态落地共用尾段（入场重播标记重置 + 几何交接）；面板收起自动退出
+    /// 编辑模式并销毁撤销提示条（#30 §四/§三.7）。</summary>
     private void CompletePanelCollapseHandoff()
     {
+        ExitLauncherEditMode();
+        DestroyLauncherUndoToast();
         ResetLauncherEntranceReplay();
         BeginCollapsedVisualHandoff(WindowController.Collapsed(
             CurrentWorkArea(),
@@ -447,6 +491,40 @@ public partial class MainWindow
     private void LauncherSurface_DragLeave(object sender, DragEventArgs e)
     {
         SetLauncherDropHighlight(active: false);
+    }
+
+    /// <summary>点空白退出编辑模式（#30 §四）：命中瓦片/工具行/提示条/滚动区内容的
+    /// 按下不在此列（由各自控件消费），命中表面背景即退出。</summary>
+    private void LauncherSurface_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!_launcherEditMode)
+        {
+            return;
+        }
+
+        if (e.OriginalSource is DependencyObject source &&
+            (IsWithinLauncherTile(source) || source is ButtonBase or TextBox or ScrollBar))
+        {
+            return;
+        }
+
+        ExitLauncherEditMode();
+    }
+
+    private static bool IsWithinLauncherTile(DependencyObject source)
+    {
+        var current = source;
+        while (current is not null)
+        {
+            if (current is Border { DataContext: LauncherItem })
+            {
+                return true;
+            }
+
+            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+        }
+
+        return false;
     }
 
     private async void LauncherSurface_Drop(object sender, DragEventArgs e)
@@ -900,14 +978,57 @@ public partial class MainWindow
             case Key.Delete:
                 // 查看态 Delete 无操作（结构性排除，键盘层级③）。
                 return true;
+            case Key.F2:
+                // 查看态 F2=进入编辑模式（#30 §四；优先于窗口级标签改名 F2）。
+                EnterLauncherEditMode();
+                return true;
             default:
                 return false;
         }
     }
 
-    private bool HandleLauncherEditKey(KeyEventArgs e) => false; // 切片 3：编辑态键盘层级。
+    private bool HandleLauncherEditKey(KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Delete:
+                if (_launcherFocusedIndex >= 0 && _launcherFocusedIndex < _launchers.Items.Count)
+                {
+                    TrackPendingOperation(DeleteLauncherItemAsync(_launchers.Items[_launcherFocusedIndex]));
+                }
 
-    private bool IsLauncherEditModeActive() => false; // 切片 3：编辑模式状态。
+                return true;
+            case Key.F2:
+            case Key.Enter:
+                if (_launcherFocusedIndex >= 0 && _launcherFocusedIndex < _launchers.Items.Count)
+                {
+                    BeginLauncherTileRename(_launchers.Items[_launcherFocusedIndex]);
+                }
+
+                return true;
+            case Key.Escape:
+                ExitLauncherEditMode();
+                return true;
+            case Key.Left:
+                MoveLauncherFocus(-1, 0);
+                return true;
+            case Key.Right:
+                MoveLauncherFocus(1, 0);
+                return true;
+            case Key.Up:
+                MoveLauncherFocus(0, -1);
+                return true;
+            case Key.Down:
+                MoveLauncherFocus(0, 1);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private bool _launcherEditMode;
+
+    private bool IsLauncherEditModeActive() => _launcherEditMode;
 
     private void MoveLauncherFocus(int deltaColumns, int deltaRows)
     {
@@ -939,9 +1060,555 @@ public partial class MainWindow
         }
     }
 
+    // ---- 编辑模式（#30 §四）：进入=工具行按钮 / F2；退出=完成钮 / Esc / 点空白 /
+    // 切标签自动退出 / 面板收起自动退出。编辑态：瓦片常驻浅底 + 右上 × 删除钮（常驻）+
+    // 单击=就地改名 + 拖拽重排（阈值 4 DIP）+ Delete 删焦点瓦片 + 方向键导航。----
+
     private void LauncherEditButton_Click(object sender, RoutedEventArgs e)
     {
-        // 切片 3：进入编辑模式（改名/删除/重排/键盘层级②）。
+        if (_launcherEditMode)
+        {
+            ExitLauncherEditMode();
+        }
+        else
+        {
+            EnterLauncherEditMode();
+        }
+    }
+
+    private void EnterLauncherEditMode()
+    {
+        if (_isClosing || _launchers is null || _launchers.Items.Count == 0 || _launcherEditMode)
+        {
+            return;
+        }
+
+        _launcherEditMode = true;
+        LauncherEditButton.SetCurrentValue(ContentControl.ContentProperty, "完成");
+        LauncherEditHint.SetCurrentValue(VisibilityProperty, Visibility.Visible);
+        if (_launcherFocusedIndex < 0)
+        {
+            _launcherFocusedIndex = 0;
+        }
+
+        ApplyLauncherFocusVisual();
+        UpdateLauncherEditVisuals();
+    }
+
+    private void ExitLauncherEditMode()
+    {
+        if (!_launcherEditMode)
+        {
+            return;
+        }
+
+        CommitLauncherTileRename();
+        _launcherEditMode = false;
+        LauncherEditButton.SetCurrentValue(ContentControl.ContentProperty, "编辑");
+        LauncherEditHint.SetCurrentValue(VisibilityProperty, Visibility.Collapsed);
+        EndLauncherTileDrag(apply: false);
+        UpdateLauncherEditVisuals();
+    }
+
+    /// <summary>编辑态瓦片视觉：常驻浅底（Opacity 1/0）与 × 删除钮可见性（83ms 淡入
+    /// 由 FadeAnimation 承载；多选 40ms 交错的视觉近似为同帧淡入——重排动画另有专门路径）。</summary>
+    private void UpdateLauncherEditVisuals()
+    {
+        foreach (var item in _launchers?.Items ?? [])
+        {
+            if (FindLauncherTile(item) is not { } tile)
+            {
+                continue;
+            }
+
+            if (FindTemplatePart<Border>(tile, "TileEditLayer") is { } editLayer)
+            {
+                editLayer.SetCurrentValue(UIElement.OpacityProperty, _launcherEditMode ? 1d : 0d);
+            }
+
+            if (FindTemplatePart<Button>(tile, "TileDeleteButton") is { } deleteButton)
+            {
+                FadeAnimation.SetIsActive(deleteButton, _launcherEditMode);
+            }
+        }
+    }
+
+    private T? FindTemplatePart<T>(FrameworkElement tile, string name)
+        where T : FrameworkElement
+    {
+        if (tile.Name == name && tile is T exact)
+        {
+            return exact;
+        }
+
+        return Descendants<T>(tile).FirstOrDefault(element => element.Name == name);
+    }
+
+    // ---- 就地改名（编辑态单击/F2/Enter）：预填全选、Enter 提交/Esc 取消/失焦提交、
+    // 空提交=回退原名、IME 组合守卫（组合期的 Esc 属输入法操作不触发取消）。----
+
+    private LauncherItem? _launcherRenamingItem;
+    private bool _launcherRenameComposing;
+
+    private void BeginLauncherTileRename(LauncherItem item)
+    {
+        if (!_launcherEditMode)
+        {
+            return;
+        }
+
+        CommitLauncherTileRename();
+        item.DraftName = item.DisplayName;
+        item.IsEditingName = true;
+        _launcherRenamingItem = item;
+        _launcherFocusedIndex = IndexOfLauncherItem(item);
+        ApplyLauncherFocusVisual();
+        UpdateLayout();
+        if (FindLauncherTile(item) is not { } tile ||
+            FindTemplatePart<TextBox>(tile, "TileNameEditor") is not { } editor)
+        {
+            return;
+        }
+
+        editor.SetCurrentValue(TextBox.VisibilityProperty, Visibility.Visible);
+        if (FindTemplatePart<TextBlock>(tile, "TileNameText") is { } nameText)
+        {
+            nameText.SetCurrentValue(VisibilityProperty, Visibility.Collapsed);
+        }
+
+        editor.Focus();
+        editor.SelectAll();
+    }
+
+    /// <summary>提交改名（空/空白=回退原名）；保存失败由目录还原原名+状态条。</summary>
+    private void CommitLauncherTileRename()
+    {
+        if (_launcherRenamingItem is not { } item)
+        {
+            return;
+        }
+
+        _launcherRenamingItem = null;
+        var draft = item.DraftName?.Trim();
+        var nextName = string.IsNullOrEmpty(draft) ? item.DisplayName : draft;
+        item.IsEditingName = false;
+        RestoreRenameVisuals(item);
+        if (!string.IsNullOrEmpty(draft) && nextName != item.DisplayName)
+        {
+            TrackPendingOperation(_launchers.RenameAsync(item.Id, nextName));
+        }
+    }
+
+    private void CancelLauncherTileRename()
+    {
+        if (_launcherRenamingItem is not { } item)
+        {
+            return;
+        }
+
+        _launcherRenamingItem = null;
+        item.IsEditingName = false;
+        RestoreRenameVisuals(item);
+    }
+
+    private void RestoreRenameVisuals(LauncherItem item)
+    {
+        if (FindLauncherTile(item) is not { } tile)
+        {
+            return;
+        }
+
+        if (FindTemplatePart<TextBox>(tile, "TileNameEditor") is { } editor)
+        {
+            editor.SetCurrentValue(TextBox.VisibilityProperty, Visibility.Collapsed);
+        }
+
+        if (FindTemplatePart<TextBlock>(tile, "TileNameText") is { } nameText)
+        {
+            nameText.SetCurrentValue(VisibilityProperty, Visibility.Visible);
+        }
+    }
+
+    private void LauncherTileNameEditor_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox editor || _launcherRenamingItem is null)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            if (_launcherRenameComposing)
+            {
+                // IME 组合期的 Esc=取消候选，属输入法操作，不触发改名取消。
+                return;
+            }
+
+            e.Handled = true;
+            CancelLauncherTileRename();
+            return;
+        }
+
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            CommitLauncherTileRename();
+            if (_launcherFocusedIndex >= 0 && _launcherFocusedIndex < _launchers.Items.Count)
+            {
+                FindLauncherTile(_launchers.Items[_launcherFocusedIndex])?.Focus();
+            }
+        }
+    }
+
+    private void LauncherTileNameEditor_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (ReferenceEquals(sender, Keyboard.FocusedElement) || _launcherRenamingItem is null)
+        {
+            return;
+        }
+
+        CommitLauncherTileRename();
+    }
+
+    // ---- 删除安全网（#30 §三.7）：单条最新删除记录 + 4s 撤销提示条事务。----
+
+    private readonly DispatcherTimer _launcherUndoTimer = new() { Interval = TimeSpan.FromSeconds(4) };
+    private LauncherRemoveOutcome? _launcherUndoRecord;
+
+    private async Task DeleteLauncherItemAsync(LauncherItem item)
+    {
+        if (_launchers is null)
+        {
+            return;
+        }
+
+        if (_launcherRenamingItem?.Id == item.Id)
+        {
+            CancelLauncherTileRename();
+        }
+
+        var outcome = await _launchers.RemoveAsync(item.Id);
+        if (outcome is null)
+        {
+            return;
+        }
+
+        await Dispatcher.InvokeAsync(() =>
+        {
+            // 新删除替换旧记录（旧的不可再恢复），计时重置 4s。
+            _launcherUndoRecord = outcome;
+            LauncherUndoToastText.SetCurrentValue(
+                TextBlock.TextProperty,
+                $"已删除「{outcome.Item.DisplayName}」");
+            FadeAnimation.SetIsActive(LauncherUndoToast, true);
+            _launcherUndoTimer.Stop();
+            _launcherUndoTimer.Start();
+            if (_launcherFocusedIndex >= _launchers.Items.Count)
+            {
+                _launcherFocusedIndex = _launchers.Items.Count - 1;
+            }
+
+            ApplyLauncherFocusVisual();
+        });
+    }
+
+    private async void LauncherUndoToast_Click(object sender, RoutedEventArgs e)
+    {
+        if (_launcherUndoRecord is not { } record)
+        {
+            return;
+        }
+
+        var restored = await _launchers.RestoreAsync(record.Item, Math.Min(record.Index, _launchers.Items.Count));
+        if (!restored)
+        {
+            // 撤销保存失败：恢复「已删除」状态（记录保留）、提示条保留可重试至超时。
+            return;
+        }
+
+        await Dispatcher.InvokeAsync(() =>
+        {
+            _launcherUndoRecord = null;
+            _launcherUndoTimer.Stop();
+            FadeAnimation.SetIsActive(LauncherUndoToast, false);
+            AnimateLauncherShifts();
+        });
+    }
+
+    /// <summary>提示条与记录随切标签/面板收起一起销毁。</summary>
+    private void DestroyLauncherUndoToast()
+    {
+        _launcherUndoRecord = null;
+        _launcherUndoTimer.Stop();
+        FadeAnimation.SetIsActive(LauncherUndoToast, false);
+    }
+
+    private void LauncherUndoTimer_Tick(object? sender, EventArgs e)
+    {
+        _launcherUndoTimer.Stop();
+        FadeAnimation.SetIsActive(LauncherUndoToast, false);
+        _launcherUndoRecord = null;
+    }
+
+    private void LauncherTileDeleteButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: LauncherItem item })
+        {
+            e.Handled = true;
+            TrackPendingOperation(DeleteLauncherItemAsync(item));
+        }
+    }
+
+    // ---- 拖拽重排（编辑态；阈值 4 DIP；查看态拖拽=无操作）：
+    // 拾起=瓦片跟随指针；让位指示=目标瓦片 accent 描边；放置=单次 MoveAsync +
+    // 邻位让位/归位动画（变更前位置缓存 → 变更后位移回零 167ms）。----
+
+    private Guid? _launcherDraggingId;
+    private System.Windows.Point _launcherDragStart;
+    private int _launcherDropTargetIndex = -1;
+    private Border? _launcherDropTargetTile;
+
+    private void LauncherTile_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_launcherEditMode ||
+            sender is not Border { DataContext: LauncherItem pressed } tile ||
+            _launcherPressItemId != pressed.Id ||
+            _launcherRenamingItem is not null)
+        {
+            return;
+        }
+
+        var position = e.GetPosition(this);
+        if (_launcherDraggingId is null)
+        {
+            var displacement = position - _launcherPressStartPosition;
+            if (Math.Abs(displacement.X) < 4 && Math.Abs(displacement.Y) < 4)
+            {
+                return;
+            }
+
+            _launcherDraggingId = pressed.Id;
+            _launcherDragStart = position;
+            tile.CaptureMouse();
+            AnimateLauncherPressScale(tile, pressed: false);
+        }
+
+        if (FindLauncherTile(pressed) is { } dragged)
+        {
+            var translate = LauncherTileTranslate(dragged);
+            var delta = position - _launcherDragStart;
+            if (!ClientAreaAnimationsEnabled)
+            {
+                translate.BeginAnimation(TranslateTransform.YProperty, null);
+                translate.SetCurrentValue(TranslateTransform.YProperty, delta.Y);
+                translate.BeginAnimation(TranslateTransform.XProperty, null);
+                translate.SetCurrentValue(TranslateTransform.XProperty, delta.X);
+            }
+            else
+            {
+                translate.BeginAnimation(
+                    TranslateTransform.XProperty,
+                    new DoubleAnimation(delta.X, TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs)));
+                translate.BeginAnimation(
+                    TranslateTransform.YProperty,
+                    new DoubleAnimation(delta.Y, TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs)));
+            }
+        }
+
+        UpdateLauncherDropTarget(position);
+    }
+
+    private void UpdateLauncherDropTarget(System.Windows.Point windowPosition)
+    {
+        if (_launcherDraggingId is not { } draggingId)
+        {
+            return;
+        }
+
+        Border? target = null;
+        var targetIndex = -1;
+        var index = 0;
+        foreach (var item in _launchers.Items)
+        {
+            if (item.Id == draggingId)
+            {
+                index++;
+                continue;
+            }
+
+            if (FindLauncherTile(item) is { } candidate &&
+                IsPositionOverTile(candidate, windowPosition))
+            {
+                target = candidate;
+                targetIndex = index;
+                break;
+            }
+
+            index++;
+        }
+
+        if (!ReferenceEquals(_launcherDropTargetTile, target))
+        {
+            _launcherDropTargetTile?.SetCurrentValue(Border.BorderBrushProperty, Brushes.Transparent);
+            _launcherDropTargetTile = target;
+            target?.SetCurrentValue(Border.BorderBrushProperty, (Brush)FindResource("AccentBrush"));
+        }
+
+        _launcherDropTargetIndex = targetIndex;
+    }
+
+    private bool IsPositionOverTile(Border tile, System.Windows.Point windowPosition)
+    {
+        var position = tile.TransformToAncestor(this).Transform(new System.Windows.Point());
+        return windowPosition.X >= position.X && windowPosition.X < position.X + tile.ActualWidth &&
+            windowPosition.Y >= position.Y && windowPosition.Y < position.Y + tile.ActualHeight;
+    }
+
+    /// <summary>结束拖拽（放置=提交重排并播放邻位动画；取消=归位动画）。</summary>
+    private void EndLauncherTileDrag(bool apply)
+    {
+        if (_launcherDraggingId is not { } draggingId)
+        {
+            _launcherDropTargetTile?.SetCurrentValue(Border.BorderBrushProperty, Brushes.Transparent);
+            _launcherDropTargetTile = null;
+            _launcherDropTargetIndex = -1;
+            return;
+        }
+
+        _launcherDraggingId = null;
+        _launcherDropTargetTile?.SetCurrentValue(Border.BorderBrushProperty, Brushes.Transparent);
+        _launcherDropTargetTile = null;
+        var targetIndex = _launcherDropTargetIndex;
+        _launcherDropTargetIndex = -1;
+        if (apply && targetIndex >= 0 && _launchers?.Find(draggingId) is { } item)
+        {
+            var move = _launchers.MoveAsync(item.Id, targetIndex);
+            TrackPendingOperation(AnimateAfterLauncherMutationAsync(move));
+        }
+        else if (_launchers?.Find(draggingId) is { } returning)
+        {
+            ResetLauncherTileTransforms(returning);
+        }
+    }
+
+    private async Task AnimateAfterLauncherMutationAsync(Task<bool> mutation)
+    {
+        var positionsBefore = CaptureLauncherTilePositions();
+        var changed = await mutation;
+        await Dispatcher.InvokeAsync(() =>
+        {
+            if (changed)
+            {
+                AnimateLauncherShifts(positionsBefore);
+            }
+            else if (_launcherDraggingId is null)
+            {
+                // 保存失败：内存已还原——重置全部瓦片变换（归位）。
+                foreach (var item in _launchers.Items)
+                {
+                    ResetLauncherTileTransforms(item);
+                }
+            }
+        });
+    }
+
+    private Dictionary<Guid, System.Windows.Point> CaptureLauncherTilePositions()
+    {
+        var positions = new Dictionary<Guid, System.Windows.Point>();
+        foreach (var item in _launchers?.Items ?? [])
+        {
+            if (FindLauncherTile(item) is { } tile)
+            {
+                positions[item.Id] = tile.TranslatePoint(new System.Windows.Point(), this);
+            }
+        }
+
+        return positions;
+    }
+
+    /// <summary>邻位让位/归位动画：重排（或撤销重插）后，位置变化的瓦片从旧位置
+    /// 位移回零 167ms（自身跟随指针的平移同时清零=归位）。</summary>
+    private void AnimateLauncherShifts(Dictionary<Guid, System.Windows.Point>? positionsBefore = null)
+    {
+        if (!ClientAreaAnimationsEnabled)
+        {
+            foreach (var item in _launchers?.Items ?? [])
+            {
+                ResetLauncherTileTransforms(item, immediate: true);
+            }
+
+            return;
+        }
+
+        foreach (var item in _launchers?.Items ?? [])
+        {
+            if (FindLauncherTile(item) is not { } tile)
+            {
+                continue;
+            }
+
+            var previous = positionsBefore?.GetValueOrDefault(item.Id);
+            if (previous is { } origin)
+            {
+                var current = tile.TranslatePoint(new System.Windows.Point(), this);
+                var deltaX = origin.X - current.X;
+                var deltaY = origin.Y - current.Y;
+                if (Math.Abs(deltaX) < 1 && Math.Abs(deltaY) < 1)
+                {
+                    ResetLauncherTileTransforms(item, immediate: true);
+                    continue;
+                }
+
+                var translate = LauncherTileTranslate(tile);
+                translate.SetCurrentValue(TranslateTransform.XProperty, deltaX);
+                translate.SetCurrentValue(TranslateTransform.YProperty, deltaY);
+                translate.BeginAnimation(
+                    TranslateTransform.XProperty,
+                    new DoubleAnimation(0, TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs)));
+                translate.BeginAnimation(
+                    TranslateTransform.YProperty,
+                    new DoubleAnimation(0, TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs)));
+            }
+            else
+            {
+                ResetLauncherTileTransforms(item, immediate: true);
+            }
+        }
+    }
+
+    private void ResetLauncherTileTransforms(LauncherItem item, bool immediate = false)
+    {
+        if (FindLauncherTile(item) is not { } tile)
+        {
+            return;
+        }
+
+        var translate = LauncherTileTranslate(tile);
+        if (immediate || !ClientAreaAnimationsEnabled)
+        {
+            translate.BeginAnimation(TranslateTransform.XProperty, null);
+            translate.BeginAnimation(TranslateTransform.YProperty, null);
+            translate.SetCurrentValue(TranslateTransform.XProperty, 0d);
+            translate.SetCurrentValue(TranslateTransform.YProperty, 0d);
+            return;
+        }
+
+        translate.BeginAnimation(
+            TranslateTransform.XProperty,
+            new DoubleAnimation(0, TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs)));
+        translate.BeginAnimation(
+            TranslateTransform.YProperty,
+            new DoubleAnimation(0, TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs)));
+    }
+
+    private void LauncherTile_GiveFeedback(object sender, GiveFeedbackEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    private void LauncherTile_QueryContinueDrag(object sender, QueryContinueDragEventArgs e)
+    {
+        e.Handled = true;
     }
 
     private void DisposeQuickLaunch()
