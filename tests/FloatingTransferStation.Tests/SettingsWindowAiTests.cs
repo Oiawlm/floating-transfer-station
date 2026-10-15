@@ -324,15 +324,15 @@ public sealed class SettingsWindowAiTests
     }
 
     [STATestMethod]
-    public void TestConnection_SendsClientDefaultModelWithoutSelectionState()
+    public void TestConnection_ProbesModelsWithoutSelectionState()
     {
-        // 连接测试请求体模型必须恒等于 DeepSeekClient.DefaultModel（契约 #28），
-        // 与设置页当前状态无关（无选择状态可依）。
+        // 探活改 GET /models（契约 #28 修订）：无请求体、无模型字段，与设置页
+        // 当前状态无关（无选择状态可依）；成功文案模型名恒为 DefaultModel。
         using var directory = new TestDirectory();
         var protector = new FakeSecretProtector();
         var preferencesStore = new RecordingPreferencesStore();
         var handler = new StubHttpMessageHandler();
-        handler.Respond = (_, _) => HandlerResponse(200, SuccessBody(DeepSeekClient.DefaultModel));
+        handler.Respond = (_, _) => HandlerResponse(200, ModelsBody());
         var window = CreateWindow(
             directory,
             preferencesStore,
@@ -348,11 +348,12 @@ public sealed class SettingsWindowAiTests
             PumpUntil(settings.Dispatcher, () => StatusText(settings).Visibility == Visibility.Visible);
 
             StringAssert.Contains(StatusText(settings).Text, "连接成功");
-            var body = System.Text.Json.JsonDocument.Parse(handler.LastRequestBody!).RootElement;
-            Assert.AreEqual(
-                DeepSeekClient.DefaultModel,
-                body.GetProperty("model").GetString(),
-                "连接测试必须以客户端默认模型发起。");
+            StringAssert.Contains(StatusText(settings).Text, DeepSeekClient.DefaultModel);
+            var request = handler.LastRequest!;
+            Assert.IsNotNull(request, "必须真实发起（假 handler 捕获的）请求。");
+            Assert.AreEqual(HttpMethod.Get, request.Method, "探活必须是 GET /models。");
+            Assert.AreEqual("https://api.deepseek.com/models", request.RequestUri!.ToString());
+            Assert.IsNull(request.Content, "探活不得携带请求体（不得构造 chat completion）。");
         }
         finally
         {
@@ -367,7 +368,7 @@ public sealed class SettingsWindowAiTests
         var protector = new FakeSecretProtector();
         var preferencesStore = new RecordingPreferencesStore();
         var handler = new StubHttpMessageHandler();
-        handler.Respond = (_, _) => HandlerResponse(200, SuccessBody("deepseek-flash"));
+        handler.Respond = (_, _) => HandlerResponse(200, ModelsBody());
         var window = CreateWindow(
             directory,
             preferencesStore,
@@ -421,6 +422,45 @@ public sealed class SettingsWindowAiTests
             PumpUntil(settings.Dispatcher, () => StatusText(settings).Visibility == Visibility.Visible);
 
             Assert.AreEqual("API Key 无效。", StatusText(settings).Text);
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    [STATestMethod]
+    public void TestConnection_WithUnmappedNetworkException_ShowsMappedChineseFailure()
+    {
+        // 复现报障现象类别（层②）：映射外异常（原始 SocketException）曾穿透
+        // 客户端到本 UI 的 catch(Exception) 兜底——朋友看到的正是兜底文案
+        // 「测试失败，请重试。」且诊断信息全丢（现场异常类型未留存，此处注入
+        // 的类型是缺口证明）；客户端边界完备化后显示精确映射文案，兜底退化为
+        // 纯崩溃护栏。
+        using var directory = new TestDirectory();
+        var protector = new FakeSecretProtector();
+        var preferencesStore = new RecordingPreferencesStore();
+        var handler = new StubHttpMessageHandler();
+        handler.Respond = (_, _) => throw new System.Net.Sockets.SocketException();
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            protector,
+            new DeepSeekClient(handler));
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            KeyBox(settings).Password = PlainFakeKey;
+
+            ((Button)settings.FindName("DeepSeekTestButton")).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpUntil(settings.Dispatcher, () => StatusText(settings).Visibility == Visibility.Visible);
+
+            Assert.AreEqual(
+                "无法连接 DeepSeek 服务，请检查网络。",
+                StatusText(settings).Text,
+                "映射外异常必须由客户端边界映射为带类别的文案，不得落到 UI 兜底。");
         }
         finally
         {
@@ -503,7 +543,7 @@ public sealed class SettingsWindowAiTests
             DesignThemeManager.Apply(settings, DesignTheme.Light);
             RevealAiSection(settings);
 
-            handler.Respond = (_, _) => HandlerResponse(200, SuccessBody("deepseek-flash"));
+            handler.Respond = (_, _) => HandlerResponse(200, ModelsBody());
             ((Button)settings.FindName("DeepSeekTestButton")).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
             PumpUntil(settings.Dispatcher, () => StatusText(settings).Visibility == Visibility.Visible);
@@ -569,9 +609,9 @@ public sealed class SettingsWindowAiTests
             Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json")
         };
 
-    private static string SuccessBody(string model) => """
-        {"id":"1","model":"DEEPSEEK_MODEL","choices":[{"index":0,"message":{"role":"assistant","content":"pong"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}
-        """.Replace("DEEPSEEK_MODEL", model);
+    private static string ModelsBody() => """
+        {"object":"list","data":[{"id":"deepseek-flash","object":"model","owned_by":"deepseek"}]}
+        """;
 
     private static void CompleteLayout(Window window)
     {

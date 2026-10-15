@@ -10,11 +10,11 @@
 
 ## 下载与安装
 
-在 [1.46.0 发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.46.0) 下载 Windows 安装程序：
+在 [1.46.1 发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.46.1) 下载 Windows 安装程序：
 
 | 平台 | 下载 | 状态 |
 |---|---|---|
-| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.46.0/FloatingTransferStation-Setup-1.46.0.exe) | 正式版 |
+| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.46.1/FloatingTransferStation-Setup-1.46.1.exe) | 正式版 |
 
 发行页同时提供 `SHA256SUMS.txt`。Windows 无需另装 .NET。
 
@@ -54,7 +54,7 @@ Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自
 *发现新版本：头部最左「更新」按钮点亮，点击即自动下载安装并重启*
 
 - **设置**：点击面板头部的齿轮按钮可打开设置窗口（左导航 + 右内容页双栏布局，可拖拽缩放）：左侧导航 5 组——外观（主题：跟随系统/浅色/深色、界面动效、置顶分隔：无/实线/虚线/强调条）、面板（标签顺序：拖动行或用上移/下移按钮调整「图片、复盘、启动、待分类」四个标签的显示顺序、内容复制手势（右键卡片操作区复制、`Ctrl + C` 复制选中）、垃圾桶按钮无选择时的左右键行为）、通用（开机自启、全局快捷键 `Ctrl + Alt + V` 唤起面板，默认关闭）、数据与维护（自动清理：默认开启，保留时长 2/4/6/8/10/12/24 小时七档可选、默认 24 小时，非置顶卡片入库满所选时长自动删除、数据目录、插件管理）、AI 设置（DeepSeek）；页脚常驻关于与退出应用。改动立即生效并自动保存；窗口大小与位置跨会话记忆（可拖动边缘自由缩放，恢复时按所在显示器自动钳回工作区）。某页内容超出可视高度时页内出现滚动条。
-- **AI 设置（DeepSeek）**：设置窗口的「AI 设置」节可填入 DeepSeek 官方国内 API 的 Key（在 [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) 创建），并用「测试连接」就地验证 Key、余额与网络（请求统一使用 `deepseek-flash` 模型，结果直接显示；Key 为空时不会发送任何请求）。Key 经 Windows 系统加密（DPAPI）后只保存在本机 preferences.json，界面只显示掩码；输入后焦点离开即自动保存，清空后失焦即删除。填好 Key 后，内容超长被截断的文字卡悬停时右上按钮组会出现「AI 整理」按钮：一键按内置「语音转文字整理器」提示词整理全文——忠于原意、保留个人语言风格，把口语跳跃、重复、后置补充和识别错误清理成逻辑顺畅、可直接使用的文字，**结果直接替换卡片正文**；不满意按 `Ctrl + Z` 恢复原文。整理期间按钮变为旋转图标（每张卡同时只整理一次，重复点击自动忽略）；超过 2 万字的正文不支持整理；整理中途手动改了卡片内容，返回的结果会被自动放弃、不覆盖新内容。
+- **AI 设置（DeepSeek）**：设置窗口的「AI 设置」节可填入 DeepSeek 官方国内 API 的 Key（在 [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) 创建），并用「测试连接」就地验证连接与鉴权——对官方模型列表端点 `GET /models` 探活，不发起生成、不消耗 token；成功显示「连接成功（deepseek-flash，耗时 …）」，失败显示中文原因（Key 无效、余额不足、限频、超时、服务不可用等；Key 为空时不会发送任何请求）。Key 经 Windows 系统加密（DPAPI）后只保存在本机 preferences.json，界面只显示掩码；输入后焦点离开即自动保存，清空后失焦即删除。填好 Key 后，内容超长被截断的文字卡悬停时右上按钮组会出现「AI 整理」按钮：一键按内置「语音转文字整理器」提示词整理全文——忠于原意、保留个人语言风格，把口语跳跃、重复、后置补充和识别错误清理成逻辑顺畅、可直接使用的文字，**结果直接替换卡片正文**；不满意按 `Ctrl + Z` 恢复原文。整理期间按钮变为旋转图标（每张卡同时只整理一次，重复点击自动忽略）；超过 2 万字的正文不支持整理；整理中途手动改了卡片内容，返回的结果会被自动放弃、不覆盖新内容。
 
 <img src="docs/images/card-ai-organize-light.png" width="400" alt="截断文字卡悬停出现「AI 整理」按钮（浅色主题）">
 

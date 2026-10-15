@@ -760,8 +760,9 @@ public partial class SettingsWindow : Window
         DeepSeekTestButton.Content = "测试中…";
         try
         {
-            // 直接测当前输入框内容（含未保存的新输入）；模型恒为客户端默认
-            // （deepseek-flash，契约 #28），无选择状态。
+            // 直接测当前输入框内容（含未保存的新输入）；探活为 GET /models
+            // （零 token 消耗），成功文案模型名恒为客户端默认（deepseek-flash，
+            // 契约 #28），无选择状态。
             var result = await _host.TestDeepSeekConnectionAsync(ReadDeepSeekKeyInput());
             ShowDeepSeekStatus(result.Message, isError: !result.IsSuccess);
         }
@@ -771,7 +772,8 @@ public partial class SettingsWindow : Window
         }
         catch (Exception)
         {
-            // async void 的未知异常会击穿为进程崩溃；就地反馈且不带任何请求细节。
+            // 纯崩溃护栏：客户端边界已把网络阶段全部映射为结果，常规失败不经过
+            // 这里；仅防 async void 的未知异常击穿为进程崩溃，不带任何请求细节。
             ShowDeepSeekStatus("测试失败，请重试。");
         }
         finally

@@ -703,7 +703,7 @@
                           Content="测试连接"
                           Margin="0,10,0,0"
                           HorizontalAlignment="Left"
-                          ToolTip="用当前输入的 API Key 发起一次最小请求"
+                          ToolTip="用当前输入的 API Key 验证连接与鉴权（不发起生成、不消耗 token）"
                           AutomationProperties.Name="测试 DeepSeek 连接"
                           Click="DeepSeekTestButton_Click" />
                   <TextBlock x:Name="DeepSeekStatusText"
