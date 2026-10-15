@@ -28,6 +28,22 @@ internal static class ShellInterop
 
     internal const int IldTransparent = 0x1;
 
+    // SFGAO_FOLDER（已安装应用枚举过滤文件夹项）。
+    internal const uint SfgaoFolder = 0x20000000;
+
+    // GetDisplayNameOf 旗标：NORMAL=显示名；FORPARSING=解析名（AppsFolder 条目的
+    // 解析名即 AUMID / 文件系统路径，按是否含路径字符分流）。
+    internal const uint ShgdnNormal = 0x0;
+    internal const uint ShgdnForParsing = 0x8000;
+
+    // EnumObjects 旗标（全枚举后按 AUMID/文件夹过滤）。
+    internal const uint ShcontfFolders = 0x20;
+    internal const uint ShcontfNonFolders = 0x40;
+    internal const uint ShcontfIncludeHidden = 0x80;
+
+    // STRRET.uType（uType 在 offset 0；WSTR 联合指针在 offset 8，CoTaskMem 释放）。
+    internal const int StrretWstr = 0;
+
     internal static readonly Guid ClsidShellLink = new("00021401-0000-0000-C000-000000000046");
     internal static readonly Guid ClsidApplicationActivationManager = new("45BA127D-10DF-4D6B-9DB5-40755FE23494");
     internal static readonly Guid BhidEnumItems = new("94f60526-8d9e-4e25-94f1-e7fc8ee2d808");
@@ -43,6 +59,15 @@ internal static class ShellInterop
         IntPtr bindingContext,
         in Guid interfaceId,
         out IntPtr shellItem);
+
+    [DllImport("shell32.dll")]
+    internal static extern int SHGetDesktopFolder(out IntPtr desktopFolder);
+
+    [DllImport("shell32.dll")]
+    internal static extern int SHCreateItemFromIDList(
+        IntPtr itemIdList,
+        in Guid interfaceId,
+        out IntPtr ppv);
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     internal static extern IntPtr SHGetFileInfoW(
@@ -254,6 +279,98 @@ internal static class ShellInterop
 
         [PreserveSig]
         int Clone(out IEnumShellItems enumerator);
+    }
+
+    // IShellFolder 虚表序（shobjidl_core.h 10 方法）：ParseDisplayName, EnumObjects,
+    // BindToObject, BindToStorage, CompareIDs, CreateViewObject, GetAttributesOf,
+    // GetUIObjectOf, GetDisplayNameOf, SetNameOf。已安装应用枚举/AUMID 匹配走此经典
+    // 路线（BindToHandler(BHID_EnumItems) 在实际环境返回 MK_E_NOOBJECT 不可依赖）。
+    [ComImport]
+    [Guid("000214E6-0000-0000-C000-000000000046")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IShellFolder
+    {
+        [PreserveSig]
+        int ParseDisplayName(
+            IntPtr ownerWindow,
+            IntPtr bindingContext,
+            [MarshalAs(UnmanagedType.LPWStr)] string displayName,
+            out uint charactersEaten,
+            out IntPtr itemIdList,
+            ref uint attributes);
+
+        [PreserveSig]
+        int EnumObjects(IntPtr ownerWindow, uint flags, out IntPtr enumIdList);
+
+        [PreserveSig]
+        int BindToObject(IntPtr itemIdList, IntPtr bindingContext, in Guid interfaceId, out IntPtr ppv);
+
+        [PreserveSig]
+        int BindToStorage(IntPtr itemIdList, IntPtr bindingContext, in Guid interfaceId, out IntPtr ppv);
+
+        [PreserveSig]
+        int CompareIDs(IntPtr parameter, IntPtr itemIdList1, IntPtr itemIdList2);
+
+        [PreserveSig]
+        int CreateViewObject(IntPtr ownerWindow, in Guid interfaceId, out IntPtr ppv);
+
+        // PCUITEMID_CHILD_ARRAY＝PIDL 指针数组：调用方手工构造（Marshal.AllocCoTaskMem
+        // + WriteIntPtr）；数组参数的 CLR 默认编组在此接口上会崩溃（探针实证）。
+        [PreserveSig]
+        int GetAttributesOf(uint itemCount, IntPtr itemIdListArray, ref uint attributes);
+
+        [PreserveSig]
+        int GetUIObjectOf(IntPtr ownerWindow, uint itemCount, IntPtr itemIdListArray, in Guid interfaceId, IntPtr reserved, out IntPtr ppv);
+
+        // STRRET 出参（uType 在 offset 0，STRRET_WSTR=0，union 指针在 offset 8）：
+        // 调用方传 ≥16 字节缓冲并负责释放 WSTR。
+        [PreserveSig]
+        int GetDisplayNameOf(IntPtr itemIdList, uint flags, IntPtr strRet);
+
+        [PreserveSig]
+        int SetNameOf(IntPtr ownerWindow, IntPtr itemIdList, [MarshalAs(UnmanagedType.LPWStr)] string name, uint flags, out IntPtr newItemIdList);
+    }
+
+    [ComImport]
+    [Guid("000214F2-0000-0000-C000-000000000046")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IEnumIDList
+    {
+        [PreserveSig]
+        int Next(uint count, out IntPtr itemIdList, out uint fetched);
+
+        [PreserveSig]
+        int Skip(uint count);
+
+        [PreserveSig]
+        int Reset();
+
+        [PreserveSig]
+        int Clone(out IntPtr enumIdList);
+    }
+
+    // IExtractIconW 虚表序（shobjidl_core.h）：GetIconLocation, Extract（仅此两法）。
+    // AppsFolder 条目的图标提取链（条目不实现 IShellItemImageFactory，探针实证 2026-10-14）。
+    [ComImport]
+    [Guid("000214FA-0000-0000-C000-000000000046")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IExtractIconW
+    {
+        [PreserveSig]
+        int GetIconLocation(
+            uint flags,
+            [Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder iconFile,
+            int capacity,
+            out int iconIndex,
+            out uint outputFlags);
+
+        [PreserveSig]
+        int Extract(
+            [MarshalAs(UnmanagedType.LPWStr)] string file,
+            uint iconIndex,
+            out IntPtr largeIcon,
+            IntPtr smallIcon,
+            uint iconSize);
     }
 
     // IShellLinkW 虚表序（shobjidl_core.h）：GetPath, GetIDList, SetIDList,

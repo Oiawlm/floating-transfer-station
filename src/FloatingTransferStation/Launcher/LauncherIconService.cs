@@ -244,6 +244,42 @@ internal sealed class LauncherIconService : IDisposable
         });
     }
 
+    /// <summary>仅供测试观察：重枚举取图请求的 IconKey 记录（#30 切片 4）。</summary>
+    internal System.Collections.Concurrent.ConcurrentQueue<string> RefreshRequestsForTests { get; } = new();
+
+    /// <summary>
+    /// 强制刷新（#30）：「应用未注册」激活失败触发的重枚举取图——绕过内存与
+    /// pending 去重直发提取线程；AUMID 条目 stamp=null，LoadOrCreate 对其恒走
+    /// 提取路径，失败时保留最后成功 PNG（失效灰态由 UI 层承载）。
+    /// </summary>
+    internal void RequestRefresh(LauncherItem item, Action<BitmapSource?> onCompleted)
+    {
+        var iconKey = item.IconKey;
+        if (iconKey.Length == 0)
+        {
+            // 空 key（Url 类）无从提取：仍回调空结果，调用方不被静默悬挂。
+            onCompleted(null);
+            return;
+        }
+
+        RefreshRequestsForTests.Enqueue(iconKey);
+        _iconDispatcher.BeginInvoke(() =>
+        {
+            BitmapSource? icon = null;
+            try
+            {
+                icon = LoadOrCreate(item, iconKey);
+            }
+            catch (Exception exception) when (
+                exception is IOException or UnauthorizedAccessException or COMException or InvalidOperationException)
+            {
+                // 提取失败＝保持现状（旧图继续有效）。
+            }
+
+            _uiDispatcher.BeginInvoke(() => onCompleted(icon));
+        });
+    }
+
     /// <summary>孤儿清扫：仅启动装载成功后运行一次。</summary>
     internal void SweepOrphansOnce()
     {
@@ -442,6 +478,16 @@ internal sealed class LauncherIconService : IDisposable
             }
         }
 
+        // PackagedApp 终回退（实现期修订）：AppsFolder 条目在实际系统不实现
+        // IShellItemImageFactory（E_NOINTERFACE，探针实证 2026-10-14）——枚举命中项经
+        // 文件夹 GetUIObjectOf(IExtractIconW) 提取 HICON。
+        if (item.Kind == LauncherKind.PackagedApp &&
+            InstalledAppsEnumerator.TryExtractIconForAumid(item.TargetPath) is { } iconHandle &&
+            iconHandle != IntPtr.Zero)
+        {
+            return (iconHandle, true);
+        }
+
         return (ExtractViaSystemImageList(item), true);
     }
 
@@ -499,68 +545,11 @@ internal sealed class LauncherIconService : IDisposable
         return IntPtr.Zero;
     }
 
-    /// <summary>AppsFolder 枚举按 AUMID 匹配取 IShellItem2（shell:AppsFolder 解析失败的回退；
-    /// PR-B 已安装应用选择器复用同一枚举）。</summary>
-    private static object? TryGetAppsFolderItemByAumid(string appUserModelId)
-    {
-        var itemId = typeof(ShellInterop.IShellItem).GUID;
-        if (ShellInterop.SHCreateItemFromParsingName("shell:AppsFolder", IntPtr.Zero, itemId, out var appsFolderPointer) != 0)
-        {
-            return null;
-        }
-
-        try
-        {
-            var folderItem = (ShellInterop.IShellItem)Marshal.GetObjectForIUnknown(appsFolderPointer);
-            var enumItemsId = typeof(ShellInterop.IEnumShellItems).GUID;
-            if (folderItem.BindToHandler(IntPtr.Zero, ShellInterop.BhidEnumItems, enumItemsId, out var enumeratorPointer) != 0)
-            {
-                return null;
-            }
-
-            try
-            {
-                var enumerator = (ShellInterop.IEnumShellItems)Marshal.GetObjectForIUnknown(enumeratorPointer);
-                while (enumerator.Next(1, out var item, out _) == 0)
-                {
-                    try
-                    {
-                        if (item is ShellInterop.IShellItem2 { } item2 &&
-                            item2.GetProperty(ShellInterop.AppUserModelId, out var variant) == 0)
-                        {
-                            var aumid = variant.AsString();
-                            variant.Clear();
-                            if (string.Equals(aumid, appUserModelId, StringComparison.OrdinalIgnoreCase))
-                            {
-                                return item2;
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        if (item is not ShellInterop.IShellItem2)
-                        {
-                            Marshal.ReleaseComObject(item);
-                        }
-                    }
-                }
-            }
-            catch (Exception exception) when (exception is COMException or InvalidCastException or MarshalDirectiveException)
-            {
-                return null;
-            }
-            finally
-            {
-                Marshal.Release(enumeratorPointer);
-            }
-
-            return null;
-        }
-        finally
-        {
-            Marshal.Release(appsFolderPointer);
-        }
-    }
+    /// <summary>AppsFolder 枚举按 AUMID 匹配取条目（shell:AppsFolder\{AUMID} 解析失败的
+    /// 回退；与已安装应用选择器共用经典 IShellFolder 枚举链——BindToHandler(BHID_
+    /// EnumItems)/属性系统字符串读取在实际环境不可依赖，探针实证 2026-10-14）。</summary>
+    private static object? TryGetAppsFolderItemByAumid(string appUserModelId) =>
+        InstalledAppsEnumerator.TryGetItemByAumid(appUserModelId);
 
     /// <summary>
     /// 图标戳（#30）：shortHash(lnk.mtime|size ‖ 解析目标.mtime|size ‖ GetIconLocation

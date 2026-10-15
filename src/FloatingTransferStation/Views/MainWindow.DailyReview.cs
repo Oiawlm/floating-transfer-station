@@ -70,6 +70,12 @@ public partial class MainWindow
             DestroyLauncherUndoToast();
         }
 
+        if (!isLauncher)
+        {
+            // ＋菜单不随宿主隐藏自动关闭，切表面时显式收起（#30 切片 4）。
+            LauncherAddMenu.IsOpen = false;
+        }
+
         if (!isReview)
         {
             _reviewLoaded = false;
