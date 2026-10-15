@@ -26,7 +26,8 @@ public partial class MainWindow : Window, ISettingsHost
     public ISecretProtector SecretProtector => _secretProtector;
 
     /// <summary>
-    /// DeepSeek 连接测试：客户端无状态，key 按设置页当前输入传入，模型恒为
+    /// DeepSeek 连接测试：客户端无状态，key 按设置页当前输入传入；探活是官方
+    /// 模型列表端点的 GET /models（零 token 消耗，契约 #28），成功文案模型名恒为
     /// DeepSeekClient.DefaultModel；按后台任务惯例追踪，退出冲刷会等待本次请求
     /// （受客户端 30 秒超时约束）。
     /// </summary>
