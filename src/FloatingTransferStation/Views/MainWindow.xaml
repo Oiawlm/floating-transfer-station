@@ -570,11 +570,220 @@
           </Grid>
         </Border>
 
-        <!-- 快捷启动表面（#30）：瓦片网格宿主，与 BoardList 同格互斥（UpdatePanelSurface 三态分发）。 -->
+        <!-- 快捷启动表面（#30）：瓦片网格宿主，与 BoardList 同格互斥（UpdatePanelSurface 三态分发）。
+             工具行 40 DIP（左：编辑/完成，中：编辑态提示，右：＋添加）；内容区为空态或瓦片网格；
+             文件拖入分流与放置态（2px accent 描边 + 8% 填充 + 「松开以添加」）。 -->
         <Border x:Name="LauncherContentHost"
                 Grid.Row="1"
+                Padding="12,8,12,10"
                 Background="Transparent"
-                Visibility="Collapsed" />
+                Visibility="Collapsed"
+                AllowDrop="True"
+                DragEnter="LauncherSurface_DragEnter"
+                DragOver="LauncherSurface_DragOver"
+                DragLeave="LauncherSurface_DragLeave"
+                Drop="LauncherSurface_Drop">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- 工具行：编辑钮在空项目数下禁用并 40% 透明（编辑模式切片 3 启用）。 -->
+            <Grid x:Name="LauncherToolbar" Grid.Row="0" Height="40" Margin="0,0,0,4">
+              <Button x:Name="LauncherEditButton"
+                      HorizontalAlignment="Left"
+                      VerticalAlignment="Center"
+                      Content="编辑"
+                      FontSize="12"
+                      Padding="10,3"
+                      Style="{StaticResource ThemedActionButtonStyle}"
+                      Click="LauncherEditButton_Click" />
+              <TextBlock x:Name="LauncherEditHint"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center"
+                         FontSize="12"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Text="拖动排序 · 点 × 删除 · 单击改名"
+                         Visibility="Collapsed" />
+              <Button x:Name="LauncherAddButton"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Center"
+                      Content="＋ 添加"
+                      FontSize="12"
+                      Padding="10,3"
+                      Style="{StaticResource ThemedActionButtonStyle}"
+                      AutomationProperties.Name="添加启动项"
+                      Click="LauncherAddButton_Click" />
+            </Grid>
+
+            <!-- 空态：内容区垂直居中（插图 + 标题 + 副文案 + CTA，CTA 与工具行＋同一入口）。 -->
+            <StackPanel x:Name="LauncherEmptyState"
+                        Grid.Row="1"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Visibility="Visible">
+              <TextBlock HorizontalAlignment="Center"
+                         FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                         FontSize="36"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Text="&#xE71D;" />
+              <TextBlock Margin="0,10,0,2"
+                         HorizontalAlignment="Center"
+                         FontSize="14"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource PrimaryTextBrush}"
+                         Text="还没有启动项" />
+              <TextBlock Margin="0,0,0,12"
+                         HorizontalAlignment="Center"
+                         FontSize="12"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Text="把 .exe 或快捷方式拖到这里，或点右上角 ＋ 添加" />
+              <Button HorizontalAlignment="Center"
+                      Content="添加应用"
+                      FontSize="12"
+                      Padding="14,5"
+                      Style="{StaticResource ThemedActionButtonStyle}"
+                      AutomationProperties.Name="添加应用"
+                      Click="LauncherAddButton_Click" />
+            </StackPanel>
+
+            <!-- 瓦片网格：垂直滚动 + overlay 瘦条（契约 #23 口径）；不虚拟化（有界性以
+                 200 上限承载）；列数由代码按内容区宽 clamp(3..6) 设定，网格水平居中。 -->
+            <ScrollViewer x:Name="LauncherScroll"
+                          Grid.Row="1"
+                          Style="{StaticResource OverlayScrollViewerStyle}"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          Visibility="Collapsed">
+              <ItemsControl x:Name="LauncherTileGrid"
+                            HorizontalAlignment="Center"
+                            SizeChanged="LauncherTileGrid_SizeChanged"
+                            Focusable="False">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="{x:Type models:LauncherItem}">
+                    <!-- 瓦片 84×100、圆角 8、内边距 上8 下8 左右6、间距 8×8（Margin 4×4）。
+                         悬停 167ms/-2px 与按压 83ms/0.96 走既有动画体系；启动确认/失败描边/
+                         重复脉冲为代码驱动的场景动画。 -->
+                    <Border x:Name="TileRoot"
+                            Width="84"
+                            Height="100"
+                            Margin="4"
+                            Padding="6,8,6,8"
+                            Background="{DynamicResource CardBrush}"
+                            BorderBrush="Transparent"
+                            BorderThickness="2"
+                            CornerRadius="{StaticResource CardCornerRadius}"
+                            RenderTransformOrigin="0.5,0.5"
+                            MouseEnter="LauncherTile_MouseEnter"
+                            MouseLeave="LauncherTile_MouseLeave"
+                            MouseLeftButtonDown="LauncherTile_MouseLeftButtonDown"
+                            MouseLeftButtonUp="LauncherTile_MouseLeftButtonUp">
+                      <Border.RenderTransform>
+                        <TransformGroup>
+                          <TranslateTransform />
+                          <ScaleTransform />
+                        </TransformGroup>
+                      </Border.RenderTransform>
+                      <Border.Style>
+                        <Style TargetType="Border">
+                          <Setter Property="ToolTip" Value="{Binding DisplayName}" />
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding LaunchFailed}" Value="True">
+                              <!-- 失败灰态：2px 危险色描边常显 + 图标 50% + 警告角标。 -->
+                              <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Border.Style>
+                      <Grid>
+                        <Grid.RowDefinitions>
+                          <RowDefinition Height="Auto" />
+                          <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0"
+                              Width="48"
+                              Height="48"
+                              Margin="0,0,0,6"
+                              HorizontalAlignment="Center">
+                          <!-- 占位图标：提取在途/失败时可见（Segoe Fluent 应用图标字形）。 -->
+                          <TextBlock HorizontalAlignment="Center"
+                                     VerticalAlignment="Center"
+                                     FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                     FontSize="28"
+                                     Foreground="{DynamicResource SecondaryTextBrush}"
+                                     Text="&#xE8FD;" />
+                          <Image x:Name="TileIcon"
+                                 Width="48"
+                                 Height="48"
+                                 Stretch="Uniform"
+                                 RenderOptions.BitmapScalingMode="HighQuality"
+                                 Loaded="LauncherTileIcon_Loaded"
+                                 Source="{Binding RelativeSource={RelativeSource Self}, Path=Tag}" />
+                        </Grid>
+                        <!-- 名称 12px 两行（行高 16、CharacterEllipsis、tooltip 全名）。 -->
+                        <TextBlock Grid.Row="1"
+                                   MaxHeight="32"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource PrimaryTextBrush}"
+                                   LineHeight="16"
+                                   LineStackingStrategy="BlockLineHeight"
+                                   Text="{Binding DisplayName}"
+                                   TextAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="Wrap"
+                                   ToolTip="{Binding DisplayName}" />
+                        <!-- 警告角标（失败灰态）。 -->
+                        <Border x:Name="TileFailedBadge"
+                                Width="16"
+                                Height="16"
+                                Margin="0,0,2,0"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Top"
+                                Background="{DynamicResource DangerBrush}"
+                                CornerRadius="8"
+                                Visibility="Collapsed">
+                          <TextBlock HorizontalAlignment="Center"
+                                     VerticalAlignment="Center"
+                                     FontSize="11"
+                                     FontWeight="Bold"
+                                     Foreground="{DynamicResource OnAccentBrush}"
+                                     Text="!" />
+                        </Border>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+
+            <!-- 放置态：松开以添加（2px accent 描边 + 8% 填充，描边层 167ms 淡入）。 -->
+            <Border x:Name="LauncherDropHighlight"
+                    Grid.Row="1"
+                    BorderBrush="{DynamicResource AccentBrush}"
+                    BorderThickness="2"
+                    CornerRadius="8"
+                    Opacity="0"
+                    IsHitTestVisible="False">
+              <Border Background="{DynamicResource AccentBrush}" Opacity="0.08" CornerRadius="6" />
+            </Border>
+            <TextBlock x:Name="LauncherDropHint"
+                       Grid.Row="1"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource AccentBrush}"
+                       Text="松开以添加"
+                       Visibility="Collapsed"
+                       IsHitTestVisible="False" />
+          </Grid>
+        </Border>
 
         <Canvas Grid.Row="1"
                 Background="Transparent"

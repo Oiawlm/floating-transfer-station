@@ -8,7 +8,9 @@ public sealed record AppPaths(
     string ImagesDirectory,
     string ReviewsDirectory,
     string PluginsDirectory,
-    string PluginStateFile)
+    string PluginStateFile,
+    string LaunchersFile,
+    string LauncherIconsDirectory)
 {
     public static AppPaths CreateDefault(IDataDirectorySettings? settings = null)
     {
@@ -30,7 +32,9 @@ public sealed record AppPaths(
         Path.Combine(dataDirectory, "images"),
         Path.Combine(dataDirectory, "reviews"),
         Path.Combine(dataDirectory, "plugins"),
-        Path.Combine(dataDirectory, "plugins-state.json"));
+        Path.Combine(dataDirectory, "plugins-state.json"),
+        Path.Combine(dataDirectory, "launchers.json"),
+        Path.Combine(dataDirectory, "launcher-icons"));
 
     /// <summary>
     /// 应用插件目录偏好的单一解析规则：null/空白或等于默认 → 默认（数据目录下 plugins）；

@@ -141,7 +141,7 @@ public sealed class ExternalDropPayloadReaderTests
     [DataRow("png")]
     [DataRow("webp")]
     [DataRow("tiff")]
-    public void FileDropBatchContainingMultiFrameImageIsRejectedWithoutFallback(string extension)
+    public void FileDropBatchContainingMultiFrameImageIsPreservedAsRawListWithoutFallback(string extension)
     {
         using var directory = new TestDirectory();
         var staticPath = Path.Combine(directory.Root, "static.png");
@@ -168,11 +168,17 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.UnicodeText, "must not fall back");
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsNull(reader.Read(data));
+        // #30 r2-M1：非全图片文件组保留原始清单（FileList），解释权归目标角色；
+        // 图片/文本回退仍然不做。
+        var payload = reader.Read(data);
+        Assert.IsInstanceOfType<ExternalDropPayload.FileList>(payload);
+        CollectionAssert.AreEqual(
+            new[] { staticPath, multiFramePath },
+            ((ExternalDropPayload.FileList)payload!).Paths.ToArray());
     }
 
     [STATestMethod]
-    public void CorruptSupportedExtensionFileDropIsRejectedWithoutFallback()
+    public void CorruptSupportedExtensionFileDropIsPreservedAsRawListWithoutFallback()
     {
         using var directory = new TestDirectory();
         var path = Path.Combine(directory.Root, "corrupt.png");
@@ -182,7 +188,11 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.UnicodeText, "must not fall back");
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsNull(reader.Read(data));
+        var payload = reader.Read(data);
+        Assert.IsInstanceOfType<ExternalDropPayload.FileList>(payload);
+        CollectionAssert.AreEqual(
+            new[] { path },
+            ((ExternalDropPayload.FileList)payload!).Paths.ToArray());
     }
 
     [STATestMethod]
@@ -197,7 +207,7 @@ public sealed class ExternalDropPayloadReaderTests
     }
 
     [STATestMethod]
-    public void MixedFileDropRejectsWholeDataObjectWithoutImageOrTextFallback()
+    public void MixedFileDropIsPreservedAsRawListWithoutImageOrTextFallback()
     {
         using var directory = new TestDirectory();
         var image = Path.Combine(directory.Root, "image.png");
@@ -210,12 +220,17 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.UnicodeText, image);
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsNull(reader.Read(data));
-        Assert.IsNull(reader.Read(data));
+        var first = reader.Read(data);
+        var second = reader.Read(data);
+        Assert.IsInstanceOfType<ExternalDropPayload.FileList>(first);
+        Assert.IsInstanceOfType<ExternalDropPayload.FileList>(second);
+        CollectionAssert.AreEqual(
+            new[] { image, textFile },
+            ((ExternalDropPayload.FileList)first!).Paths.ToArray());
     }
 
     [STATestMethod]
-    public void FolderFileDropIsRejectedWithoutFallback()
+    public void FolderFileDropIsPreservedAsRawListWithoutFallback()
     {
         using var directory = new TestDirectory();
         var folder = Path.Combine(directory.Root, "folder.png");
@@ -226,12 +241,12 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.UnicodeText, folder);
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsNull(reader.Read(data));
-        Assert.IsNull(reader.Read(data));
+        Assert.IsInstanceOfType<ExternalDropPayload.FileList>(reader.Read(data));
+        Assert.IsInstanceOfType<ExternalDropPayload.FileList>(reader.Read(data));
     }
 
     [STATestMethod]
-    public void MissingImageFileDropIsRejectedWithoutFallback()
+    public void MissingImageFileDropIsPreservedAsRawListWithoutFallback()
     {
         using var directory = new TestDirectory();
         var missing = Path.Combine(directory.Root, "missing.jpeg");
@@ -241,8 +256,8 @@ public sealed class ExternalDropPayloadReaderTests
         data.SetData(DataFormats.UnicodeText, missing);
         var reader = new ExternalDropPayloadReader();
 
-        Assert.IsNull(reader.Read(data));
-        Assert.IsNull(reader.Read(data));
+        Assert.IsInstanceOfType<ExternalDropPayload.FileList>(reader.Read(data));
+        Assert.IsInstanceOfType<ExternalDropPayload.FileList>(reader.Read(data));
     }
 
     [STATestMethod]

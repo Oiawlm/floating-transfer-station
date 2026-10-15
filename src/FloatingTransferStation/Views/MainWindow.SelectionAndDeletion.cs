@@ -627,6 +627,15 @@ public partial class MainWindow : Window
 
     private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // 快捷启动键盘层级（#30 §一）：①改名编辑器原生 → ②编辑态 → ③查看态
+        // （Enter/Space 启动、方向键导航、Delete 无操作）；消费后短路既有窗口级处理
+        // （Ctrl+Z/F 等窗口级命令在层级④，未被启动表面消费时照常到达）。
+        if (HandleLauncherPreviewKey(e))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.F2 &&
             e.KeyboardDevice.Modifiers == ModifierKeys.None &&
             !_isClosing &&

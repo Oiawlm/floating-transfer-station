@@ -40,6 +40,10 @@ jobs:
           FTS_DELIVERY_EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
           FTS_GESTURE_EVIDENCE_DIR: ${{ runner.temp }}/gesture-evidence
           FTS_MOTION_TRANSITIONS_EVIDENCE_DIR: ${{ runner.temp }}/motion-transitions-evidence
+          FTS_QUICKLAUNCH_SURFACE_EVIDENCE_DIR: ${{ runner.temp }}/quicklaunch-surface-evidence
+          FTS_QUICKLAUNCH_INTERACT_EVIDENCE_DIR: ${{ runner.temp }}/quicklaunch-interact-evidence
+          FTS_QUICKLAUNCH_MIGRATION_EVIDENCE_DIR: ${{ runner.temp }}/quicklaunch-migration-evidence
+          FTS_QUICKLAUNCH_ORDER_EVIDENCE_DIR: ${{ runner.temp }}/quicklaunch-order-evidence
         run: '& .\scripts\build-release.ps1 -DotnetPath (Get-Command dotnet).Source'
       - name: 严格 Release 构建
         run: dotnet build FloatingTransferStation.slnx -c Release --no-restore -warnaserror
@@ -114,6 +118,34 @@ jobs:
         with:
           name: gesture-evidence
           path: ${{ runner.temp }}/gesture-evidence/*.png
+          if-no-files-found: error
+          retention-days: 30
+      - name: 保存快捷启动双主题双宽度表面截图
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: quicklaunch-surface-evidence
+          path: ${{ runner.temp }}/quicklaunch-surface-evidence/*.png
+          if-no-files-found: error
+          retention-days: 30
+      - name: 保存快捷启动添加与启动失败截图
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: quicklaunch-interact-evidence
+          path: ${{ runner.temp }}/quicklaunch-interact-evidence/*.png
+          if-no-files-found: error
+          retention-days: 30
+      - name: 保存快捷启动迁移前后截图
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: quicklaunch-migration-evidence
+          path: ${{ runner.temp }}/quicklaunch-migration-evidence/*.png
+          if-no-files-found: error
+          retention-days: 30
+      - name: 保存快捷启动调序标签轨与把手截图
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: quicklaunch-order-evidence
+          path: ${{ runner.temp }}/quicklaunch-order-evidence/*.png
           if-no-files-found: error
           retention-days: 30
       - name: 保存通过安装验证的候选安装包

@@ -60,7 +60,10 @@ public sealed partial class MainWindowInteractionTests
         IImageNormalizer normalizer,
         IClipboardReader? clipboardReader = null,
         IUpdateService? updateService = null,
-        IPreferencesStore? preferencesStore = null)
+        IPreferencesStore? preferencesStore = null,
+        ILauncherStore? launcherStore = null,
+        AppLauncher? appLauncher = null,
+        string? dataDirectory = null)
     {
         defaultCaptureCategory ??= new DefaultCaptureCategoryState();
         var operationGate = new BoardOperationGate();
@@ -90,7 +93,12 @@ public sealed partial class MainWindowInteractionTests
                 operationGate),
             defaultCaptureCategory,
             updateService: updateService,
-            preferencesStore: preferencesStore);
+            preferencesStore: preferencesStore,
+            launcherStore: launcherStore,
+            appLauncher: appLauncher,
+            dataDirectory: dataDirectory ?? ((store as LocalStore)?.ImagesDirectory is { } imagesDirectory
+                ? Path.GetDirectoryName(imagesDirectory)
+                : null));
         return window;
     }
 

@@ -69,6 +69,21 @@ public static class DesignTokens
     public const int DeleteFeedbackMs = 120;
     public const int ItemEntranceStaggerMs = 40;
 
+    // 快捷启动（#30）：场景常量不加档——LaunchConfirmMs/ItemLandingMs 直接锚 SlowDurationMs。
+    public const int LaunchConfirmMs = SlowDurationMs;
+    public const int ItemLandingMs = SlowDurationMs;
+    /// <summary>启动后排队收起延迟（r2-M5 有效性协议：到期重验抑制条件）。</summary>
+    public const int LaunchCollapseDelayMs = SlowDurationMs;
+    /// <summary>单击启动重入门闩（同一时间窗内第二击不重复派发）。</summary>
+    public const int LaunchReentryLatchMs = 500;
+    /// <summary>瓦片入场交错步进与封顶（M1：min(i,8)×40ms）。</summary>
+    public const int TileEntranceStaggerMs = ItemEntranceStaggerMs;
+    public const int TileEntranceStaggerCap = 8;
+    /// <summary>瓦片按压缩放（#30 §五）。</summary>
+    public const double TilePressScale = 0.96;
+    /// <summary>瓦片悬停抬升位移（瓦片 −2px，区别于卡片 LiftedOffsetPx −1）。</summary>
+    public const double TileHoverLiftPx = -2;
+
     // 缓动曲线（WPF KeySpline 控制点；入场为减速曲线，出场为加速曲线）。
     public const string EnterEasingKeySpline = "0,0,0,1";
     public const string ExitEasingKeySpline = "1,0,1,1";

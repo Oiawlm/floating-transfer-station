@@ -232,8 +232,18 @@ public partial class MainWindow : Window
         if (sender is Border { DataContext: CategoryViewModel tabCategory } &&
             !BoardCategoryCatalog.IsContentBucket(tabCategory.Category))
         {
-            // 复盘与启动标签不接收卡片/内容拖入（#30 排除面，Effects.None）；
-            // 启动标签的文件拖入导入走瓦片表面分流，不经标签轨接收。
+            // 启动标签的文件拖入导入（#30 §七矩阵）：∈{*.exe,*.lnk} 给 Copy 效果；
+            // 复盘标签与不支持的文件组维持拒绝（Effects.None）。
+            if (tabCategory.Category == QuickLaunchMigration.LauncherCategory &&
+                ReadImportableLauncherFiles(e.Data).Count > 0)
+            {
+                ClearExternalDragPayload();
+                SetCategoryDropTarget(tabCategory);
+                e.Effects = DragDropEffects.Copy;
+                e.Handled = true;
+                return;
+            }
+
             e.Effects = DragDropEffects.None;
             e.Handled = true;
             return;
@@ -376,8 +386,21 @@ public partial class MainWindow : Window
         if (sender is Border { DataContext: CategoryViewModel dropTabCategory } &&
             !BoardCategoryCatalog.IsContentBucket(dropTabCategory.Category))
         {
-            // 复盘与启动标签不接收卡片/内容拖入（#30 排除面）；拖放效果在
-            // DragOver 已判 None，此处为纵深。
+            // 启动标签的文件拖入导入（#30 §七矩阵）；其余（卡片/内容/复盘目标）拒绝。
+            if (dropTabCategory.Category == QuickLaunchMigration.LauncherCategory)
+            {
+                var importable = ReadImportableLauncherFiles(e.Data);
+                if (importable.Count > 0)
+                {
+                    ClearExternalDragPayload();
+                    HideExternalDropRail();
+                    e.Effects = DragDropEffects.Copy;
+                    var raw = ReadRawLauncherFiles(e.Data);
+                    TrackPendingOperation(ImportLauncherFilesAsync(importable, raw.Count - importable.Count));
+                    return;
+                }
+            }
+
             ClearExternalDragPayload();
             HideExternalDropRail();
             return;
@@ -437,7 +460,9 @@ public partial class MainWindow : Window
             _externalDragPayload = _externalDropPayloadReader.Read(data);
         }
 
-        return _externalDragPayload;
+        // 内容桶消费面只认图片/文本载荷（#30 r2-M1）：原始文件清单（FileList）的
+        // 解释权归启动标签/表面（不经本缓存），内容桶对非图片文件组维持升级前拒绝。
+        return _externalDragPayload is ExternalDropPayload.FileList ? null : _externalDragPayload;
     }
 
     private void ClearExternalDragPayload()

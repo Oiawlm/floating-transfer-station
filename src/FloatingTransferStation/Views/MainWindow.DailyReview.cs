@@ -58,6 +58,11 @@ public partial class MainWindow
             UpdateBatchPinButton();
         }
         DeleteContentButton.Visibility = isReview || isLauncher ? Visibility.Collapsed : Visibility.Visible;
+        if (isLauncher)
+        {
+            // 启动表面空态/网格与工具行状态随激活刷新（绑定集合变化另行驱动）。
+            UpdateLauncherSurfaceState();
+        }
 
         if (!isReview)
         {

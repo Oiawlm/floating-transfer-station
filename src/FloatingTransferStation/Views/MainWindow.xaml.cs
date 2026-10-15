@@ -125,7 +125,9 @@ public partial class MainWindow : Window
         ISecretProtector? secretProtector = null,
         DeepSeekClient? deepSeekClient = null,
         AiTextOrganizer? aiTextOrganizer = null,
-        IUpdateService? updateService = null)
+        IUpdateService? updateService = null,
+        ILauncherStore? launcherStore = null,
+        AppLauncher? appLauncher = null)
     {
         InitializeComponent();
         _preferences = preferences ?? AppPreferences.Default;
@@ -179,6 +181,7 @@ public partial class MainWindow : Window
         InitializeCategoryNameEditing();
         InitializePanelTextEditing();
         InitializeCardEditSessionTracking();
+        InitializeQuickLaunch(launcherStore, appLauncher);
         SourceInitialized += MainWindow_SourceInitialized;
 
         ApplyPlacement(WindowController.Collapsed(
