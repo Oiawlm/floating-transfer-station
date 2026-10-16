@@ -464,6 +464,362 @@ public sealed partial class MainWindowInteractionTests
         return new NativePoint((int)position.X, (int)position.Y);
     }
 
+    // ---- 再展开抑制（#30，Issue #170）：观测式解除会话族——真实输入旅程 ----
+
+    /// <summary>共用前置：真实指针在面板内单击启动 → 排队收起提交（抑制布防）。
+    /// 返回收起前展开中心（原区域内非把手点）与收起后把手中心。</summary>
+    private static (MainWindowViewModel ViewModel, NativePoint ExpandedCenter, NativePoint CollapsedCenter)
+        LaunchFromTileAndCollapse(MainWindow window, LauncherItem item, int upTimestamp)
+    {
+        ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+        CompleteLayout(window);
+        var viewModel = (MainWindowViewModel)window.DataContext;
+
+        var expandedCenter = tileWindowCenter(window);
+        SetCursorPos(expandedCenter.X, expandedCenter.Y);
+        var tile = FindLauncherTile(window, item);
+        Assert.IsNotNull(tile);
+        tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile, upTimestamp));
+        tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, upTimestamp + 3));
+        PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
+        CompleteLayout(window);
+        Assert.IsFalse(viewModel.IsPanelExpanded, "前置：启动成功后排队收起（抑制窗布防）。");
+        return (viewModel, expandedCenter, tileWindowCenter(window));
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_ReexpandSuppression_HoldsAcrossPollCyclesWhilePointerStaysInside()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            var (viewModel, _, collapsedCenter) = LaunchFromTileAndCollapse(window, item, upTimestamp: 3);
+
+            // 指针在原区域内连续停留多个观测周期（≥5 个 100ms 周期）：不做计时解除。
+            SetCursorPos(collapsedCenter.X, collapsedCenter.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(550));
+            EnterCategory(window, QuickLaunchMigration.LauncherCategory);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            CompleteLayout(window);
+            Assert.IsFalse(viewModel.IsPanelExpanded, "指针停留期间跨多个观测周期仍保持抑制（不做计时解除）。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_ReexpandSuppression_HoldsWhenPointerLeavesHandleButStaysInRegion()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            var (viewModel, expandedCenter, collapsedCenter) = LaunchFromTileAndCollapse(window, item, upTimestamp: 3);
+
+            // 把手悬停被抑制后，指针离开把手但仍停留在收起前原区域内（收起后该处已无窗口
+            // 覆盖——正是离场观测盲区）→ 抑制保持，回到把手仍不展开。
+            SetCursorPos(collapsedCenter.X, collapsedCenter.Y);
+            EnterCategory(window, QuickLaunchMigration.LauncherCategory);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            Assert.IsFalse(viewModel.IsPanelExpanded, "前置：把手悬停在抑制期内不展开。");
+
+            SetCursorPos(expandedCenter.X, expandedCenter.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            SetCursorPos(collapsedCenter.X, collapsedCenter.Y);
+            EnterCategory(window, QuickLaunchMigration.LauncherCategory);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            CompleteLayout(window);
+            Assert.IsFalse(viewModel.IsPanelExpanded, "离开把手但未离开收起前原区域：抑制保持。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_ReexpandSuppression_LegalFirstApproachAfterEarlyDepartureExpands()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            // 指针在面板内单击启动，等待期内即离场：收起提交时指针已在原区域外，
+            // 首个观测周期即解除——用户回到把手属合法首次接近，直接展开。
+            var center = tileWindowCenter(window);
+            SetCursorPos(center.X, center.Y);
+            var tile = FindLauncherTile(window, item);
+            Assert.IsNotNull(tile);
+            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile));
+            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, timestamp: 3));
+            SetCursorPos(40, 40);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
+            CompleteLayout(window);
+            Assert.IsFalse(viewModel.IsPanelExpanded, "前置：启动成功后收起。");
+
+            var collapsedCenter = tileWindowCenter(window);
+            SetCursorPos(collapsedCenter.X, collapsedCenter.Y);
+            EnterCategory(window, QuickLaunchMigration.LauncherCategory);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            CompleteLayout(window);
+            Assert.IsTrue(viewModel.IsPanelExpanded, "指针在布防后从未被观测到停留在原区域：合法首次接近直接展开。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_ReexpandSuppression_HotkeyExpandTerminatesSessionForSubsequentHover()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            var (viewModel, _, collapsedCenter) = LaunchFromTileAndCollapse(window, item, upTimestamp: 3);
+
+            SetCursorPos(collapsedCenter.X, collapsedCenter.Y);
+            EnterCategory(window, QuickLaunchMigration.LauncherCategory);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            Assert.IsFalse(viewModel.IsPanelExpanded, "前置：抑制期内把手悬停不展开。");
+
+            // 热键＝权威展开路径：终止抑制会话（Switch 清闩）。
+            InvokePrivate(window, "OnGlobalHotkeyPressed");
+            CompleteLayout(window);
+            Assert.IsTrue(viewModel.IsPanelExpanded, "热键展开不受抑制闸门约束。");
+
+            // 自然收起后再悬停：旧会话不残留。
+            SetCursorPos(40, 40);
+            CollapseForSetup(window);
+            Assert.IsFalse(viewModel.IsPanelExpanded, "前置：自然收起。");
+            var collapsedAgain = tileWindowCenter(window);
+            SetCursorPos(collapsedAgain.X, collapsedAgain.Y);
+            EnterCategory(window, QuickLaunchMigration.LauncherCategory);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            CompleteLayout(window);
+            Assert.IsTrue(viewModel.IsPanelExpanded, "热键已终止会话：自然收起后悬停正常展开（抑制不跨会话残留）。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_ReexpandSuppression_SecondLaunchRearmsAndStillRecoversAfterDeparture()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            var (viewModel, _, collapsedCenter) = LaunchFromTileAndCollapse(window, item, upTimestamp: 3);
+
+            SetCursorPos(collapsedCenter.X, collapsedCenter.Y);
+            EnterCategory(window, QuickLaunchMigration.LauncherCategory);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            Assert.IsFalse(viewModel.IsPanelExpanded, "前置：第一次启动后的抑制在场。");
+
+            // 观测离场 → 悬停恢复展开（第一次会话正常终结）。
+            SetCursorPos(40, 40);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            SetCursorPos(collapsedCenter.X, collapsedCenter.Y);
+            EnterCategory(window, QuickLaunchMigration.LauncherCategory);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            CompleteLayout(window);
+            Assert.IsTrue(viewModel.IsPanelExpanded, "前置：第一次会话观测离场后恢复展开。");
+
+            // 第二次启动（同瓦片，事件时间戳已越过 500ms 重入门闩）→ 重新布防。
+            var expandedCenter2 = tileWindowCenter(window);
+            SetCursorPos(expandedCenter2.X, expandedCenter2.Y);
+            var tile = FindLauncherTile(window, item);
+            Assert.IsNotNull(tile);
+            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile, 4000));
+            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, 4003));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
+            CompleteLayout(window);
+            Assert.IsFalse(viewModel.IsPanelExpanded, "第二次启动成功后再次收起。");
+
+            var collapsedCenter2 = tileWindowCenter(window);
+            SetCursorPos(collapsedCenter2.X, collapsedCenter2.Y);
+            EnterCategory(window, QuickLaunchMigration.LauncherCategory);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            Assert.IsFalse(viewModel.IsPanelExpanded, "第二次启动重新布防抑制。");
+
+            SetCursorPos(40, 40);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            SetCursorPos(collapsedCenter2.X, collapsedCenter2.Y);
+            EnterCategory(window, QuickLaunchMigration.LauncherCategory);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            CompleteLayout(window);
+            Assert.IsTrue(viewModel.IsPanelExpanded, "第二次会话同样观测离场即恢复（连发启动不死锁）。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_ReexpandSuppression_PollStopsOnWindowCloseWithoutRevival()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+        var closedDuringTest = false;
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            var (viewModel, _, _) = LaunchFromTileAndCollapse(window, item, upTimestamp: 3);
+            Assert.IsFalse(viewModel.IsPanelExpanded);
+
+            var poll = GetPrivateField<DispatcherTimer>(window, "_reexpandSuppressionPollTimer");
+            Assert.IsTrue(poll.IsEnabled, "前置：布防期间离场观测轮询在运行。");
+
+            CloseWindowWithoutSaving(window);
+            closedDuringTest = true;
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
+
+            Assert.IsFalse(poll.IsEnabled, "窗口关闭即终止会话：轮询停表，泵过多个周期无复活。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            if (!closedDuringTest)
+            {
+                CloseWindowWithoutSaving(window);
+            }
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_ReexpandSuppression_RapidLeaveAndReturnKeepsSuppressionUntilNextObservedDeparture()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            var (viewModel, _, collapsedCenter) = LaunchFromTileAndCollapse(window, item, upTimestamp: 3);
+
+            // 快速离场回场：离场与回场两次同步 SetCursorPos 之间无泵 → 采样式观测
+            // 无周期可捕获离场 → 抑制保持（定义语义，非缺陷）。
+            SetCursorPos(40, 40);
+            SetCursorPos(collapsedCenter.X, collapsedCenter.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
+            EnterCategory(window, QuickLaunchMigration.LauncherCategory);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            CompleteLayout(window);
+            Assert.IsFalse(viewModel.IsPanelExpanded, "快速离场回场未被观测到：抑制保持到下次观测离场。");
+
+            SetCursorPos(40, 40);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            SetCursorPos(collapsedCenter.X, collapsedCenter.Y);
+            EnterCategory(window, QuickLaunchMigration.LauncherCategory);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            CompleteLayout(window);
+            Assert.IsTrue(viewModel.IsPanelExpanded, "下一次观测到真实离场即解除，其后悬停展开。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
     // ---- 键盘查看态：Enter 启动、方向键导航、Delete 无操作 ----
 
     [STATestMethod]
