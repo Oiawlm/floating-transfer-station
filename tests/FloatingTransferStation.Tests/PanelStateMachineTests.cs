@@ -298,17 +298,18 @@ public sealed class PanelStateMachineTests
         Assert.AreEqual(BoardCategory.Inbox, state.ActiveCategory);
     }
 
-    // ---- 再展开抑制会话（#30，Issue #170）：布防=启动收起提交点记录原区域；
-    // ---- 解除=轮询观测到指针离场；终止=观测离场或权威展开；捕获失败不布防 ----
+    // ---- 再展开抑制会话（#30，Issue #173）：布防=启动收起提交点以收起把手矩形
+    // ---- 建立会话（指针在把手内才布防）；解除=轮询观测到指针离开把手；终止=观测
+    // ---- 离场、显式结束或权威展开；退化矩形结束旧会话不布防 ----
 
     [TestMethod]
     public void ReexpandSuppression_ArmedAfterBegin_AndHoldsWhilePointerInside()
     {
         var state = new PanelStateMachine();
-        state.BeginReexpandSuppression(100, 200, 500, 800);
+        state.ArmReexpandSuppression(100, 200, 500, 800);
 
         Assert.IsTrue(state.IsReexpandSuppressed);
-        // 指针仍在收起前原区域内（含左上边界、不含右下边界）：多个观测周期持续抑制。
+        // 指针仍在收起把手矩形内（含左上边界、不含右下边界）：多个观测周期持续抑制。
         Assert.IsFalse(state.ObservePointer(100, 200));
         Assert.IsFalse(state.ObservePointer(499, 799));
         Assert.IsFalse(state.ObservePointer(300, 500));
@@ -319,10 +320,10 @@ public sealed class PanelStateMachineTests
     public void ReexpandSuppression_ObservedPointerLeavingLiftsSuppression()
     {
         var state = new PanelStateMachine();
-        state.BeginReexpandSuppression(100, 200, 500, 800);
+        state.ArmReexpandSuppression(100, 200, 500, 800);
 
-        Assert.IsFalse(state.ObservePointer(300, 500), "区域内观测不解。");
-        Assert.IsTrue(state.ObservePointer(500, 800), "区域外观测（右/下边界即外）解除并回报本次完成。");
+        Assert.IsFalse(state.ObservePointer(300, 500), "把手矩形内观测不解。");
+        Assert.IsTrue(state.ObservePointer(500, 800), "把手矩形外观测（右/下边界即外）解除并回报本次完成。");
         Assert.IsFalse(state.IsReexpandSuppressed);
         Assert.IsFalse(state.ObservePointer(100, 200), "解除后观测为无操作。");
     }
@@ -331,7 +332,7 @@ public sealed class PanelStateMachineTests
     public void ReexpandSuppression_AuthoritativeExpandViaSwitchTerminatesSession()
     {
         var state = new PanelStateMachine();
-        state.BeginReexpandSuppression(100, 200, 500, 800);
+        state.ArmReexpandSuppression(100, 200, 500, 800);
 
         state.Switch(BoardCategory.Inbox);
 
@@ -344,7 +345,7 @@ public sealed class PanelStateMachineTests
     {
         var state = new PanelStateMachine();
         state.Switch(BoardCategory.Inbox);
-        state.BeginReexpandSuppression(100, 200, 500, 800);
+        state.ArmReexpandSuppression(100, 200, 500, 800);
 
         state.ForceCollapse();
 
@@ -357,10 +358,10 @@ public sealed class PanelStateMachineTests
     {
         var state = new PanelStateMachine();
 
-        state.BeginReexpandSuppression(0, 0, 0, 0);
+        state.ArmReexpandSuppression(0, 0, 0, 0);
         Assert.IsFalse(state.IsReexpandSuppressed, "捕获失败形态（退化矩形）不布防（fail-open）。");
 
-        state.BeginReexpandSuppression(500, 800, 100, 200);
+        state.ArmReexpandSuppression(500, 800, 100, 200);
         Assert.IsFalse(state.IsReexpandSuppressed, "倒置矩形同属退化形态，不布防。");
         Assert.IsFalse(state.ObservePointer(300, 500), "未布防时观测为无操作。");
     }
@@ -369,24 +370,38 @@ public sealed class PanelStateMachineTests
     public void ReexpandSuppression_DegenerateRearmDisarmsStaleSession()
     {
         var state = new PanelStateMachine();
-        state.BeginReexpandSuppression(100, 200, 500, 800);
+        state.ArmReexpandSuppression(100, 200, 500, 800);
         Assert.IsTrue(state.IsReexpandSuppressed);
 
-        state.BeginReexpandSuppression(0, 0, 0, 0);
+        state.ArmReexpandSuppression(0, 0, 0, 0);
 
         Assert.IsFalse(state.IsReexpandSuppressed, "重布防遇退化矩形＝新会话捕获失败：旧会话的陈旧矩形一并解除（fail-open 完整语义）。");
+    }
+
+    [TestMethod]
+    public void ReexpandSuppression_ExplicitEndClearsArmedSessionAndStopsObservation()
+    {
+        var state = new PanelStateMachine();
+        state.ArmReexpandSuppression(100, 200, 500, 800);
+        Assert.IsTrue(state.IsReexpandSuppressed);
+
+        state.EndReexpandSuppression();
+
+        Assert.IsFalse(state.IsReexpandSuppressed, "显式结束清闩（提交点指针在把手外时不布防且不留旧会话）。");
+        Assert.IsFalse(state.ObservePointer(300, 500), "结束后的观测为无操作。");
+        Assert.IsFalse(state.ObservePointer(900, 900));
     }
 
     [TestMethod]
     public void ReexpandSuppression_RearmingTakesLatestRectangle()
     {
         var state = new PanelStateMachine();
-        state.BeginReexpandSuppression(100, 200, 500, 800);
-        state.BeginReexpandSuppression(1000, 1200, 1400, 1800);
+        state.ArmReexpandSuppression(100, 200, 500, 800);
+        state.ArmReexpandSuppression(1000, 1200, 1400, 1800);
 
-        Assert.IsTrue(state.ObservePointer(300, 500), "重复布防总取当次收起前矩形：旧矩形内的点已在当次矩形外，观测即解除。");
+        Assert.IsTrue(state.ObservePointer(300, 500), "重布防总取当次收起把手矩形：旧矩形内的点已在当次矩形外，观测即解除。");
 
-        state.BeginReexpandSuppression(1000, 1200, 1400, 1800);
+        state.ArmReexpandSuppression(1000, 1200, 1400, 1800);
         Assert.IsFalse(state.ObservePointer(1200, 1500), "当次矩形内保持抑制。");
         Assert.IsTrue(state.ObservePointer(999, 1500), "离开当次矩形即解除。");
     }
