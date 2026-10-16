@@ -158,10 +158,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 再展开抑制窗（#30）：启动成功收起后，指针离开收起前面板原区域前不悬停展开
-        // （解除条件唯一=指针离开后重新进入，指针停留期间保持抑制）。必须在
-        // TryCommitHover 之前——提交会消费悬停意图并翻转内部展开态，抑制期不得发生。
-        if (TryConsumeReexpandSuppression())
+        // 再展开抑制窗（#30，Issue #170）：启动成功收起后，指针离开收起前面板原区域前
+        // 不悬停展开（解除=离场观测轮询或权威展开终止会话，指针停留期间保持抑制、不做
+        // 计时解除）。必须在 TryCommitHover 之前——提交会消费悬停意图并翻转内部展开态，
+        // 抑制期不得发生。
+        if (_panelState.IsReexpandSuppressed)
         {
             return;
         }
