@@ -278,8 +278,8 @@ public partial class MainWindow
     }
 
     /// <summary>覆盖交互全部结束后的表面重估：指针仍在窗口内则维持展开，否则恢复
-    /// 既有收起节奏（重启 250ms 离开计时）。已收起时不重启计时也不反向展开——
-    /// 收起尾段关闭菜单触发的 Closed 再入路径由此天然幂等。</summary>
+    /// 既有收起节奏。已收起时不重启计时也不反向展开——收起尾段关闭菜单触发的
+    /// Closed 再入路径由此天然幂等。</summary>
     private void ReconcileSurfaceAfterOverlayInteraction()
     {
         if (_isClosing || _panelState.HasOverlayInteraction || !_panelState.IsExpanded)
@@ -294,6 +294,9 @@ public partial class MainWindow
         }
 
         _panelState.LeaveSurface();
+        // 重启=完整新一轮 250ms：DispatcherTimer.Start 对运行中的计时器是空操作，
+        // 旧期限（离开瞬间起算）不得穿透覆盖交互的释放时刻继续倒计时。
+        _collapseTimer.Stop();
         _collapseTimer.Start();
     }
 
@@ -803,8 +806,9 @@ public partial class MainWindow
         // 自引用死锁（Issue #162 回归）。窄轨/收起期视口为 0：跳过本帧，展开后
         // ScrollChanged 按新视口补算。网格水平居中由限定宽度 +
         // HorizontalAlignment=Center 承载；200 上限承载有界性（不预建虚拟化）。
+        // 非有限（NaN/∞）一并跳过：防御性守卫，真实布局管线不会产生非有限视口。
         var viewportWidth = e.ViewportWidth;
-        if (double.IsNaN(viewportWidth) || viewportWidth <= 0)
+        if (!double.IsFinite(viewportWidth) || viewportWidth <= 0)
         {
             return;
         }

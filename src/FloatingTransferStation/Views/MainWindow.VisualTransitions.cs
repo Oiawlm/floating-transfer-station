@@ -334,7 +334,10 @@ public partial class MainWindow : Window
     {
         _expandIntentTimer.Stop();
         _collapseTimer.Stop();
-        if (IsPanelEditHoldActive())
+        // 编辑保持与覆盖交互（＋菜单/模态对话框=独立 HWND）期间的 MouseLeave 多为
+        // 假离开（IME 候选窗/弹层遮挡光标，消息可能迟到）：吞掉——不落 LeaveSurface、
+        // 不武装收起计时，释放后由表面重估按指针几何位置统一裁决（#30 覆盖交互抑制）。
+        if (IsPanelEditHoldActive() || _panelState.HasOverlayInteraction)
         {
             return;
         }

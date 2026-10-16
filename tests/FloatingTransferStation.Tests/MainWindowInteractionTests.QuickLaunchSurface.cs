@@ -140,6 +140,39 @@ public sealed partial class MainWindowInteractionTests
         return (container as Border) ?? FindDescendant<Border>(container);
     }
 
+    /// <summary>关闭＋菜单并等到 Closed 事件真正派发（Popup 关闭经 Dispatcher 异步
+    /// 进行，IsOpen=false 后 Closed 可能尚未触发——立即直驱 tick 会被残留 hold
+    /// 拦截造成假失败）。</summary>
+    private static void CloseLauncherMenuAndWait(MainWindow window)
+    {
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        EventHandler closedHandler = (_, _) => closed.TrySetResult();
+        window.LauncherAddMenu.Closed += closedHandler;
+        try
+        {
+            window.LauncherAddMenu.IsOpen = false;
+            PumpDispatcherUntil(window.Dispatcher, closed.Task);
+        }
+        finally
+        {
+            window.LauncherAddMenu.Closed -= closedHandler;
+        }
+    }
+
+    /// <summary>泵到＋菜单的异步 Closed 派发完毕、覆盖交互记账清零（Popup 关闭经
+    /// Dispatcher 异步进行——含淡出动画——IsOpen=false 后 Closed 可能延迟派发）。</summary>
+    private static void PumpUntilOverlayAccountingCleared(MainWindow window)
+    {
+        var panelState = GetPrivateField<PanelStateMachine>(window, "_panelState");
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(3);
+        while (panelState.HasOverlayInteraction && DateTime.UtcNow < deadline)
+        {
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(30));
+        }
+
+        Assert.IsFalse(panelState.HasOverlayInteraction, "菜单 Closed 派发后覆盖交互记账必须清零。");
+    }
+
     // ---- 真实输入（契约 #13）：单击一次有效请求 + 500ms 重入门闩 ----
 
     [STATestMethod]
@@ -1023,9 +1056,15 @@ public sealed partial class MainWindowInteractionTests
             InvokePrivateTask(window, "ImportLauncherFilesAsync", new[] { app.Path }, 0);
             CompleteLayout(window);
 
-            // 再展开（真实路径：悬停意图提交→宽几何）：网格必须按视口恢复列槽宽度。
+            // 再展开（真实路径：悬停意图提交→宽几何）：网格必须按视口恢复列槽宽度，
+            // 且精确等于视口公式（宽度输入只来自容器视口）；随后跨列数边界改宽再验。
             ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
             CompleteLayout(window);
+            AssertGridWidthMatchesViewportFormula(window);
+
+            window.Width = 480;
+            CompleteLayout(window);
+            AssertGridWidthMatchesViewportFormula(window);
 
             Assert.IsTrue(
                 window.LauncherTileGrid.ActualWidth >= 3 * 92 - 8,
@@ -1035,6 +1074,121 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    /// <summary>网格宽度必须精确等于「视口实测宽 → clamp 列数 → 限宽」公式（按测试
+    /// 运行时实读的 LauncherScroll.ViewportWidth 计算期望，跨列数边界取两个宽度）。</summary>
+    private static void AssertGridWidthMatchesViewportFormula(MainWindow window)
+    {
+        var viewport = window.LauncherScroll.ViewportWidth;
+        Assert.IsTrue(
+            double.IsFinite(viewport) && viewport > 0,
+            $"前置：展开态视口宽有效（实际 {viewport}）。");
+        var columns = Math.Clamp((int)Math.Floor((viewport + 8) / 92), 3, 6);
+        Assert.AreEqual(
+            Math.Min(viewport, columns * 92 - 8),
+            window.LauncherTileGrid.Width,
+            0.5,
+            $"网格宽度=视口公式（viewport={viewport}, columns={columns}）。");
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_OverlaySuppression_HoldReleasedBeforeOldDeadlineRestartsCountdown()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var window = CreateLauncherWindowSync(directory, board, store, starter);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            SetCursorPos(40, 40);
+            var panelState = GetPrivateField<PanelStateMachine>(window, "_panelState");
+
+            // 指针离开启动 250ms 计时；第 ~180ms 覆盖交互开始并释放（半白盒直驱
+            // 重估，避开 Popup Opened/Closed 异步时序）：释放必须重启完整新一轮
+            // 250ms——旧期限（离开起算）不得穿透释放时刻继续倒计时。
+            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(180));
+            Assert.IsTrue(viewModel.IsPanelExpanded, "前置：旧计时未到期。");
+            panelState.BeginOverlayInteraction(PanelOverlayReason.Menu);
+            panelState.EndOverlayInteraction(PanelOverlayReason.Menu);
+            InvokePrivate(window, "ReconcileSurfaceAfterOverlayInteraction");
+
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(130));
+            Assert.IsTrue(
+                viewModel.IsPanelExpanded,
+                "旧期限（250ms）已过但新一轮 250ms 未到：不得提交收起。");
+
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(500));
+            Assert.IsFalse(viewModel.IsPanelExpanded, "释放后重启的新一轮 250ms 到期正常收起。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_OverlaySuppression_ExitAnimationCompletionCommitsNothingWhenOverlayHolds()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var window = CreateLauncherWindowSync(directory, board, store, starter);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            // 动效保持开启：走真实出场动画完成回调（CommitPanelCollapse 第二提交入口）。
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            SetCursorPos(40, 40);
+
+            // 离开+到点 → 200ms 出场动画开始；动画进行中打开＋菜单（覆盖交互 hold）。
+            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+            window.LauncherAddButton.RaiseEvent(
+                new RoutedEventArgs(Button.ClickEvent, window.LauncherAddButton));
+            CompleteLayout(window);
+            Assert.IsTrue(window.LauncherAddMenu.IsOpen, "前置：动画进行中菜单已打开。");
+
+            // 等待动画完成回调（200ms 出场 + 余量）：CommitPanelCollapse 必须被
+            // TryCollapse 的覆盖交互抑制拒绝并恢复内容，不得收起。
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(700));
+            CompleteLayout(window);
+
+            Assert.IsTrue(viewModel.IsPanelExpanded, "动画完成回调不得在覆盖交互期间提交收起。");
+            Assert.IsTrue(window.LauncherAddMenu.IsOpen);
+            var contentHost = (Grid)window.FindName("PanelContentHost");
+            Assert.AreEqual(1d, contentHost.Opacity, 0.01, "放弃收起后内容恢复显示。");
+
+            // 菜单关闭（指针在外）→ 恢复收起节奏（动画路径照常收起）。
+            CloseLauncherMenuAndWait(window);
+            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(700));
+            Assert.IsFalse(viewModel.IsPanelExpanded, "覆盖交互结束后照常收起。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
             CloseWindowWithoutSaving(window);
         }
     }
@@ -1150,6 +1304,10 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.IsFalse(window.LauncherAddMenu.IsOpen, "入口点击后菜单关闭（既有行为不变）。");
             Assert.IsTrue(viewModel.IsPanelExpanded, "交接全程保持展开。");
+            PumpUntilOverlayAccountingCleared(window);
+            Assert.IsFalse(
+                GetPrivateField<PanelStateMachine>(window, "_panelState").HasOverlayInteraction,
+                "交接结束后覆盖交互记账必须清零（Closed 异步时序下原因集合仍平衡）。");
         }
         finally
         {
@@ -1198,7 +1356,8 @@ public sealed partial class MainWindowInteractionTests
             window.LauncherAddInstalledMenuButton.RaiseEvent(new RoutedEventArgs(
                 Button.ClickEvent, window.LauncherAddInstalledMenuButton));
 
-            // 对话框已关闭且指针在窗口内：释放重估维持展开，不得重启收起。
+            // 对话框已关闭且指针在窗口内：释放重估维持展开；迟到的假 MouseLeave
+            // （对话框曾遮住光标）在 hold 期间已被吞掉，不得武装收起计时。
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(450));
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "指针在内→覆盖交互释放后维持展开。");
@@ -1236,9 +1395,9 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             Assert.IsTrue(window.LauncherAddMenu.IsOpen);
 
-            // 菜单外点关闭（StaysOpen=False 的正常关闭路径）且指针在窗口外：
-            // 释放重估恢复收起节奏。
-            window.LauncherAddMenu.IsOpen = false;
+            // 菜单外点关闭（StaysOpen=False 的正常关闭路径，等到 Closed 真正派发）
+            // 且指针在窗口外：释放重估恢复收起节奏。
+            CloseLauncherMenuAndWait(window);
             WithClientAreaAnimationsDisabled(
                 window,
                 () =>
@@ -1376,9 +1535,9 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(viewModel.IsPanelExpanded, "启动排队收起遇覆盖交互（＋菜单）必须取消。");
             Assert.IsTrue(window.LauncherAddMenu.IsOpen);
 
-            // 菜单关闭且指针在外 → 恢复收起节奏。
+            // 菜单关闭（等到 Closed 真正派发）且指针在外 → 恢复收起节奏。
             SetCursorPos(40, 40);
-            window.LauncherAddMenu.IsOpen = false;
+            CloseLauncherMenuAndWait(window);
             WithClientAreaAnimationsDisabled(
                 window,
                 () =>
@@ -1452,8 +1611,9 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             Assert.AreEqual(1, window.LaunchersForTests().Items.Count, "确认后导入 1 项。");
 
-            // 对话框已关、指针在外：按既有节奏收起（非 bug，是正常离开收起）。
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(450));
+            // 对话框已关、指针在外：按既有节奏收起（非 bug，是正常离开收起；淡出
+            // 动画使菜单 Closed 与重启的 250ms 计时起点异步，条件泵到收起为止）。
+            PumpUntilCondition(window.Dispatcher, () => !viewModel.IsPanelExpanded);
             CompleteLayout(window);
             Assert.IsFalse(viewModel.IsPanelExpanded, "覆盖交互结束后指针在外→按节奏收起。");
 
