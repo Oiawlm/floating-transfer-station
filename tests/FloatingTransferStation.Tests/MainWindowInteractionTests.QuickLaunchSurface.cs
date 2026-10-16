@@ -1156,29 +1156,47 @@ public sealed partial class MainWindowInteractionTests
         try
         {
             window.Show();
-            // 动效保持开启：走真实出场动画完成回调（CommitPanelCollapse 第二提交入口）。
             ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
             CompleteLayout(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
             SetCursorPos(40, 40);
 
-            // 离开+到点 → 200ms 出场动画开始；动画进行中打开＋菜单（覆盖交互 hold）。
-            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
-            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-            window.LauncherAddButton.RaiseEvent(
-                new RoutedEventArgs(Button.ClickEvent, window.LauncherAddButton));
-            CompleteLayout(window);
-            Assert.IsTrue(window.LauncherAddMenu.IsOpen, "前置：动画进行中菜单已打开。");
+            if (window.ClientAreaAnimationsEnabled)
+            {
+                // 动效开启环境（本机）：离开+到点 → 200ms 出场动画开始；动画进行中
+                // 打开＋菜单（覆盖交互 hold）→ 完成回调（CommitPanelCollapse 第二
+                // 提交入口）必须被 TryCollapse 的覆盖交互抑制拒绝并恢复内容。
+                InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+                InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                window.LauncherAddButton.RaiseEvent(
+                    new RoutedEventArgs(Button.ClickEvent, window.LauncherAddButton));
+                CompleteLayout(window);
+                Assert.IsTrue(window.LauncherAddMenu.IsOpen, "前置：动画进行中菜单已打开。");
 
-            // 等待动画完成回调（200ms 出场 + 余量）：CommitPanelCollapse 必须被
-            // TryCollapse 的覆盖交互抑制拒绝并恢复内容，不得收起。
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(700));
-            CompleteLayout(window);
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(700));
+                CompleteLayout(window);
 
-            Assert.IsTrue(viewModel.IsPanelExpanded, "动画完成回调不得在覆盖交互期间提交收起。");
-            Assert.IsTrue(window.LauncherAddMenu.IsOpen);
-            var contentHost = (Grid)window.FindName("PanelContentHost");
-            Assert.AreEqual(1d, contentHost.Opacity, 0.01, "放弃收起后内容恢复显示。");
+                Assert.IsTrue(viewModel.IsPanelExpanded, "动画完成回调不得在覆盖交互期间提交收起。");
+                Assert.IsTrue(window.LauncherAddMenu.IsOpen);
+                var contentHost = (Grid)window.FindName("PanelContentHost");
+                Assert.AreEqual(1d, contentHost.Opacity, 0.01, "放弃收起后内容恢复显示。");
+            }
+            else
+            {
+                // 客户区动画被系统关闭的环境（CI 远程会话常见）：不存在「出场动画
+                // 完成回调」入口，等价提交入口=tick 内同步 CommitPanelCollapse——
+                // 菜单先行打开时该入口同样必须被抑制（WouldCollapse 早退）。
+                window.LauncherAddButton.RaiseEvent(
+                    new RoutedEventArgs(Button.ClickEvent, window.LauncherAddButton));
+                CompleteLayout(window);
+                Assert.IsTrue(window.LauncherAddMenu.IsOpen, "前置：菜单已打开。");
+
+                InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+                InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                CompleteLayout(window);
+                Assert.IsTrue(viewModel.IsPanelExpanded, "同步提交入口同样受覆盖交互抑制。");
+                Assert.IsTrue(window.LauncherAddMenu.IsOpen);
+            }
 
             // 菜单关闭（指针在外）→ 恢复收起节奏（动画路径照常收起）。
             CloseLauncherMenuAndWait(window);
