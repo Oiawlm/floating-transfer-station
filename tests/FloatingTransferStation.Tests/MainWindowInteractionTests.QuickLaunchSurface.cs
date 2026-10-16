@@ -1038,4 +1038,552 @@ public sealed partial class MainWindowInteractionTests
             CloseWindowWithoutSaving(window);
         }
     }
+
+    [STATestMethod]
+    public void QuickLaunch_OverlaySuppression_DialogOpenSurvivesLeaveAndResumesAfterCloseOutside()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var window = CreateLauncherWindowSync(directory, board, store, starter);
+        window.UseInstalledAppsSourceForTests(() => [FakeInstalledApp("app.new1", "新应用一")]);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            SetCursorPos(40, 40);
+            window._showPickerDialog = picker =>
+            {
+                // 模态对话框打开期间（指针已离开主窗口）：假 MouseLeave+250ms 到点。
+                picker.Show();
+                WithClientAreaAnimationsDisabled(
+                    window,
+                    () =>
+                    {
+                        InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+                        InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                        CompleteLayout(window);
+                    });
+                Assert.IsTrue(
+                    viewModel.IsPanelExpanded,
+                    "模态对话框打开期间鼠标离开收起链不得收回面板。");
+                picker.Close();
+                return false;
+            };
+
+            window.LauncherAddInstalledMenuButton.RaiseEvent(new RoutedEventArgs(
+                Button.ClickEvent, window.LauncherAddInstalledMenuButton));
+
+            // 对话框已关闭且指针在窗口外：释放重估恢复收起节奏（250ms 到点提交）。
+            Assert.IsTrue(viewModel.IsPanelExpanded, "对话框刚关闭、收起计时未到期前保持展开。");
+            WithClientAreaAnimationsDisabled(
+                window,
+                () =>
+                {
+                    InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                    CompleteLayout(window);
+                });
+            Assert.IsFalse(viewModel.IsPanelExpanded, "指针在外、覆盖交互全部结束→按既有节奏收起。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_OverlaySuppression_MenuToDialogHandoffKeepsPanelOpen()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var window = CreateLauncherWindowSync(directory, board, store, starter);
+        window.UseInstalledAppsSourceForTests(() => [FakeInstalledApp("app.new1", "新应用一")]);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            SetCursorPos(40, 40);
+
+            // ＋ 打开菜单（Menu hold），经菜单入口交接给选择器对话框（ModalDialog hold）。
+            window.LauncherAddButton.RaiseEvent(
+                new RoutedEventArgs(Button.ClickEvent, window.LauncherAddButton));
+            CompleteLayout(window);
+            Assert.IsTrue(window.LauncherAddMenu.IsOpen);
+            window._showPickerDialog = picker =>
+            {
+                picker.Show();
+                WithClientAreaAnimationsDisabled(
+                    window,
+                    () =>
+                    {
+                        InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+                        InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                        CompleteLayout(window);
+                    });
+                Assert.IsTrue(
+                    viewModel.IsPanelExpanded,
+                    "菜单→对话框交接期间（菜单已关、对话框已开）收起链不得收回面板。");
+                picker.Close();
+                return false;
+            };
+
+            window.LauncherAddInstalledMenuButton.RaiseEvent(new RoutedEventArgs(
+                Button.ClickEvent, window.LauncherAddInstalledMenuButton));
+
+            Assert.IsFalse(window.LauncherAddMenu.IsOpen, "入口点击后菜单关闭（既有行为不变）。");
+            Assert.IsTrue(viewModel.IsPanelExpanded, "交接全程保持展开。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_OverlaySuppression_DialogCloseWithPointerInsideKeepsPanelExpanded()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var window = CreateLauncherWindowSync(directory, board, store, starter);
+        window.UseInstalledAppsSourceForTests(() => [FakeInstalledApp("app.new1", "新应用一")]);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var inside = tileWindowCenter(window);
+            SetCursorPos(inside.X, inside.Y);
+            window._showPickerDialog = picker =>
+            {
+                picker.Show();
+                WithClientAreaAnimationsDisabled(
+                    window,
+                    () =>
+                    {
+                        InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+                        InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                        CompleteLayout(window);
+                    });
+                picker.Close();
+                return false;
+            };
+
+            window.LauncherAddInstalledMenuButton.RaiseEvent(new RoutedEventArgs(
+                Button.ClickEvent, window.LauncherAddInstalledMenuButton));
+
+            // 对话框已关闭且指针在窗口内：释放重估维持展开，不得重启收起。
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(450));
+            CompleteLayout(window);
+            Assert.IsTrue(viewModel.IsPanelExpanded, "指针在内→覆盖交互释放后维持展开。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_OverlaySuppression_MenuCloseWithPointerOutsideResumesCollapse()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var window = CreateLauncherWindowSync(directory, board, store, starter);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            SetCursorPos(40, 40);
+
+            window.LauncherAddButton.RaiseEvent(
+                new RoutedEventArgs(Button.ClickEvent, window.LauncherAddButton));
+            CompleteLayout(window);
+            Assert.IsTrue(window.LauncherAddMenu.IsOpen);
+
+            // 菜单外点关闭（StaysOpen=False 的正常关闭路径）且指针在窗口外：
+            // 释放重估恢复收起节奏。
+            window.LauncherAddMenu.IsOpen = false;
+            WithClientAreaAnimationsDisabled(
+                window,
+                () =>
+                {
+                    InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                    CompleteLayout(window);
+                });
+            Assert.IsFalse(viewModel.IsPanelExpanded, "菜单外点关闭且指针在外→恢复收起节奏。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_OverlaySuppression_CollapsedTailMenuCloseReentryStaysCollapsed()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var window = CreateLauncherWindowSync(directory, board, store, starter);
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            // 先真实收起，再在收起态开/关菜单（收起尾段关菜单触发的 Closed 再入）：
+            // 释放重估不得反向展开、不得重启收起计时。
+            CollapseForSetup(window);
+            window.LauncherAddButton.RaiseEvent(
+                new RoutedEventArgs(Button.ClickEvent, window.LauncherAddButton));
+            CompleteLayout(window);
+            Assert.IsTrue(window.LauncherAddMenu.IsOpen, "前置：收起态菜单可打开。");
+
+            window.LauncherAddMenu.IsOpen = false;
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(450));
+            CompleteLayout(window);
+
+            Assert.IsFalse(window.LauncherAddMenu.IsOpen);
+            Assert.IsFalse(viewModel.IsPanelExpanded, "Closed 再入路径天然幂等：不得反向展开。");
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_OverlaySuppression_EdgeHideArmedWithMenuOpenTickCommitsNothing()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var window = CreateLauncherWindowSync(directory, board, store, starter);
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            ToggleEdgeHide(window);
+            Assert.IsTrue(EdgeHideState(window).IsArmed, "前置：贴边隐藏已待命。");
+            window.LauncherAddButton.RaiseEvent(
+                new RoutedEventArgs(Button.ClickEvent, window.LauncherAddButton));
+            CompleteLayout(window);
+            Assert.IsTrue(window.LauncherAddMenu.IsOpen);
+
+            WithClientAreaAnimationsDisabled(
+                window,
+                () =>
+                {
+                    InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+                    InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                    CompleteLayout(window);
+                });
+
+            Assert.IsFalse(EdgeHideState(window).IsDocked, "菜单打开期间 tick 不得提交贴边隐藏。");
+            Assert.IsTrue(viewModel.IsPanelExpanded, "菜单打开期间面板保持展开。");
+            Assert.IsTrue(window.LauncherAddMenu.IsOpen);
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_OverlaySuppression_QueuedLaunchCollapseCancelsWhenOverlayActive()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            // 启动成功排队收起（250ms）→ 等待期内打开＋菜单 → 到期重验取消收起。
+            var tile = FindLauncherTile(window, item);
+            Assert.IsNotNull(tile);
+            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile));
+            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, timestamp: 3));
+            window.LauncherAddButton.RaiseEvent(
+                new RoutedEventArgs(Button.ClickEvent, window.LauncherAddButton));
+            CompleteLayout(window);
+            Assert.IsTrue(window.LauncherAddMenu.IsOpen);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(450));
+            CompleteLayout(window);
+
+            Assert.IsTrue(viewModel.IsPanelExpanded, "启动排队收起遇覆盖交互（＋菜单）必须取消。");
+            Assert.IsTrue(window.LauncherAddMenu.IsOpen);
+
+            // 菜单关闭且指针在外 → 恢复收起节奏。
+            SetCursorPos(40, 40);
+            window.LauncherAddMenu.IsOpen = false;
+            WithClientAreaAnimationsDisabled(
+                window,
+                () =>
+                {
+                    InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                    CompleteLayout(window);
+                });
+            Assert.IsFalse(viewModel.IsPanelExpanded);
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_OverlaySuppression_PickerAddFlowKeepsPanelOpenUntilTilesVisible()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var window = CreateLauncherWindowSync(directory, board, store, starter);
+        window.UseInstalledAppsSourceForTests(() => [FakeInstalledApp("app.new1", "新应用一")]);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            SetCursorPos(40, 40);
+
+            // 用户报告时序（Issue #162）：＋ 菜单 → 已安装应用… → 对话框期间指针在外。
+            window.LauncherAddButton.RaiseEvent(
+                new RoutedEventArgs(Button.ClickEvent, window.LauncherAddButton));
+            CompleteLayout(window);
+            Assert.IsTrue(window.LauncherAddMenu.IsOpen);
+            window._showPickerDialog = picker =>
+            {
+                picker.Show();
+                picker.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+                WithClientAreaAnimationsDisabled(
+                    window,
+                    () =>
+                    {
+                        InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+                        InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                        CompleteLayout(window);
+                    });
+                Assert.IsTrue(viewModel.IsPanelExpanded, "对话框期间面板不得收回（bug ①）。");
+                for (var i = 0; i < picker.PickerList.Items.Count; i++)
+                {
+                    CheckPickerRow(picker, i);
+                }
+
+                ClickPickerConfirm(picker);
+                return true;
+            };
+
+            window.LauncherAddInstalledMenuButton.RaiseEvent(new RoutedEventArgs(
+                Button.ClickEvent, window.LauncherAddInstalledMenuButton));
+            PumpUntilCondition(
+                window.Dispatcher,
+                () => window.LaunchersForTests().Items.Count == 1);
+            CompleteLayout(window);
+            Assert.AreEqual(1, window.LaunchersForTests().Items.Count, "确认后导入 1 项。");
+
+            // 对话框已关、指针在外：按既有节奏收起（非 bug，是正常离开收起）。
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(450));
+            CompleteLayout(window);
+            Assert.IsFalse(viewModel.IsPanelExpanded, "覆盖交互结束后指针在外→按节奏收起。");
+
+            // 再展开：瓦片可见、网格宽度按视口恢复（bug ②不得复发）。
+            SetCursorPos(40, 40);
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            Assert.IsTrue(window.LauncherTileGrid.ActualWidth >= 3 * 92 - 8,
+                $"再展开后网格宽度按视口恢复（实际 {window.LauncherTileGrid.ActualWidth}）。");
+            Assert.IsNotNull(
+                FindLauncherTile(window, window.LaunchersForTests().Items[0]),
+                "再展开后瓦片可见。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_GridWidth_EmptyToDataSwitchAtWideViewportLaysOutColumns()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var window = CreateLauncherWindowSync(directory, board, store, starter);
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            Assert.AreEqual(0, window.LaunchersForTests().Items.Count, "前置：空态。");
+
+            InvokePrivateTask(window, "ImportLauncherFilesAsync", new[] { app.Path }, 0);
+            CompleteLayout(window);
+
+            Assert.AreEqual(1, window.LaunchersForTests().Items.Count);
+            Assert.IsTrue(window.LauncherTileGrid.ActualWidth >= 3 * 92 - 8,
+                $"空态→带数据切换后网格按视口布局（实际 {window.LauncherTileGrid.ActualWidth}）。");
+            Assert.IsNotNull(FindLauncherTile(window, window.LaunchersForTests().Items[0]));
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_GridWidth_CollapseReexpandCycleKeepsTilesVisible()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+
+            CollapseForSetup(window);
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+
+            Assert.IsTrue(window.LauncherTileGrid.ActualWidth >= 3 * 92 - 8,
+                $"收起→再展开循环后网格宽度按视口恢复（实际 {window.LauncherTileGrid.ActualWidth}）。");
+            Assert.IsNotNull(FindLauncherTile(window, item), "收起→再展开循环后瓦片可见。");
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_GridWidth_LaunchCollapseReexpandKeepsTilesVisible()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            var tile = FindLauncherTile(window, item);
+            Assert.IsNotNull(tile);
+            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile));
+            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, timestamp: 3));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(450));
+            CompleteLayout(window);
+            Assert.IsFalse(viewModel.IsPanelExpanded, "前置：启动成功后排队收起。");
+
+            SetCursorPos(40, 40);
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+
+            Assert.IsTrue(window.LauncherTileGrid.ActualWidth >= 3 * 92 - 8,
+                $"启动→收起→再展开后网格宽度按视口恢复（实际 {window.LauncherTileGrid.ActualWidth}）。");
+            Assert.IsNotNull(FindLauncherTile(window, item), "启动→收起→再展开后瓦片可见。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
 }
