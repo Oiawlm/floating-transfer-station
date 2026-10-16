@@ -81,7 +81,10 @@ public partial class MainWindow : Window
     /// <summary>悬停意图评估共享入口（#30，Issue #173）：标签 MouseEnter 与收起交接
     /// 完成点的静止指针重评估共用同一条守卫链、同一个 60ms 意图计时与再展开抑制
     /// 闸门（闸门在 ExpandIntentTimer_Tick 内统一执行）——仓内不设第二套悬停逻辑；
-    /// 重复评估幂等（只重启意图计时，不双展开）。</summary>
+    /// 重复评估幂等（只重启意图计时，不双展开）。守卫链（拖放轨道/拖拽在途）权威
+    /// 在此入口而非事件处理器：对 MouseEnter 与补发一致生效；与提取前的顺序差异
+    /// 仅在「无效事件源＋守卫成立」时可观察——XAML 绑定下事件源恒为标签 Border，
+    /// 该形态不可达，属刻意归一（T7 评审 #4 驳回理由）。</summary>
     private void EvaluateHoverIntent(BoardCategory category)
     {
         if (_viewModel.IsExternalDropRailVisible ||

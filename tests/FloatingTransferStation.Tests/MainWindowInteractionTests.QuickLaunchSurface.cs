@@ -749,10 +749,77 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void QuickLaunch_ReexpandSuppression_SecondLaunchRearmsAndStillRecoversAfterDeparture()
+    public void QuickLaunch_ReexpandSuppression_SecondLaunchWithPointerOnHandleRearmsAndRecovers()
     {
-        // 连发启动（Issue #173）：第二次提交点指针在把手内＝重布防且同样观测恢复；
-        // 第二次提交点指针在把手外＝不布防并结束既有会话（T7 修订：旧闩不得残留）。
+        // 连发启动在内形态（D6 ④前半）：第二次提交点指针在把手内＝重布防（替换旧
+        // 会话），同样观测离场即恢复。
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            var panelState = GetPrivateField<PanelStateMachine>(window, "_panelState");
+            var (viewModel, _, handleCenter) =
+                LaunchFromTileAndCollapseWithPointerOnHandle(window, item, upTimestamp: 3);
+
+            // 第一次会话：观测离场 → 悬停恢复展开。
+            SetCursorPos(40, 40);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            SetCursorPos(handleCenter.X, handleCenter.Y);
+            EnterCategory(window, BoardCategory.Inbox);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            CompleteLayout(window);
+            Assert.IsTrue(viewModel.IsPanelExpanded, "前置：第一次会话观测离场后恢复展开。");
+
+            // 第二次启动（同瓦片，事件时间戳已越过 500ms 重入门闩）：指针在瓦片位置完成
+            // 单击、提交点前移入把手（把手位置不随展开/收起移动）→ 重布防。
+            var expandedCenter2 = tileWindowCenter(window);
+            SetCursorPos(expandedCenter2.X, expandedCenter2.Y);
+            var tile = FindLauncherTile(window, item);
+            Assert.IsNotNull(tile);
+            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile, 4000));
+            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, 4003));
+            SetCursorPos(handleCenter.X, handleCenter.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
+            CompleteLayout(window);
+            Assert.IsFalse(viewModel.IsPanelExpanded, "第二次启动成功后再次收起。");
+            Assert.IsTrue(panelState.IsReexpandSuppressed, "第二次提交点指针在把手内＝重布防（替换旧会话）。");
+
+            EnterCategory(window, BoardCategory.Inbox);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            Assert.IsFalse(viewModel.IsPanelExpanded, "重布防后把手悬停被抑制。");
+
+            SetCursorPos(40, 40);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            SetCursorPos(handleCenter.X, handleCenter.Y);
+            EnterCategory(window, BoardCategory.Inbox);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            CompleteLayout(window);
+            Assert.IsTrue(viewModel.IsPanelExpanded, "第二次会话同样观测离场即恢复（连发启动不死锁）。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_ReexpandSuppression_SecondLaunchWithPointerOutsideEndsStaleSession()
+    {
+        // 连发启动在外形态（D6 ④后半，T7 修订）：第二次提交点指针在把手外＝不布防并
+        // 结束既有会话——旧闩不得残留。
         using var directory = new TestDirectory();
         using var app = new StubAppFile();
         var board = new BoardService();
@@ -782,7 +849,7 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "前置：第一次会话观测离场后恢复展开。");
 
-            // 合成在场旧闩：产品路径中任何展开都经 Switch 清闩（测试三锁定），旧闩能
+            // 合成在场旧闩：产品路径中任何展开都经 Switch 清闩（热键测试锁定），旧闩能
             // 存活到第二次收起提交点的形态只有跨会话残留——直接合成以直测提交点分支。
             panelState.ArmReexpandSuppression(
                 handleCenter.X - 1,
@@ -790,6 +857,11 @@ public sealed partial class MainWindowInteractionTests
                 handleCenter.X + 1,
                 handleCenter.Y + 1);
             Assert.IsTrue(panelState.IsReexpandSuppressed, "前置：合成旧闩在场。");
+            // 判别力（T7 #6）：合成布防不启动轮询，且旧轮询已随第一次观测离场自停——
+            // 到提交点为止没有任何轮询周期能抢先清除旧闩，清除只能来自提交点分支。
+            Assert.IsFalse(
+                GetPrivateField<DispatcherTimer>(window, "_reexpandSuppressionPollTimer").IsEnabled,
+                "前置：轮询停表（旧闩只能由提交点分支清除）。");
 
             // 第二次启动（同瓦片，事件时间戳已越过 500ms 重入门闩），指针停在瓦片位置
             // （把手外）→ 提交点走「在外不布防且结束旧会话」分支。
@@ -1049,8 +1121,11 @@ public sealed partial class MainWindowInteractionTests
                 GetPrivateField<PanelStateMachine>(window, "_panelState").IsReexpandSuppressed,
                 "前置：提交点指针在把手外＝未布防。");
 
-            // 直驱交接盲窗（先例：直接驱动私有方法隔离时序）：指针已在把手上，
-            // ContextIdle 完成时按指针几何位置补发悬停评估。
+            // 直驱交接盲窗（先例：直接驱动私有方法隔离时序）：指针已在把手上。
+            // 判别力（T7 #7 驳回重构的理由）：指针移动的输入消息在 Input 优先级处理，
+            // 先于 ContextIdle 的完成回调，且当时 IsHitTestVisible=false——真实
+            // MouseEnter 不可能发生（命中恢复后无位置变化、无新消息），展开只能来自
+            // 完成点补发。
             SetCursorPos(handleCenter.X, handleCenter.Y);
             InvokePrivate(window, "BeginCollapsedVisualHandoff", CurrentCollapsedPlacement(window));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
@@ -1196,6 +1271,9 @@ public sealed partial class MainWindowInteractionTests
             PumpUntilCondition(
                 window.Dispatcher,
                 () => GetPrivateField<DispatcherOperation>(window, "_pendingCollapsedVisualHandoff") is null);
+            Assert.IsTrue(
+                GetPrivateField<DispatcherTimer>(window, "_expandIntentTimer").IsEnabled,
+                "前置：补发已启动 60ms 意图计时（尚未到达）——真实进入与之重叠（判别力，T7 #7）。");
             EnterCategory(window, BoardCategory.Inbox);
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             CompleteLayout(window);
@@ -1205,6 +1283,99 @@ public sealed partial class MainWindowInteractionTests
                 sessionBefore + 1,
                 GetPrivateField<int>(window, "_expandSessionId"),
                 "两次评估只发生一次展开（意图不丢不双展开）。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_ReexpandSuppression_CloseDuringHandoffDoesNotReissueIntent()
+    {
+        // 关闭边界（T7 #9）：交接挂起期间窗口关闭——完成回调即便派发也不得重启意图
+        // 计时/补发（_isClosing 守卫），不抛异常。
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            LaunchFromTileAndCollapse(window, item, upTimestamp: 3);
+
+            var handleCenter = tileWindowCenter(window);
+            SetCursorPos(handleCenter.X, handleCenter.Y);
+            InvokePrivate(window, "BeginCollapsedVisualHandoff", CurrentCollapsedPlacement(window));
+            CloseWindowWithoutSaving(window);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+
+            Assert.IsFalse(
+                GetPrivateField<DispatcherTimer>(window, "_expandIntentTimer").IsEnabled,
+                "关闭后完成回调不重启意图计时（无补发）。");
+            Assert.IsFalse(viewModel.IsPanelExpanded);
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_ReexpandSuppression_ArmedHandleRectangleMatchesAppliedWindowRect()
+    {
+        // 物理几何一致性（T7 #3）：布防判定所用 ToPhysicalRectangle（DIP 放置 ×
+        // TransformToDevice 锚定取整）与收起落窗（TryApplyPlacementAtomically 的
+        // SetWindowPos 矩形）在本机真实 DPI 下逐边相等——两处换算同口径的运行时证明
+        // （含边界像素语义：含左上不含右下）。
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            var (_, _, _) = LaunchFromTileAndCollapseWithPointerOnHandle(window, item, upTimestamp: 3);
+            Assert.IsTrue(
+                GetPrivateField<PanelStateMachine>(window, "_panelState").IsReexpandSuppressed,
+                "前置：布防在场（观测区即本次收起把手矩形）。");
+
+            var toPhysical = typeof(MainWindow).GetMethod(
+                "ToPhysicalRectangle",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(toPhysical);
+            var handleRect = (PhysicalRectangle)toPhysical.Invoke(
+                window,
+                [CurrentCollapsedPlacement(window)])!;
+            var source = (System.Windows.Interop.HwndSource)typeof(MainWindow)
+                .GetField("_windowSource", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(window)!;
+            Assert.IsTrue(GetWindowRect(source.Handle, out var windowRect));
+
+            Assert.AreEqual(windowRect.Left, handleRect.Left, "左缘＝实际落窗。");
+            Assert.AreEqual(windowRect.Top, handleRect.Top, "上缘＝实际落窗。");
+            Assert.AreEqual(windowRect.Right, handleRect.Right, "右缘＝实际落窗。");
+            Assert.AreEqual(windowRect.Bottom, handleRect.Bottom, "下缘＝实际落窗。");
         }
         finally
         {
