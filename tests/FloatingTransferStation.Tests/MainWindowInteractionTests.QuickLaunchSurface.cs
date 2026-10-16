@@ -947,4 +947,95 @@ public sealed partial class MainWindowInteractionTests
             CloseWindowWithoutSaving(window);
         }
     }
+
+    // ---- 覆盖交互收起抑制（#30 回归修复，Issue #162 双 bug）----
+    // ＋菜单与模态对话框是独立 HWND：指针移入即触发主窗口假 MouseLeave，
+    // 收起链（250ms 到点重验）必须被「覆盖交互 hold」抑制，全部释放后按指针
+    // 几何位置重估（在内维持展开/不在恢复收起节奏）。
+
+    [STATestMethod]
+    public void QuickLaunch_OverlaySuppression_MenuOpenSurvivesPointerLeaveAndCollapseTick()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var window = CreateLauncherWindowSync(directory, board, store, starter);
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            // 真实路径打开＋菜单（工具行＋），随后指针移向菜单=假 MouseLeave+250ms 到点。
+            window.LauncherAddButton.RaiseEvent(
+                new RoutedEventArgs(Button.ClickEvent, window.LauncherAddButton));
+            CompleteLayout(window);
+            Assert.IsTrue(window.LauncherAddMenu.IsOpen, "前置：＋菜单已打开。");
+
+            WithClientAreaAnimationsDisabled(
+                window,
+                () =>
+                {
+                    InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+                    InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                    CompleteLayout(window);
+                });
+
+            Assert.IsTrue(window.LauncherAddMenu.IsOpen, "菜单打开期间收起链不得关闭菜单。");
+            Assert.IsTrue(viewModel.IsPanelExpanded, "菜单打开期间鼠标离开收起链不得收回面板。");
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    // ---- 瓦片网格宽度输入（#30 回归修复）：宽度只来自容器视口，禁自引用回写 ----
+    // 首次带数据布局发生在窄轨（58 DIP 收起几何）时，网格不得把自身渲染宽钉死成
+    // 本地 Width；展开至宽视口后必须按视口恢复列槽宽度并保持瓦片可见。
+
+    [STATestMethod]
+    public void QuickLaunch_GridWidth_FirstLayoutAtNarrowTrackRecoversAfterExpand()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var window = CreateLauncherWindowSync(directory, board, store, starter);
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+
+            // 收起（真实路径）→ 数据在收起态到达（窄轨首布局，Width 被钉死 0=用户
+            // 报告的「添加后一片空白」）→ 再展开必须恢复。
+            CollapseForSetup(window);
+            InvokePrivateTask(window, "ImportLauncherFilesAsync", new[] { app.Path }, 0);
+            CompleteLayout(window);
+
+            // 再展开（真实路径：悬停意图提交→宽几何）：网格必须按视口恢复列槽宽度。
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+
+            Assert.IsTrue(
+                window.LauncherTileGrid.ActualWidth >= 3 * 92 - 8,
+                $"展开至宽视口后瓦片网格宽度必须恢复（实际 {window.LauncherTileGrid.ActualWidth}）。");
+            Assert.AreEqual(1, window.LaunchersForTests().Items.Count);
+            Assert.IsNotNull(FindLauncherTile(window, window.LaunchersForTests().Items[0]), "瓦片容器已生成。");
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
 }
