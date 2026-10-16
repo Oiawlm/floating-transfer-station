@@ -434,17 +434,20 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.IsFalse(viewModel.IsPanelExpanded, "启动成功后排队收起（启动收起不受指针在内抑制——那正是再展开抑制窗的存在理由）。");
 
-            // 指针仍在收起前面板原区域内：悬停不展开（抑制窗）。
-            SetCursorPos(windowPosition.X, windowPosition.Y);
+            // 指针仍在收起前面板原区域内（把手上）：真实悬停意图经真实 60ms 计时到达 → 不展开。
+            var collapsedCenter = tileWindowCenter(window);
+            SetCursorPos(collapsedCenter.X, collapsedCenter.Y);
             EnterCategory(window, QuickLaunchMigration.LauncherCategory);
-            InvokePrivate(window, "ExpandIntentTimer_Tick", null, EventArgs.Empty);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
             CompleteLayout(window);
             Assert.IsFalse(viewModel.IsPanelExpanded, "指针停留期间保持抑制。");
 
-            // 指针离开原区域 → 抑制解除；再进入 → 悬停展开。
+            // 指针真实离开原区域（泵过抑制观测周期解除）→ 回到把手重新悬停 → 必须展开。
             SetCursorPos(40, 40);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            SetCursorPos(collapsedCenter.X, collapsedCenter.Y);
             EnterCategory(window, QuickLaunchMigration.LauncherCategory);
-            InvokePrivate(window, "ExpandIntentTimer_Tick", null, EventArgs.Empty);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "指针离开后重新进入即恢复悬停展开。");
         }
