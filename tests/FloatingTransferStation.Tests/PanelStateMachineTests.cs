@@ -366,6 +366,18 @@ public sealed class PanelStateMachineTests
     }
 
     [TestMethod]
+    public void ReexpandSuppression_DegenerateRearmDisarmsStaleSession()
+    {
+        var state = new PanelStateMachine();
+        state.BeginReexpandSuppression(100, 200, 500, 800);
+        Assert.IsTrue(state.IsReexpandSuppressed);
+
+        state.BeginReexpandSuppression(0, 0, 0, 0);
+
+        Assert.IsFalse(state.IsReexpandSuppressed, "重布防遇退化矩形＝新会话捕获失败：旧会话的陈旧矩形一并解除（fail-open 完整语义）。");
+    }
+
+    [TestMethod]
     public void ReexpandSuppression_RearmingTakesLatestRectangle()
     {
         var state = new PanelStateMachine();

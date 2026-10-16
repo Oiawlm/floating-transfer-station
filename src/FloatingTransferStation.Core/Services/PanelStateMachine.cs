@@ -142,12 +142,13 @@ public sealed class PanelStateMachine
 
     /// <summary>布防再展开抑制窗（#30）：在启动收起提交点记录收起前面板原区域
     /// （屏幕物理像素，含左上不含右下，与 Win32 矩形语义一致）。矩形退化（捕获
-    /// 失败形态）＝不布防——抑制是体验增强而非安全机制，绝不留下无观测依据的闩
-    /// （fail-open，Issue #170）。</summary>
+    /// 失败形态）＝本次不抑制——已布防的旧会话一并解除（fail-open：绝不以陈旧
+    /// 矩形顶替无观测依据的新会话，Issue #170）。</summary>
     public void BeginReexpandSuppression(int left, int top, int right, int bottom)
     {
         if (right <= left || bottom <= top)
         {
+            _reexpandSuppressionArmed = false;
             return;
         }
 

@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -642,10 +643,15 @@ public sealed partial class MainWindowInteractionTests
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
             Assert.IsFalse(viewModel.IsPanelExpanded, "前置：抑制期内把手悬停不展开。");
 
-            // 热键＝权威展开路径：终止抑制会话（Switch 清闩）。
+            // 热键＝权威展开路径：终止抑制会话（Switch 清闩）——立即探针断言，
+            // 与后续离场轮询解除隔离。
             InvokePrivate(window, "OnGlobalHotkeyPressed");
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "热键展开不受抑制闸门约束。");
+            Assert.IsFalse(
+                GetPrivateField<PanelStateMachine>(window, "_panelState")
+                    .IsReexpandSuppressed,
+                "热键路径经 Switch 清闩（权威展开终止会话，非离场轮询解除）。");
 
             // 自然收起后再悬停：旧会话不残留。
             SetCursorPos(40, 40);
@@ -812,6 +818,113 @@ public sealed partial class MainWindowInteractionTests
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "下一次观测到真实离场即解除，其后悬停展开。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_ReexpandSuppression_CaptureFailureDoesNotArmPoll()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            var (viewModel, _, _) = LaunchFromTileAndCollapse(window, item, upTimestamp: 3);
+
+            // 权威展开终止会话 → 回到未布防基线。
+            InvokePrivate(window, "OnGlobalHotkeyPressed");
+            CompleteLayout(window);
+            Assert.IsTrue(viewModel.IsPanelExpanded);
+
+            // 窗口源缺失（＝矩形捕获失败形态）：布防调用是无操作——不留无观测依据的闩。
+            var sourceField = typeof(MainWindow).GetField(
+                "_windowSource", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(sourceField);
+            var originalSource = sourceField.GetValue(window);
+            sourceField.SetValue(window, null);
+            try
+            {
+                InvokePrivate(window, "ArmReexpandSuppression");
+            }
+            finally
+            {
+                sourceField.SetValue(window, originalSource);
+            }
+
+            Assert.IsFalse(
+                GetPrivateField<PanelStateMachine>(window, "_panelState")
+                    .IsReexpandSuppressed,
+                "捕获失败不布防（fail-open）。");
+            Assert.IsFalse(
+                GetPrivateField<DispatcherTimer>(window, "_reexpandSuppressionPollTimer").IsEnabled,
+                "未布防不启动离场观测轮询。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_ReexpandSuppression_StaleTickAfterCloseStopsPollWithoutSampling()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "应用", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, item);
+
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            LaunchFromTileAndCollapse(window, item, upTimestamp: 3);
+
+            var poll = GetPrivateField<DispatcherTimer>(window, "_reexpandSuppressionPollTimer");
+            Assert.IsTrue(poll.IsEnabled, "前置：布防期间轮询在运行。");
+
+            // 已进入关闭流程（_isClosing）后的陈旧 tick：直接停表，不做指针采样/解除。
+            var closingField = typeof(MainWindow).GetField(
+                "_isClosing", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(closingField);
+            closingField.SetValue(window, true);
+            try
+            {
+                InvokePrivate(window, "ReexpandSuppressionPollTimer_Tick", null, EventArgs.Empty);
+            }
+            finally
+            {
+                closingField.SetValue(window, false);
+            }
+
+            Assert.IsFalse(poll.IsEnabled, "关闭后的陈旧回调自守卫停表。");
+            Assert.IsTrue(
+                GetPrivateField<PanelStateMachine>(window, "_panelState")
+                    .IsReexpandSuppressed,
+                "陈旧 tick 不做指针观测（抑制状态原样保留，会话由窗口关闭终止）。");
         }
         finally
         {
