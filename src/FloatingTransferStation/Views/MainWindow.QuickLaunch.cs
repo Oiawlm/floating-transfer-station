@@ -30,9 +30,9 @@ public partial class MainWindow
     private int _launchCollapseSession;
     private bool _launcherEntrancePlayed;
 
-    // 再展开抑制解除观测轮询（#30，Issue #170）：窗口收起后仅把手区接收鼠标消息，
-    // 收起前原区域的指针离场只能靠全局轮询观测；节奏与贴边隐藏回位轮询一致（业界
-    // 主流 ~100ms，TrafficMonitor、winautohidev2 等），仅抑制布防期间运行。
+    // 再展开抑制解除观测轮询（#30，Issue #173）：收起后仅把手接收鼠标消息，指针
+    // 离开收起把手矩形只能靠全局轮询观测；节奏与贴边隐藏回位轮询一致（业界主流
+    // ~100ms，TrafficMonitor、winautohidev2 等），仅抑制布防期间运行。
     private static readonly TimeSpan ReexpandSuppressionPollInterval = TimeSpan.FromMilliseconds(100);
     private DispatcherTimer _reexpandSuppressionPollTimer = null!;
 
@@ -537,42 +537,75 @@ public partial class MainWindow
             return;
         }
 
-        ArmReexpandSuppression();
+        // 单源几何快照（Issue #173）：布防判定与收起放置消费同一次 Collapsed 计算。
+        var collapsedPlacement = WindowController.Collapsed(
+            CurrentWorkArea(),
+            _settings,
+            _viewModel.DefaultCapturePanel.Category);
+        ArmReexpandSuppressionForCollapsedHandle(collapsedPlacement);
         // 强制提交：指针在内不是启动收起的抑制项（再展开抑制窗另行承载），而
         // PanelStateMachine.TryCollapse 会在指针在内时拒绝——此处跳过该检查直接落收起。
         _panelCollapseExitPending = false;
         StopCategoryRevealAnimations();
         _panelState.ForceCollapse();
-        CompletePanelCollapseHandoff();
+        CompletePanelCollapseHandoff(collapsedPlacement);
     }
 
     /// <summary>收起态落地共用尾段（入场重播标记重置 + 几何交接）；面板收起自动退出
     /// 编辑模式并销毁撤销提示条（#30 §四/§三.7）；＋菜单随收起关闭。</summary>
-    private void CompletePanelCollapseHandoff()
+    private void CompletePanelCollapseHandoff(WindowPlacement collapsedPlacement)
     {
         ExitLauncherEditMode();
         DestroyLauncherUndoToast();
         LauncherAddMenu.IsOpen = false;
         ResetLauncherEntranceReplay();
-        BeginCollapsedVisualHandoff(WindowController.Collapsed(
-            CurrentWorkArea(),
-            _settings,
-            _viewModel.DefaultCapturePanel.Category));
+        BeginCollapsedVisualHandoff(collapsedPlacement);
     }
 
-    /// <summary>布防再展开抑制窗（#30，Issue #170）：启动收起提交点在收起几何应用
-    /// 前记录展开态整窗物理矩形并启动离场观测轮询；矩形捕获失败＝不布防（fail-open，
-    /// 绝不留无观测依据的闩）。</summary>
-    private void ArmReexpandSuppression()
+    /// <summary>条件布防再展开抑制会话（#30，Issue #173）：观测区＝本次收起放置的
+    /// 把手物理矩形（悬停意图与伪回弹威胁的唯一诞生地），与收起交接消费同一份单源
+    /// 几何快照换算。指针在把手内→布防新会话（替换旧会话）；在外或读取/换算失败→
+    /// 结束既有会话且不布防（fail-open：连发启动不得残留旧闩）。</summary>
+    private void ArmReexpandSuppressionForCollapsedHandle(WindowPlacement collapsedPlacement)
     {
-        if (_windowSource?.Handle is not { } handle ||
-            !NativeMethods.GetWindowRect(handle, out var rect))
+        if (ToPhysicalRectangle(collapsedPlacement) is not { } handleRect)
         {
+            _panelState.EndReexpandSuppression();
             return;
         }
 
-        _panelState.BeginReexpandSuppression(rect.Left, rect.Top, rect.Right, rect.Bottom);
-        _reexpandSuppressionPollTimer.Start();
+        if (NativeMethods.GetCursorPos(out var cursor) &&
+            handleRect.Contains(cursor.X, cursor.Y))
+        {
+            _panelState.ArmReexpandSuppression(
+                handleRect.Left,
+                handleRect.Top,
+                handleRect.Right,
+                handleRect.Bottom);
+            _reexpandSuppressionPollTimer.Start();
+            return;
+        }
+
+        _panelState.EndReexpandSuppression();
+    }
+
+    /// <summary>DIP 放置→物理像素矩形（含左上不含右下）：两条锚定边各自取整后相减
+    /// 得跨度，右/底缘换算后不因取整漂移——与 TryApplyPlacementAtomically 同一换算
+    /// 口径（先例 EdgeHide「DIP 为权威、按 CompositionTarget 换算一次」）；窗口源
+    /// 未就绪＝null（调用方 fail-open）。</summary>
+    private PhysicalRectangle? ToPhysicalRectangle(WindowPlacement placement)
+    {
+        if (_windowSource?.CompositionTarget is not { } target)
+        {
+            return null;
+        }
+
+        var transform = target.TransformToDevice;
+        return new PhysicalRectangle(
+            (int)Math.Round(placement.Left * transform.M11),
+            (int)Math.Round(placement.Top * transform.M22),
+            (int)Math.Round((placement.Left + placement.Width) * transform.M11),
+            (int)Math.Round((placement.Top + placement.Height) * transform.M22));
     }
 
     /// <summary>抑制离场观测轮询：仅布防期间运行（自守卫停表对齐贴边隐藏回位轮询

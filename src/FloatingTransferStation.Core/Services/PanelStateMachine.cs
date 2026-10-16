@@ -32,7 +32,7 @@ public sealed class PanelStateMachine
     public bool IsExpanded { get; private set; }
 
     /// <summary>再展开抑制窗（#30）是否布防：一次已提交的启动收起会话尚未观测到
-    /// 指针离开收起前原区域。</summary>
+    /// 指针离开本次收起放置的收起把手矩形。</summary>
     public bool IsReexpandSuppressed => _reexpandSuppressionArmed;
 
     public void BeginHover(BoardCategory category)
@@ -140,11 +140,11 @@ public sealed class PanelStateMachine
         !_pointerInside && !_dragInProgress && !_textEditingActive && !_panelHoldActive &&
         !HasOverlayInteraction && IsExpanded;
 
-    /// <summary>布防再展开抑制窗（#30）：在启动收起提交点记录收起前面板原区域
-    /// （屏幕物理像素，含左上不含右下，与 Win32 矩形语义一致）。矩形退化（捕获
-    /// 失败形态）＝本次不抑制——已布防的旧会话一并解除（fail-open：绝不以陈旧
-    /// 矩形顶替无观测依据的新会话，Issue #170）。</summary>
-    public void BeginReexpandSuppression(int left, int top, int right, int bottom)
+    /// <summary>布防再展开抑制会话（#30，Issue #173）：观测区＝本次收起放置的收起
+    /// 把手物理矩形（悬停意图与伪回弹威胁的唯一诞生地；含左上不含右下，与 Win32
+    /// 矩形语义一致）。矩形退化（捕获失败形态）＝结束既有会话且不布防（fail-open：
+    /// 绝不以陈旧矩形顶替无观测依据的新会话）。</summary>
+    public void ArmReexpandSuppression(int left, int top, int right, int bottom)
     {
         if (right <= left || bottom <= top)
         {
@@ -159,10 +159,15 @@ public sealed class PanelStateMachine
         _reexpandSuppressionArmed = true;
     }
 
-    /// <summary>轮询观测一次指针位置（#30）：布防期间指针在收起前原区域外即解除
-    /// 抑制并返回 true（本次观测完成了离场解除）；未布防或指针仍在原区域内返回
-    /// false。窗口收起后仅把手区接收鼠标消息，原区域的离场只能靠采样式轮询观测
-    /// （快速离场回场可能漏观测，抑制保持到下次观测离场——定义语义）。</summary>
+    /// <summary>显式结束再展开抑制会话（#30，Issue #173）：启动收起提交点判定指针
+    /// 在把手矩形外（或几何读取失败）时不布防并结束既有会话——连发启动不得残留
+    /// 旧闩。</summary>
+    public void EndReexpandSuppression() => _reexpandSuppressionArmed = false;
+
+    /// <summary>轮询观测一次指针位置（#30）：布防期间指针离开收起把手矩形即解除
+    /// 抑制并返回 true（本次观测完成了离场解除）；未布防或指针仍在把手矩形内返回
+    /// false。收起后仅把手接收鼠标消息，把手的离场只能靠采样式轮询观测（快速离场
+    /// 回场可能漏观测，抑制保持到下次观测离场——定义语义）。</summary>
     public bool ObservePointer(int x, int y)
     {
         if (!_reexpandSuppressionArmed)

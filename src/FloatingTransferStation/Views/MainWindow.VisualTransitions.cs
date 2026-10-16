@@ -70,24 +70,29 @@ public partial class MainWindow : Window
 
     private void CategoryTab_MouseEnter(object sender, MouseEventArgs e)
     {
-        if (_viewModel.IsExternalDropRailVisible)
-        {
-            _expandIntentTimer.Stop();
-            _collapseTimer.Stop();
-            CancelPanelCollapseExit();
-            return;
-        }
-
-        if (_panelState.IsDragInProgress)
-        {
-            _expandIntentTimer.Stop();
-            _collapseTimer.Stop();
-            CancelPanelCollapseExit();
-            return;
-        }
-
         if (sender is not Border { DataContext: CategoryViewModel category })
         {
+            return;
+        }
+
+        EvaluateHoverIntent(category.Category);
+    }
+
+    /// <summary>悬停意图评估共享入口（#30，Issue #173）：标签 MouseEnter 与收起交接
+    /// 完成点的静止指针重评估共用同一条守卫链、同一个 60ms 意图计时与再展开抑制
+    /// 闸门（闸门在 ExpandIntentTimer_Tick 内统一执行）——仓内不设第二套悬停逻辑；
+    /// 重复评估幂等（只重启意图计时，不双展开）。守卫链（拖放轨道/拖拽在途）权威
+    /// 在此入口而非事件处理器：对 MouseEnter 与补发一致生效；与提取前的顺序差异
+    /// 仅在「无效事件源＋守卫成立」时可观察——XAML 绑定下事件源恒为标签 Border，
+    /// 该形态不可达，属刻意归一（T7 评审 #4 驳回理由）。</summary>
+    private void EvaluateHoverIntent(BoardCategory category)
+    {
+        if (_viewModel.IsExternalDropRailVisible ||
+            _panelState.IsDragInProgress)
+        {
+            _expandIntentTimer.Stop();
+            _collapseTimer.Stop();
+            CancelPanelCollapseExit();
             return;
         }
 
@@ -96,20 +101,20 @@ public partial class MainWindow : Window
         _panelState.EnterSurface();
         if (_panelState.IsExpanded)
         {
-            if (_panelState.ActiveCategory == category.Category)
+            if (_panelState.ActiveCategory == category)
             {
                 return;
             }
 
             SaveCurrentScrollOffset();
-            _panelState.Switch(category.Category);
-            ActivatePanel(category.Category);
-            RestoreScrollOffset(category.Category);
+            _panelState.Switch(category);
+            ActivatePanel(category);
+            RestoreScrollOffset(category);
             AnimatePanelContent(isCategorySwitch: true);
             return;
         }
 
-        _panelState.BeginHover(category.Category);
+        _panelState.BeginHover(category);
         _expandIntentTimer.Start();
     }
 
@@ -158,7 +163,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 再展开抑制窗（#30，Issue #170）：启动成功收起后，指针离开收起前面板原区域前
+        // 再展开抑制窗（#30，Issue #173）：启动成功收起后，指针离开收起把手矩形前
         // 不悬停展开（解除=离场观测轮询或权威展开终止会话，指针停留期间保持抑制、不做
         // 计时解除）。必须在 TryCommitHover 之前——提交会消费悬停意图并翻转内部展开态，
         // 抑制期不得发生。
@@ -412,8 +417,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 收起尾段（#30）：重置交错入场标记（再展开重播）+ 几何交接。
-        CompletePanelCollapseHandoff();
+        // 收起尾段（#30）：重置交错入场标记（再展开重播）+ 几何交接（单源快照：
+        // 与放置消费同一次 Collapsed 计算）。
+        CompletePanelCollapseHandoff(WindowController.Collapsed(
+            CurrentWorkArea(),
+            _settings,
+            _viewModel.DefaultCapturePanel.Category));
     }
 
     private void CancelPanelCollapseExit()
@@ -460,5 +469,27 @@ public partial class MainWindow : Window
         UpdateStatusPresentation();
         WindowShell.Opacity = 1d;
         WindowShell.IsHitTestVisible = true;
+        ReevaluateHoverAfterCollapseHandoff(placement);
+    }
+
+    /// <summary>收起交接完成点的静止指针重评估（#30，Issue #173）：交接盲窗
+    /// （IsHitTestVisible=false→ContextIdle 恢复）内移入把手的指针收不到 MouseEnter，
+    /// WPF 也不对静止光标重评估——恢复命中后按指针几何位置（收起态把手即整窗）
+    /// 经悬停意图共享入口补一次评估，照常过 60ms 计时与再展开抑制闸门（armed 拦
+    /// 伪进入不弹回、未 armed 正常展开）。仅有效完成分支执行；Cancel 分支（交接期
+    /// 再展开）不补发。普通收起重入安全由几何不变量承载：TryCollapse 提交时指针必
+    /// 在展开窗外⇒必在把手外⇒补发恒为真实趋近（启动收起的伪进入风险由条件布防
+    /// 的抑制闩拦下）。</summary>
+    private void ReevaluateHoverAfterCollapseHandoff(WindowPlacement collapsedPlacement)
+    {
+        if (_isClosing ||
+            ToPhysicalRectangle(collapsedPlacement) is not { } handleRect ||
+            !NativeMethods.GetCursorPos(out var cursor) ||
+            !handleRect.Contains(cursor.X, cursor.Y))
+        {
+            return;
+        }
+
+        EvaluateHoverIntent(_viewModel.DefaultCapturePanel.Category);
     }
 }

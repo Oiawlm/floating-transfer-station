@@ -311,7 +311,11 @@ public sealed partial class MainWindowInteractionTests
 
     private static void CollapseForSetup(MainWindow window)
     {
-        // 作为前置条件的收起走减弱动效路径：同步提交，不等待出场动画。
+        // 作为前置条件的收起走减弱动效路径：同步提交，不等待出场动画。合成 Root_
+        // MouseLeave 不移动物理指针——先把真实指针移离窗口（普通收起不变量：提交时
+        // 指针在展开窗外），防止收起交接完成点的静止指针重评估（Issue #173）把机器
+        // 光标恰停在把手上的偶然形态误判为回场。
+        SetCursorPos(40, 40);
         WithClientAreaAnimationsDisabled(
             window,
             () =>
