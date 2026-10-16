@@ -26,7 +26,6 @@ public partial class MainWindow
     private Guid? _launcherPressItemId;
     private System.Windows.Point _launcherPressStartPosition;
     private int _launcherFocusedIndex = -1;
-    private bool _launcherDialogOpen;
     private int _expandSessionId;
     private int _launchCollapseSession;
     private bool _suppressReexpandAfterLaunch;
@@ -174,13 +173,20 @@ public partial class MainWindow
         }
 
         // 锚定发起按钮（工具行＋或空态 CTA）；首次打开前 Popup 子元素未进视觉树、
-        // ActualWidth=0，先显式 Measure 取期望宽再算右对齐偏移。
+        // ActualWidth=0，先显式 Measure 取期望宽再算右对齐偏移。IsOpen=true 触发
+        // Opened→BeginOverlayInteraction(Menu)，收起链随即被覆盖交互 hold 抑制。
         LauncherAddMenu.PlacementTarget = initiator;
         var menuChild = (FrameworkElement)LauncherAddMenu.Child;
         menuChild.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         LauncherAddMenu.HorizontalOffset = initiator.ActualWidth - menuChild.DesiredSize.Width;
         LauncherAddMenu.IsOpen = true;
     }
+
+    private void LauncherAddMenu_Opened(object? sender, EventArgs e) =>
+        _panelState.BeginOverlayInteraction(PanelOverlayReason.Menu);
+
+    private void LauncherAddMenu_Closed(object? sender, EventArgs e) =>
+        EndOverlayInteractionAndReconcile(PanelOverlayReason.Menu);
 
     private void LauncherAddFileMenu_Click(object sender, RoutedEventArgs e)
     {
@@ -196,7 +202,7 @@ public partial class MainWindow
             Filter = "应用程序|*.exe;*.lnk",
             Multiselect = true
         };
-        _launcherDialogOpen = true;
+        _panelState.BeginOverlayInteraction(PanelOverlayReason.ModalDialog);
         try
         {
             if (dialog.ShowDialog(this) != true || dialog.FileNames is not { Length: > 0 } fileNames)
@@ -208,7 +214,7 @@ public partial class MainWindow
         }
         finally
         {
-            _launcherDialogOpen = false;
+            EndOverlayInteractionAndReconcile(PanelOverlayReason.ModalDialog);
         }
     }
 
@@ -244,7 +250,7 @@ public partial class MainWindow
             .Select(item => item.TargetPath)
             .ToHashSet(StringComparer.Ordinal);
         var picker = new InstalledAppPickerWindow(CurrentTheme, installed, existingAumids) { Owner = this };
-        _launcherDialogOpen = true;
+        _panelState.BeginOverlayInteraction(PanelOverlayReason.ModalDialog);
         try
         {
             if (_showPickerDialog(picker) != true || picker.Selection is not { Count: > 0 } selection)
@@ -256,8 +262,56 @@ public partial class MainWindow
         }
         finally
         {
-            _launcherDialogOpen = false;
+            EndOverlayInteractionAndReconcile(PanelOverlayReason.ModalDialog);
         }
+    }
+
+    // ---- 覆盖交互收起抑制（#30 回归修复，Issue #162）：＋菜单/模态对话框是独立
+    // HWND，指针移入即补发假 MouseLeave；打开期间收起链被状态机 hold 抑制，全部
+    // 释放后按指针几何位置重估（与编辑保持的 ReconcileSurfaceAfterEditing 同形，
+    // 但判据是几何包含而非 IsMouseOver——外来 HWND 捕获期间 IsMouseOver 不可靠）。----
+
+    private void EndOverlayInteractionAndReconcile(PanelOverlayReason reason)
+    {
+        _panelState.EndOverlayInteraction(reason);
+        ReconcileSurfaceAfterOverlayInteraction();
+    }
+
+    /// <summary>覆盖交互全部结束后的表面重估：指针仍在窗口内则维持展开，否则恢复
+    /// 既有收起节奏。已收起时不重启计时也不反向展开——收起尾段关闭菜单触发的
+    /// Closed 再入路径由此天然幂等。</summary>
+    private void ReconcileSurfaceAfterOverlayInteraction()
+    {
+        if (_isClosing || _panelState.HasOverlayInteraction || !_panelState.IsExpanded)
+        {
+            return;
+        }
+
+        if (IsPointerInsideWindow())
+        {
+            _panelState.EnterSurface();
+            return;
+        }
+
+        _panelState.LeaveSurface();
+        // 重启=完整新一轮 250ms：DispatcherTimer.Start 对运行中的计时器是空操作，
+        // 旧期限（离开瞬间起算）不得穿透覆盖交互的释放时刻继续倒计时。
+        _collapseTimer.Stop();
+        _collapseTimer.Start();
+    }
+
+    /// <summary>指针几何包含测试：GetCursorPos+GetWindowRect 屏幕物理像素直比（与
+    /// 再展开抑制窗同一坐标系）；取值失败按保守=在内处理。</summary>
+    private bool IsPointerInsideWindow()
+    {
+        if (!GetCursorPos(out var cursor))
+        {
+            return true;
+        }
+
+        return _windowSource?.Handle is not { } handle ||
+            !GetWindowRect(handle, out var rect) ||
+            rect.Contains(cursor);
     }
 
     /// <summary>已安装应用导入：PackagedApp 条目（TargetPath=AUMID，永不存包名）＋
@@ -493,7 +547,7 @@ public partial class MainWindow
             _launchCollapseSession != _expandSessionId ||
             IsPanelEditHoldActive() ||
             _panelState.IsPanelHoldActive ||
-            _launcherDialogOpen ||
+            _panelState.HasOverlayInteraction ||
             IsLauncherEditModeActive())
         {
             // 任一抑制条件在等待期出现即取消本次收起（失败启动在 LaunchLauncherItem
@@ -745,17 +799,26 @@ public partial class MainWindow
 
     // ---- 瓦片网格几何：列数 clamp(floor((Wc+8)/92), 3, 6)，网格水平居中 ----
 
-    private void LauncherTileGrid_SizeChanged(object sender, SizeChangedEventArgs e)
+    private void LauncherScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        // 列数 clamp(floor((Wc+8)/92), 3, 6)（Wc=布局实测可用宽）；网格水平居中由
-        // 限定宽度 + HorizontalAlignment=Center 承载。200 上限承载有界性（不预建虚拟化）。
+        // Wc=内容区视口实测宽（容器侧唯一可靠可用宽输入；overlay 瘦条不占布局宽，
+        // 视口与滚动条可见性解耦）。网格自身渲染宽是布局输出，回写自身 Width 即
+        // 自引用死锁（Issue #162 回归）。窄轨/收起期视口为 0：跳过本帧，展开后
+        // ScrollChanged 按新视口补算。网格水平居中由限定宽度 +
+        // HorizontalAlignment=Center 承载；200 上限承载有界性（不预建虚拟化）。
+        // 非有限（NaN/∞）一并跳过：防御性守卫，真实布局管线不会产生非有限视口。
+        var viewportWidth = e.ViewportWidth;
+        if (!double.IsFinite(viewportWidth) || viewportWidth <= 0)
+        {
+            return;
+        }
+
         var tilePitch = 84 + 8;
-        var availableWidth = Math.Max(0, e.NewSize.Width);
         var columns = Math.Clamp(
-            (int)Math.Floor((availableWidth + 8) / tilePitch),
+            (int)Math.Floor((viewportWidth + 8) / tilePitch),
             3,
             6);
-        LauncherTileGrid.Width = Math.Min(availableWidth, columns * tilePitch - 8);
+        LauncherTileGrid.Width = Math.Min(viewportWidth, columns * tilePitch - 8);
     }
 
     // ---- 动效（§五）：悬停/按压走变换，入场/落位/确认/失败为场景动画，全部减动效降级 ----

@@ -217,6 +217,75 @@ public sealed class PanelStateMachineTests
 
     [TestMethod]
     [TestCategory("Adversarial")]
+    public void OverlayInteraction_SingleReasonSuppressesCollapseUntilEnded()
+    {
+        var state = new PanelStateMachine();
+        state.Switch(BoardCategory.Inbox);
+        state.BeginOverlayInteraction(PanelOverlayReason.Menu);
+        state.LeaveSurface();
+
+        Assert.IsFalse(state.WouldCollapse);
+        Assert.IsFalse(state.TryCollapse());
+        state.EndOverlayInteraction(PanelOverlayReason.Menu);
+        Assert.IsTrue(state.WouldCollapse);
+        Assert.IsTrue(state.TryCollapse());
+        Assert.IsFalse(state.IsExpanded);
+        Assert.AreEqual(BoardCategory.Inbox, state.ActiveCategory);
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
+    public void OverlayInteraction_OverlappingReasonsClearedOnlyWhenAllEnded()
+    {
+        var state = new PanelStateMachine();
+        state.Switch(BoardCategory.Inbox);
+        state.BeginOverlayInteraction(PanelOverlayReason.Menu);
+        state.BeginOverlayInteraction(PanelOverlayReason.ModalDialog);
+        state.LeaveSurface();
+
+        Assert.IsFalse(state.WouldCollapse);
+        Assert.IsFalse(state.TryCollapse());
+        state.EndOverlayInteraction(PanelOverlayReason.Menu);
+        Assert.IsFalse(state.WouldCollapse, "对话框仍在：迟到的菜单关闭不得清掉对话框的持有。");
+        Assert.IsFalse(state.TryCollapse());
+        state.EndOverlayInteraction(PanelOverlayReason.ModalDialog);
+        Assert.IsTrue(state.WouldCollapse, "全部覆盖交互结束后才解除抑制。");
+        Assert.IsTrue(state.TryCollapse());
+        Assert.IsFalse(state.IsExpanded);
+        Assert.AreEqual(BoardCategory.Inbox, state.ActiveCategory);
+    }
+
+    [TestMethod]
+    public void OverlayInteraction_BeginAndEndAreIdempotentPerReason()
+    {
+        var state = new PanelStateMachine();
+        state.BeginOverlayInteraction(PanelOverlayReason.Menu);
+        state.BeginOverlayInteraction(PanelOverlayReason.Menu);
+        Assert.IsTrue(state.HasOverlayInteraction);
+
+        state.EndOverlayInteraction(PanelOverlayReason.Menu);
+        Assert.IsFalse(state.HasOverlayInteraction, "重复 Begin 同因不累计，一次 End 即清。");
+        state.EndOverlayInteraction(PanelOverlayReason.Menu);
+        Assert.IsFalse(state.HasOverlayInteraction, "多余 End 无副作用。");
+    }
+
+    [TestMethod]
+    public void OverlayInteractionState_IsObservableWithoutAllowingExternalMutation()
+    {
+        var state = new PanelStateMachine();
+
+        Assert.IsFalse(state.HasOverlayInteraction);
+        state.BeginOverlayInteraction(PanelOverlayReason.ModalDialog);
+        Assert.IsTrue(state.HasOverlayInteraction);
+        state.EndOverlayInteraction(PanelOverlayReason.ModalDialog);
+        Assert.IsFalse(state.HasOverlayInteraction);
+        Assert.IsFalse(typeof(PanelStateMachine)
+            .GetProperty(nameof(PanelStateMachine.HasOverlayInteraction))!
+            .CanWrite);
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
     public void RapidEnterAfterLeaveCancelsPendingCollapseCondition()
     {
         var state = new PanelStateMachine();

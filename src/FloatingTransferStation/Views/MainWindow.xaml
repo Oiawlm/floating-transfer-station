@@ -619,7 +619,9 @@
             </Grid>
 
             <!-- ＋ 添加两入口菜单（#30 切片 4）：应用文件… / 已安装应用…；定位锚点在
-                 打开时按发起按钮（工具行＋或空态 CTA）指定，右对齐经 HorizontalOffset 校正。 -->
+                 打开时按发起按钮（工具行＋或空态 CTA）指定，右对齐经 HorizontalOffset 校正。
+                 Opened/Closed 接状态机覆盖交互 hold：菜单是独立 HWND，指针移入即假
+                 MouseLeave，打开期间收起链被抑制、关闭后按指针几何位置重估。 -->
             <Popup x:Name="LauncherAddMenu"
                    Grid.Row="0"
                    PlacementTarget="{Binding ElementName=LauncherAddButton}"
@@ -628,7 +630,9 @@
                    StaysOpen="False"
                    PopupAnimation="Fade"
                    AllowsTransparency="True"
-                   Focusable="False">
+                   Focusable="False"
+                   Opened="LauncherAddMenu_Opened"
+                   Closed="LauncherAddMenu_Closed">
               <Border Background="{DynamicResource HeaderBrush}"
                       BorderBrush="{DynamicResource BorderBrush}"
                       BorderThickness="1"
@@ -684,17 +688,19 @@
                       Click="LauncherAddButton_Click" />
             </StackPanel>
 
-            <!-- 瓦片网格：垂直滚动 + overlay 瘦条（契约 #23 口径）；不虚拟化（有界性以
-                 200 上限承载）；列数由代码按内容区宽 clamp(3..6) 设定，网格水平居中。 -->
+            <!-- 瓦片网格：垂直滚动 + overlay 瘦条（契约 #23 口径，不占布局宽）；不虚拟化
+                 （有界性以 200 上限承载）；列数由代码按内容区（ScrollViewer 视口）实测宽
+                 clamp(3..6) 设定，网格水平居中。宽度输入只来自容器视口——读网格自身渲染
+                 宽回写自身 Width 是自引用死锁（Issue #162 回归）。 -->
             <ScrollViewer x:Name="LauncherScroll"
                           Grid.Row="1"
                           Style="{StaticResource OverlayScrollViewerStyle}"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
+                          ScrollChanged="LauncherScroll_ScrollChanged"
                           Visibility="Collapsed">
               <ItemsControl x:Name="LauncherTileGrid"
                             HorizontalAlignment="Center"
-                            SizeChanged="LauncherTileGrid_SizeChanged"
                             Focusable="False">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
