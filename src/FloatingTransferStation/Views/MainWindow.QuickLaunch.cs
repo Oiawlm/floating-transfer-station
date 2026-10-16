@@ -28,40 +28,21 @@ public partial class MainWindow
     private int _launcherFocusedIndex = -1;
     private int _expandSessionId;
     private int _launchCollapseSession;
-    private bool _suppressReexpandAfterLaunch;
-    private NativeRect _reexpandSuppressionRect;
     private bool _launcherEntrancePlayed;
 
-    [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out NativePoint point);
-
-    [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(IntPtr window, out NativeRect rectangle);
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct NativePoint
-    {
-        public int X;
-        public int Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct NativeRect
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-
-        public readonly bool Contains(NativePoint point) =>
-            point.X >= Left && point.X < Right && point.Y >= Top && point.Y < Bottom;
-    }
+    // 再展开抑制解除观测轮询（#30，Issue #170）：窗口收起后仅把手区接收鼠标消息，
+    // 收起前原区域的指针离场只能靠全局轮询观测；节奏与贴边隐藏回位轮询一致（业界
+    // 主流 ~100ms，TrafficMonitor、winautohidev2 等），仅抑制布防期间运行。
+    private static readonly TimeSpan ReexpandSuppressionPollInterval = TimeSpan.FromMilliseconds(100);
+    private DispatcherTimer _reexpandSuppressionPollTimer = null!;
 
     private void InitializeQuickLaunch(ILauncherStore? launcherStore, AppLauncher? appLauncher)
     {
         _appLauncher = appLauncher ?? new AppLauncher(packagedActivator: new ShellPackagedAppActivator().Activate);
         _launchCollapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(DesignTokens.LaunchCollapseDelayMs) };
         _launchCollapseTimer.Tick += LaunchCollapseTimer_Tick;
+        _reexpandSuppressionPollTimer = new DispatcherTimer { Interval = ReexpandSuppressionPollInterval };
+        _reexpandSuppressionPollTimer.Tick += ReexpandSuppressionPollTimer_Tick;
         _launcherUndoTimer.Tick += LauncherUndoTimer_Tick;
         // 瓦片改名编辑器的 IME 组合标记（组合期的 Esc 属输入法操作，不触发取消；与
         // 分类改名框同族守卫，#7/#22）。
@@ -301,17 +282,18 @@ public partial class MainWindow
     }
 
     /// <summary>指针几何包含测试：GetCursorPos+GetWindowRect 屏幕物理像素直比（与
-    /// 再展开抑制窗同一坐标系）；取值失败按保守=在内处理。</summary>
+    /// 再展开抑制窗同一坐标系，含左上不含右下）；取值失败按保守=在内处理。</summary>
     private bool IsPointerInsideWindow()
     {
-        if (!GetCursorPos(out var cursor))
+        if (!NativeMethods.GetCursorPos(out var cursor))
         {
             return true;
         }
 
         return _windowSource?.Handle is not { } handle ||
-            !GetWindowRect(handle, out var rect) ||
-            rect.Contains(cursor);
+            !NativeMethods.GetWindowRect(handle, out var rect) ||
+            (cursor.X >= rect.Left && cursor.X < rect.Right &&
+             cursor.Y >= rect.Top && cursor.Y < rect.Bottom);
     }
 
     /// <summary>已安装应用导入：PackagedApp 条目（TargetPath=AUMID，永不存包名）＋
@@ -555,7 +537,7 @@ public partial class MainWindow
             return;
         }
 
-        RecordReexpandSuppression();
+        ArmReexpandSuppression();
         // 强制提交：指针在内不是启动收起的抑制项（再展开抑制窗另行承载），而
         // PanelStateMachine.TryCollapse 会在指针在内时拒绝——此处跳过该检查直接落收起。
         _panelCollapseExitPending = false;
@@ -578,37 +560,41 @@ public partial class MainWindow
             _viewModel.DefaultCapturePanel.Category));
     }
 
-    /// <summary>再展开抑制窗：解除条件唯一=指针离开收起前面板原区域后重新进入
-    /// （不做计时解除；指针停留期间保持抑制）。</summary>
-    private void RecordReexpandSuppression()
+    /// <summary>布防再展开抑制窗（#30，Issue #170）：启动收起提交点在收起几何应用
+    /// 前记录展开态整窗物理矩形并启动离场观测轮询；矩形捕获失败＝不布防（fail-open，
+    /// 绝不留无观测依据的闩）。</summary>
+    private void ArmReexpandSuppression()
     {
-        _suppressReexpandAfterLaunch = true;
-        if (_windowSource?.Handle is { } handle && GetWindowRect(handle, out var rect))
+        if (_windowSource?.Handle is not { } handle ||
+            !NativeMethods.GetWindowRect(handle, out var rect))
         {
-            _reexpandSuppressionRect = rect;
+            return;
         }
+
+        _panelState.BeginReexpandSuppression(rect.Left, rect.Top, rect.Right, rect.Bottom);
+        _reexpandSuppressionPollTimer.Start();
     }
 
-    internal bool TryConsumeReexpandSuppression()
+    /// <summary>抑制离场观测轮询：仅布防期间运行（自守卫停表对齐贴边隐藏回位轮询
+    /// 式样）；GetCursorPos 失败跳过本周期（失败保持抑制，不误解除）。解除的另一
+    /// 途径是权威展开——Switch 清闩后本回调在下一周期自停。</summary>
+    private void ReexpandSuppressionPollTimer_Tick(object? sender, EventArgs e)
     {
-        if (!_suppressReexpandAfterLaunch)
+        if (_isClosing || !_panelState.IsReexpandSuppressed)
         {
-            return false;
+            _reexpandSuppressionPollTimer.Stop();
+            return;
         }
 
-        if (!GetCursorPos(out var cursor))
+        if (!NativeMethods.GetCursorPos(out var cursor))
         {
-            return true;
+            return;
         }
 
-        if (_reexpandSuppressionRect.Contains(cursor))
+        if (_panelState.ObservePointer(cursor.X, cursor.Y))
         {
-            // 指针仍停留在收起前面板原区域内：保持抑制。
-            return true;
+            _reexpandSuppressionPollTimer.Stop();
         }
-
-        _suppressReexpandAfterLaunch = false;
-        return false;
     }
 
     /// <summary>收起时重置交错标记（M1 再展开重播；由 CommitPanelCollapse 调用）。</summary>
@@ -1819,6 +1805,7 @@ public partial class MainWindow
     private void DisposeQuickLaunch()
     {
         _launchCollapseTimer.Stop();
+        _reexpandSuppressionPollTimer.Stop();
         _launcherIcons?.Dispose();
         _launcherIcons = null;
     }
