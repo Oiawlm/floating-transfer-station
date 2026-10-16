@@ -871,6 +871,10 @@ public sealed partial class MainWindowInteractionTests
                 GetPrivateField<PanelStateMachine>(window, "_panelState")
                     .IsReexpandSuppressed,
                 "捕获失败不布防（fail-open）。");
+
+            // 泵过一个观测周期：捕获失败没有重新布防，上一会话的轮询自守卫停表
+            // （权威展开清闩后轮询要等下一个 tick 才自停——≤100ms）。
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             Assert.IsFalse(
                 GetPrivateField<DispatcherTimer>(window, "_reexpandSuppressionPollTimer").IsEnabled,
                 "未布防不启动离场观测轮询。");
