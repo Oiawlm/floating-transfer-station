@@ -239,22 +239,28 @@ if ($Full) {
 if ($Explain) { Write-Host '-Explain：仅打印计划，不执行。'; exit 0 }
 
 function Invoke-TestRun([string]$Title, [string]$Project, [string]$Filter) {
-    $logName = 'affected-' + (($Title -replace '[^A-Za-z0-9._-]', '_')) + '.trx'
-    $testArgs = @('test', $Project, '-c', $Configuration, '--no-build', '--results-directory', (Join-Path $repoRoot 'TestResults'), '--logger', "trx;LogFileName=$logName")
+    $prefix = 'affected-' + (($Title -replace '[^A-Za-z0-9._-]', '_'))
+    $results = Join-Path $repoRoot 'TestResults'
+    # LogFilePrefix 使 solution 级运行的两个测试工程各写独立 TRX；运行前清理同名前缀旧文件防累积。
+    Get-ChildItem $results -Filter "$prefix*.trx" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+    $testArgs = @('test', $Project, '-c', $Configuration, '--no-build', '--results-directory', $results, '--logger', "trx;LogFilePrefix=$prefix")
     if ($Filter) { $testArgs += @('--filter', $Filter) }
     Write-Host "运行 $Title ..."
     & $DotnetPath @testArgs
     if ($LASTEXITCODE -ne 0) { throw "$Title 失败（dotnet 退出码 $LASTEXITCODE）。" }
-    $trx = Get-ChildItem (Join-Path $repoRoot 'TestResults') -Filter $logName -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime | Select-Object -Last 1
-    if (-not $trx) { throw "$Title 未找到 TRX 结果（$logName）。" }
-    $counters = ([xml](Get-Content $trx.FullName)).TestRun.ResultSummary.Counters
-    if ([int]$counters.total -eq 0) { throw "$Title 选中 0 条测试——空选集视为失败，请检查映射或显式 -Areas/-Full。" }
-    Write-Host "$Title 通过：total=$($counters.total) passed=$($counters.passed) failed=$($counters.failed)。"
+    $trxFiles = @(Get-ChildItem $results -Filter "$prefix*.trx" -ErrorAction SilentlyContinue)
+    if (-not $trxFiles.Count) { throw "$Title 未找到 TRX 结果（$prefix*.trx）。" }
+    $total = 0; $passed = 0; $failed = 0
+    foreach ($trx in $trxFiles) {
+        $c = ([xml](Get-Content $trx.FullName)).TestRun.ResultSummary.Counters
+        $total += [int]$c.total; $passed += [int]$c.passed; $failed += [int]$c.failed
+    }
+    if ($total -eq 0) { throw "$Title 选中 0 条测试——空选集视为失败，请检查映射或显式 -Areas/-Full。" }
+    Write-Host "$Title 通过：total=$total passed=$passed failed=$failed。"
 }
 
 if ($planFull) {
-    & $DotnetPath test $solution -c $Configuration --results-directory (Join-Path $repoRoot 'TestResults') --logger 'trx;LogFileName=affected-full.trx'
+    & $DotnetPath test $solution -c $Configuration --results-directory (Join-Path $repoRoot 'TestResults') --logger 'trx;LogFilePrefix=affected-full'
     exit $LASTEXITCODE
 }
 
