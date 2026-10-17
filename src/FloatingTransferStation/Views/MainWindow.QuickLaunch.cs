@@ -1132,6 +1132,9 @@ public partial class MainWindow
 
     private Border? FindLauncherTile(LauncherItem item)
     {
+        // 拖动命中缓存的结构探针（契约守护用）：拖动期间的 MouseMove 不允许再
+        // 走视觉树解析（缓存命中＝零查找），测试据此断言与瓦片数解耦。
+        _launcherTileLookupCountForTests++;
         var index = IndexOfLauncherItem(item);
         if (index < 0)
         {
@@ -1142,6 +1145,17 @@ public partial class MainWindow
         return LauncherTileGrid.ItemContainerGenerator.ContainerFromIndex(index) is { } container
             ? (container as Border) ?? Descendants<Border>(container).FirstOrDefault()
             : null;
+    }
+
+    private int _launcherTileLookupCountForTests;
+
+    /// <summary>测试探针：FindLauncherTile（视觉树解析）累计调用数。</summary>
+    internal int LauncherTileLookupCountForTests => _launcherTileLookupCountForTests;
+
+    private void ClearLauncherDragHitCache()
+    {
+        _launcherDraggingTile = null;
+        _launcherDragHitSlots = null;
     }
 
     // ---- 键盘层级（§一）：①改名编辑器原生 ②编辑态（切片 3）③查看态（Enter/Space 启动、
@@ -1697,6 +1711,14 @@ public partial class MainWindow
     private int _launcherDropTargetIndex = -1;
     private Border? _launcherDropTargetTile;
 
+    // 命中缓存（起拖一次解析）：被拖瓦片容器引用、接管基值、其余瓦片的窗口
+    // 坐标静止矩形。拖动期间其余瓦片几何不变（捕获期间输入全归被拖瓦片，无
+    // 重排、无悬停位移）——每步命中是纯矩形扫描，零视觉树遍历；缓存随会话
+    // 边界（EndLauncherTileDrag）失效重建。
+    private Border? _launcherDraggingTile;
+    private System.Windows.Point _launcherDragTranslateOrigin;
+    private List<(int ItemsIndex, Guid Id, Border Tile, Rect WindowRect)>? _launcherDragHitSlots;
+
     private void LauncherTile_PreviewMouseMove(object sender, MouseEventArgs e)
     {
         if (!_launcherEditMode ||
@@ -1720,60 +1742,89 @@ public partial class MainWindow
             _launcherDragStart = position;
             tile.CaptureMouse();
             AnimateLauncherPressScale(tile, pressed: false);
+            BuildLauncherDragHitCache(pressed);
         }
 
-        if (FindLauncherTile(pressed) is { } dragged)
+        if (_launcherDraggingTile is { } dragged)
         {
+            // 跟随＝输入的直接反映（#30 本义）：动效开/关两档统一为直接赋值。
+            // 起拖时按「读当前值→清动画→设基值」接管进行中的动画（悬停抬升等
+            // ——动画期间 SetCurrentValue 不生效：依赖属性优先级动画>本地值），
+            // 随后每步把累计位移加到接管基值上；167ms 动画只承担归位/让位这类
+            // 有限时长的状态过渡，绝不追赶指针（追赶=恒定空间滞后=粘滞感）。
             var translate = LauncherTileTranslate(dragged);
+            translate.BeginAnimation(TranslateTransform.XProperty, null);
+            translate.BeginAnimation(TranslateTransform.YProperty, null);
             var delta = position - _launcherDragStart;
-            if (!ClientAreaAnimationsEnabled)
-            {
-                translate.BeginAnimation(TranslateTransform.YProperty, null);
-                translate.SetCurrentValue(TranslateTransform.YProperty, delta.Y);
-                translate.BeginAnimation(TranslateTransform.XProperty, null);
-                translate.SetCurrentValue(TranslateTransform.XProperty, delta.X);
-            }
-            else
-            {
-                translate.BeginAnimation(
-                    TranslateTransform.XProperty,
-                    new DoubleAnimation(delta.X, TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs)));
-                translate.BeginAnimation(
-                    TranslateTransform.YProperty,
-                    new DoubleAnimation(delta.Y, TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs)));
-            }
+            translate.SetCurrentValue(
+                TranslateTransform.XProperty,
+                _launcherDragTranslateOrigin.X + delta.X);
+            translate.SetCurrentValue(
+                TranslateTransform.YProperty,
+                _launcherDragTranslateOrigin.Y + delta.Y);
         }
 
         UpdateLauncherDropTarget(position);
     }
 
+    /// <summary>起拖一次解析命中缓存：被拖瓦片容器＋接管基值（含悬停抬升等
+    /// 进行中动画的当前有效值），其余瓦片的窗口坐标静止矩形（按 Items 下标序）。</summary>
+    private void BuildLauncherDragHitCache(LauncherItem draggedItem)
+    {
+        _launcherDraggingTile = FindLauncherTile(draggedItem);
+        if (_launcherDraggingTile is { } dragged)
+        {
+            var translate = LauncherTileTranslate(dragged);
+            var baseX = translate.X;
+            var baseY = translate.Y;
+            translate.BeginAnimation(TranslateTransform.XProperty, null);
+            translate.BeginAnimation(TranslateTransform.YProperty, null);
+            translate.SetCurrentValue(TranslateTransform.XProperty, baseX);
+            translate.SetCurrentValue(TranslateTransform.YProperty, baseY);
+            _launcherDragTranslateOrigin = new System.Windows.Point(baseX, baseY);
+        }
+
+        var slots = new List<(int, Guid, Border, Rect)>(_launchers.Items.Count);
+        var index = 0;
+        foreach (var item in _launchers.Items)
+        {
+            if (item.Id == draggedItem.Id)
+            {
+                index++;
+                continue;
+            }
+
+            if (FindLauncherTile(item) is { } candidate)
+            {
+                var origin = candidate.TranslatePoint(new System.Windows.Point(), this);
+                slots.Add((index, item.Id, candidate, new Rect(
+                    origin,
+                    new Size(candidate.ActualWidth, candidate.ActualHeight))));
+            }
+
+            index++;
+        }
+
+        _launcherDragHitSlots = slots;
+    }
+
     private void UpdateLauncherDropTarget(System.Windows.Point windowPosition)
     {
-        if (_launcherDraggingId is not { } draggingId)
+        if (_launcherDraggingId is null || _launcherDragHitSlots is not { } slots)
         {
             return;
         }
 
         Border? target = null;
         var targetIndex = -1;
-        var index = 0;
-        foreach (var item in _launchers.Items)
+        foreach (var slot in slots)
         {
-            if (item.Id == draggingId)
+            if (slot.WindowRect.Contains(windowPosition))
             {
-                index++;
-                continue;
-            }
-
-            if (FindLauncherTile(item) is { } candidate &&
-                IsPositionOverTile(candidate, windowPosition))
-            {
-                target = candidate;
-                targetIndex = index;
+                target = slot.Tile;
+                targetIndex = slot.ItemsIndex;
                 break;
             }
-
-            index++;
         }
 
         if (!ReferenceEquals(_launcherDropTargetTile, target))
@@ -1786,16 +1837,11 @@ public partial class MainWindow
         _launcherDropTargetIndex = targetIndex;
     }
 
-    private bool IsPositionOverTile(Border tile, System.Windows.Point windowPosition)
-    {
-        var position = tile.TransformToAncestor(this).Transform(new System.Windows.Point());
-        return windowPosition.X >= position.X && windowPosition.X < position.X + tile.ActualWidth &&
-            windowPosition.Y >= position.Y && windowPosition.Y < position.Y + tile.ActualHeight;
-    }
-
-    /// <summary>结束拖拽（放置=提交重排并播放邻位动画；取消=归位动画）。</summary>
+    /// <summary>结束拖拽（放置=提交重排并播放邻位动画；取消=归位动画）；命中缓存
+    /// 随会话边界失效。</summary>
     private void EndLauncherTileDrag(bool apply)
     {
+        ClearLauncherDragHitCache();
         if (_launcherDraggingId is not { } draggingId)
         {
             _launcherDropTargetTile?.SetCurrentValue(Border.BorderBrushProperty, Brushes.Transparent);

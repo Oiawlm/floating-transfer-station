@@ -542,6 +542,215 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void QuickLaunch_EditMode_DragFollowIsDirectAssignmentWithoutAnimation()
+    {
+        // F3 守护（#30 本义「拖动瓦片跟随指针」）：动效开启档的跟随必须是直接
+        // 赋值——变换值==累计位移（叠加接管基值）且无动画在身（IsAnimated==
+        // false）；追赶动画=恒定空间滞后=粘滞感的根因。归位/让位动画不受影响。
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var items = Enumerable.Range(0, 6)
+            .Select(index => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.Application,
+                $"{app.Path}.{index}",
+                $"应用{index}",
+                DateTimeOffset.UtcNow))
+            .ToArray();
+        var window = CreateLauncherWindowSync(directory, board, store, starter, items);
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            // 展开期动效关闭（入场交错是 async void，测试宿主无同步上下文），
+            // 测量段显式开启——直接赋值两档统一，开启档是用户默认。
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var catalog = window.LaunchersForTests();
+            var dragged = catalog.Items[0];
+
+            EnterLauncherEdit(window);
+            CompleteLayout(window);
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
+
+            var draggedTile = FindLauncherTile(window, dragged);
+            Assert.IsNotNull(draggedTile);
+            var centerInWindow = draggedTile.TranslatePoint(
+                new Point(draggedTile.ActualWidth / 2, draggedTile.ActualHeight / 2),
+                window);
+            var pressScreen = window.PointToScreen(centerInWindow);
+            SetCursorPos((int)pressScreen.X, (int)pressScreen.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+            draggedTile.RaiseEvent(NewMouseButtonEventArgs(
+                UIElement.MouseLeftButtonDownEvent,
+                draggedTile));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+
+            // 第一步越过阈值：拖动会话建立（接管基值=接管时刻的当前有效值）。
+            var first = new Point(centerInWindow.X + 30, centerInWindow.Y + 12);
+            var screen = window.PointToScreen(first);
+            SetCursorPos((int)screen.X, (int)screen.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+            draggedTile.RaiseEvent(NewMouseEventArgs(
+                UIElement.PreviewMouseMoveEvent,
+                draggedTile));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+
+            var translate = GetLauncherTileTranslate(draggedTile);
+            Assert.IsNotNull(translate, "前置：瓦片平移变换存在。");
+            // 基值与位移都取自真实光标坐标（SetCursorPos 物理像素取整，GetPosition
+            // 返回的实际 DIP 坐标才是处理器看到的输入）。
+            var origin = new Point(translate.X, translate.Y);
+            var firstPosition = Mouse.GetPosition(window);
+
+            // 后续每步：值==基值+累计位移且 IsAnimated==false（无追赶动画）。
+            for (var step = 1; step <= 6; step++)
+            {
+                var target = new Point(
+                    centerInWindow.X + 30 + step * 11,
+                    centerInWindow.Y + 12 + (step % 3) * 9);
+                screen = window.PointToScreen(target);
+                SetCursorPos((int)screen.X, (int)screen.Y);
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(12));
+                var actual = Mouse.GetPosition(window);
+                draggedTile.RaiseEvent(NewMouseEventArgs(
+                    UIElement.PreviewMouseMoveEvent,
+                    draggedTile));
+                var xSource = DependencyPropertyHelper.GetValueSource(
+                    translate, System.Windows.Media.TranslateTransform.XProperty);
+                var ySource = DependencyPropertyHelper.GetValueSource(
+                    translate, System.Windows.Media.TranslateTransform.YProperty);
+                Assert.IsFalse(xSource.IsAnimated, $"第 {step} 步 X 不应有动画在身。");
+                Assert.IsFalse(ySource.IsAnimated, $"第 {step} 步 Y 不应有动画在身。");
+                Assert.AreEqual(
+                    origin.X + (actual.X - firstPosition.X),
+                    translate.X,
+                    0.01,
+                    $"第 {step} 步 X==基值+累计位移。");
+                Assert.AreEqual(
+                    origin.Y + (actual.Y - firstPosition.Y),
+                    translate.Y,
+                    0.01,
+                    $"第 {step} 步 Y==基值+累计位移。");
+            }
+
+            // 抬起取消（回到原位无目标重排）：归位动画保留（167ms 位移回零）。
+            draggedTile.ReleaseMouseCapture();
+            InvokePrivate(window, "EndLauncherTileDrag", false);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
+            var settling = DependencyPropertyHelper.GetValueSource(
+                translate, System.Windows.Media.TranslateTransform.XProperty);
+            Assert.IsTrue(
+                settling.IsAnimated || Math.Abs(translate.X - origin.X) < 1.5,
+                "取消后归位动画仍在（或已完成回零）。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    private static System.Windows.Media.TranslateTransform? GetLauncherTileTranslate(Border tile)
+    {
+        var group = tile.RenderTransform as System.Windows.Media.TransformGroup;
+        return group?.Children.OfType<System.Windows.Media.TranslateTransform>().FirstOrDefault();
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_EditMode_DragMovesDoNotTraverseVisualTree()
+    {
+        // F4 守护：拖动期间的 MouseMove 命中不查视觉树（起拖一次解析缓存；每步
+        // 纯几何扫描）——MouseMove 处理成本与瓦片数解耦的结构证明。
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var items = Enumerable.Range(0, 12)
+            .Select(index => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.Application,
+                $"{app.Path}.{index}",
+                $"应用{index}",
+                DateTimeOffset.UtcNow))
+            .ToArray();
+        var window = CreateLauncherWindowSync(directory, board, store, starter, items);
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var catalog = window.LaunchersForTests();
+            var dragged = catalog.Items[0];
+
+            EnterLauncherEdit(window);
+            CompleteLayout(window);
+            window.Topmost = true;
+            CompleteLayout(window);
+
+            var draggedTile = FindLauncherTile(window, dragged);
+            Assert.IsNotNull(draggedTile);
+            var centerInWindow = draggedTile.TranslatePoint(
+                new Point(draggedTile.ActualWidth / 2, draggedTile.ActualHeight / 2),
+                window);
+            var screen = window.PointToScreen(centerInWindow);
+            SetCursorPos((int)screen.X, (int)screen.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+            draggedTile.RaiseEvent(NewMouseButtonEventArgs(
+                UIElement.MouseLeftButtonDownEvent,
+                draggedTile));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+
+            // 第一步建立拖动会话（缓存构建允许查树），其后 40 步零查找。
+            screen = window.PointToScreen(new Point(centerInWindow.X + 30, centerInWindow.Y + 12));
+            SetCursorPos((int)screen.X, (int)screen.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+            draggedTile.RaiseEvent(NewMouseEventArgs(
+                UIElement.PreviewMouseMoveEvent,
+                draggedTile));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+
+            var lookupsBefore = window.LauncherTileLookupCountForTests;
+            for (var step = 0; step < 40; step++)
+            {
+                screen = window.PointToScreen(new Point(
+                    centerInWindow.X + 30 + (step % 5) * 10,
+                    centerInWindow.Y + 12 + (step / 5) * 9));
+                SetCursorPos((int)screen.X, (int)screen.Y);
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(6));
+                draggedTile.RaiseEvent(NewMouseEventArgs(
+                    UIElement.PreviewMouseMoveEvent,
+                    draggedTile));
+            }
+
+            Assert.AreEqual(
+                lookupsBefore,
+                window.LauncherTileLookupCountForTests,
+                "拖动期间每步命中必须零视觉树查找（缓存命中，成本与瓦片数解耦）。");
+
+            draggedTile.ReleaseMouseCapture();
+            InvokePrivate(window, "EndLauncherTileDrag", false);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(60));
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
     public void QuickLaunch_EditMode_DragReorderPersistsOrder()
     {
         using var directory = new TestDirectory();
