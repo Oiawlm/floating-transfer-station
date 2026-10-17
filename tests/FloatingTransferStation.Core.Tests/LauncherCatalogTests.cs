@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 
@@ -207,5 +208,191 @@ public sealed class LauncherCatalogTests
         Assert.IsTrue(await catalog.UpdateIconStampAsync(item.Id, "abc123def456"));
         Assert.AreEqual("abc123def456", catalog.Items.Single().IconStamp);
         Assert.AreEqual("abc123def456", store.Saved.Last().Items.Single().IconStamp);
+    }
+
+    // ---- 乐观发布＋最小操作（#30 修订，Issue #176）----
+
+    /// <summary>记录集合通知形态（Move/Reset/Add/Remove/Replace 计数）。</summary>
+    private static (int Move, int Reset, int Add, int Remove, int Replace) TrackChanges(
+        LauncherCatalog catalog,
+        Action act)
+    {
+        var (move, reset, add, remove, replace) = (0, 0, 0, 0, 0);
+        NotifyCollectionChangedEventHandler onChange = (_, args) =>
+        {
+            switch (args.Action)
+            {
+                case NotifyCollectionChangedAction.Move: move++; break;
+                case NotifyCollectionChangedAction.Reset: reset++; break;
+                case NotifyCollectionChangedAction.Add: add++; break;
+                case NotifyCollectionChangedAction.Remove: remove++; break;
+                case NotifyCollectionChangedAction.Replace: replace++; break;
+            }
+        };
+        catalog.Items.CollectionChanged += onChange;
+        try
+        {
+            act();
+        }
+        finally
+        {
+            catalog.Items.CollectionChanged -= onChange;
+        }
+
+        return (move, reset, add, remove, replace);
+    }
+
+    [TestMethod]
+    public async Task Move_PublishesExactlyOneMoveNotification()
+    {
+        var store = new RecordingLauncherStore();
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        var first = Item(@"C:\Apps\A.exe");
+        var second = Item(@"C:\Apps\B.exe");
+        var third = Item(@"C:\Apps\C.exe");
+        await catalog.AddRangeAsync([first, second, third]);
+
+        var changes = TrackChanges(catalog, () =>
+            catalog.MoveAsync(first.Id, 2).GetAwaiter().GetResult());
+
+        Assert.AreEqual(1, changes.Move, "重排发布恰一条 Move 通知。");
+        Assert.AreEqual(0, changes.Reset, "无 Reset（全量重建退役为装载专用）。");
+        Assert.AreEqual(0, changes.Add);
+        Assert.AreEqual(0, changes.Remove);
+    }
+
+    [TestMethod]
+    public async Task RenameAndIconStamp_PublishNoCollectionChange()
+    {
+        var store = new RecordingLauncherStore();
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        var item = Item();
+        await catalog.AddRangeAsync([item]);
+
+        var changes = TrackChanges(catalog, () =>
+        {
+            catalog.RenameAsync(item.Id, "新名").GetAwaiter().GetResult();
+            catalog.UpdateIconStampAsync(item.Id, "stamp").GetAwaiter().GetResult();
+        });
+
+        Assert.AreEqual(0, changes.Move + changes.Reset + changes.Add + changes.Remove + changes.Replace,
+            "改名/图标戳是实例属性通知，无集合变更。");
+        Assert.AreEqual("新名", catalog.Items.Single().DisplayName);
+        Assert.AreEqual("stamp", catalog.Items.Single().IconStamp);
+    }
+
+    [TestMethod]
+    public async Task Move_AppliesOptimisticallyWhileSaveIsInFlight()
+    {
+        var store = new RecordingLauncherStore();
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        var first = Item(@"C:\Apps\A.exe");
+        var second = Item(@"C:\Apps\B.exe");
+        var third = Item(@"C:\Apps\C.exe");
+        await catalog.AddRangeAsync([first, second, third]);
+
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        store.Respond = (_, _) => held.Task;
+        var moveTask = catalog.MoveAsync(first.Id, 2);
+        await Task.Delay(50);
+
+        Assert.IsFalse(moveTask.IsCompleted, "前置：保存仍在途。");
+        CollectionAssert.AreEqual(
+            new[] { second.Id, third.Id, first.Id },
+            catalog.Items.Select(entry => entry.Id).ToArray(),
+            "保存挂起期间 UI 已新序（乐观上屏，发布不再被落盘往返门住）。");
+
+        held.SetResult();
+        Assert.IsTrue(await moveTask);
+        CollectionAssert.AreEqual(
+            new[] { second.Id, third.Id, first.Id },
+            store.Saved.Last().Items.Select(entry => entry.Id).ToArray(),
+            "持久化以新序落盘。");
+    }
+
+    [TestMethod]
+    public async Task MoveSaveFailure_RollsBackByReverseMove()
+    {
+        var store = new RecordingLauncherStore();
+        var messages = new List<string>();
+        var catalog = await LauncherCatalog.LoadAsync(store, messages.Add);
+        var first = Item(@"C:\Apps\A.exe");
+        var second = Item(@"C:\Apps\B.exe");
+        var third = Item(@"C:\Apps\C.exe");
+        await catalog.AddRangeAsync([first, second, third]);
+
+        store.Respond = (_, _) => throw new IOException("fail");
+        var changes = TrackChanges(catalog, () =>
+            catalog.MoveAsync(first.Id, 2).GetAwaiter().GetResult());
+
+        CollectionAssert.AreEqual(
+            new[] { first.Id, second.Id, third.Id },
+            catalog.Items.Select(entry => entry.Id).ToArray(),
+            "保存失败按逆操作回滚（反向 Move，不做全量重建）。");
+        Assert.AreEqual(2, changes.Move, "失败回滚=第二条 Move 通知。");
+        Assert.AreEqual(0, changes.Reset, "回滚不触发 Reset（用户最差时刻不做全量重建）。");
+        CollectionAssert.AreEqual(new[] { "启动项未保存，已还原。" }, messages);
+    }
+
+    [TestMethod]
+    public async Task MutationDuringSaveInFlight_WaitsForGate_NotClobberedByFailure()
+    {
+        // T7 评审 BLOCKER 的守护：门横跨「应用→保存→失败回滚」全程——A 的保存
+        // 在途时 B 无法开始，不存在「A 失败回滚踩掉已应用的 B」的交错；A 失败
+        // 回滚后 B 在原序上照常执行。
+        var store = new RecordingLauncherStore();
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        var first = Item(@"C:\Apps\A.exe");
+        var second = Item(@"C:\Apps\B.exe");
+        var third = Item(@"C:\Apps\C.exe");
+        await catalog.AddRangeAsync([first, second, third]);
+
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var saveAttempts = 0;
+        store.Respond = (_, _) => ++saveAttempts == 1 ? held.Task : Task.CompletedTask;
+        var moveTask = catalog.MoveAsync(first.Id, 2);
+        await Task.Delay(50);
+        var removeTask = catalog.RemoveAsync(second.Id);
+        await Task.Delay(50);
+
+        Assert.IsFalse(removeTask.IsCompleted, "B（删除）在 A 的保存往返期间排队等门。");
+        CollectionAssert.AreEqual(
+            new[] { second.Id, third.Id, first.Id },
+            catalog.Items.Select(entry => entry.Id).ToArray(),
+            "期间集合=A 的乐观序（B 尚未应用）。");
+
+        held.SetException(new IOException("fail"));
+        Assert.IsFalse(await moveTask, "A 保存失败。");
+        var outcome = await removeTask;
+        Assert.IsNotNull(outcome, "A 失败回滚后 B 在原序上执行。");
+        CollectionAssert.AreEqual(
+            new[] { first.Id, third.Id },
+            catalog.Items.Select(entry => entry.Id).ToArray(),
+            "终态：A 已回滚＋B 已应用（互不踩踏）。");
+    }
+
+    [TestMethod]
+    public async Task RemoveSaveFailure_ReinsertsAtOriginalIndex()
+    {
+        var store = new RecordingLauncherStore();
+        var messages = new List<string>();
+        var catalog = await LauncherCatalog.LoadAsync(store, messages.Add);
+        var first = Item(@"C:\Apps\A.exe");
+        var second = Item(@"C:\Apps\B.exe");
+        var third = Item(@"C:\Apps\C.exe");
+        await catalog.AddRangeAsync([first, second, third]);
+
+        store.Respond = (_, _) => throw new IOException("fail");
+        var changes = TrackChanges(catalog, () =>
+            catalog.RemoveAsync(second.Id).GetAwaiter().GetResult());
+
+        CollectionAssert.AreEqual(
+            new[] { first.Id, second.Id, third.Id },
+            catalog.Items.Select(entry => entry.Id).ToArray(),
+            "删除保存失败：按原下标重插回滚。");
+        Assert.AreEqual(1, changes.Remove, "乐观删除=一条 Remove 通知。");
+        Assert.AreEqual(1, changes.Add, "失败回滚=一条 Insert(Add) 通知。");
+        Assert.AreEqual(0, changes.Reset);
+        CollectionAssert.AreEqual(new[] { "启动项未保存，已还原。" }, messages);
     }
 }

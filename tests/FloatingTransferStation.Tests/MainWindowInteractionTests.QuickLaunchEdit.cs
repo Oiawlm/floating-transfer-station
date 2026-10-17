@@ -663,6 +663,12 @@ public sealed partial class MainWindowInteractionTests
         return group?.Children.OfType<System.Windows.Media.TranslateTransform>().FirstOrDefault();
     }
 
+    private static System.Windows.Media.ScaleTransform? GetLauncherTileScale(Border tile)
+    {
+        var group = tile.RenderTransform as System.Windows.Media.TransformGroup;
+        return group?.Children.OfType<System.Windows.Media.ScaleTransform>().FirstOrDefault();
+    }
+
     [STATestMethod]
     public void QuickLaunch_EditMode_DragMovesDoNotTraverseVisualTree()
     {
@@ -742,6 +748,101 @@ public sealed partial class MainWindowInteractionTests
             draggedTile.ReleaseMouseCapture();
             InvokePrivate(window, "EndLauncherTileDrag", false);
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(60));
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_EditMode_DragReorderPublishesSingleMoveAndKeepsContainers()
+    {
+        // F5 窗口层守护（#30 修订，Issue #176）：拖拽重排的 UI 发布=恰一条 Move
+        // 通知（无 Reset），容器实例跨重排保持（无全量重建）。
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var items = Enumerable.Range(0, 5)
+            .Select(index => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.Application,
+                $"{app.Path}.{index}",
+                $"应用{index}",
+                DateTimeOffset.UtcNow))
+            .ToArray();
+        var window = CreateLauncherWindowSync(directory, board, store, starter, items);
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var catalog = window.LaunchersForTests();
+            var dragged = catalog.Items[0];
+            var target = catalog.Items[3];
+
+            EnterLauncherEdit(window);
+            CompleteLayout(window);
+            window.Topmost = true;
+            CompleteLayout(window);
+
+            var draggedTile = FindLauncherTile(window, dragged);
+            var targetTile = FindLauncherTile(window, target);
+            Assert.IsNotNull(draggedTile);
+            Assert.IsNotNull(targetTile);
+            var grid = (ItemsControl)window.FindName("LauncherTileGrid")!;
+            // 锚定具体条目（同下标容器在重排后天然换主；「保持」指同一 ITEM 的
+            // 容器实例不变）。
+            var anchored = catalog.Items[2];
+            var containerBefore = grid.ItemContainerGenerator.ContainerFromIndex(2);
+
+            var changes = new List<System.Collections.Specialized.NotifyCollectionChangedAction>();
+            System.Collections.Specialized.NotifyCollectionChangedEventHandler onChange = (_, args) =>
+                changes.Add(args.Action);
+            catalog.Items.CollectionChanged += onChange;
+            try
+            {
+                var press = draggedTile.PointToScreen(new Point(
+                    draggedTile.ActualWidth / 2, draggedTile.ActualHeight / 2));
+                SetCursorPos((int)press.X, (int)press.Y);
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+                draggedTile.RaiseEvent(NewMouseButtonEventArgs(
+                    UIElement.MouseLeftButtonDownEvent, draggedTile));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+                var move = targetTile.PointToScreen(new Point(
+                    targetTile.ActualWidth / 2, targetTile.ActualHeight / 2));
+                SetCursorPos((int)move.X, (int)move.Y);
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+                draggedTile.RaiseEvent(NewMouseEventArgs(
+                    UIElement.PreviewMouseMoveEvent, draggedTile));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(60));
+                draggedTile.RaiseEvent(NewMouseButtonEventArgs(
+                    UIElement.MouseLeftButtonUpEvent, draggedTile, timestamp: 61));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            }
+            finally
+            {
+                catalog.Items.CollectionChanged -= onChange;
+            }
+
+            CompleteLayout(window);
+            Assert.AreEqual(3, catalog.Items.IndexOf(dragged), "重排提交生效。");
+            CollectionAssert.AreEqual(
+                new[] { System.Collections.Specialized.NotifyCollectionChangedAction.Move },
+                changes,
+                "拖拽重排的 UI 发布恰一条 Move 通知（无 Reset/Add/Remove）。");
+            Assert.IsTrue(
+                ReferenceEquals(
+                    containerBefore,
+                    grid.ItemContainerGenerator.ContainerFromIndex(catalog.Items.IndexOf(anchored))),
+                "同一条目的容器实例跨重排保持（单 Move 的容器复用语义）。");
         }
         finally
         {

@@ -246,6 +246,12 @@ public sealed partial class MainWindowInteractionTests
             PumpUntilCondition(
                 window.Dispatcher,
                 () => window.LaunchersForTests().Items.Count == 3);
+            // 乐观上屏（Issue #176）：条目先于保存完成出现在集合；状态条汇报在
+            // 导入续体（保存往返后）才发出——等它到齐再断言。
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            PumpUntilCondition(
+                window.Dispatcher,
+                () => viewModel.StatusText == "添加了 2 项，1 个已存在。");
             CompleteLayout(window);
 
             var catalog = window.LaunchersForTests();
@@ -255,7 +261,6 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(added.All(item => item.Kind == LauncherKind.PackagedApp), "选择器添加=PackagedApp（只存 AUMID）。");
             Assert.AreEqual("新应用一", added.Single(item => item.TargetPath == "app.new1").DisplayName);
 
-            var viewModel = (MainWindowViewModel)window.DataContext;
             Assert.AreEqual("添加了 2 项，1 个已存在。", viewModel.StatusText, "多源合并汇报（零段省略）。");
         }
         finally

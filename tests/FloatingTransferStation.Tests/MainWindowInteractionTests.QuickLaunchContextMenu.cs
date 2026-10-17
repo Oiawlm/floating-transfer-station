@@ -77,11 +77,20 @@ public sealed partial class MainWindowInteractionTests
         Border tile)
     {
         var centerInTile = new Point(tile.ActualWidth / 2, tile.ActualHeight / 2);
-        HoverRealAt(window, tile, centerInTile, settleMilliseconds: 60);
+        HoverRealAt(window, tile, centerInTile, settleMilliseconds: 140);
         RightClickBySendInput(window);
         var menu = tile.ContextMenu!;
         Assert.IsTrue(menu.IsOpen, "真实右键必须打开瓦片上下文菜单。");
         return menu;
+    }
+
+    /// <summary>关闭菜单并等 Popup 的异步 Closed/焦点归还安定（连开两次菜单的
+    /// 批跑场景里，紧接的第二次右键可能落在未完成收尾的 Popup 上）。</summary>
+    private static void CloseTileContextMenuAndSettle(MainWindow window)
+    {
+        PressEscapeBySendInput(window);
+        PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(220));
+        PumpUntilOverlayAccountingCleared(window);
     }
 
     [STATestMethod]
@@ -138,7 +147,7 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(viewModel.IsPanelExpanded, "菜单打开期间面板不收起（覆盖交互 hold）。");
 
             // 真实 Esc 只关菜单：面板随后按指针几何恢复收起节奏（指针在窗外）。
-            PressEscapeBySendInput(window);
+            CloseTileContextMenuAndSettle(window);
             Assert.IsFalse(menu.IsOpen, "Esc 关闭菜单。");
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(700));
             Assert.IsFalse(viewModel.IsPanelExpanded, "菜单关闭＋指针在外：面板恢复收起。");
@@ -185,14 +194,14 @@ public sealed partial class MainWindowInteractionTests
             var menu = OpenTileContextMenuByRealRightClick(window, first);
             Assert.IsFalse(MenuItemOf(menu, "TileMenuMoveUp").IsEnabled, "首瓦片上移端点禁用。");
             Assert.IsTrue(MenuItemOf(menu, "TileMenuMoveDown").IsEnabled, "首瓦片下移可用。");
-            PressEscapeBySendInput(window);
+            CloseTileContextMenuAndSettle(window);
 
             var last = FindLauncherTile(window, catalog.Items[^1]);
             Assert.IsNotNull(last);
             menu = OpenTileContextMenuByRealRightClick(window, last);
             Assert.IsTrue(MenuItemOf(menu, "TileMenuMoveUp").IsEnabled, "末瓦片上移可用。");
             Assert.IsFalse(MenuItemOf(menu, "TileMenuMoveDown").IsEnabled, "末瓦片下移端点禁用。");
-            PressEscapeBySendInput(window);
+            CloseTileContextMenuAndSettle(window);
         }
         finally
         {
