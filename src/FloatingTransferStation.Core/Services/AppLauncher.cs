@@ -201,6 +201,7 @@ public sealed class AppLauncher
         5 or unchecked((int)0x80070005) => "拒绝访问。",
         740 or unchecked((int)0x800710E0) => "需要管理员权限。",
         1223 or unchecked((int)0x800704C7) => "已取消授权。",
+        31 or 1155 => "没有找到能打开该地址的应用。",
         unchecked((int)0x80270254) or unchecked((int)0x80070490) => "应用未注册（可能已卸载）。",
         _ => $"错误 0x{code:X8}。"
     };

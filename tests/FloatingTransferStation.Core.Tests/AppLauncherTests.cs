@@ -246,4 +246,28 @@ public sealed class AppLauncherTests
 
         Assert.AreEqual(0, starter.Started.Count, "明确失败绝不回退 explorer 派发。");
     }
+
+    // ---- 无默认浏览器关联映射（#30 修订 D7，Issue #179）：SE_ERR_NOASSOC(31)/
+    // ERROR_NO_ASSOCIATION(1155) → 中文文案（融合进既有映射表，惠及各类 ShellExecute 失败）----
+
+    [TestMethod]
+    public void DescribeError_NoAssociation_MapsToNoOpeningAppMessage()
+    {
+        Assert.AreEqual("没有找到能打开该地址的应用。", AppLauncher.DescribeError(31), "SE_ERR_NOASSOC。");
+        Assert.AreEqual("没有找到能打开该地址的应用。", AppLauncher.DescribeError(1155), "ERROR_NO_ASSOCIATION。");
+    }
+
+    [TestMethod]
+    public void Url_Win32NoAssociation_FailsWithMappedChineseMessage()
+    {
+        var starter = new RecordingStarter { Respond = _ => throw new Win32Exception(1155) };
+        var launcher = new AppLauncher(starter.Invoke);
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Url, "https://example.invalid/", "网页", DateTimeOffset.UtcNow);
+
+        var result = launcher.Launch(item);
+
+        Assert.AreEqual(LauncherLaunchStatus.Failed, result.Status);
+        Assert.AreEqual("没有找到能打开该地址的应用。", result.FailureMessage, "无关联失败不再落十六进制兜底文案。");
+    }
 }

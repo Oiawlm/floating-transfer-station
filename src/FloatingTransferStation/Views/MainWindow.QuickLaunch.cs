@@ -155,6 +155,9 @@ public partial class MainWindow
     /// <summary>选择器对话框显示（测试缝：可替换为非模态驱动并自动确认）。</summary>
     internal Func<InstalledAppPickerWindow, bool?> _showPickerDialog = static picker => picker.ShowDialog();
 
+    /// <summary>网页地址对话框显示（测试缝：同选择器缝）。</summary>
+    internal Func<LauncherUrlInputWindow, bool?> _showUrlDialog = static dialog => dialog.ShowDialog();
+
     private void LauncherAddButton_Click(object sender, RoutedEventArgs e)
     {
         if (_isClosing || _launchers is null || _launchers.IsReadOnlyFromNewerVersion)
@@ -261,6 +264,34 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>网页地址入口（#30 修订，Issue #179）：输入对话框经 Core 归一化（唯一
+    /// ingress，无协议补 https://、仅 http/https、失败就地内联报错），确认后创建 Url
+    /// 条目走目录添加协议（去重/上限/落位/状态条与文件导入同一汇报路径）。</summary>
+    private void LauncherAddUrlMenu_Click(object sender, RoutedEventArgs e)
+    {
+        LauncherAddMenu.IsOpen = false;
+        if (_isClosing || _launchers is null || _launchers.IsReadOnlyFromNewerVersion)
+        {
+            return;
+        }
+
+        var dialog = new LauncherUrlInputWindow(CurrentTheme) { Owner = this };
+        _panelState.BeginOverlayInteraction(PanelOverlayReason.ModalDialog);
+        try
+        {
+            if (_showUrlDialog(dialog) != true || dialog.Result is not { Success: true } normalization)
+            {
+                return;
+            }
+
+            TrackPendingOperation(ImportLauncherUrlsAsync(normalization.Url, normalization.DefaultName));
+        }
+        finally
+        {
+            EndOverlayInteractionAndReconcile(PanelOverlayReason.ModalDialog);
+        }
+    }
+
     // ---- 覆盖交互收起抑制（#30 回归修复，Issue #162）：＋菜单/模态对话框是独立
     // HWND，指针移入即补发假 MouseLeave；打开期间收起链被状态机 hold 抑制，全部
     // 释放后按指针几何位置重估（与编辑保持的 ReconcileSurfaceAfterEditing 同形，
@@ -349,6 +380,36 @@ public partial class MainWindow
     internal void UseInstalledAppsSourceForTests(Func<IReadOnlyList<InstalledApp>> source) =>
         _installedAppsSource = source;
 
+    /// <summary>网页地址导入：Url 条目（TargetPath=规范形，默认名=域名）＋状态条一次性
+    /// 汇报＋落位动画（与文件/选择器导入同路径）。</summary>
+    private async Task ImportLauncherUrlsAsync(string url, string defaultName)
+    {
+        if (_launchers is null)
+        {
+            return;
+        }
+
+        var outcome = await _launchers.AddRangeAsync(
+        [
+            new LauncherItem(Guid.NewGuid(), LauncherKind.Url, url, defaultName, DateTimeOffset.Now)
+        ]);
+        // 保存续体可能落在无同步上下文的线程（测试环境）：UI 反馈显式回投 UI 线程。
+        await Dispatcher.InvokeAsync(() =>
+        {
+            if (outcome.AddedCount > 0)
+            {
+                PlayLauncherLandingAsync(outcome.AddedItems);
+            }
+
+            foreach (var duplicate in outcome.Duplicates)
+            {
+                PulseLauncherDuplicate(duplicate);
+            }
+
+            ShowLauncherImportStatus(outcome, skippedTotal: 0);
+        });
+    }
+
     /// <summary>文件导入分流（.exe/.lnk 导入，其余跳过计数）＋状态条一次性汇报＋落位动画。</summary>
     private async Task ImportLauncherFilesAsync(IReadOnlyList<string> files, int skippedUnsupportedCount)
     {
@@ -394,7 +455,10 @@ public partial class MainWindow
             return;
         }
 
-        if (outcome.AddedCount == 0 && skippedTotal == 0 && outcome.OverflowSkippedCount == 0)
+        // 全零结果（无新增/无重复/无跳过/无超额）静默；纯单条重复不在此列——
+        // 契约 #30 断言其汇报「已在启动列表中」＋滚动至已有瓦片＋accent 脉冲。
+        if (outcome.AddedCount == 0 && outcome.Duplicates.Count == 0 && skippedTotal == 0 &&
+            outcome.OverflowSkippedCount == 0)
         {
             return;
         }
