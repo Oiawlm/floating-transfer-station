@@ -27,12 +27,13 @@ $coreTests = Join-Path $repoRoot 'tests\FloatingTransferStation.Core.Tests\Float
 # ---- 区域规则（Glob 相对仓库根、正斜杠；首个命中生效；Name 相同的规则合并 filter 并集）----
 # 快捷启动（启动器）：瓦片/URL/选择器/图标/目录/存储，Core 与 App 两侧同属一族。
 $rules = @(
-    @{ Name = 'Launcher'; Filter = 'FullyQualifiedName~Launcher'; Globs = @(
+    @{ Name = 'Launcher'; Filter = 'FullyQualifiedName~Launcher|FullyQualifiedName~QuickLaunch'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.QuickLaunch*.cs',
         'src/FloatingTransferStation/Views/LauncherUrlInputWindow*',
         'src/FloatingTransferStation/Views/InstalledAppPickerWindow*',
         'src/FloatingTransferStation/Launcher/*',
         'src/FloatingTransferStation.Core/Services/Launcher*.cs',
+        'src/FloatingTransferStation.Core/Services/VolatileLauncherStore.cs',
         'src/FloatingTransferStation.Core/Models/LauncherItem.cs',
         'src/FloatingTransferStation.Core/Models/LauncherIconKey.cs',
         'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.QuickLaunch*.cs') },
@@ -50,6 +51,7 @@ $rules = @(
         'src/FloatingTransferStation/Services/WpfClipboardReader.cs', 'src/FloatingTransferStation/Services/WindowsDataImageReader.cs',
         'src/FloatingTransferStation/Services/ExternalDrop*.cs', 'src/FloatingTransferStation/Models/Clipboard*.cs',
         'src/FloatingTransferStation/Models/ExternalDropPayload.cs', 'src/FloatingTransferStation.Core/Services/CapturedContentFingerprint.cs',
+        'src/FloatingTransferStation.Core/Services/StoredImage.cs',
         'src/FloatingTransferStation.Core/Services/TextCleanerPipeline.cs') },
     # 拖放管线（含拖放载荷服务）
     @{ Name = 'Drag'; Filter = 'FullyQualifiedName~Drag|FullyQualifiedName~Drop'; Globs = @(
@@ -59,17 +61,15 @@ $rules = @(
         'src/FloatingTransferStation/Views/MainWindow.AutoCleanup.cs') },
     @{ Name = 'CardAi'; Filter = 'FullyQualifiedName~CardAi'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.CardAi.cs') },
-    @{ Name = 'CardEntrance'; Filter = 'FullyQualifiedName~MotionTransitions|FullyQualifiedName~DesignTokens'; Globs = @(
-        'src/FloatingTransferStation/Views/MainWindow.CardEntrance.cs') },
     @{ Name = 'CardGestures'; Filter = 'FullyQualifiedName~CardGestures|FullyQualifiedName~CardHalves'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.CardGestures.cs', 'src/FloatingTransferStation/Views/CardGestureZones.cs') },
     @{ Name = 'CardTextEditing'; Filter = 'FullyQualifiedName~CardEditing|FullyQualifiedName~CardCaretAnchor|FullyQualifiedName~CardNote'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.CardTextEditing.cs') },
     @{ Name = 'CategoryEditing'; Filter = 'FullyQualifiedName~Category'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.CategoryEditing.cs', 'src/FloatingTransferStation/Views/CategoryFeedbackAnimation.cs') },
-    @{ Name = 'ClipboardDelivery'; Filter = 'FullyQualifiedName~ClipboardDelivery'; Globs = @(
+    @{ Name = 'ClipboardDelivery'; Filter = 'FullyQualifiedName~RightClickCopy|FullyQualifiedName~ClipboardDelivery'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.ClipboardDelivery.cs') },
-    @{ Name = 'DailyReview'; Filter = 'FullyQualifiedName~DailyReview'; Globs = @(
+    @{ Name = 'DailyReview'; Filter = 'FullyQualifiedName~DailyReview|FullyQualifiedName~Review'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.DailyReview.cs') },
     @{ Name = 'DataRelocation'; Filter = 'FullyQualifiedName~Relocation|FullyQualifiedName~DataDirectory'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.DataRelocation.cs') },
@@ -79,15 +79,12 @@ $rules = @(
         'src/FloatingTransferStation/Views/MainWindow.PanelHold.cs', 'src/FloatingTransferStation/Views/MainWindow.PanelTextEditing.cs') },
     @{ Name = 'Search'; Filter = 'FullyQualifiedName~Search'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.Search.cs') },
-    @{ Name = 'Selection'; Filter = 'FullyQualifiedName~Selection'; Globs = @(
+    @{ Name = 'Selection'; Filter = 'FullyQualifiedName~Selection|FullyQualifiedName~Undo'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.SelectionAndDeletion.cs') },
     @{ Name = 'Settings'; Filter = 'FullyQualifiedName~SettingsWindow|FullyQualifiedName~Preferences'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.Settings.cs') },
     @{ Name = 'Updates'; Filter = 'FullyQualifiedName~Update'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.Updates.cs') },
-    @{ Name = 'VisualTransitions'; Filter = 'FullyQualifiedName~VisualTransitions|FullyQualifiedName~MotionTransitions|FullyQualifiedName~VisualLifecycle'; Globs = @(
-        'src/FloatingTransferStation/Views/MainWindow.VisualTransitions.cs',
-        'src/FloatingTransferStation/Views/FadeAnimation.cs', 'src/FloatingTransferStation/Views/LiftAnimation.cs') },
     # 控件/转换器
     @{ Name = 'TrimAwareTextBlock'; Filter = 'FullyQualifiedName~TrimAwareTextBlock'; Globs = @(
         'src/FloatingTransferStation/Controls/TrimAwareTextBlock.cs') },
@@ -119,7 +116,8 @@ $rules = @(
     @{ Name = 'Core.DataDirectory'; Filter = 'FullyQualifiedName~Relocation|FullyQualifiedName~DataDirectory'; Globs = @(
         'src/FloatingTransferStation.Core/Services/DataDirectoryCleanupProcessor.cs',
         'src/FloatingTransferStation.Core/Services/DataDirectoryRelocation.cs',
-        'src/FloatingTransferStation.Core/Services/DataDirectorySettings.cs') },
+        'src/FloatingTransferStation.Core/Services/DataDirectorySettings.cs',
+        'src/FloatingTransferStation.Core/Services/RelocationCleanupMarker.cs') },
     @{ Name = 'Core.ImageFileSupport'; Filter = 'FullyQualifiedName~Image'; Globs = @(
         'src/FloatingTransferStation.Core/Services/ImageFileSupport.cs') },
     @{ Name = 'Core.ManagedImagePath'; Filter = 'FullyQualifiedName~ImageNormalizer'; Globs = @(
@@ -142,6 +140,9 @@ $fullRules = @(
         'src/FloatingTransferStation/Services/ISettingsHost.cs', 'src/FloatingTransferStation/Services/IImageNormalizer.cs') },
     @{ Reason = '构建/依赖/解决方案配置'; Globs = @(
         'Directory.Build.props', 'Directory.Packages.props', 'FloatingTransferStation.slnx', 'global.json', 'nuget.config') },
+    @{ Reason = '窗口/卡片视觉与动画基础设施——测试方法名与源文件名不同族，保守回退全量'; Globs = @(
+        'src/FloatingTransferStation/Views/MainWindow.VisualTransitions.cs', 'src/FloatingTransferStation/Views/MainWindow.CardEntrance.cs',
+        'src/FloatingTransferStation/Views/FadeAnimation.cs', 'src/FloatingTransferStation/Views/LiftAnimation.cs') },
     @{ Reason = '共享测试设施'; Globs = @(
         'tests/FloatingTransferStation.Tests/TestDirectory.cs', 'tests/FloatingTransferStation.Tests/GlobalUsings.cs',
         'tests/FloatingTransferStation.Tests/BoardCreatedAtTestHelpers.cs', 'tests/FloatingTransferStation.Tests/FailingFirstSaveBoardStore.cs',
@@ -159,18 +160,18 @@ function Get-MatchedRule([string]$file) {
             if ($file -like $glob) { return @{ Full = $rule.Reason } }
         }
     }
-    # 泛型规则：Core 服务一服务一类（FQN~stem，点号 partial 取首段）；App 测试文件一文件一区域
-    # （MainWindowInteractionTests.<Area>.cs → FQN~<Area>）；Core 测试文件由强制基线覆盖。
+    # 泛型规则：Core 服务一服务一类（FQN~stem，点号 partial 取首段；接口文件已由 fullRules 拦截）；
+    # App 测试文件——partial 族共享同一类名、FQN 不含文件区域名，统一放宽到
+    # FQN~MainWindowInteractionTests 全族（恒非零），独立类取 FQN~<类名>（类名必在 FQN 中，恒非零）。
     if ($file -like 'src/FloatingTransferStation.Core/Services/*.cs') {
         $stem = ((Split-Path -Leaf $file) -replace '\.cs$', '') -split '\.' | Select-Object -First 1
-        if ($stem -notmatch '^I[A-Z]') {
-            return @{ Name = "Core.$stem"; Filter = "FullyQualifiedName~$stem"; Derived = 'Core 一服务一类泛型规则' }
-        }
+        return @{ Name = "Core.$stem"; Filter = "FullyQualifiedName~$stem"; Derived = 'Core 一服务一类泛型规则' }
+    }
+    if ($file -like 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.*.cs') {
+        return @{ Name = 'Tests.MainWindowInteractionTests'; Filter = 'FullyQualifiedName~MainWindowInteractionTests'; Derived = 'App 测试文件泛型规则（partial 全族）' }
     }
     if ($file -like 'tests/FloatingTransferStation.Tests/*.cs') {
-        $stem = (Split-Path -Leaf $file) -replace '\.cs$', ''
-        if ($stem -like 'MainWindowInteractionTests.*') { $stem = ($stem -split '\.', 2)[1] }
-        else { $stem = ($stem -split '\.')[0] }
+        $stem = ((Split-Path -Leaf $file) -replace '\.cs$', '') -split '\.' | Select-Object -First 1
         return @{ Name = "Tests.$stem"; Filter = "FullyQualifiedName~$stem"; Derived = 'App 测试文件泛型规则' }
     }
     if ($file -like 'tests/FloatingTransferStation.Core.Tests/*') {
