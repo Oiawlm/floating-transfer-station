@@ -97,8 +97,22 @@ public partial class MainWindow
     private void OnLauncherItemsChanged()
     {
         UpdateLauncherSurfaceState();
-        // 目录权威计数（_items 在发布前置位）：PublishInline 的 Clear→Add 会让
-        // CollectionChanged 在瞬时空集上触发，不得据此判「删空」。
+        // 目录权威计数（_items 在发布前置位）：装载的整表发布与失败回滚的逆操作
+        // 都会改变集合——不得据此误判「删空」（PublishInline 的 Clear→Add 瞬态）。
+        // 拖动在途时的集合变更（保存失败回滚的逆 Move、旁路突变）会改变下标与
+        // 布局：落点命中槽在**布局落定后**重建（GetLayoutSlot 反映重排后的槽位
+        // ——同步重建会拍到旧布局；Loaded 优先级恰在布局之后、下一次输入之前）。
+        if (_launcherDraggingId is { } draggingId && _launcherDragHitSlots is not null)
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+            {
+                if (_launcherDraggingId == draggingId)
+                {
+                    RefreshLauncherDragHitSlots(draggingId);
+                }
+            });
+        }
+
         if (_launcherEditMode && _launchers.Count == 0)
         {
             // 删空最后瓦片：编辑模式无对象，自动退出（空态工具行编辑钮回到禁用）。
@@ -820,24 +834,32 @@ public partial class MainWindow
 
     private void LauncherScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        // Wc=内容区视口实测宽（容器侧唯一可靠可用宽输入；overlay 瘦条不占布局宽，
-        // 视口与滚动条可见性解耦）。网格自身渲染宽是布局输出，回写自身 Width 即
-        // 自引用死锁（Issue #162 回归）。窄轨/收起期视口为 0：跳过本帧，展开后
-        // ScrollChanged 按新视口补算。网格水平居中由限定宽度 +
+        // 拖动在途的滚动改变瓦片窗口坐标：落点命中槽即时重建（其余路径只关心
+        // 视口宽）。Wc=内容区视口实测宽（容器侧唯一可靠可用宽输入；overlay 瘦条
+        // 不占布局宽，视口与滚动条可见性解耦）。网格自身渲染宽是布局输出，回写
+        // 自身 Width 即自引用死锁（Issue #162 回归）。窄轨/收起期视口为 0：跳过
+        // 本帧，展开后 ScrollChanged 按新视口补算。网格水平居中由限定宽度 +
         // HorizontalAlignment=Center 承载；200 上限承载有界性（不预建虚拟化）。
         // 非有限（NaN/∞）一并跳过：防御性守卫，真实布局管线不会产生非有限视口。
+        if (_launcherDraggingId is { } draggingId && _launcherDragHitSlots is not null)
+        {
+            RefreshLauncherDragHitSlots(draggingId);
+        }
+
         var viewportWidth = e.ViewportWidth;
         if (!double.IsFinite(viewportWidth) || viewportWidth <= 0)
         {
             return;
         }
 
-        var tilePitch = 84 + 8;
+        var tilePitch = DesignTokens.LauncherTilePitchPx;
         var columns = Math.Clamp(
-            (int)Math.Floor((viewportWidth + 8) / tilePitch),
+            (int)Math.Floor((viewportWidth + DesignTokens.LauncherTileGutterPx) / tilePitch),
             3,
             6);
-        LauncherTileGrid.Width = Math.Min(viewportWidth, columns * tilePitch - 8);
+        LauncherTileGrid.Width = Math.Min(
+            viewportWidth,
+            columns * tilePitch - DesignTokens.LauncherTileGutterPx);
     }
 
     // ---- 动效（§五）：悬停/按压走变换，入场/落位/确认/失败为场景动画，全部减动效降级 ----
@@ -1132,6 +1154,9 @@ public partial class MainWindow
 
     private Border? FindLauncherTile(LauncherItem item)
     {
+        // 拖动命中缓存的结构探针（契约守护用）：拖动期间的 MouseMove 不允许再
+        // 走视觉树解析（缓存命中＝零查找），测试据此断言与瓦片数解耦。
+        _launcherTileLookupCountForTests++;
         var index = IndexOfLauncherItem(item);
         if (index < 0)
         {
@@ -1142,6 +1167,17 @@ public partial class MainWindow
         return LauncherTileGrid.ItemContainerGenerator.ContainerFromIndex(index) is { } container
             ? (container as Border) ?? Descendants<Border>(container).FirstOrDefault()
             : null;
+    }
+
+    private int _launcherTileLookupCountForTests;
+
+    /// <summary>测试探针：FindLauncherTile（视觉树解析）累计调用数。</summary>
+    internal int LauncherTileLookupCountForTests => _launcherTileLookupCountForTests;
+
+    private void ClearLauncherDragHitCache()
+    {
+        _launcherDraggingTile = null;
+        _launcherDragHitSlots = null;
     }
 
     // ---- 键盘层级（§一）：①改名编辑器原生 ②编辑态（切片 3）③查看态（Enter/Space 启动、
@@ -1256,7 +1292,10 @@ public partial class MainWindow
 
     private void MoveLauncherFocus(int deltaColumns, int deltaRows)
     {
-        var columns = Math.Max(1, (int)Math.Floor((LauncherTileGrid.ActualWidth + 8) / 92));
+        var columns = Math.Max(
+            1,
+            (int)Math.Floor((LauncherTileGrid.ActualWidth + DesignTokens.LauncherTileGutterPx) /
+                DesignTokens.LauncherTilePitchPx));
         var current = _launcherFocusedIndex < 0 ? 0 : _launcherFocusedIndex;
         var target = current + deltaColumns + deltaRows * columns;
         _launcherFocusedIndex = Math.Clamp(target, 0, _launchers.Items.Count - 1);
@@ -1335,16 +1374,12 @@ public partial class MainWindow
     }
 
     /// <summary>编辑态瓦片视觉：常驻浅底（Opacity 1/0）与 × 删除钮可见性（83ms 淡入
-    /// 由 FadeAnimation 承载；多选 40ms 交错的视觉近似为同帧淡入——重排动画另有专门路径）。</summary>
+    /// 由 FadeAnimation 承载；多选 40ms 交错的视觉近似为同帧淡入——重排动画另有专门路径）。
+    /// 容器经单遍快照解析（每条目逐次树查找的 O(n)² 模式不再）。</summary>
     private void UpdateLauncherEditVisuals()
     {
-        foreach (var item in _launchers?.Items ?? [])
+        foreach (var (_, tile) in SnapshotLauncherTiles())
         {
-            if (FindLauncherTile(item) is not { } tile)
-            {
-                continue;
-            }
-
             if (FindTemplatePart<Border>(tile, "TileEditLayer") is { } editLayer)
             {
                 editLayer.SetCurrentValue(UIElement.OpacityProperty, _launcherEditMode ? 1d : 0d);
@@ -1583,6 +1618,107 @@ public partial class MainWindow
         }
     }
 
+    // ---- 瓦片右键上下文菜单（#30 修订，Issue #176）：删除/上移/下移/重命名四项
+    // 全部复用既有事务与会话（删除走 × 同一撤销事务、上移/下移走 MoveAsync、重命名
+    // 进入既有编辑模式＋改名会话）；上移/下移＝WCAG 2.5.7 拖动单指针替代（与契约
+    // #21 标签顺序行同源）。菜单打开期间挂覆盖交互 Menu hold（不自动收起）；Esc
+    // 只关菜单（菜单是独立 HWND，键盘先归菜单）；右键不启动——启动判定要求左键
+    // PointerUp 同瓦片 <4 DIP，结构上不可达。----
+
+    private void LauncherTile_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is not Border { DataContext: LauncherItem item } tile ||
+            tile.ContextMenu is not { } menu ||
+            _launchers is null)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (_isClosing || _launchers.IsReadOnlyFromNewerVersion)
+        {
+            // 只读停用：一切写路径禁用（菜单是结构修改入口，整体不出）。
+            e.Handled = true;
+            return;
+        }
+
+        // Opening 时菜单模板尚未展开且 PlacementTarget 未赋值：菜单项经逻辑树
+        //（Items）取，下标直接从宿主瓦片条目算。
+        var index = IndexOfLauncherItem(item);
+        if (LauncherMenuItem(menu, "TileMenuMoveUp") is { } up)
+        {
+            up.SetCurrentValue(IsEnabledProperty, index > 0);
+        }
+
+        if (LauncherMenuItem(menu, "TileMenuMoveDown") is { } down)
+        {
+            down.SetCurrentValue(IsEnabledProperty, index >= 0 && index < _launchers.Items.Count - 1);
+        }
+    }
+
+    private static MenuItem? LauncherMenuItem(ContextMenu menu, string name) =>
+        menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.Name == name);
+
+    private LauncherItem? LauncherItemFromMenu(object? sender) =>
+        (sender as FrameworkElement)?.Parent is ContextMenu { PlacementTarget: Border { DataContext: LauncherItem item } }
+            ? item
+            : null;
+
+    private void LauncherTile_ContextMenuOpened(object? sender, EventArgs e) =>
+        _panelState.BeginOverlayInteraction(PanelOverlayReason.Menu);
+
+    private void LauncherTile_ContextMenuClosed(object? sender, EventArgs e) =>
+        EndOverlayInteractionAndReconcile(PanelOverlayReason.Menu);
+
+    private void LauncherTileMenuDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (LauncherItemFromMenu(sender) is { } item)
+        {
+            e.Handled = true;
+            TrackPendingOperation(DeleteLauncherItemAsync(item));
+        }
+    }
+
+    private void LauncherTileMenuMoveUp_Click(object sender, RoutedEventArgs e) =>
+        MoveLauncherItemFromMenu(sender, e, -1);
+
+    private void LauncherTileMenuMoveDown_Click(object sender, RoutedEventArgs e) =>
+        MoveLauncherItemFromMenu(sender, e, +1);
+
+    private void MoveLauncherItemFromMenu(object sender, RoutedEventArgs e, int delta)
+    {
+        if (LauncherItemFromMenu(sender) is not { } item || _launchers is null)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        // 相对移动（±1）：目标下标在目录门内的权威序上解析，菜单代码不计算
+        // 绝对下标（乐观序上的门外下标会与在途回滚竞态）。
+        var positionsBefore = CaptureLauncherTilePositions();
+        TrackPendingOperation(AnimateAfterLauncherMutationAsync(
+            _launchers.MoveByAsync(item.Id, delta),
+            positionsBefore));
+    }
+
+    private void LauncherTileMenuRename_Click(object sender, RoutedEventArgs e)
+    {
+        if (LauncherItemFromMenu(sender) is not { } item)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (!_launcherEditMode)
+        {
+            // 重命名是结构修改：先进编辑模式再入改名会话（不另造第二套编辑器，
+            // 改名会话机器与编辑态语义保持一体）。
+            EnterLauncherEditMode();
+        }
+
+        BeginLauncherTileRename(item);
+    }
+
     // ---- 拖拽重排（编辑态；阈值 4 DIP；查看态拖拽=无操作）：
     // 拾起=瓦片跟随指针；让位指示=目标瓦片 accent 描边；放置=单次 MoveAsync +
     // 邻位让位/归位动画（变更前位置缓存 → 变更后位移回零 167ms）。----
@@ -1591,6 +1727,17 @@ public partial class MainWindow
     private System.Windows.Point _launcherDragStart;
     private int _launcherDropTargetIndex = -1;
     private Border? _launcherDropTargetTile;
+
+    // 命中缓存（起拖一次解析）：被拖瓦片容器引用、接管基值、其余瓦片的**布局槽**
+    // 矩形（LayoutInformation.GetLayoutSlot 经 WrapPanel→窗口换算——不含任何
+    // RenderTransform：链式拖拽时上一轮让位/归位动画的 FLIP 残差、悬停抬升都不
+    // 会污染落点判定）。拖动期间不变量＝「布局不变」（捕获期间输入全归被拖瓦片、
+    // 无重排）；滚动与集合变更（保存失败回滚在门内逆操作 Items）两类例外在
+    // LauncherScroll_ScrollChanged / OnLauncherItemsChanged 里重建缓存；缓存随会话
+    // 边界（EndLauncherTileDrag）失效。
+    private Border? _launcherDraggingTile;
+    private System.Windows.Point _launcherDragTranslateOrigin;
+    private List<(int ItemsIndex, Guid Id, Border Tile, Rect WindowRect)>? _launcherDragHitSlots;
 
     private void LauncherTile_PreviewMouseMove(object sender, MouseEventArgs e)
     {
@@ -1615,60 +1762,110 @@ public partial class MainWindow
             _launcherDragStart = position;
             tile.CaptureMouse();
             AnimateLauncherPressScale(tile, pressed: false);
+            BuildLauncherDragHitCache(pressed);
         }
 
-        if (FindLauncherTile(pressed) is { } dragged)
+        if (_launcherDraggingTile is { } dragged)
         {
+            // 跟随＝输入的直接反映（#30 本义）：动效开/关两档统一为直接赋值。
+            // 起拖时按「读当前值→清动画→设基值」接管进行中的动画（——动画期间
+            // SetCurrentValue 不生效：依赖属性优先级动画>本地值），随后每步把累计
+            // 位移加到接管基值上；167ms 动画只承担归位/让位这类有限时长的状态
+            // 过渡，绝不追赶指针（追赶=恒定空间滞后=粘滞感）。每步先清一次动画
+            // 是捕获期悬停重入的自愈防线（捕获下 MouseLeave 仍可能投递，悬停动画
+            // 一旦重启会压过 SetCurrentValue）。
             var translate = LauncherTileTranslate(dragged);
+            translate.BeginAnimation(TranslateTransform.XProperty, null);
+            translate.BeginAnimation(TranslateTransform.YProperty, null);
             var delta = position - _launcherDragStart;
-            if (!ClientAreaAnimationsEnabled)
-            {
-                translate.BeginAnimation(TranslateTransform.YProperty, null);
-                translate.SetCurrentValue(TranslateTransform.YProperty, delta.Y);
-                translate.BeginAnimation(TranslateTransform.XProperty, null);
-                translate.SetCurrentValue(TranslateTransform.XProperty, delta.X);
-            }
-            else
-            {
-                translate.BeginAnimation(
-                    TranslateTransform.XProperty,
-                    new DoubleAnimation(delta.X, TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs)));
-                translate.BeginAnimation(
-                    TranslateTransform.YProperty,
-                    new DoubleAnimation(delta.Y, TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs)));
-            }
+            translate.SetCurrentValue(
+                TranslateTransform.XProperty,
+                _launcherDragTranslateOrigin.X + delta.X);
+            translate.SetCurrentValue(
+                TranslateTransform.YProperty,
+                _launcherDragTranslateOrigin.Y + delta.Y);
         }
 
         UpdateLauncherDropTarget(position);
     }
 
+    /// <summary>起拖一次解析命中缓存：被拖瓦片容器＋接管基值（取悬停静止值而非
+    /// 抬升动画的瞬时值——放下后不重入悬停也能归位），其余瓦片的布局槽矩形。</summary>
+    private void BuildLauncherDragHitCache(LauncherItem draggedItem)
+    {
+        _launcherDraggingTile = FindLauncherTile(draggedItem);
+        if (_launcherDraggingTile is { } dragged)
+        {
+            var translate = LauncherTileTranslate(dragged);
+            translate.BeginAnimation(TranslateTransform.XProperty, null);
+            translate.BeginAnimation(TranslateTransform.YProperty, null);
+            // 悬停静止基值：IsMouseOver ? -2 : 0（抬升动画途中起拖不冻结瞬时值）。
+            var baseX = 0d;
+            var baseY = dragged.IsMouseOver ? DesignTokens.TileHoverLiftPx : 0d;
+            translate.SetCurrentValue(TranslateTransform.XProperty, baseX);
+            translate.SetCurrentValue(TranslateTransform.YProperty, baseY);
+            _launcherDragTranslateOrigin = new System.Windows.Point(baseX, baseY);
+        }
+
+        RefreshLauncherDragHitSlots(draggedItem.Id);
+    }
+
+    /// <summary>按当前集合序重建落点命中槽（Items 下标＋布局槽→窗口矩形）。
+    /// 拖动期间的两类例外（滚动改变窗口坐标、集合变更改变下标与布局——保存失败
+    /// 回滚的逆操作 Move）都经此重建；仍是单遍 O(n)。</summary>
+    private void RefreshLauncherDragHitSlots(Guid draggedId)
+    {
+        var panel = Descendants<WrapPanel>(LauncherTileGrid).FirstOrDefault();
+        if (panel is null)
+        {
+            _launcherDragHitSlots = [];
+            return;
+        }
+
+        // 布局槽→窗口的换算用面板级变换一次（含滚动偏移；不含各瓦片 RenderTransform）。
+        var panelToWindow = panel.TransformToAncestor(this);
+        var generator = LauncherTileGrid.ItemContainerGenerator;
+        var slots = new List<(int, Guid, Border, Rect)>(_launchers.Items.Count);
+        var index = 0;
+        foreach (var item in _launchers.Items)
+        {
+            if (item.Id != draggedId)
+            {
+                if (generator.ContainerFromIndex(index) is { } container &&
+                    ((container as Border) ?? Descendants<Border>(container).FirstOrDefault()) is { } candidate)
+                {
+                    var slot = System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(
+                        (FrameworkElement)container);
+                    var origin = panelToWindow.Transform(new System.Windows.Point(slot.X, slot.Y));
+                    slots.Add((index, item.Id, candidate, new Rect(
+                        origin,
+                        new Size(slot.Width, slot.Height))));
+                }
+            }
+
+            index++;
+        }
+
+        _launcherDragHitSlots = slots;
+    }
+
     private void UpdateLauncherDropTarget(System.Windows.Point windowPosition)
     {
-        if (_launcherDraggingId is not { } draggingId)
+        if (_launcherDraggingId is null || _launcherDragHitSlots is not { } slots)
         {
             return;
         }
 
         Border? target = null;
         var targetIndex = -1;
-        var index = 0;
-        foreach (var item in _launchers.Items)
+        foreach (var slot in slots)
         {
-            if (item.Id == draggingId)
+            if (slot.WindowRect.Contains(windowPosition))
             {
-                index++;
-                continue;
-            }
-
-            if (FindLauncherTile(item) is { } candidate &&
-                IsPositionOverTile(candidate, windowPosition))
-            {
-                target = candidate;
-                targetIndex = index;
+                target = slot.Tile;
+                targetIndex = slot.ItemsIndex;
                 break;
             }
-
-            index++;
         }
 
         if (!ReferenceEquals(_launcherDropTargetTile, target))
@@ -1681,16 +1878,11 @@ public partial class MainWindow
         _launcherDropTargetIndex = targetIndex;
     }
 
-    private bool IsPositionOverTile(Border tile, System.Windows.Point windowPosition)
-    {
-        var position = tile.TransformToAncestor(this).Transform(new System.Windows.Point());
-        return windowPosition.X >= position.X && windowPosition.X < position.X + tile.ActualWidth &&
-            windowPosition.Y >= position.Y && windowPosition.Y < position.Y + tile.ActualHeight;
-    }
-
-    /// <summary>结束拖拽（放置=提交重排并播放邻位动画；取消=归位动画）。</summary>
+    /// <summary>结束拖拽（放置=提交重排并播放邻位动画；取消=归位动画）；命中缓存
+    /// 随会话边界失效。</summary>
     private void EndLauncherTileDrag(bool apply)
     {
+        ClearLauncherDragHitCache();
         if (_launcherDraggingId is not { } draggingId)
         {
             _launcherDropTargetTile?.SetCurrentValue(Border.BorderBrushProperty, Brushes.Transparent);
@@ -1706,18 +1898,29 @@ public partial class MainWindow
         _launcherDropTargetIndex = -1;
         if (apply && targetIndex >= 0 && _launchers?.Find(draggingId) is { } item)
         {
+            // 位置快照在突变调用之前取（乐观发布时 MoveAsync 返回即已应用，事后
+            // 取会拍到新位）。
+            var positionsBefore = CaptureLauncherTilePositions();
             var move = _launchers.MoveAsync(item.Id, targetIndex);
-            TrackPendingOperation(AnimateAfterLauncherMutationAsync(move));
+            TrackPendingOperation(AnimateAfterLauncherMutationAsync(move, positionsBefore));
         }
         else if (_launchers?.Find(draggingId) is { } returning)
         {
             ResetLauncherTileTransforms(returning);
+            // 归位后按指针在场与否重放悬停评估：拖动期间接管基值取的是悬停静止
+            // 值，指针未离开时归位到 0 会让瓦片比同排悬停瓦片低一截，直到下一次
+            // 进入/离开才纠正——显式重评估把悬停态即时对齐。
+            if (FindLauncherTile(returning) is { } tile)
+            {
+                AnimateLauncherHoverLift(tile, lifted: tile.IsMouseOver);
+            }
         }
     }
 
-    private async Task AnimateAfterLauncherMutationAsync(Task<bool> mutation)
+    private async Task AnimateAfterLauncherMutationAsync(
+        Task<bool> mutation,
+        Dictionary<Guid, System.Windows.Point>? positionsBefore)
     {
-        var positionsBefore = CaptureLauncherTilePositions();
         var changed = await mutation;
         await Dispatcher.InvokeAsync(() =>
         {
@@ -1736,41 +1939,60 @@ public partial class MainWindow
         });
     }
 
+    /// <summary>单遍容器快照（条目, 瓦片）：容器解析一次完成，供位置捕获/让位
+    /// 动画/编辑态视觉共用（每条目逐次「IndexOf＋ContainerFromIndex＋树遍历」
+    /// 的 O(n)² 模式收敛为单遍）。装载竞态下目录可能尚未就绪（旧代码同样容忍
+    /// 空目录），空安全。</summary>
+    private List<(LauncherItem Item, Border Tile)> SnapshotLauncherTiles()
+    {
+        var items = _launchers?.Items;
+        if (items is null || items.Count == 0)
+        {
+            return [];
+        }
+
+        var snapshots = new List<(LauncherItem, Border)>(items.Count);
+        var generator = LauncherTileGrid.ItemContainerGenerator;
+        for (var index = 0; index < items.Count; index++)
+        {
+            if (generator.ContainerFromIndex(index) is { } container &&
+                ((container as Border) ?? Descendants<Border>(container).FirstOrDefault()) is { } tile)
+            {
+                snapshots.Add((items[index], tile));
+            }
+        }
+
+        return snapshots;
+    }
+
     private Dictionary<Guid, System.Windows.Point> CaptureLauncherTilePositions()
     {
         var positions = new Dictionary<Guid, System.Windows.Point>();
-        foreach (var item in _launchers?.Items ?? [])
+        foreach (var (item, tile) in SnapshotLauncherTiles())
         {
-            if (FindLauncherTile(item) is { } tile)
-            {
-                positions[item.Id] = tile.TranslatePoint(new System.Windows.Point(), this);
-            }
+            positions[item.Id] = tile.TranslatePoint(new System.Windows.Point(), this);
         }
 
         return positions;
     }
 
     /// <summary>邻位让位/归位动画：重排（或撤销重插）后，位置变化的瓦片从旧位置
-    /// 位移回零 167ms（自身跟随指针的平移同时清零=归位）。</summary>
+    /// 位移回零 167ms（自身跟随指针的平移同时清零=归位）。FLIP 型：数据 Id 为
+    /// 键、RenderTransform 逆偏移回零；容器经单遍快照解析。</summary>
     private void AnimateLauncherShifts(Dictionary<Guid, System.Windows.Point>? positionsBefore = null)
     {
         if (!ClientAreaAnimationsEnabled)
         {
-            foreach (var item in _launchers?.Items ?? [])
+            foreach (var (_, tile) in SnapshotLauncherTiles())
             {
-                ResetLauncherTileTransforms(item, immediate: true);
+                ResetLauncherTileTransforms(tile, immediate: true);
             }
 
             return;
         }
 
-        foreach (var item in _launchers?.Items ?? [])
+        foreach (var (item, tile) in SnapshotLauncherTiles())
         {
-            if (FindLauncherTile(item) is not { } tile)
-            {
-                continue;
-            }
-
             var previous = positionsBefore?.GetValueOrDefault(item.Id);
             if (previous is { } origin)
             {
@@ -1779,7 +2001,7 @@ public partial class MainWindow
                 var deltaY = origin.Y - current.Y;
                 if (Math.Abs(deltaX) < 1 && Math.Abs(deltaY) < 1)
                 {
-                    ResetLauncherTileTransforms(item, immediate: true);
+                    ResetLauncherTileTransforms(tile, immediate: true);
                     continue;
                 }
 
@@ -1795,18 +2017,21 @@ public partial class MainWindow
             }
             else
             {
-                ResetLauncherTileTransforms(item, immediate: true);
+                ResetLauncherTileTransforms(tile, immediate: true);
             }
         }
     }
 
     private void ResetLauncherTileTransforms(LauncherItem item, bool immediate = false)
     {
-        if (FindLauncherTile(item) is not { } tile)
+        if (FindLauncherTile(item) is { } tile)
         {
-            return;
+            ResetLauncherTileTransforms(tile, immediate);
         }
+    }
 
+    private void ResetLauncherTileTransforms(Border tile, bool immediate = false)
+    {
         var translate = LauncherTileTranslate(tile);
         if (immediate || !ClientAreaAnimationsEnabled)
         {

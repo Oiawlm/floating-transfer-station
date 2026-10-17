@@ -1116,6 +1116,125 @@
     </Style.Triggers>
   </Style>
 
+  <!-- 危险动作图标钮模板（快捷启动瓦片 × 删除钮族）：结构与 CardIconButtonTemplate
+       同族（悬停/按压层 + 居中图标），但语义色恒为 DangerBrush——悬停不换强调色
+       （删除入口悬停保持危险色＋低透明度危险底，语义先于装饰）。两模板的布局层
+       保持逐段对应，改其一须同步另一（语义色差异是唯一意图分叉）。 -->
+  <ControlTemplate x:Key="DangerIconButtonTemplate" TargetType="Button">
+    <Border x:Name="DangerIconButtonSurface"
+            Background="{TemplateBinding Background}"
+            BorderBrush="{TemplateBinding BorderBrush}"
+            BorderThickness="{TemplateBinding BorderThickness}"
+            CornerRadius="{StaticResource PinButtonCornerRadius}">
+      <Grid>
+        <Border x:Name="HoverLayer"
+                Background="{DynamicResource DangerBrush}"
+                Opacity="0"
+                CornerRadius="{StaticResource PinButtonCornerRadius}"
+                IsHitTestVisible="False" />
+        <Border x:Name="PressedLayer"
+                Background="{DynamicResource DangerBrush}"
+                Opacity="0"
+                CornerRadius="{StaticResource PinButtonCornerRadius}"
+                IsHitTestVisible="False" />
+        <ContentPresenter HorizontalAlignment="Center"
+                          VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+    <ControlTemplate.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter TargetName="HoverLayer" Property="Opacity" Value="0.14" />
+      </Trigger>
+      <Trigger Property="IsPressed" Value="True">
+        <Setter TargetName="HoverLayer" Property="Opacity" Value="0" />
+        <Setter TargetName="PressedLayer" Property="Opacity" Value="0.24" />
+      </Trigger>
+    </ControlTemplate.Triggers>
+  </ControlTemplate>
+
+  <!-- 快捷启动瓦片右键上下文菜单（#30 修订，Issue #176）：查看态/编辑态瓦片右键
+       出「删除/上移/下移/重命名」四项（Win11 开始菜单先例；上移/下移＝WCAG 2.5.7
+       拖动单指针替代，与契约 #21 标签顺序行同源）。主题画刷全部 DynamicResource
+       （契约 #28 活切换同族）。-->
+  <ControlTemplate x:Key="LauncherContextMenuTemplate" TargetType="ContextMenu">
+    <Border Background="{TemplateBinding Background}"
+            BorderBrush="{TemplateBinding BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource HeaderActionCornerRadius}"
+            Padding="4">
+      <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" />
+    </Border>
+  </ControlTemplate>
+
+  <Style x:Key="LauncherTileContextMenuStyle" TargetType="ContextMenu">
+    <Setter Property="Background" Value="{DynamicResource StatusSurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Template" Value="{StaticResource LauncherContextMenuTemplate}" />
+  </Style>
+
+  <Style x:Key="LauncherContextMenuItemStyle" TargetType="MenuItem">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Padding" Value="28,7" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="MenuItem">
+          <Border x:Name="MenuItemSurface"
+                  Background="Transparent"
+                  CornerRadius="{StaticResource PinButtonCornerRadius}"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+              <Setter TargetName="MenuItemSurface" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.45" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- 删除项：危险语义色（与 × 删除钮一致）。 -->
+  <Style x:Key="LauncherContextMenuDangerItemStyle" TargetType="MenuItem"
+         BasedOn="{StaticResource LauncherContextMenuItemStyle}">
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+  </Style>
+
+  <!-- 快捷启动瓦片 × 删除钮（#30 修订，Issue #176）：编辑态常驻的右上删除入口。
+       显隐与备注钮/AI 钮同族——基态 Collapsed＋Opacity 0＋FadeAnimation.
+       ManageVisibility（禁纯 Opacity 隐藏），由 UpdateLauncherEditVisuals 代码驱动
+       IsActive（激活即时 Visible=真实命中可达，契约 #13）；命中区 24×24
+       （WCAG 2.5.8）完全落在瓦片内（无负 Margin 外溢）；图标矢量 Path，
+       DangerBrush 语义色与全库一致。 -->
+  <Style x:Key="TileDeleteButtonStyle" TargetType="Button">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Visibility" Value="Collapsed" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="ToolTip" Value="删除" />
+    <Setter Property="AutomationProperties.Name" Value="删除启动项" />
+    <Setter Property="Template" Value="{StaticResource DangerIconButtonTemplate}" />
+    <Setter Property="views:FadeAnimation.IsActive" Value="False" />
+    <Setter Property="views:FadeAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
+    <Setter Property="views:FadeAnimation.DurationMs"
+            Value="{x:Static design:DesignTokens.PressFeedbackMs}" />
+    <Setter Property="views:FadeAnimation.ManageVisibility" Value="True" />
+  </Style>
+
   <!-- AI 追加按钮行（1.41.0，#16/#19 修订）：命中层右列改垂直 StackPanel——
        基座 2×2 网格原样（恒 64）＋本追加网格（两列×CardOperationColumnWidth、
        单 30 DIP 按钮行、上缘 4 DIP 间隔）。只在截断文字卡出现：正文恒钳
@@ -1669,7 +1788,7 @@
                        IsHitTestVisible="False">
                 <Path Data="M3,2.75 L13,2.75 C13.9665,2.75 14.75,3.5335 14.75,4.5 L14.75,9.5 C14.75,10.4665 13.9665,11.25 13,11.25 L8.2,11.25 L5.35,13.9 C5.05,14.18 4.75,14.06 4.75,13.6 L4.75,11.25 L3,11.25 C2.0335,11.25 1.25,10.4665 1.25,9.5 L1.25,4.5 C1.25,3.5335 2.0335,2.75 3,2.75 Z"
                       Stroke="{DynamicResource SecondaryTextBrush}"
-                      StrokeThickness="1.3"
+                      StrokeThickness="1.5"
                       StrokeStartLineCap="Round"
                       StrokeEndLineCap="Round"
                       StrokeLineJoin="Round" />

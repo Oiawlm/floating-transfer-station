@@ -386,8 +386,8 @@
                         Margin="0,0,2,0"
                         Click="SearchClearButton_Click">
                   <Path Data="M4,4 L12,12 M12,4 L4,12"
-                        Width="9.5"
-                        Height="9.5"
+                        Width="12"
+                        Height="12"
                         Stretch="Uniform"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
@@ -709,12 +709,13 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                   <DataTemplate DataType="{x:Type models:LauncherItem}">
-                    <!-- 瓦片 84×100、圆角 8、内边距 上8 下8 左右6、间距 8×8（Margin 4×4）。
-                         悬停 167ms/-2px 与按压 83ms/0.96 走既有动画体系；启动确认/失败描边/
-                         重复脉冲为代码驱动的场景动画。 -->
+                    <!-- 瓦片 84×100（DesignTokens 同源）、圆角 8、内边距 上8 下8 左右6、
+                         瓦片间沟道 8（Margin 4×4=LauncherTileGutterPx/2 两侧，锁定测试
+                         镜像）。悬停 167ms/-2px 与按压 83ms/0.96 走既有动画体系；启动
+                         确认/失败描边/重复脉冲为代码驱动的场景动画。 -->
                     <Border x:Name="TileRoot"
-                            Width="84"
-                            Height="100"
+                            Width="{x:Static design:DesignTokens.LauncherTileWidthPx}"
+                            Height="{x:Static design:DesignTokens.LauncherTileHeightPx}"
                             Margin="4"
                             Padding="6,8,6,8"
                             Background="{DynamicResource CardBrush}"
@@ -727,6 +728,7 @@
                             MouseLeftButtonDown="LauncherTile_MouseLeftButtonDown"
                             MouseLeftButtonUp="LauncherTile_MouseLeftButtonUp"
                             PreviewMouseMove="LauncherTile_PreviewMouseMove"
+                            ContextMenuOpening="LauncherTile_ContextMenuOpening"
                             GiveFeedback="LauncherTile_GiveFeedback"
                             QueryContinueDrag="LauncherTile_QueryContinueDrag">
                       <Border.RenderTransform>
@@ -735,6 +737,35 @@
                           <ScaleTransform />
                         </TransformGroup>
                       </Border.RenderTransform>
+                      <Border.ContextMenu>
+                        <!-- 查看态/编辑态右键均可用；端点禁用在 Opening 时按当前
+                             下标设定；打开期间挂覆盖交互 Menu hold（不自动收起）。 -->
+                        <ContextMenu x:Name="TileContextMenu"
+                                     Style="{StaticResource LauncherTileContextMenuStyle}"
+                                     Opened="LauncherTile_ContextMenuOpened"
+                                     Closed="LauncherTile_ContextMenuClosed">
+                          <MenuItem x:Name="TileMenuDelete"
+                                    Header="删除"
+                                    Style="{StaticResource LauncherContextMenuDangerItemStyle}"
+                                    AutomationProperties.Name="删除启动项"
+                                    Click="LauncherTileMenuDelete_Click" />
+                          <MenuItem x:Name="TileMenuMoveUp"
+                                    Header="上移"
+                                    Style="{StaticResource LauncherContextMenuItemStyle}"
+                                    AutomationProperties.Name="上移启动项"
+                                    Click="LauncherTileMenuMoveUp_Click" />
+                          <MenuItem x:Name="TileMenuMoveDown"
+                                    Header="下移"
+                                    Style="{StaticResource LauncherContextMenuItemStyle}"
+                                    AutomationProperties.Name="下移启动项"
+                                    Click="LauncherTileMenuMoveDown_Click" />
+                          <MenuItem x:Name="TileMenuRename"
+                                    Header="重命名"
+                                    Style="{StaticResource LauncherContextMenuItemStyle}"
+                                    AutomationProperties.Name="重命名启动项"
+                                    Click="LauncherTileMenuRename_Click" />
+                        </ContextMenu>
+                      </Border.ContextMenu>
                       <Border.Style>
                         <Style TargetType="Border">
                           <Setter Property="ToolTip" Value="{Binding DisplayName}" />
@@ -825,21 +856,29 @@
                                      Foreground="{DynamicResource OnAccentBrush}"
                                      Text="!" />
                         </Border>
-                        <!-- 编辑态右上 20×20 × 删除钮（常驻，83ms 淡入；点击删除走
-                             撤销提示条事务，不弹模态）。 -->
+                        <!-- 编辑态右上 × 删除钮（#30 修订，Issue #176）：常驻显示走
+                             FadeAnimation.ManageVisibility 显隐族（TileDeleteButtonStyle，
+                             83ms 淡入；点击删除走撤销提示条事务，不弹模态）；命中区
+                             24×24 完全落在瓦片内，图标矢量 Path 与全库一致。 -->
                         <Button x:Name="TileDeleteButton"
-                                Width="20"
-                                Height="20"
-                                Margin="0,-6,-6,0"
+                                Margin="0,4,4,0"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Top"
                                 AutomationProperties.Name="删除启动项"
                                 Padding="0"
                                 Click="LauncherTileDeleteButton_Click"
-                                FontSize="11"
-                                Foreground="{DynamicResource DangerBrush}"
-                                Content="✕"
-                                Visibility="Collapsed" />
+                                Style="{StaticResource TileDeleteButtonStyle}">
+                          <Path Data="M6,6 L18,18 M18,6 L6,18"
+                                Width="12"
+                                Height="12"
+                                Stretch="Uniform"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                                StrokeThickness="1.5"
+                                StrokeStartLineCap="Round"
+                                StrokeEndLineCap="Round" />
+                        </Button>
                       </Grid>
                     </Border>
                   </DataTemplate>

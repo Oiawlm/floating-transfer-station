@@ -17,13 +17,18 @@ public sealed record LauncherAddOutcome(
 public sealed record LauncherRemoveOutcome(LauncherItem Item, int Index);
 
 /// <summary>
-/// 启动项目录（#30，Issue #162）：唯一突变入口，内部一条串行突变链——信号量包住
-/// 「生成不可变快照 → SaveAsync(快照) → 成功发布到 Items / 失败还原内存原状＋状态条」
-/// 全过程（不只包文件写），旧快照永不晚于新快照落盘。整集合读写，无逐条 CRUD；
-/// 数组顺序即唯一真相。会话态字段（改名草稿/失败标记）不落盘、不经本协议。
-/// 200 为可执行产品边界（WrapPanel 不虚拟化的有界性以此承载）。版本高于当前的
-/// 数据 → 只读停用：显示空列表 + 状态条提示，本会话禁用一切写路径（绝不以空
-/// 集合覆盖回写、保持原文件）。
+/// 启动项目录（#30，Issue #162；发布语义修订 Issue #176）：唯一突变入口，内部一条
+/// 串行突变链——信号量包住「乐观应用到内存与 Items（按操作类型的最小集合通知：
+/// 重排=单条 Move 容器复用、增删=Insert/Remove、改名/图标戳=属性通知，实例同体）
+/// → SaveAsync（后台落盘，原子写管线零改动）→ 成功即确认 / 失败按本突变的逆
+/// 操作回滚＋状态条」全过程。**门横跨应用与回滚**：后继突变在整个保存往返期间
+/// 排队等待，不存在「A 保存失败回滚时踩掉已在途的 B」的交错（乐观上屏＋失败
+/// 回弹语义对齐契约 #21/Issue #153 先例；保存失败还原契约 #1/#5 不变）。整集合
+/// 读写，无逐条 CRUD；数组顺序即唯一真相。会话态字段（改名草稿/失败标记）不
+/// 落盘、不经本协议。200 为可执行产品边界（WrapPanel 不虚拟化的有界性以此
+/// 承载）。整集合 Clear+Add 发布仅存于装载（LoadAsync）。版本高于当前的数据 →
+/// 只读停用：显示空列表 + 状态条提示，本会话禁用一切写路径（绝不以空集合覆盖
+/// 回写、保持原文件）。
 /// </summary>
 public sealed class LauncherCatalog
 {
@@ -47,7 +52,7 @@ public sealed class LauncherCatalog
         Items = [];
     }
 
-    /// <summary>发布视图（UI 绑定唯一集合；整集合替换，未变条目复用实例）。</summary>
+    /// <summary>发布视图（UI 绑定唯一集合；未变条目复用实例与容器）。</summary>
     public ObservableCollection<LauncherItem> Items { get; }
 
     public int Count => _items.Count;
@@ -62,7 +67,7 @@ public sealed class LauncherCatalog
         CancellationToken cancellationToken = default)
     {
         // 显式发布封送（UI 注入 Dispatcher.Invoke；缺省内联）：保存续体可能落到
-        // 线程池，发布 Items 与状态条必须回到绑定线程（CollectionView 线程亲和；
+        // 线程池，Items 通知与状态条必须回到绑定线程（CollectionView 线程亲和；
         // 测试线程可能没有同步上下文，不依赖 SynchronizationContext 捕获）。
         var catalog = new LauncherCatalog(store, showStatus, marshalToPublisher ?? (action => action()));
         var data = await store.LoadAsync(cancellationToken).ConfigureAwait(false);
@@ -120,9 +125,30 @@ public sealed class LauncherCatalog
                 added.Add(candidate);
             }
 
-            if (added.Count > 0 && !await SaveAndPublishAsync(working, cancellationToken).ConfigureAwait(false))
+            if (added.Count > 0)
             {
-                return new LauncherAddOutcome(0, [], duplicates, overflow);
+                var previous = _items;
+                _items = working;
+                ApplyToItems(items =>
+                {
+                    foreach (var candidate in added)
+                    {
+                        items.Add(candidate);
+                    }
+                });
+                if (!await SaveWorkingAsync(working, cancellationToken).ConfigureAwait(false))
+                {
+                    _items = previous;
+                    ApplyToItems(items =>
+                    {
+                        // 追加的逆操作：从尾部按逆序移除（期间无其他突变——门跨全程）。
+                        for (var index = 0; index < added.Count; index++)
+                        {
+                            items.RemoveAt(items.Count - 1);
+                        }
+                    });
+                    return new LauncherAddOutcome(0, [], duplicates, overflow);
+                }
             }
 
             return new LauncherAddOutcome(added.Count, added, duplicates, overflow);
@@ -133,7 +159,8 @@ public sealed class LauncherCatalog
         }
     }
 
-    /// <summary>重命名（≤64 截断由模型承载）：保存失败还原原名＋状态条。</summary>
+    /// <summary>重命名（≤64 截断由模型承载）：属性通知即上屏（实例同体，无集合变更）；
+    /// 保存失败还原原名＋状态条。</summary>
     public async Task<bool> RenameAsync(Guid id, string displayName, CancellationToken cancellationToken = default)
     {
         await _mutationGate.WaitAsync(cancellationToken);
@@ -146,7 +173,7 @@ public sealed class LauncherCatalog
 
             var originalName = item.DisplayName;
             item.AdoptPersistedName(displayName);
-            if (!await SaveAndPublishAsync(_items.ToList(), cancellationToken).ConfigureAwait(false))
+            if (!await SaveWorkingAsync(_items, cancellationToken).ConfigureAwait(false))
             {
                 item.AdoptPersistedName(originalName);
                 return false;
@@ -160,7 +187,7 @@ public sealed class LauncherCatalog
         }
     }
 
-    /// <summary>移除：保存失败还原原集合＋状态条；成功返回条目与原下标（撤销提示条事务用）。</summary>
+    /// <summary>移除：成功返回条目与原下标（撤销提示条事务用）；保存失败重插原下标＋状态条。</summary>
     public async Task<LauncherRemoveOutcome?> RemoveAsync(Guid id, CancellationToken cancellationToken = default)
     {
         await _mutationGate.WaitAsync(cancellationToken);
@@ -181,8 +208,13 @@ public sealed class LauncherCatalog
             var working = _items.ToList();
             var removed = working[index];
             working.RemoveAt(index);
-            if (!await SaveAndPublishAsync(working, cancellationToken).ConfigureAwait(false))
+            var previous = _items;
+            _items = working;
+            ApplyToItems(items => items.RemoveAt(index));
+            if (!await SaveWorkingAsync(working, cancellationToken).ConfigureAwait(false))
             {
+                _items = previous;
+                ApplyToItems(items => items.Insert(Math.Min(index, items.Count), removed));
                 return null;
             }
 
@@ -194,8 +226,21 @@ public sealed class LauncherCatalog
         }
     }
 
-    /// <summary>重排（编辑模式拖拽）：把 id 条目移动到 toIndex（钳制到合法范围），数组顺序即唯一真相。</summary>
-    public async Task<bool> MoveAsync(Guid id, int toIndex, CancellationToken cancellationToken = default)
+    /// <summary>重排（编辑模式拖拽）：把 id 条目移动到 toIndex，数组顺序即唯一真相。
+    /// 乐观上屏=单条 Move 通知（容器复用）；保存失败反向 Move 回滚＋状态条。</summary>
+    public Task<bool> MoveAsync(Guid id, int toIndex, CancellationToken cancellationToken = default) =>
+        MoveAsync(id, toIndex, relative: false, cancellationToken);
+
+    /// <summary>相对重排（菜单上下移）：delta 相对**门内权威序**解析目标下标——
+    /// 调用方传绝对下标会在乐观序上与在途回滚竞态（回滚后绝对下标指向错位）。</summary>
+    public Task<bool> MoveByAsync(Guid id, int delta, CancellationToken cancellationToken = default) =>
+        MoveAsync(id, delta, relative: true, cancellationToken);
+
+    private async Task<bool> MoveAsync(
+        Guid id,
+        int indexOrDelta,
+        bool relative,
+        CancellationToken cancellationToken)
     {
         await _mutationGate.WaitAsync(cancellationToken);
         try
@@ -211,18 +256,29 @@ public sealed class LauncherCatalog
                 return false;
             }
 
+            // toIndex 在门内权威序上解析（钳制域 [0, Count-1]：移除后域=插入域，
+            // ObservableCollection.Move 与 List.Insert 同域）。
+            var toIndex = relative
+                ? Math.Clamp(fromIndex + indexOrDelta, 0, _items.Count - 1)
+                : indexOrDelta;
             var working = _items.ToList();
             var item = working[fromIndex];
             working.RemoveAt(fromIndex);
-            working.Insert(Math.Clamp(toIndex, 0, working.Count), item);
+            var insertIndex = Math.Clamp(toIndex, 0, working.Count);
+            working.Insert(insertIndex, item);
             if (working.Select((entry, index) => entry.Id)
                 .SequenceEqual(_items.Select(entry => entry.Id)))
             {
                 return false;
             }
 
-            if (!await SaveAndPublishAsync(working, cancellationToken).ConfigureAwait(false))
+            var previous = _items;
+            _items = working;
+            ApplyToItems(items => items.Move(fromIndex, insertIndex));
+            if (!await SaveWorkingAsync(working, cancellationToken).ConfigureAwait(false))
             {
+                _items = previous;
+                ApplyToItems(items => items.Move(insertIndex, fromIndex));
                 return false;
             }
 
@@ -250,8 +306,19 @@ public sealed class LauncherCatalog
             }
 
             var working = _items.ToList();
-            working.Insert(Math.Clamp(index, 0, working.Count), item);
-            return await SaveAndPublishAsync(working, cancellationToken).ConfigureAwait(false);
+            var insertIndex = Math.Clamp(index, 0, working.Count);
+            working.Insert(insertIndex, item);
+            var previous = _items;
+            _items = working;
+            ApplyToItems(items => items.Insert(insertIndex, item));
+            if (!await SaveWorkingAsync(working, cancellationToken).ConfigureAwait(false))
+            {
+                _items = previous;
+                ApplyToItems(items => items.RemoveAt(insertIndex));
+                return false;
+            }
+
+            return true;
         }
         finally
         {
@@ -260,8 +327,8 @@ public sealed class LauncherCatalog
     }
 
     /// <summary>
-    /// 图标戳推进（同一串行协议）：只在图标 PNG 成功发布后调用；保存失败静默还原
-    /// （旧图继续有效，陈旧可接受）。
+    /// 图标戳推进（同一串行协议）：只在图标 PNG 成功发布后调用；属性通知即上屏，
+    /// 保存失败静默还原（旧图继续有效，陈旧可接受）。
     /// </summary>
     public async Task<bool> UpdateIconStampAsync(Guid id, string? iconStamp, CancellationToken cancellationToken = default)
     {
@@ -280,7 +347,7 @@ public sealed class LauncherCatalog
 
             var originalStamp = item.IconStamp;
             item.AdoptPersistedIconStamp(iconStamp);
-            if (!await SaveAndPublishAsync(_items.ToList(), cancellationToken).ConfigureAwait(false))
+            if (!await SaveWorkingAsync(_items, cancellationToken).ConfigureAwait(false))
             {
                 item.AdoptPersistedIconStamp(originalStamp);
                 return false;
@@ -296,7 +363,9 @@ public sealed class LauncherCatalog
 
     public LauncherItem? Find(Guid id) => _items.FirstOrDefault(item => item.Id == id);
 
-    private async Task<bool> SaveAndPublishAsync(List<LauncherItem> working, CancellationToken cancellationToken)
+    /// <summary>保存 working 快照；失败时状态条＋false（回滚由调用方按本突变的逆操作执行，
+    /// 与应用同在门内——不存在后继突变可被踩掉）。</summary>
+    private async Task<bool> SaveWorkingAsync(List<LauncherItem> working, CancellationToken cancellationToken)
     {
         var snapshot = working.Select(item => item.CloneForSnapshot()).ToList();
         try
@@ -310,13 +379,15 @@ public sealed class LauncherCatalog
             return false;
         }
 
-        _items = working;
-        Publish(working);
         return true;
     }
 
+    /// <summary>乐观应用 Items 侧的最小集合通知（封送到绑定线程）。</summary>
+    private void ApplyToItems(Action<ObservableCollection<LauncherItem>> apply) => _marshal(() => apply(Items));
+
     private void ReportStatus(string message) => _marshal(() => _showStatus(message));
 
+    /// <summary>装载发布（整表替换专用，LoadAsync）：Clear+Add 全量重建只在此处合法。</summary>
     private void Publish(List<LauncherItem> items) => _marshal(() => PublishInline(items));
 
     private void PublishInline(List<LauncherItem> items)

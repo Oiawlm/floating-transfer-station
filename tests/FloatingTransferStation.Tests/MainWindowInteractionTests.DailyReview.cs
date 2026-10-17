@@ -185,31 +185,52 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(editor, Keyboard.FocusedElement);
             CompleteLayout(window);
 
-            // 抑制期间指针已离开面板；失焦后不会有 MouseLeave 补发，必须靠重估恢复收起。
-            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
-            var collapseTimer = GetPrivateField<DispatcherTimer>(window, "_collapseTimer");
-            Assert.IsFalse(collapseTimer.IsEnabled);
-            var previousButton = (Button)window.FindName("ReviewPreviousButton");
-            Assert.IsNotNull(previousButton);
-            Assert.IsTrue(previousButton.Focus());
-            Assert.AreEqual(previousButton, Keyboard.FocusedElement);
-            CompleteLayout(window);
-            Assert.IsTrue(collapseTimer.IsEnabled);
+            // 本测试断言「指针在外」的收起语义：真实光标必须显式停在外面——
+            // 批跑中前置真实输入测试的残留位置可能落在同位停靠的窗口矩形内，
+            // 会把「失焦→重估恢复收起」的前提偷换成「指针在内」。
+            var savedCursor = SaveCursorPosition();
+            ParkCursorOutsideWorkAreaRight();
+            try
+            {
+                // 抑制期间指针已离开面板；失焦后不会有 MouseLeave 补发，必须靠重估恢复收起。
+                InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+                var collapseTimer = GetPrivateField<DispatcherTimer>(window, "_collapseTimer");
+                Assert.IsFalse(collapseTimer.IsEnabled);
+                var previousButton = (Button)window.FindName("ReviewPreviousButton");
+                Assert.IsNotNull(previousButton);
+                Assert.IsTrue(previousButton.Focus());
+                Assert.AreEqual(previousButton, Keyboard.FocusedElement);
+                CompleteLayout(window);
+                Assert.IsTrue(collapseTimer.IsEnabled);
 
-            WithClientAreaAnimationsDisabled(
-                window,
-                () =>
-                {
-                    InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-                    CompleteLayout(window);
-                });
+                WithClientAreaAnimationsDisabled(
+                    window,
+                    () =>
+                    {
+                        InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                        CompleteLayout(window);
+                    });
 
-            Assert.IsFalse(viewModel.IsPanelExpanded);
+                Assert.IsFalse(viewModel.IsPanelExpanded);
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
         }
         finally
         {
             CloseReviewWindow(window);
         }
+    }
+
+    /// <summary>把真实光标停到工作区左下角外缘（远离右缘停靠的面板矩形）。</summary>
+    private static void ParkCursorOutsideWorkAreaRight()
+    {
+        var workArea = SystemParameters.WorkArea;
+        Assert.IsTrue(
+            SetCursorPos((int)workArea.Left + 4, (int)workArea.Bottom - 4),
+            "真实光标必须可停靠到面板矩形之外。");
     }
 
     [STATestMethod]
@@ -362,27 +383,38 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(editor.Focus());
             CompleteLayout(window);
 
-            // 抑制期间指针已离开面板。
-            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
-            // 模拟 WM_KILLFOCUS 未走路由事件：保持原因卡在 true。
-            Keyboard.ClearFocus();
+            // 与 EditorFocusLossRestoresCollapseWhenPointerOutside 同因：真实光标
+            // 显式停靠面板矩形外，防批跑残留把「指针在外」前提偷换。
+            var savedCursor = SaveCursorPosition();
+            ParkCursorOutsideWorkAreaRight();
+            try
+            {
+                // 抑制期间指针已离开面板。
+                InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+                // 模拟 WM_KILLFOCUS 未走路由事件：保持原因卡在 true。
+                Keyboard.ClearFocus();
 
-            var state = GetPrivateField<PanelStateMachine>(window, "_panelState");
-            Assert.IsTrue(state.IsTextEditingActive);
-            InvokePrivate(window, "MainWindow_Deactivated", window, EventArgs.Empty);
-            Assert.IsFalse(state.IsTextEditingActive);
+                var state = GetPrivateField<PanelStateMachine>(window, "_panelState");
+                Assert.IsTrue(state.IsTextEditingActive);
+                InvokePrivate(window, "MainWindow_Deactivated", window, EventArgs.Empty);
+                Assert.IsFalse(state.IsTextEditingActive);
 
-            var collapseTimer = GetPrivateField<DispatcherTimer>(window, "_collapseTimer");
-            Assert.IsTrue(collapseTimer.IsEnabled);
-            WithClientAreaAnimationsDisabled(
-                window,
-                () =>
-                {
-                    InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-                    CompleteLayout(window);
-                });
+                var collapseTimer = GetPrivateField<DispatcherTimer>(window, "_collapseTimer");
+                Assert.IsTrue(collapseTimer.IsEnabled);
+                WithClientAreaAnimationsDisabled(
+                    window,
+                    () =>
+                    {
+                        InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+                        CompleteLayout(window);
+                    });
 
-            Assert.IsFalse(viewModel.IsPanelExpanded);
+                Assert.IsFalse(viewModel.IsPanelExpanded);
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
         }
         finally
         {

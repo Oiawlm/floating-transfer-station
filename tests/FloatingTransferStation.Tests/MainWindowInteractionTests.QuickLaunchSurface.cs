@@ -1513,7 +1513,13 @@ public sealed partial class MainWindowInteractionTests
             var data = new DataObject();
             data.SetFileDropList(new System.Collections.Specialized.StringCollection { secondPath });
             host!.RaiseEvent(NewDragEventArgs(data, DragDrop.DropEvent, host));
-            PumpUntilCondition(window.Dispatcher, () => catalog.Items.Count == 2);
+            // 乐观上屏（Issue #176）：条目先于保存完成进入集合；落位动画由导入
+            // 续体在保存往返后编排——等到瓦片真正带动画再断言。
+            PumpUntilCondition(
+                window.Dispatcher,
+                () => catalog.Items.Count == 2 &&
+                    catalog.Items.SingleOrDefault(entry => entry.TargetPath == secondPath) is { } pending &&
+                    FindLauncherTile(window, pending)?.HasAnimatedProperties == true);
             CompleteLayout(window);
 
             var added = catalog.Items.Single(entry => entry.TargetPath == secondPath);
@@ -1523,18 +1529,33 @@ public sealed partial class MainWindowInteractionTests
                 addedTile.HasAnimatedProperties,
                 "真正新增的瓦片播放落位动画（M21）。");
 
-            // 重排：容器重建但任何瓦片都不播落位动画（不是新增事件）。
+            // 重排（单 Move 容器复用）：不触发落位动画（不是新增事件）。先等首次
+            // 落位动画自然结束（opacity/scale 回 1），再重排并即时断言全体瓦片无
+            // 新落位形态（重播会以 opacity 0→1、scale 0.8→1 重新起摆，重排完成
+            // 时刻必 <1）。注：库内场景动画默认 HoldEnd，HasAnimatedProperties 会
+            // 恒真，判据取值不取「动画在身」。
+            PumpUntilCondition(
+                window.Dispatcher,
+                () => FindLauncherTile(window, added) is { } landingTile &&
+                    Math.Abs(landingTile.Opacity - 1d) < 0.001 &&
+                    (GetLauncherTileScale(landingTile)?.ScaleX ?? 1d) > 0.999);
             var moveTask = catalog.MoveAsync(added.Id, 0);
             PumpDispatcherUntil(window.Dispatcher, moveTask);
             CompleteLayout(window);
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(50));
             foreach (var entry in catalog.Items)
             {
                 var tile = FindLauncherTile(window, entry);
                 Assert.IsNotNull(tile);
-                Assert.IsFalse(
-                    tile.HasAnimatedProperties,
-                    $"重排不触发落位动画（{entry.DisplayName}）。");
+                Assert.AreEqual(
+                    1d,
+                    tile.Opacity,
+                    0.001,
+                    $"重排不重播落位（{entry.DisplayName} opacity 保持 1）。");
+                Assert.AreEqual(
+                    1d,
+                    GetLauncherTileScale(tile)?.ScaleX ?? 1d,
+                    0.001,
+                    $"重排不重播落位（{entry.DisplayName} scale 保持 1）。");
             }
         }
         finally
