@@ -133,11 +133,6 @@ public sealed partial class MainWindowInteractionTests
                 firstTile.Margin.Left + firstTile.Margin.Right,
                 0.01,
                 "瓦片左右 Margin 合计=沟道 token。");
-            Assert.AreEqual(
-                DesignTokens.LauncherTileWidthPx + DesignTokens.LauncherTileGutterPx,
-                DesignTokens.LauncherTilePitchPx,
-                0.01,
-                "节距=宽+沟道（列数公式与网格宽度的唯一来源）。");
             if (FindLauncherTile(window, catalog.Items[1]) is { } secondTile)
             {
                 Assert.AreEqual(

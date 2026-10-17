@@ -1,5 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.Views;
@@ -8,8 +11,9 @@ namespace FloatingTransferStation.Tests;
 
 /// <summary>
 /// 快捷启动发布证据（FTS_QUICKLAUNCH_EVIDENCE_DIR 设置时产出真实 WPF 渲染截图，
-/// GOAL-LAUNCHER-UX-PERF-20261016）：编辑模式瓦片 × 常驻（浅/深）与查看态右键
-/// 菜单。渲染走 SaveVisualEvidence（RenderTargetBitmap 实拍窗口壳层）。
+/// GOAL-LAUNCHER-UX-PERF-20261016，Issue #176）：编辑模式瓦片 × 常驻（浅/深）与
+/// 查看态右键菜单（浅/深）。渲染走 RenderTargetBitmap 实拍窗口壳层（菜单为独立
+/// Popup 视觉树，单独实拍其可视树）。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -42,26 +46,82 @@ public sealed partial class MainWindowInteractionTests
         {
             window.Show();
             window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
-            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
-            CompleteLayout(window);
 
-            // 查看态（浅色）。
-            SaveVisualEvidence(
-                (Border)window.FindName("WindowShell"),
-                "quicklaunch-view-light.png",
-                "FTS_QUICKLAUNCH_EVIDENCE_DIR");
+            foreach (var (theme, suffix) in new[]
+            {
+                (DesignTheme.Light, "light"),
+                (DesignTheme.Dark, "dark"),
+            })
+            {
+                DesignThemeManager.Apply(window, theme);
+                ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+                CompleteLayout(window);
 
-            // 编辑模式（浅色）：右上 × 删除钮常驻是本批次修复对象。
-            EnterLauncherEdit(window);
-            CompleteLayout(window);
-            SaveVisualEvidence(
-                (Border)window.FindName("WindowShell"),
-                "quicklaunch-edit-light.png",
-                "FTS_QUICKLAUNCH_EVIDENCE_DIR");
+                // 查看态。
+                SaveVisualEvidence(
+                    (Border)window.FindName("WindowShell"),
+                    $"quicklaunch-view-{suffix}.png",
+                    "FTS_QUICKLAUNCH_EVIDENCE_DIR");
+
+                // 编辑模式：右上 × 删除钮常驻是本批次修复对象（Issue #176）。
+                EnterLauncherEdit(window);
+                CompleteLayout(window);
+                SaveVisualEvidence(
+                    (Border)window.FindName("WindowShell"),
+                    $"quicklaunch-edit-{suffix}.png",
+                    "FTS_QUICKLAUNCH_EVIDENCE_DIR");
+
+                // 查看态右键菜单（独立 Popup 视觉树，单独实拍）。
+                ExitLauncherEditSilently(window);
+                CompleteLayout(window);
+                var tile = FindLauncherTile(window, window.LaunchersForTests().Items[1]);
+                Assert.IsNotNull(tile);
+                var menu = tile.ContextMenu!;
+                menu.PlacementTarget = tile;
+                menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+                menu.IsOpen = true;
+                CompleteLayout(window);
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+                SaveContextMenuEvidence(
+                    menu,
+                    $"quicklaunch-contextmenu-{suffix}.png");
+                menu.IsOpen = false;
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            }
         }
         finally
         {
             CloseWindowWithoutSaving(window);
         }
+    }
+
+    private static void ExitLauncherEditSilently(MainWindow window)
+    {
+        var editButton = (Button)window.FindName("LauncherEditButton")!;
+        if (Equals(editButton.Content, "完成"))
+        {
+            editButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, editButton));
+        }
+    }
+
+    /// <summary>实拍上下文菜单视觉树（打开态的独立 Popup 子树）。</summary>
+    private static void SaveContextMenuEvidence(ContextMenu menu, string fileName)
+    {
+        var directory = Environment.GetEnvironmentVariable("FTS_QUICKLAUNCH_EVIDENCE_DIR")!;
+        Directory.CreateDirectory(directory);
+        menu.UpdateLayout();
+        var width = Math.Max(menu.ActualWidth, 120d);
+        var height = Math.Max(menu.ActualHeight, 120d);
+        var bitmap = new RenderTargetBitmap(
+            (int)Math.Ceiling(width),
+            (int)Math.Ceiling(height),
+            96,
+            96,
+            PixelFormats.Pbgra32);
+        bitmap.Render(menu);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(Path.Combine(directory, fileName));
+        encoder.Save(stream);
     }
 }

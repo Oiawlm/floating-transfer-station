@@ -372,6 +372,31 @@ public sealed class LauncherCatalogTests
     }
 
     [TestMethod]
+    public async Task MoveBy_ResolvesTargetInsideGateAgainstAuthoritativeOrder()
+    {
+        // 菜单上下移的相对语义：目标下标在门内权威序上解析（Issue #176 T7 收紧）；
+        // 端点 delta 出界=同序早退（无写盘）。
+        var store = new RecordingLauncherStore();
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        var first = Item(@"C:\Apps\A.exe");
+        var second = Item(@"C:\Apps\B.exe");
+        var third = Item(@"C:\Apps\C.exe");
+        await catalog.AddRangeAsync([first, second, third]);
+        var savesBefore = store.Saved.Count;
+
+        Assert.IsTrue(await catalog.MoveByAsync(third.Id, -1), "third 上移一位。");
+        CollectionAssert.AreEqual(
+            new[] { first.Id, third.Id, second.Id },
+            catalog.Items.Select(entry => entry.Id).ToArray());
+
+        Assert.IsFalse(await catalog.MoveByAsync(first.Id, -1), "首项上移=同序早退。");
+        Assert.AreEqual(
+            savesBefore + 1,
+            store.Saved.Count,
+            "端点早退零写盘。");
+    }
+
+    [TestMethod]
     public async Task RemoveSaveFailure_ReinsertsAtOriginalIndex()
     {
         var store = new RecordingLauncherStore();

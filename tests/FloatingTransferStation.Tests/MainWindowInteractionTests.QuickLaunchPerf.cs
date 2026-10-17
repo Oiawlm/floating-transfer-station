@@ -191,6 +191,8 @@ public sealed partial class MainWindowInteractionTests
             EnterLauncherEdit(window);
             CompleteLayout(window);
             var grid = (ItemsControl)window.FindName("LauncherTileGrid")!;
+            // 锚定条目（重排后按下标取容器天然换主；「保持」=同一条目的容器不变）。
+            var anchored = catalog.Items[3];
             var containerBefore = grid.ItemContainerGenerator.ContainerFromIndex(3);
 
             var changes = new List<(long Timestamp, NotifyCollectionChangedAction Action)>();
@@ -252,7 +254,7 @@ public sealed partial class MainWindowInteractionTests
                 Console.WriteLine(
                     $"PERF|  layoutPassesAfterDrop={layoutAfterDrop.Count}" +
                     $"|firstLayoutGap(ms)={(layoutAfterDrop.Count > 0 ? Stopwatch.GetElapsedTime(droppedAt, layoutAfterDrop[0]).TotalMilliseconds : -1):0.0}" +
-                    $"|containerIdentityPreserved={ReferenceEquals(containerBefore, grid.ItemContainerGenerator.ContainerFromIndex(3))}" +
+                    $"|containerIdentityPreserved={ReferenceEquals(containerBefore, grid.ItemContainerGenerator.ContainerFromIndex(catalog.Items.IndexOf(anchored)))}" +
                     $"|gc(G0/G1/G2)={GCCollectionCountsDelta(gcBefore)}");
 
                 Assert.AreEqual(

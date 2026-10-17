@@ -852,6 +852,247 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void QuickLaunch_EditMode_DragCacheTracksLayoutSlotsNotTransientOffsets()
+    {
+        // T7 BLOCKER 2 守护（Issue #176）：命中缓存矩形必须锚定**布局槽**（不含
+        // RenderTransform）——链式拖拽时上一轮让位动画的 FLIP 残差不得污染下一轮
+        // 的落点判定；拖动中悬停抬升（-2px）同样不进落点槽。
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var items = Enumerable.Range(0, 5)
+            .Select(index => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.Application,
+                $"{app.Path}.{index}",
+                $"应用{index}",
+                DateTimeOffset.UtcNow))
+            .ToArray();
+        var window = CreateLauncherWindowSync(directory, board, store, starter, items);
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var catalog = window.LaunchersForTests();
+            window.Topmost = true;
+            CompleteLayout(window);
+
+            EnterLauncherEdit(window);
+            CompleteLayout(window);
+
+            // 第一轮拖拽提交：松手后让位动画路径已走过（减动效下为立即重置；本
+            // 测试再显式给非被拖瓦片挂一个 FLIP 残差变换，模拟动画中途的视觉
+            // 偏移——缓存若取含 RenderTransform 的矩形就会带残差）。
+            var firstTile = FindLauncherTile(window, catalog.Items[0]);
+            Assert.IsNotNull(firstTile);
+            var press = firstTile.PointToScreen(new Point(
+                firstTile.ActualWidth / 2, firstTile.ActualHeight / 2));
+            SetCursorPos((int)press.X, (int)press.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+            firstTile.RaiseEvent(NewMouseButtonEventArgs(
+                UIElement.MouseLeftButtonDownEvent, firstTile));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+            var targetTile = FindLauncherTile(window, catalog.Items[3]);
+            Assert.IsNotNull(targetTile);
+            var drop = targetTile.PointToScreen(new Point(
+                targetTile.ActualWidth / 2, targetTile.ActualHeight / 2));
+            SetCursorPos((int)drop.X, (int)drop.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+            firstTile.RaiseEvent(NewMouseEventArgs(
+                UIElement.PreviewMouseMoveEvent, firstTile));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(60));
+            firstTile.RaiseEvent(NewMouseButtonEventArgs(
+                UIElement.MouseLeftButtonUpEvent, firstTile, timestamp: 91));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            CompleteLayout(window);
+
+            // 给若干瓦片挂 FLIP 残差（模拟让位动画在途的 RenderTransform 偏移）。
+            var grid = (ItemsControl)window.FindName("LauncherTileGrid")!;
+            var panel = FindDescendants<WrapPanel>(grid).First();
+            foreach (var (_, tile) in GetLauncherSnapshotForTests(window))
+            {
+                var translate = GetLauncherTileTranslate(tile);
+                if (translate is not null)
+                {
+                    translate.SetCurrentValue(
+                        System.Windows.Media.TranslateTransform.XProperty, -92d);
+                }
+            }
+
+            CompleteLayout(window);
+
+            // 第二轮拖拽立即起拖：缓存矩形应等于布局槽（残差 -92 不得进入）。
+            var secondTile = FindLauncherTile(window, catalog.Items[1]);
+            Assert.IsNotNull(secondTile);
+            press = secondTile.PointToScreen(new Point(
+                secondTile.ActualWidth / 2, secondTile.ActualHeight / 2));
+            SetCursorPos((int)press.X, (int)press.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+            secondTile.RaiseEvent(NewMouseButtonEventArgs(
+                UIElement.MouseLeftButtonDownEvent, secondTile));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+            var movePos = secondTile.PointToScreen(new Point(
+                secondTile.ActualWidth / 2 + 40, secondTile.ActualHeight / 2 + 8));
+            SetCursorPos((int)movePos.X, (int)movePos.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+            secondTile.RaiseEvent(NewMouseEventArgs(
+                UIElement.PreviewMouseMoveEvent, secondTile));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+
+            var slots = GetPrivateField<
+                List<(int ItemsIndex, Guid Id, Border Tile, Rect WindowRect)>>(
+                window,
+                "_launcherDragHitSlots");
+            Assert.IsNotNull(slots);
+            Assert.IsTrue(slots.Count >= 3, "前置：缓存槽已建立。");
+            var panelToWindow = panel.TransformToAncestor(window);
+            foreach (var slot in slots)
+            {
+                var container = grid.ItemContainerGenerator.ContainerFromIndex(slot.ItemsIndex);
+                var layoutSlot = System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot((FrameworkElement)container);
+                var expected = panelToWindow.Transform(new Point(layoutSlot.X, layoutSlot.Y));
+                Assert.AreEqual(
+                    expected.X,
+                    slot.WindowRect.X,
+                    0.5,
+                    $"缓存槽 {slot.ItemsIndex} X==布局槽（FLIP 残差不入缓存）。");
+                Assert.AreEqual(
+                    expected.Y,
+                    slot.WindowRect.Y,
+                    0.5,
+                    $"缓存槽 {slot.ItemsIndex} Y==布局槽（FLIP 残差不入缓存）。");
+                Assert.AreEqual(layoutSlot.Width, slot.WindowRect.Width, 0.5);
+                Assert.AreEqual(layoutSlot.Height, slot.WindowRect.Height, 0.5);
+            }
+
+            secondTile.ReleaseMouseCapture();
+            InvokePrivate(window, "EndLauncherTileDrag", false);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(60));
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    private static List<(LauncherItem Item, Border Tile)> GetLauncherSnapshotForTests(MainWindow window) =>
+        (List<(LauncherItem, Border)>)typeof(MainWindow)
+            .GetMethod("SnapshotLauncherTiles", System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(window, null)!;
+
+    [STATestMethod]
+    public void QuickLaunch_EditMode_DragCacheRebuildsWhenCollectionChangesMidDrag()
+    {
+        // T7 BLOCKER 1 守护（Issue #176）：拖动在途的集合变更（保存失败回滚的逆
+        // Move、或菜单移动等旁路突变）会改变下标与布局——命中缓存必须即时重建，
+        // 其后移动的落点判定按新序生效。
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var items = Enumerable.Range(0, 5)
+            .Select(index => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.Application,
+                $"{app.Path}.{index}",
+                $"应用{index}",
+                DateTimeOffset.UtcNow))
+            .ToArray();
+        var window = CreateLauncherWindowSync(directory, board, store, starter, items);
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var catalog = window.LaunchersForTests();
+            window.Topmost = true;
+            CompleteLayout(window);
+
+            EnterLauncherEdit(window);
+            CompleteLayout(window);
+
+            // 起拖 1 号瓦片（不松手）。
+            var draggedTile = FindLauncherTile(window, catalog.Items[1]);
+            Assert.IsNotNull(draggedTile);
+            var press = draggedTile.PointToScreen(new Point(
+                draggedTile.ActualWidth / 2, draggedTile.ActualHeight / 2));
+            SetCursorPos((int)press.X, (int)press.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+            draggedTile.RaiseEvent(NewMouseButtonEventArgs(
+                UIElement.MouseLeftButtonDownEvent, draggedTile));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+            var movePos = draggedTile.PointToScreen(new Point(
+                draggedTile.ActualWidth / 2 + 30, draggedTile.ActualHeight / 2 + 6));
+            SetCursorPos((int)movePos.X, (int)movePos.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+            draggedTile.RaiseEvent(NewMouseEventArgs(
+                UIElement.PreviewMouseMoveEvent, draggedTile));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+            Assert.IsNotNull(GetPrivateField<Guid?>(window, "_launcherDraggingId"), "前置：拖动会话在途。");
+
+            // 拖动在途的旁路集合变更：菜单路径把 3 号移到 0（真实目录突变）。
+            var moved = catalog.Items[3];
+            var mutation = catalog.MoveAsync(moved.Id, 0);
+            PumpDispatcherUntil(window.Dispatcher, mutation);
+            CompleteLayout(window);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+
+            // 缓存已按新序重建：0 号槽现在承载原 3 号条目。
+            var slots = GetPrivateField<
+                List<(int ItemsIndex, Guid Id, Border Tile, Rect WindowRect)>>(
+                window,
+                "_launcherDragHitSlots");
+            Assert.IsNotNull(slots);
+            Assert.AreEqual(
+                moved.Id,
+                slots.Single(slot => slot.ItemsIndex == 0).Id,
+                "集合变更后缓存下标按新序重建。");
+
+            // 其后的移动落点按新序判定（0 号槽位置命中 → 目标下标 0）。
+            var grid = (ItemsControl)window.FindName("LauncherTileGrid")!;
+            var panel = FindDescendants<WrapPanel>(grid).First();
+            var container0 = grid.ItemContainerGenerator.ContainerFromIndex(0);
+            var slot0 = System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(
+                (FrameworkElement)container0);
+            var slot0InWindow = panel.TransformToAncestor(window).Transform(
+                new Point(slot0.X + slot0.Width / 2, slot0.Y + slot0.Height / 2));
+            var screen = window.PointToScreen(slot0InWindow);
+            SetCursorPos((int)screen.X, (int)screen.Y);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+            draggedTile.RaiseEvent(NewMouseEventArgs(
+                UIElement.PreviewMouseMoveEvent, draggedTile));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(40));
+            Assert.AreEqual(
+                0,
+                GetPrivateField<int>(window, "_launcherDropTargetIndex"),
+                "重建后的落点判定按新序命中 0 号槽。");
+
+            draggedTile.ReleaseMouseCapture();
+            InvokePrivate(window, "EndLauncherTileDrag", false);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(60));
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
     public void QuickLaunch_EditMode_DragReorderPersistsOrder()
     {
         using var directory = new TestDirectory();

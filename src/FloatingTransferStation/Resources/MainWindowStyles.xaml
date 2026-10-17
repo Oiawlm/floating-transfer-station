@@ -1118,7 +1118,8 @@
 
   <!-- 危险动作图标钮模板（快捷启动瓦片 × 删除钮族）：结构与 CardIconButtonTemplate
        同族（悬停/按压层 + 居中图标），但语义色恒为 DangerBrush——悬停不换强调色
-       （删除入口悬停保持危险色＋低透明度危险底，语义先于装饰）。 -->
+       （删除入口悬停保持危险色＋低透明度危险底，语义先于装饰）。两模板的布局层
+       保持逐段对应，改其一须同步另一（语义色差异是唯一意图分叉）。 -->
   <ControlTemplate x:Key="DangerIconButtonTemplate" TargetType="Button">
     <Border x:Name="DangerIconButtonSurface"
             Background="{TemplateBinding Background}"

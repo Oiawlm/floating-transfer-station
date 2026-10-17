@@ -226,10 +226,21 @@ public sealed class LauncherCatalog
         }
     }
 
-    /// <summary>重排（编辑模式拖拽/菜单上下移）：把 id 条目移动到 toIndex（钳制到合法
-    /// 范围），数组顺序即唯一真相。乐观上屏=单条 Move 通知（容器复用）；保存失败
-    /// 反向 Move 回滚＋状态条。</summary>
-    public async Task<bool> MoveAsync(Guid id, int toIndex, CancellationToken cancellationToken = default)
+    /// <summary>重排（编辑模式拖拽）：把 id 条目移动到 toIndex，数组顺序即唯一真相。
+    /// 乐观上屏=单条 Move 通知（容器复用）；保存失败反向 Move 回滚＋状态条。</summary>
+    public Task<bool> MoveAsync(Guid id, int toIndex, CancellationToken cancellationToken = default) =>
+        MoveAsync(id, toIndex, relative: false, cancellationToken);
+
+    /// <summary>相对重排（菜单上下移）：delta 相对**门内权威序**解析目标下标——
+    /// 调用方传绝对下标会在乐观序上与在途回滚竞态（回滚后绝对下标指向错位）。</summary>
+    public Task<bool> MoveByAsync(Guid id, int delta, CancellationToken cancellationToken = default) =>
+        MoveAsync(id, delta, relative: true, cancellationToken);
+
+    private async Task<bool> MoveAsync(
+        Guid id,
+        int indexOrDelta,
+        bool relative,
+        CancellationToken cancellationToken)
     {
         await _mutationGate.WaitAsync(cancellationToken);
         try
@@ -245,6 +256,11 @@ public sealed class LauncherCatalog
                 return false;
             }
 
+            // toIndex 在门内权威序上解析（钳制域 [0, Count-1]：移除后域=插入域，
+            // ObservableCollection.Move 与 List.Insert 同域）。
+            var toIndex = relative
+                ? Math.Clamp(fromIndex + indexOrDelta, 0, _items.Count - 1)
+                : indexOrDelta;
             var working = _items.ToList();
             var item = working[fromIndex];
             working.RemoveAt(fromIndex);
@@ -256,16 +272,13 @@ public sealed class LauncherCatalog
                 return false;
             }
 
-            // Items.Move 的目标下标域是 [0, Count-1]（Insert 允许 ==Count 的尾部
-            // 追加语义对应 Move 到 Count-1）。
-            var moveIndex = Math.Min(insertIndex, _items.Count - 1);
             var previous = _items;
             _items = working;
-            ApplyToItems(items => items.Move(fromIndex, moveIndex));
+            ApplyToItems(items => items.Move(fromIndex, insertIndex));
             if (!await SaveWorkingAsync(working, cancellationToken).ConfigureAwait(false))
             {
                 _items = previous;
-                ApplyToItems(items => items.Move(moveIndex, fromIndex));
+                ApplyToItems(items => items.Move(insertIndex, fromIndex));
                 return false;
             }
 
