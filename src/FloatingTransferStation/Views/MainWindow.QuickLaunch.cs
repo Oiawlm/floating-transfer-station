@@ -1349,16 +1349,12 @@ public partial class MainWindow
     }
 
     /// <summary>编辑态瓦片视觉：常驻浅底（Opacity 1/0）与 × 删除钮可见性（83ms 淡入
-    /// 由 FadeAnimation 承载；多选 40ms 交错的视觉近似为同帧淡入——重排动画另有专门路径）。</summary>
+    /// 由 FadeAnimation 承载；多选 40ms 交错的视觉近似为同帧淡入——重排动画另有专门路径）。
+    /// 容器经单遍快照解析（每条目逐次树查找的 O(n)² 模式不再）。</summary>
     private void UpdateLauncherEditVisuals()
     {
-        foreach (var item in _launchers?.Items ?? [])
+        foreach (var (_, tile) in SnapshotLauncherTiles())
         {
-            if (FindLauncherTile(item) is not { } tile)
-            {
-                continue;
-            }
-
             if (FindTemplatePart<Border>(tile, "TileEditLayer") is { } editLayer)
             {
                 editLayer.SetCurrentValue(UIElement.OpacityProperty, _launcherEditMode ? 1d : 0d);
@@ -1891,41 +1887,53 @@ public partial class MainWindow
         });
     }
 
+    /// <summary>单遍容器快照（条目, 瓦片）：容器解析一次完成，供位置捕获/让位
+    /// 动画/编辑态视觉共用（每条目逐次「IndexOf＋ContainerFromIndex＋树遍历」
+    /// 的 O(n)² 模式收敛为单遍）。</summary>
+    private List<(LauncherItem Item, Border Tile)> SnapshotLauncherTiles()
+    {
+        var snapshots = new List<(LauncherItem, Border)>(_launchers.Items.Count);
+        var generator = LauncherTileGrid.ItemContainerGenerator;
+        for (var index = 0; index < _launchers.Items.Count; index++)
+        {
+            if (generator.ContainerFromIndex(index) is { } container &&
+                ((container as Border) ?? Descendants<Border>(container).FirstOrDefault()) is { } tile)
+            {
+                snapshots.Add((_launchers.Items[index], tile));
+            }
+        }
+
+        return snapshots;
+    }
+
     private Dictionary<Guid, System.Windows.Point> CaptureLauncherTilePositions()
     {
         var positions = new Dictionary<Guid, System.Windows.Point>();
-        foreach (var item in _launchers?.Items ?? [])
+        foreach (var (item, tile) in SnapshotLauncherTiles())
         {
-            if (FindLauncherTile(item) is { } tile)
-            {
-                positions[item.Id] = tile.TranslatePoint(new System.Windows.Point(), this);
-            }
+            positions[item.Id] = tile.TranslatePoint(new System.Windows.Point(), this);
         }
 
         return positions;
     }
 
     /// <summary>邻位让位/归位动画：重排（或撤销重插）后，位置变化的瓦片从旧位置
-    /// 位移回零 167ms（自身跟随指针的平移同时清零=归位）。</summary>
+    /// 位移回零 167ms（自身跟随指针的平移同时清零=归位）。FLIP 型：数据 Id 为
+    /// 键、RenderTransform 逆偏移回零；容器经单遍快照解析。</summary>
     private void AnimateLauncherShifts(Dictionary<Guid, System.Windows.Point>? positionsBefore = null)
     {
         if (!ClientAreaAnimationsEnabled)
         {
-            foreach (var item in _launchers?.Items ?? [])
+            foreach (var (_, tile) in SnapshotLauncherTiles())
             {
-                ResetLauncherTileTransforms(item, immediate: true);
+                ResetLauncherTileTransforms(tile, immediate: true);
             }
 
             return;
         }
 
-        foreach (var item in _launchers?.Items ?? [])
+        foreach (var (item, tile) in SnapshotLauncherTiles())
         {
-            if (FindLauncherTile(item) is not { } tile)
-            {
-                continue;
-            }
-
             var previous = positionsBefore?.GetValueOrDefault(item.Id);
             if (previous is { } origin)
             {
@@ -1934,7 +1942,7 @@ public partial class MainWindow
                 var deltaY = origin.Y - current.Y;
                 if (Math.Abs(deltaX) < 1 && Math.Abs(deltaY) < 1)
                 {
-                    ResetLauncherTileTransforms(item, immediate: true);
+                    ResetLauncherTileTransforms(tile, immediate: true);
                     continue;
                 }
 
@@ -1950,18 +1958,21 @@ public partial class MainWindow
             }
             else
             {
-                ResetLauncherTileTransforms(item, immediate: true);
+                ResetLauncherTileTransforms(tile, immediate: true);
             }
         }
     }
 
     private void ResetLauncherTileTransforms(LauncherItem item, bool immediate = false)
     {
-        if (FindLauncherTile(item) is not { } tile)
+        if (FindLauncherTile(item) is { } tile)
         {
-            return;
+            ResetLauncherTileTransforms(tile, immediate);
         }
+    }
 
+    private void ResetLauncherTileTransforms(Border tile, bool immediate = false)
+    {
         var translate = LauncherTileTranslate(tile);
         if (immediate || !ClientAreaAnimationsEnabled)
         {
