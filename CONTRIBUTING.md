@@ -18,14 +18,26 @@
 
 Windows 正式版使用 .NET 10、WPF、MSTest 和 Inno Setup，引用 `FloatingTransferStation.Core`。仓库脚本会把 Windows 开发工具准备在不提交的 `.tools/` 中。2026-10-08 起 Mac 端永久停止开发并已从仓库移除，历史 Release 与 tag 原样保留。
 
+开发循环与本地推送前质量门（分层测试协议，2026-10-18 起）：
+
 ```powershell
-& .\scripts\bootstrap-dotnet.ps1
-& .\.tools\dotnet\dotnet.exe restore FloatingTransferStation.slnx
+# 开发循环（改完代码后的快速反馈）：按 merge-base 变更集选择受影响测试区域。
+# Core.Tests 整项目恒跑作强制基线；未命中映射或共享壳变更自动回退全量并打印理由；
+# 区域选中 0 条测试按失败处理。-Areas a,b,c 显式指定区域；-Explain 只打印计划；-Full 强制全量。
+& .\scripts\run-affected-tests.ps1
+
+# 本地推送前质量门（五命令）：
 & .\.tools\dotnet\dotnet.exe build src/FloatingTransferStation.Core/FloatingTransferStation.Core.csproj -c Debug --no-restore -warnaserror
 & .\.tools\dotnet\dotnet.exe format FloatingTransferStation.slnx --verify-no-changes --no-restore
-& .\.tools\dotnet\dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore
+& .\scripts\check-repo-hygiene.ps1
+& .\scripts\run-affected-tests.ps1
 & .\.tools\dotnet\dotnet.exe build FloatingTransferStation.slnx -c Release --no-restore -warnaserror
 ```
+
+分层测试协议的分工：本地负责「受影响范围反馈」，CI 的 `quality` 任务（“格式、测试与构建”）在 PR 上运行 Release 全量测试，是**权威全量门**——本地提交 PR 前不再要求跑全量 `dotnet test`，同一份代码不重复跑全量（与发行列车「无需在同一份未变化代码上重复跑全量」同一原则）。两条纪律：
+
+- 不得为省时跳过受影响测试：映射命中的区域必须全绿，失败先修复再提交。
+- 空选集/未知路径必须回退全量（脚本自动执行并打印理由），不得把 0 条选中当通过。
 
 格式工具以 Debug 设计时配置加载 WPF XAML，首次运行前需要上面的 Core Debug 预构建，让外部类型引用可解析。它不是运行或发布配置，Release 检查仍独立执行。
 
@@ -57,7 +69,7 @@ Windows 正式版使用 .NET 10、WPF、MSTest 和 Inno Setup，引用 `Floating
 - 一个 PR 只解决一个清楚的问题，避免顺手重构无关代码。
 - 修复先证明失败路径；行为变化补充与风险相称的回归测试。
 - 保留现有原子保存、批内顺序、置顶分区、拖放源数据和安全卸载语义。
-- 运行格式验证、Release 全量测试和严格构建，并在 PR 中记录结果。
+- 运行格式验证、受影响范围分层测试（`scripts/run-affected-tests.ps1`）、仓库卫生检查和严格构建，并在 PR 中记录结果；Release 全量由 CI `quality` 权威门承担，本地不重复全量。
 - CI 的 `quality` 任务名“格式、测试与构建”是 `main` 分支保护要求的检查名称；扩充安装包等检查时保留该名称，避免检查通过但 PR 仍无法合并。
 - UI 或交互变化附真实截图或录屏；不要使用生成图冒充产品现场。
 - 同步更新受影响的 README、路线图、架构说明或更新记录。

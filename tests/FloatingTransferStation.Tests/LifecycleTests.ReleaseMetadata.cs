@@ -88,9 +88,14 @@ public sealed partial class LifecycleTests
         StringAssert.Matches(changelog, new Regex($@"(?m)^## {Regex.Escape(expectedVersion)}\s*$"));
         StringAssert.Contains(license, "MIT License");
         StringAssert.Matches(license, new Regex(@"Copyright \(c\) \d{4}(?:-\d{4})? Oiawlm"));
-        StringAssert.Contains(
-            File.ReadAllText(Path.Combine(repositoryRoot, "CONTRIBUTING.md")),
-            "dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore");
+        // 分层测试协议（2026-10-18 起）：CONTRIBUTING 必须记载受影响范围分层测试入口
+        // 与「CI 权威全量门」分工，防止本地全量要求静默回归或分层协议被移除。
+        var contributing = File.ReadAllText(Path.Combine(repositoryRoot, "CONTRIBUTING.md"));
+        StringAssert.Contains(contributing, "scripts/run-affected-tests.ps1");
+        StringAssert.Contains(contributing, "权威全量门");
+        Assert.IsFalse(
+            contributing.Contains("dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore", StringComparison.Ordinal),
+            "本地推送前质量门不再包含 Release 全量测试（权威全量在 CI quality）；该命令不得作为本地要求回到文档。");
     }
 
     [TestMethod]
