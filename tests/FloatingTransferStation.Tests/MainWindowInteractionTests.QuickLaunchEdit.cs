@@ -108,6 +108,160 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void QuickLaunch_EditMode_DeleteButtonVisibilityIsManaged()
+    {
+        // B1 守护（GOAL-LAUNCHER-UX-PERF-20261016 / 契约 #30 × 常驻）：编辑态每瓦片
+        // × 删除钮必须真正渲染——基态 Collapsed 的元素只靠 SetIsActive 永不显示
+        //（FadeAnimation 只在 ManageVisibility=true 时翻转 Visibility，合成事件
+        // 可达≠实机可达，契约 #13 缺陷族）。编辑态断言 Visible、退出后断言 Collapsed。
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var first = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path, "甲", DateTimeOffset.UtcNow);
+        var second = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Application, app.Path + "x", "乙", DateTimeOffset.UtcNow);
+        var window = CreateLauncherWindowSync(directory, board, store, starter, first, second);
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var catalog = window.LaunchersForTests();
+
+            EnterLauncherEdit(window);
+            CompleteLayout(window);
+            foreach (var item in catalog.Items)
+            {
+                var button = FindLauncherDeleteButton(window, item);
+                Assert.IsNotNull(button, "× 删除钮存在于瓦片模板。");
+                Assert.AreEqual(
+                    Visibility.Visible,
+                    button.Visibility,
+                    $"编辑态「{item.DisplayName}」的 × 删除钮必须可见（Visibility==Visible）。");
+
+                // 命中区几何（WCAG 2.5.8，#30 修订 Issue #176）：≥24×24 且完全
+                // 落在瓦片矩形内（负 Margin 外溢曾把命中区推进瓦片间隙）。
+                var tile = FindLauncherTile(window, item);
+                Assert.IsNotNull(tile);
+                Assert.IsTrue(button.ActualWidth >= 24 && button.ActualHeight >= 24,
+                    $"× 命中区 {button.ActualWidth:0.#}×{button.ActualHeight:0.#} 必须 ≥24×24。");
+                var topLeft = button.TranslatePoint(new Point(0, 0), tile);
+                var hitRect = new Rect(topLeft, new Size(button.ActualWidth, button.ActualHeight));
+                var tileRect = new Rect(0, 0, tile.ActualWidth, tile.ActualHeight);
+                Assert.IsTrue(
+                    tileRect.Contains(hitRect),
+                    $"× 命中区必须完全落在瓦片内（hit={hitRect} tile={tileRect}）。");
+            }
+
+            // 退出编辑模式后 × 隐藏（ManageVisibility 失活动画完成后 Collapsed；
+            // 本测试关闭动效=立即切换）。
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
+            CompleteLayout(window);
+            foreach (var item in catalog.Items)
+            {
+                var button = FindLauncherDeleteButton(window, item);
+                Assert.IsNotNull(button);
+                Assert.AreEqual(
+                    Visibility.Collapsed,
+                    button.Visibility,
+                    $"退出编辑态后「{item.DisplayName}」的 × 删除钮必须收起。");
+            }
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_RealInputDeleteButton_ClickDeletesAndUndoRestores()
+    {
+        // 契约 #13：× 删除钮必须经真实输入管线可用（合成事件可达≠实机可达——
+        // B1 的旧实现基态 Collapsed 永不渲染，本旅程端到端守护）。
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var items = Enumerable.Range(0, 3)
+            .Select(index => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.Application,
+                $"{app.Path}.{index}",
+                $"应用{index}",
+                DateTimeOffset.UtcNow))
+            .ToArray();
+        var window = CreateLauncherWindowSync(directory, board, store, starter, items);
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var catalog = window.LaunchersForTests();
+            var middle = catalog.Items[1];
+
+            EnterLauncherEdit(window);
+            CompleteLayout(window);
+            window.Topmost = true;
+            CompleteLayout(window);
+
+            // 真实光标点击编辑态 ×：删除生效并出撤销提示条。启动表面按钮区
+            // PostMessage 直投不可达（与头部按钮区同现象，Updates.cs 探针实证；
+            // 瓦片本体可用），按钮真实输入走 SendInput 硬件级注入（光标先悬停到位）。
+            var tile = FindLauncherTile(window, middle);
+            Assert.IsNotNull(tile);
+            var button = FindLauncherDeleteButton(window, middle);
+            Assert.IsNotNull(button);
+            Assert.AreEqual(Visibility.Visible, button.Visibility, "前置：编辑态 × 可见。");
+            var buttonCenterInTile = button.TranslatePoint(
+                new Point(button.ActualWidth / 2, button.ActualHeight / 2),
+                tile);
+            HoverRealAt(window, tile, buttonCenterInTile);
+            ClickBySendInput(window);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
+            CompleteLayout(window);
+
+            Assert.AreEqual(2, catalog.Items.Count, "真实点击 × 后删除生效。");
+            Assert.IsFalse(catalog.Items.Contains(middle), "被删条目离开集合。");
+            Assert.IsTrue(IsLauncherToastVisible(window), "撤销提示条出现。");
+            Assert.AreEqual(
+                $"已删除「{middle.DisplayName}」",
+                ((TextBlock)window.FindName("LauncherUndoToastText")).Text);
+
+            // 撤销也走真实输入：点击提示条内「撤销」按原下标恢复。
+            var toast = (Border)window.FindName("LauncherUndoToast")!;
+            var undo = FindLauncherUndoButton(window);
+            Assert.IsNotNull(undo);
+            var undoCenterInToast = undo.TranslatePoint(
+                new Point(undo.ActualWidth / 2, undo.ActualHeight / 2),
+                toast);
+            HoverRealAt(window, toast, undoCenterInToast);
+            ClickBySendInput(window);
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
+            CompleteLayout(window);
+
+            Assert.AreEqual(3, catalog.Items.Count, "真实点击撤销后恢复。");
+            Assert.AreEqual(1, catalog.Items.IndexOf(middle), "按原下标重插。");
+            Assert.IsFalse(IsLauncherToastVisible(window), "撤销后提示条隐藏。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
     public void QuickLaunch_EditMode_RenameCommitCancelAndEmptyFallback()
     {
         using var directory = new TestDirectory();
