@@ -1511,6 +1511,17 @@ public partial class MainWindow
             return;
         }
 
+        // 编辑器绑定 UpdateSourceTrigger=Explicit（预填经 source→target 仍生效）：
+        // 用户键入只在提交时刻显式推回模型侧草稿——这是「键入到不了模型」断链的修复点，
+        // 与分类改名「提交读 editor.Text」同一意图（CategoryEditing 经参数传控件文本，
+        // 此处 Commit 亦由 Begin 的先提交会话调用，统一经会话 item 反查编辑器）。
+        // Begin 找不到编辑器的会话跳过推回，草稿保持预填旧名＝无操作。
+        if (FindLauncherTile(item) is { } tile &&
+            FindTemplatePart<TextBox>(tile, "TileNameEditor") is { } editor)
+        {
+            editor.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+        }
+
         _launcherRenamingItem = null;
         var draft = item.DraftName?.Trim();
         var nextName = string.IsNullOrEmpty(draft) ? item.DisplayName : draft;
@@ -1574,6 +1585,13 @@ public partial class MainWindow
 
         if (e.Key == Key.Enter)
         {
+            if (_launcherRenameComposing)
+            {
+                // IME 组合期的 Enter=确认候选，属输入法操作（与 Esc 分支及分类改名框
+                // 同族守卫）：组合中的字串不得作为改名提交。
+                return;
+            }
+
             e.Handled = true;
             CommitLauncherTileRename();
             if (_launcherFocusedIndex >= 0 && _launcherFocusedIndex < _launchers.Items.Count)
