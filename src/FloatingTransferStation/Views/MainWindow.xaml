@@ -727,6 +727,7 @@
                             MouseLeftButtonDown="LauncherTile_MouseLeftButtonDown"
                             MouseLeftButtonUp="LauncherTile_MouseLeftButtonUp"
                             PreviewMouseMove="LauncherTile_PreviewMouseMove"
+                            ContextMenuOpening="LauncherTile_ContextMenuOpening"
                             GiveFeedback="LauncherTile_GiveFeedback"
                             QueryContinueDrag="LauncherTile_QueryContinueDrag">
                       <Border.RenderTransform>
@@ -735,6 +736,35 @@
                           <ScaleTransform />
                         </TransformGroup>
                       </Border.RenderTransform>
+                      <Border.ContextMenu>
+                        <!-- 查看态/编辑态右键均可用；端点禁用在 Opening 时按当前
+                             下标设定；打开期间挂覆盖交互 Menu hold（不自动收起）。 -->
+                        <ContextMenu x:Name="TileContextMenu"
+                                     Style="{StaticResource LauncherTileContextMenuStyle}"
+                                     Opened="LauncherTile_ContextMenuOpened"
+                                     Closed="LauncherTile_ContextMenuClosed">
+                          <MenuItem x:Name="TileMenuDelete"
+                                    Header="删除"
+                                    Style="{StaticResource LauncherContextMenuDangerItemStyle}"
+                                    AutomationProperties.Name="删除启动项"
+                                    Click="LauncherTileMenuDelete_Click" />
+                          <MenuItem x:Name="TileMenuMoveUp"
+                                    Header="上移"
+                                    Style="{StaticResource LauncherContextMenuItemStyle}"
+                                    AutomationProperties.Name="上移启动项"
+                                    Click="LauncherTileMenuMoveUp_Click" />
+                          <MenuItem x:Name="TileMenuMoveDown"
+                                    Header="下移"
+                                    Style="{StaticResource LauncherContextMenuItemStyle}"
+                                    AutomationProperties.Name="下移启动项"
+                                    Click="LauncherTileMenuMoveDown_Click" />
+                          <MenuItem x:Name="TileMenuRename"
+                                    Header="重命名"
+                                    Style="{StaticResource LauncherContextMenuItemStyle}"
+                                    AutomationProperties.Name="重命名启动项"
+                                    Click="LauncherTileMenuRename_Click" />
+                        </ContextMenu>
+                      </Border.ContextMenu>
                       <Border.Style>
                         <Style TargetType="Border">
                           <Setter Property="ToolTip" Value="{Binding DisplayName}" />

@@ -1151,6 +1151,60 @@
     </ControlTemplate.Triggers>
   </ControlTemplate>
 
+  <!-- 快捷启动瓦片右键上下文菜单（#30 修订，Issue #176）：查看态/编辑态瓦片右键
+       出「删除/上移/下移/重命名」四项（Win11 开始菜单先例；上移/下移＝WCAG 2.5.7
+       拖动单指针替代，与契约 #21 标签顺序行同源）。主题画刷全部 DynamicResource
+       （契约 #28 活切换同族）。-->
+  <ControlTemplate x:Key="LauncherContextMenuTemplate" TargetType="ContextMenu">
+    <Border Background="{TemplateBinding Background}"
+            BorderBrush="{TemplateBinding BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource HeaderActionCornerRadius}"
+            Padding="4">
+      <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" />
+    </Border>
+  </ControlTemplate>
+
+  <Style x:Key="LauncherTileContextMenuStyle" TargetType="ContextMenu">
+    <Setter Property="Background" Value="{DynamicResource StatusSurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Template" Value="{StaticResource LauncherContextMenuTemplate}" />
+  </Style>
+
+  <Style x:Key="LauncherContextMenuItemStyle" TargetType="MenuItem">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Padding" Value="28,7" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="MenuItem">
+          <Border x:Name="MenuItemSurface"
+                  Background="Transparent"
+                  CornerRadius="{StaticResource PinButtonCornerRadius}"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+              <Setter TargetName="MenuItemSurface" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.45" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- 删除项：危险语义色（与 × 删除钮一致）。 -->
+  <Style x:Key="LauncherContextMenuDangerItemStyle" TargetType="MenuItem"
+         BasedOn="{StaticResource LauncherContextMenuItemStyle}">
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+  </Style>
+
   <!-- 快捷启动瓦片 × 删除钮（#30 修订，Issue #176）：编辑态常驻的右上删除入口。
        显隐与备注钮/AI 钮同族——基态 Collapsed＋Opacity 0＋FadeAnimation.
        ManageVisibility（禁纯 Opacity 隐藏），由 UpdateLauncherEditVisuals 代码驱动

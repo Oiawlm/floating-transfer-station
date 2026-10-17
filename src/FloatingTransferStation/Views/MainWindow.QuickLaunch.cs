@@ -1583,6 +1583,111 @@ public partial class MainWindow
         }
     }
 
+    // ---- 瓦片右键上下文菜单（#30 修订，Issue #176）：删除/上移/下移/重命名四项
+    // 全部复用既有事务与会话（删除走 × 同一撤销事务、上移/下移走 MoveAsync、重命名
+    // 进入既有编辑模式＋改名会话）；上移/下移＝WCAG 2.5.7 拖动单指针替代（与契约
+    // #21 标签顺序行同源）。菜单打开期间挂覆盖交互 Menu hold（不自动收起）；Esc
+    // 只关菜单（菜单是独立 HWND，键盘先归菜单）；右键不启动——启动判定要求左键
+    // PointerUp 同瓦片 <4 DIP，结构上不可达。----
+
+    private void LauncherTile_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is not Border { DataContext: LauncherItem item } tile ||
+            tile.ContextMenu is not { } menu ||
+            _launchers is null)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (_isClosing || _launchers.IsReadOnlyFromNewerVersion)
+        {
+            // 只读停用：一切写路径禁用（菜单是结构修改入口，整体不出）。
+            e.Handled = true;
+            return;
+        }
+
+        // Opening 时菜单模板尚未展开且 PlacementTarget 未赋值：菜单项经逻辑树
+        //（Items）取，下标直接从宿主瓦片条目算。
+        var index = IndexOfLauncherItem(item);
+        if (LauncherMenuItem(menu, "TileMenuMoveUp") is { } up)
+        {
+            up.SetCurrentValue(IsEnabledProperty, index > 0);
+        }
+
+        if (LauncherMenuItem(menu, "TileMenuMoveDown") is { } down)
+        {
+            down.SetCurrentValue(IsEnabledProperty, index >= 0 && index < _launchers.Items.Count - 1);
+        }
+    }
+
+    private static MenuItem? LauncherMenuItem(ContextMenu menu, string name) =>
+        menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.Name == name);
+
+    private LauncherItem? LauncherItemFromMenu(object? sender) =>
+        (sender as FrameworkElement)?.Parent is ContextMenu { PlacementTarget: Border { DataContext: LauncherItem item } }
+            ? item
+            : null;
+
+    private void LauncherTile_ContextMenuOpened(object? sender, EventArgs e) =>
+        _panelState.BeginOverlayInteraction(PanelOverlayReason.Menu);
+
+    private void LauncherTile_ContextMenuClosed(object? sender, EventArgs e) =>
+        EndOverlayInteractionAndReconcile(PanelOverlayReason.Menu);
+
+    private void LauncherTileMenuDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (LauncherItemFromMenu(sender) is { } item)
+        {
+            e.Handled = true;
+            TrackPendingOperation(DeleteLauncherItemAsync(item));
+        }
+    }
+
+    private void LauncherTileMenuMoveUp_Click(object sender, RoutedEventArgs e) =>
+        MoveLauncherItemFromMenu(sender, e, -1);
+
+    private void LauncherTileMenuMoveDown_Click(object sender, RoutedEventArgs e) =>
+        MoveLauncherItemFromMenu(sender, e, +1);
+
+    private void MoveLauncherItemFromMenu(object sender, RoutedEventArgs e, int delta)
+    {
+        if (LauncherItemFromMenu(sender) is not { } item || _launchers is null)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var index = IndexOfLauncherItem(item);
+        var toIndex = index + delta;
+        if (index < 0 || toIndex < 0 || toIndex >= _launchers.Items.Count)
+        {
+            // 端点（菜单项已在 Opening 禁用，此处为防御）。
+            return;
+        }
+
+        var positionsBefore = CaptureLauncherTilePositions();
+        TrackPendingOperation(AnimateAfterLauncherMutationAsync(_launchers.MoveAsync(item.Id, toIndex), positionsBefore));
+    }
+
+    private void LauncherTileMenuRename_Click(object sender, RoutedEventArgs e)
+    {
+        if (LauncherItemFromMenu(sender) is not { } item)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (!_launcherEditMode)
+        {
+            // 重命名是结构修改：先进编辑模式再入改名会话（不另造第二套编辑器，
+            // 改名会话机器与编辑态语义保持一体）。
+            EnterLauncherEditMode();
+        }
+
+        BeginLauncherTileRename(item);
+    }
+
     // ---- 拖拽重排（编辑态；阈值 4 DIP；查看态拖拽=无操作）：
     // 拾起=瓦片跟随指针；让位指示=目标瓦片 accent 描边；放置=单次 MoveAsync +
     // 邻位让位/归位动画（变更前位置缓存 → 变更后位移回零 167ms）。----
@@ -1706,8 +1811,11 @@ public partial class MainWindow
         _launcherDropTargetIndex = -1;
         if (apply && targetIndex >= 0 && _launchers?.Find(draggingId) is { } item)
         {
+            // 位置快照在突变调用之前取（乐观发布时 MoveAsync 返回即已应用，事后
+            // 取会拍到新位）。
+            var positionsBefore = CaptureLauncherTilePositions();
             var move = _launchers.MoveAsync(item.Id, targetIndex);
-            TrackPendingOperation(AnimateAfterLauncherMutationAsync(move));
+            TrackPendingOperation(AnimateAfterLauncherMutationAsync(move, positionsBefore));
         }
         else if (_launchers?.Find(draggingId) is { } returning)
         {
@@ -1715,9 +1823,10 @@ public partial class MainWindow
         }
     }
 
-    private async Task AnimateAfterLauncherMutationAsync(Task<bool> mutation)
+    private async Task AnimateAfterLauncherMutationAsync(
+        Task<bool> mutation,
+        Dictionary<Guid, System.Windows.Point>? positionsBefore)
     {
-        var positionsBefore = CaptureLauncherTilePositions();
         var changed = await mutation;
         await Dispatcher.InvokeAsync(() =>
         {
