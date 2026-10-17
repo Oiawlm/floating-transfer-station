@@ -1745,7 +1745,7 @@ public partial class MainWindow
             sender is not Border { DataContext: LauncherItem pressed } tile ||
             _launcherPressItemId != pressed.Id ||
             _launcherRenamingItem is not null)
-    {
+        {
             return;
         }
 
