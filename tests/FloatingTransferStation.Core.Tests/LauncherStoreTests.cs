@@ -236,4 +236,26 @@ public sealed class LauncherStoreTests
         Assert.IsFalse(id.Contains('-'), "Guid 序列化为 N 格式（32 位十六进制无连字符）。");
         Assert.AreEqual(32, id.Length);
     }
+
+    [TestMethod]
+    public async Task RoundTrip_PreservesUrlKindAndTarget()
+    {
+        using var directory = new TestDirectory();
+        var store = CreateStore(directory);
+        var url = new LauncherItem(
+            Guid.NewGuid(),
+            LauncherKind.Url,
+            "https://example.com/",
+            "example.com",
+            new DateTimeOffset(2026, 10, 17, 12, 0, 0, TimeSpan.Zero));
+
+        await store.SaveAsync(new LauncherStoreData(LauncherStoreData.CurrentVersion, [url]));
+        var loaded = await CreateStore(directory).LoadAsync();
+
+        var persisted = loaded.Items.Single();
+        Assert.AreEqual(LauncherKind.Url, persisted.Kind, "Url Kind 往返保留。");
+        Assert.AreEqual("https://example.com/", persisted.TargetPath, "规范形网址往返不变形。");
+        Assert.AreEqual("example.com", persisted.DisplayName);
+        Assert.IsNull(persisted.Arguments, "Url 条目无参数段。");
+    }
 }

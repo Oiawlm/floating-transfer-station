@@ -420,4 +420,84 @@ public sealed class LauncherCatalogTests
         Assert.AreEqual(0, changes.Reset);
         CollectionAssert.AreEqual(new[] { "启动项未保存，已还原。" }, messages);
     }
+
+    // ---- Url 条目（#30 修订，Issue #179）：创建入口归一化产出的规范形经同一目录协议 ----
+
+    [TestMethod]
+    public async Task Add_UrlItems_PublishesAndPersists()
+    {
+        using var directory = new TestDirectory();
+        var store = new LocalStore(AppPaths.ForTests(directory.Root), new AtomicTextWriter());
+        var messages = new List<string>();
+        var catalog = await LauncherCatalog.LoadAsync(store, messages.Add);
+        var url = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Url, "https://github.com/", "github.com", DateTimeOffset.UtcNow);
+
+        var outcome = await catalog.AddRangeAsync([url]);
+
+        Assert.AreEqual(1, outcome.AddedCount);
+        Assert.AreEqual(LauncherKind.Url, catalog.Items.Single().Kind, "Url 条目按一等条目落位。");
+        var persisted = await store.LoadAsync();
+        Assert.AreEqual("https://github.com/", persisted.Items.Single().TargetPath, "Url 条目随 launchers.json 持久化。");
+        Assert.IsEmpty(messages);
+    }
+
+    [TestMethod]
+    public async Task Add_SameCanonicalUrl_Deduplicates()
+    {
+        using var directory = new TestDirectory();
+        var store = new LocalStore(AppPaths.ForTests(directory.Root), new AtomicTextWriter());
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        var first = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Url, "https://github.com/", "github.com", DateTimeOffset.UtcNow);
+        await catalog.AddRangeAsync([first]);
+
+        var outcome = await catalog.AddRangeAsync([new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Url, "https://github.com/", "github.com", DateTimeOffset.UtcNow)]);
+
+        Assert.AreEqual(0, outcome.AddedCount, "同规范形 Url 去重（大小写/空白差异由创建入口归一化收敛，见 LauncherUrlInputTests）。");
+        Assert.AreEqual(1, outcome.Duplicates.Count);
+        Assert.AreEqual(1, catalog.Items.Count);
+        Assert.AreSame(first, outcome.Duplicates[0], "命中项回传供滚动+脉冲。");
+    }
+
+    [TestMethod]
+    public async Task Add_MixedKinds_AreIndependentEntries()
+    {
+        using var directory = new TestDirectory();
+        var store = new LocalStore(AppPaths.ForTests(directory.Root), new AtomicTextWriter());
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        var application = Item(@"C:\Apps\A.exe");
+        var packaged = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.PackagedApp, "App!Publisher", "打包应用", DateTimeOffset.UtcNow);
+        var url = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Url, "https://example.com/", "example.com", DateTimeOffset.UtcNow);
+
+        var firstBatch = await catalog.AddRangeAsync([application, packaged, url]);
+        var secondBatch = await catalog.AddRangeAsync([application, packaged, url]);
+
+        Assert.AreEqual(3, firstBatch.AddedCount, "三种 Kind 互不干扰各自落位。");
+        Assert.AreEqual(0, secondBatch.AddedCount, "同目标重复按 DedupKey 各自去重。");
+        Assert.AreEqual(3, secondBatch.Duplicates.Count);
+        Assert.AreEqual(3, catalog.Items.Count);
+    }
+
+    [TestMethod]
+    public async Task Add_UrlItems_RespectMaxItemsLimit()
+    {
+        using var directory = new TestDirectory();
+        var store = new LocalStore(AppPaths.ForTests(directory.Root), new AtomicTextWriter());
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        var fill = Enumerable.Range(0, LauncherCatalog.MaxItems)
+            .Select(index => new LauncherItem(
+                Guid.NewGuid(), LauncherKind.Url, $"https://example.com/{index}/", $"example{index}", DateTimeOffset.UtcNow));
+        await catalog.AddRangeAsync(fill);
+
+        var outcome = await catalog.AddRangeAsync([new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Url, "https://overflow.example.com/", "overflow", DateTimeOffset.UtcNow)]);
+
+        Assert.AreEqual(0, outcome.AddedCount);
+        Assert.AreEqual(1, outcome.OverflowSkippedCount, "200 上限对 Url 条目同语义。");
+        Assert.AreEqual(LauncherCatalog.MaxItems, catalog.Items.Count);
+    }
 }
