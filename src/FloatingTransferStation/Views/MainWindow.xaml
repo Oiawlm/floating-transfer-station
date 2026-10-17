@@ -825,21 +825,29 @@
                                      Foreground="{DynamicResource OnAccentBrush}"
                                      Text="!" />
                         </Border>
-                        <!-- 编辑态右上 20×20 × 删除钮（常驻，83ms 淡入；点击删除走
-                             撤销提示条事务，不弹模态）。 -->
+                        <!-- 编辑态右上 × 删除钮（#30 修订，Issue #176）：常驻显示走
+                             FadeAnimation.ManageVisibility 显隐族（TileDeleteButtonStyle，
+                             83ms 淡入；点击删除走撤销提示条事务，不弹模态）；命中区
+                             24×24 完全落在瓦片内，图标矢量 Path 与全库一致。 -->
                         <Button x:Name="TileDeleteButton"
-                                Width="20"
-                                Height="20"
-                                Margin="0,-6,-6,0"
+                                Margin="0,4,4,0"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Top"
                                 AutomationProperties.Name="删除启动项"
                                 Padding="0"
                                 Click="LauncherTileDeleteButton_Click"
-                                FontSize="11"
-                                Foreground="{DynamicResource DangerBrush}"
-                                Content="✕"
-                                Visibility="Collapsed" />
+                                Style="{StaticResource TileDeleteButtonStyle}">
+                          <Path Data="M6,6 L18,18 M18,6 L6,18"
+                                Width="12"
+                                Height="12"
+                                Stretch="Uniform"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                                StrokeThickness="1.5"
+                                StrokeStartLineCap="Round"
+                                StrokeEndLineCap="Round" />
+                        </Button>
                       </Grid>
                     </Border>
                   </DataTemplate>
