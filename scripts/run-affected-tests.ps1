@@ -45,6 +45,10 @@ $rules = @(
         'installer/*', 'src/FloatingTransferStation/Services/WindowsStartupManager.cs',
         'src/FloatingTransferStation/Services/SingleInstanceGuard.cs', 'src/FloatingTransferStation/Services/AppLifecycleService.cs',
         'src/FloatingTransferStation/Services/WindowsDataDirectorySettings.cs', 'src/FloatingTransferStation.Core/ProductIdentity.cs') },
+    # 公开发行材料（README/CONTRIBUTING/CHANGELOG/LICENSE/ROADMAP/version.txt）：
+    # LifecycleTests.ReleaseMetadata 以内容断言锁定这些文件的用户契约与协议记载。
+    @{ Name = 'PublicReleaseMaterials'; Filter = 'FullyQualifiedName~ReleaseMetadata'; Globs = @(
+        'README.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'LICENSE', 'ROADMAP.md', 'version.txt') },
     # 剪贴板与外部导入：采集/去重/容量/载荷/图片读取/拖放载荷/文本整理插件管线
     @{ Name = 'Clipboard'; Filter = 'FullyQualifiedName~Clipboard|FullyQualifiedName~ExternalDrop|FullyQualifiedName~WindowsDataImageReader'; Globs = @(
         'src/FloatingTransferStation/Services/Clipboard*.cs', 'src/FloatingTransferStation/Services/IClipboardReader.cs',
