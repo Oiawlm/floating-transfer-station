@@ -88,8 +88,8 @@ public static class DesignTokens
     public const string EnterEasingKeySpline = "0,0,0,1";
     public const string ExitEasingKeySpline = "1,0,1,1";
 
-    // 圆角。
-    public const int ShellCornerRadius = 12;
+    // 圆角。窗壳圆角权威=DwmCornerRadius（DWM 裁剪与内容层自裁剪同值），
+    // XAML 资源 ShellCornerRadius 由锁定测试镜像它——不设第二个壳圆角 token。
     public const int DwmCornerRadius = 8;
     public const int HeaderSurfaceCornerRadius = 11;
     public const int CardCornerRadius = 8;
@@ -104,4 +104,12 @@ public static class DesignTokens
     public const int CardInsetPx = 12;
     public const int CardGutterPx = 4;
     public const int CardPaddingPx = 12;
+
+    // 快捷启动瓦片布局（#30 §五；XAML 与代码同源引用，Issue #176 视觉一致性）：
+    // 瓦片 84×100、瓦片间沟道 8（XAML Margin 4×4=8/2 两侧）、节距=宽+沟道（列数
+    // 公式 clamp(floor((Wc+8)/92),3,6) 与网格宽度 columns*pitch-8 的唯一数值来源）。
+    public const double LauncherTileWidthPx = 84;
+    public const double LauncherTileHeightPx = 100;
+    public const int LauncherTileGutterPx = 8;
+    public const double LauncherTilePitchPx = LauncherTileWidthPx + LauncherTileGutterPx;
 }

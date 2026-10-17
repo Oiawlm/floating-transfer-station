@@ -386,8 +386,8 @@
                         Margin="0,0,2,0"
                         Click="SearchClearButton_Click">
                   <Path Data="M4,4 L12,12 M12,4 L4,12"
-                        Width="9.5"
-                        Height="9.5"
+                        Width="12"
+                        Height="12"
                         Stretch="Uniform"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
@@ -709,12 +709,13 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                   <DataTemplate DataType="{x:Type models:LauncherItem}">
-                    <!-- 瓦片 84×100、圆角 8、内边距 上8 下8 左右6、间距 8×8（Margin 4×4）。
-                         悬停 167ms/-2px 与按压 83ms/0.96 走既有动画体系；启动确认/失败描边/
-                         重复脉冲为代码驱动的场景动画。 -->
+                    <!-- 瓦片 84×100（DesignTokens 同源）、圆角 8、内边距 上8 下8 左右6、
+                         瓦片间沟道 8（Margin 4×4=LauncherTileGutterPx/2 两侧，锁定测试
+                         镜像）。悬停 167ms/-2px 与按压 83ms/0.96 走既有动画体系；启动
+                         确认/失败描边/重复脉冲为代码驱动的场景动画。 -->
                     <Border x:Name="TileRoot"
-                            Width="84"
-                            Height="100"
+                            Width="{x:Static design:DesignTokens.LauncherTileWidthPx}"
+                            Height="{x:Static design:DesignTokens.LauncherTileHeightPx}"
                             Margin="4"
                             Padding="6,8,6,8"
                             Background="{DynamicResource CardBrush}"

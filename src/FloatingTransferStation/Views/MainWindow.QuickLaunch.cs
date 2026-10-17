@@ -832,12 +832,14 @@ public partial class MainWindow
             return;
         }
 
-        var tilePitch = 84 + 8;
+        var tilePitch = DesignTokens.LauncherTilePitchPx;
         var columns = Math.Clamp(
-            (int)Math.Floor((viewportWidth + 8) / tilePitch),
+            (int)Math.Floor((viewportWidth + DesignTokens.LauncherTileGutterPx) / tilePitch),
             3,
             6);
-        LauncherTileGrid.Width = Math.Min(viewportWidth, columns * tilePitch - 8);
+        LauncherTileGrid.Width = Math.Min(
+            viewportWidth,
+            columns * tilePitch - DesignTokens.LauncherTileGutterPx);
     }
 
     // ---- 动效（§五）：悬停/按压走变换，入场/落位/确认/失败为场景动画，全部减动效降级 ----
@@ -1270,7 +1272,10 @@ public partial class MainWindow
 
     private void MoveLauncherFocus(int deltaColumns, int deltaRows)
     {
-        var columns = Math.Max(1, (int)Math.Floor((LauncherTileGrid.ActualWidth + 8) / 92));
+        var columns = Math.Max(
+            1,
+            (int)Math.Floor((LauncherTileGrid.ActualWidth + DesignTokens.LauncherTileGutterPx) /
+                DesignTokens.LauncherTilePitchPx));
         var current = _launcherFocusedIndex < 0 ? 0 : _launcherFocusedIndex;
         var target = current + deltaColumns + deltaRows * columns;
         _launcherFocusedIndex = Math.Clamp(target, 0, _launchers.Items.Count - 1);
