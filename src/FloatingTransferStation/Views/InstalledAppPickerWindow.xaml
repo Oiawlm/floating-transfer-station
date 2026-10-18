@@ -8,7 +8,7 @@
         WindowStyle="None"
         ResizeMode="NoResize"
         AllowsTransparency="False"
-        Background="Transparent"
+        Background="{DynamicResource DialogSurfaceBrush}"
         Width="380"
         Height="480"
         MinWidth="320"
@@ -18,11 +18,13 @@
         FontFamily="Segoe UI Variable, Segoe UI"
         PreviewKeyDown="PickerWindow_PreviewKeyDown">
   <!-- 快捷启动 #30 切片 4：已安装应用选择器（AppsFolder 枚举结果的会话内挑选面）。
-       壳技术同设置窗（Mica 玻璃帧 + DWM 圆角），固定尺寸不可缩放；打开时枚举、
-       关闭即弃（结果只由确认按钮回传 AUMID 清单）。 -->
+       固定尺寸不可缩放；打开时枚举、关闭即弃（结果只由确认按钮回传 AUMID 清单）。
+       壳技术（#30 修订 2026-10-18，Issue #186 D8）：不透明 DialogSurfaceBrush＋1px
+       边框＋DWM 圆角/阴影唯一来源（GlassFrameThickness=0）；主按钮「添加 N 项」
+       N=0 禁用（ConfirmButton 状态由代码承载）；搜索过滤保留勾选。 -->
   <WindowChrome.WindowChrome>
     <WindowChrome CaptionHeight="0"
-                  GlassFrameThickness="-1"
+                  GlassFrameThickness="0"
                   ResizeBorderThickness="0"
                   CornerRadius="0"
                   UseAeroCaptionButtons="False" />
@@ -36,15 +38,8 @@
     </ResourceDictionary>
   </Window.Resources>
 
-  <Border Background="{DynamicResource WindowShellBrush}"
-          BorderBrush="{DynamicResource BorderBrush}"
-          BorderThickness="1"
-          CornerRadius="8"
-          Margin="6">
-    <Border.Effect>
-      <DropShadowEffect BlurRadius="12" ShadowDepth="2" Direction="270" Opacity="0.3" />
-    </Border.Effect>
-    <Grid Margin="1">
+  <Border Style="{StaticResource DialogShellStyle}">
+    <Grid>
       <Grid.RowDefinitions>
         <RowDefinition Height="40" />
         <RowDefinition Height="Auto" />
@@ -52,12 +47,13 @@
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
 
-      <!-- 标题行：拖拽区 + 标题 + 关闭。 -->
+      <!-- 标题行：拖拽区 + 标题 + 关闭（D8 内边距 24 由壳承载，标题行负边距回贴）。 -->
       <Grid Grid.Row="0"
+            Margin="-24,0,-24,0"
             Background="Transparent"
             MouseLeftButtonDown="Header_MouseLeftButtonDown">
         <TextBlock Text="添加已安装应用"
-                   Margin="14,0,0,0"
+                   Margin="24,0,0,0"
                    FontSize="14"
                    FontWeight="SemiBold"
                    Foreground="{DynamicResource PrimaryTextBrush}"
@@ -71,19 +67,20 @@
                 AutomationProperties.Name="关闭已安装应用选择器"
                 Click="CloseButton_Click">
           <Viewbox Width="14" Height="14">
-            <Path Data="M0.7071068,0 L7,6.2928932 L13.292893,0 L14,0.7071068 L7.7071068,7 L14,13.292893 L13.292893,14 L7,7.7071068 L0.7071068,14 L0,13.292893 L6.2928932,7 L0,0.7071068 Z"
+            <Path Data="M0.7071068,0 L7,6.2928932 L13.292893,0 L14,0.7071068 L7,7.7071068 L14,13.292893 L13.292893,14 L7,7.7071068 L0.7071068,14 L0,13.292893 L6.2928932,7 L0,0.7071068 Z"
                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
                   Stretch="Uniform" />
           </Viewbox>
         </Button>
       </Grid>
 
-      <!-- 搜索框：区域文化不区分大小写的包含匹配。 -->
-      <Grid Grid.Row="1" Margin="12,4,12,8">
+      <!-- 搜索框：区域文化不区分大小写的包含匹配（D8：高 36 圆角 4）。 -->
+      <Grid Grid.Row="1" Margin="0,4,0,8">
         <TextBox x:Name="PickerSearchBox"
                  Style="{StaticResource ThemedTextBoxStyle}"
-                 Height="30"
+                 Height="36"
                  FontSize="13"
+                 Padding="10,0"
                  AutomationProperties.Name="搜索已安装应用"
                  TextChanged="PickerSearchBox_TextChanged" />
         <TextBlock x:Name="PickerSearchHint"
@@ -100,8 +97,7 @@
       <ScrollViewer Grid.Row="2"
                     Style="{StaticResource OverlayScrollViewerStyle}"
                     VerticalScrollBarVisibility="Auto"
-                    HorizontalScrollBarVisibility="Disabled"
-                    Margin="4,0,4,0">
+                    HorizontalScrollBarVisibility="Disabled">
         <ItemsControl x:Name="PickerList"
                       Focusable="False"
                      ToggleButton.Checked="PickerList_Checked"
@@ -149,12 +145,13 @@
                  Text="没有匹配的应用"
                  Visibility="Collapsed" />
 
-      <!-- 底部动作行。 -->
-      <Grid Grid.Row="3" Margin="12,8,12,12">
+      <!-- 底部动作行（D8：按钮右对齐、间距 8、高 32；主按钮「添加 N 项」）。 -->
+      <Grid Grid.Row="3" Margin="0,12,0,0">
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
           <Button Content="取消"
                   FontSize="12"
-                  Padding="14,5"
+                  Height="32"
+                  Padding="14,0"
                   Margin="0,0,8,0"
                   Style="{StaticResource ThemedActionButtonStyle}"
                   AutomationProperties.Name="取消添加已安装应用"
@@ -162,7 +159,8 @@
           <Button x:Name="PickerConfirmButton"
                   Content="添加"
                   FontSize="12"
-                  Padding="14,5"
+                  Height="32"
+                  Padding="14,0"
                   Style="{StaticResource ThemedActionButtonStyle}"
                   AutomationProperties.Name="确认添加已安装应用"
                   Click="ConfirmButton_Click" />

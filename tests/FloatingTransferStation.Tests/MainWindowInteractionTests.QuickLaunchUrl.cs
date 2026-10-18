@@ -341,7 +341,10 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(
                 FindDescendants<TextBlock>(tile).Any(glyph => glyph.Text == "\uE774"),
                 "Url 瓦片渲染静态地球字形（模板层按 Kind 分支）。");
-            Assert.AreEqual("github.com", tile.ToolTip, "瓦片 tooltip=显示名（既有 Border 样式绑定）。");
+            Assert.AreEqual(
+                "github.com\nhttps://github.com/",
+                tile.ToolTip,
+                "瓦片 tooltip=名称＋目标（#30 修订 2026-10-18 D10：ToolTipText 名称辨认；原「仅显示名」断言随 D10 修订改写，Issue #186）。");
         }
         finally
         {

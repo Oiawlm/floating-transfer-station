@@ -760,17 +760,29 @@
                         </TransformGroup>
                       </Border.RenderTransform>
                       <Border.ContextMenu>
-                        <!-- 查看态/编辑态右键均可用；端点禁用在 Opening 时按当前
-                             下标设定；打开期间挂覆盖交互 Menu hold（不自动收起）。 -->
+                        <!-- 查看态瓦片右键均可用；端点禁用在 Opening 时按当前
+                             下标设定；打开期间挂覆盖交互 Menu hold（不自动收起）。
+                             终序（#30 修订 2026-10-18，Issue #186）：打开/重命名/
+                             编辑目标…/上移/下移/删除（删除独立分组）。 -->
                         <ContextMenu x:Name="TileContextMenu"
                                      Style="{StaticResource LauncherTileContextMenuStyle}"
                                      Opened="LauncherTile_ContextMenuOpened"
                                      Closed="LauncherTile_ContextMenuClosed">
-                          <MenuItem x:Name="TileMenuDelete"
-                                    Header="删除"
-                                    Style="{StaticResource LauncherContextMenuDangerItemStyle}"
-                                    AutomationProperties.Name="删除启动项"
-                                    Click="LauncherTileMenuDelete_Click" />
+                          <MenuItem x:Name="TileMenuOpen"
+                                    Header="打开"
+                                    Style="{StaticResource LauncherContextMenuItemStyle}"
+                                    AutomationProperties.Name="打开启动项"
+                                    Click="LauncherTileMenuOpen_Click" />
+                          <MenuItem x:Name="TileMenuRename"
+                                    Header="重命名"
+                                    Style="{StaticResource LauncherContextMenuItemStyle}"
+                                    AutomationProperties.Name="重命名启动项"
+                                    Click="LauncherTileMenuRename_Click" />
+                          <MenuItem x:Name="TileMenuEditTarget"
+                                    Header="编辑目标…"
+                                    Style="{StaticResource LauncherContextMenuItemStyle}"
+                                    AutomationProperties.Name="编辑启动项目标"
+                                    Click="LauncherTileMenuEditTarget_Click" />
                           <MenuItem x:Name="TileMenuMoveUp"
                                     Header="上移"
                                     Style="{StaticResource LauncherContextMenuItemStyle}"
@@ -781,16 +793,17 @@
                                     Style="{StaticResource LauncherContextMenuItemStyle}"
                                     AutomationProperties.Name="下移启动项"
                                     Click="LauncherTileMenuMoveDown_Click" />
-                          <MenuItem x:Name="TileMenuRename"
-                                    Header="重命名"
-                                    Style="{StaticResource LauncherContextMenuItemStyle}"
-                                    AutomationProperties.Name="重命名启动项"
-                                    Click="LauncherTileMenuRename_Click" />
+                          <Separator Style="{StaticResource LauncherContextMenuSeparatorStyle}" />
+                          <MenuItem x:Name="TileMenuDelete"
+                                    Header="删除"
+                                    Style="{StaticResource LauncherContextMenuDangerItemStyle}"
+                                    AutomationProperties.Name="删除启动项"
+                                    Click="LauncherTileMenuDelete_Click" />
                         </ContextMenu>
                       </Border.ContextMenu>
                       <Border.Style>
                         <Style TargetType="Border">
-                          <Setter Property="ToolTip" Value="{Binding DisplayName}" />
+                          <Setter Property="ToolTip" Value="{Binding ToolTipText}" />
                           <Style.Triggers>
                             <DataTrigger Binding="{Binding LaunchFailed}" Value="True">
                               <!-- 失败灰态：2px 危险色描边常显 + 图标 50% + 警告角标。 -->
@@ -873,7 +886,7 @@
                                        TextAlignment="Center"
                                        TextTrimming="CharacterEllipsis"
                                        TextWrapping="Wrap"
-                                       ToolTip="{Binding DisplayName}" />
+                                       ToolTip="{Binding ToolTipText}" />
                             <!-- 就地改名编辑器（名称带双击/F2/菜单进入；Enter 提交/
                                  Esc 取消/失焦提交；空提交=回退原名；IME 组合守卫与
                                  卡片编辑同族；Explicit 绑定修复保持——1.49.1 键入

@@ -48,6 +48,11 @@ internal partial class InstalledAppPickerWindow : Window
     {
         InitializeComponent();
         DesignThemeManager.Apply(this, theme);
+        // D8：DWM 圆角＋系统阴影唯一来源（失败回退直角+边框，可用性兜底）。
+        SourceInitialized += (_, _) =>
+            _dialogShellApplied = DwmWindowEffects.TryApplyDialogShell(
+                new System.Windows.Interop.WindowInteropHelper(this).Handle,
+                theme == DesignTheme.Dark);
 
         var existing = existingAumids ?? throw new ArgumentNullException(nameof(existingAumids));
         _rows = installedApps
@@ -55,6 +60,11 @@ internal partial class InstalledAppPickerWindow : Window
             .ToList();
         RebuildVisibleRows();
     }
+
+    private bool _dialogShellApplied;
+
+    /// <summary>圆角/阴影 DWM 接入探针（D8 坑清单；测试与诊断用）。</summary>
+    internal bool DialogShellAppliedForTests => _dialogShellApplied;
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

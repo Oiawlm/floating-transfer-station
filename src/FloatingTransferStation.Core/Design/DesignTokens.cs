@@ -90,8 +90,13 @@ public static class DesignTokens
 
     // 圆角。窗壳圆角权威=DwmCornerRadius（DWM 裁剪与内容层自裁剪同值），
     // XAML 资源 ShellCornerRadius 由锁定测试镜像它——不设第二个壳圆角 token。
+    // 两档阶梯（#30 修订 2026-10-18，Issue #186 D9）：控件级 4（输入框/按钮/下拉/
+    // 复盘编辑框/行内编辑器）、表面级 8（卡/瓦片/弹窗壳/主壳——CardCornerRadius
+    // 同源收敛）；识别元素（选择环 r5 等）保留原值不入阶梯。
     public const int DwmCornerRadius = 8;
     public const int HeaderSurfaceCornerRadius = 11;
+    public const int ControlCornerRadiusPx = 4;
+    public const int SurfaceCornerRadiusPx = 8;
     public const int CardCornerRadius = 8;
     public const int ControlCornerRadius = 7;
     public const int PinButtonCornerRadius = 6;

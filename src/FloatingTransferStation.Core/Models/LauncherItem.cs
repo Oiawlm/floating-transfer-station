@@ -48,16 +48,16 @@ public sealed class LauncherItem : INotifyPropertyChanged, IEquatable<LauncherIt
 
     public Guid Id { get; }
 
-    public LauncherKind Kind { get; }
+    public LauncherKind Kind { get; private set; }
 
     /// <summary>目标：应用类=文件路径（.lnk 存快捷方式本体路径）、打包应用=AUMID、Url=网址。</summary>
-    public string TargetPath { get; }
+    public string TargetPath { get; private set; }
 
     /// <summary>启动参数（仅 Application 类；null/空=无参数）。</summary>
-    public string? Arguments { get; }
+    public string? Arguments { get; private set; }
 
     /// <summary>工作目录（null/空 = 目标所在目录）。</summary>
-    public string? WorkingDirectory { get; }
+    public string? WorkingDirectory { get; private set; }
 
     public DateTimeOffset CreatedAt { get; }
 
@@ -122,8 +122,38 @@ public sealed class LauncherItem : INotifyPropertyChanged, IEquatable<LauncherIt
     [JsonIgnore]
     public string IconKey => LauncherIconKey.Compute(TargetPath);
 
+    /// <summary>名称辨认提示（#30 修订 2026-10-18 D10）：「名称＋目标（域名/路径）」——
+    /// 失败瓦片的可修复入口配名称与目标同览；派生只读不落盘（JsonIgnore 防序列化）。</summary>
+    [JsonIgnore]
+    public string ToolTipText => $"{_displayName}\n{TargetPath}";
+
     /// <summary>持久化改名入口（仅 LauncherCatalog 串行协议调用；构造与导入走构造函数）。</summary>
     public void AdoptPersistedName(string displayName) => DisplayName = displayName;
+
+    /// <summary>
+    /// 编辑目标入口（#30 修订 2026-10-18，Issue #186；仅 LauncherCatalog 串行协议
+    /// 调用）：目标三元组（Kind/TargetPath/Arguments/WorkingDirectory）就地替换＋
+    /// IconStamp 置空（图标管线自动重取——stamp=null 恒走提取，契约 #30 §三.6 既有
+    /// 语义）；用户名保留不动。属性通知即上屏（IconKey 派生属性随 TargetPath 失效）。
+    /// </summary>
+    public void AdoptEditedTarget(
+        LauncherKind kind,
+        string targetPath,
+        string? arguments,
+        string? workingDirectory)
+    {
+        Kind = kind;
+        TargetPath = targetPath;
+        Arguments = arguments;
+        WorkingDirectory = workingDirectory;
+        if (IconStamp is not null)
+        {
+            IconStamp = null;
+            OnPropertyChanged(nameof(IconStamp));
+        }
+
+        OnPropertyChanged(nameof(IconKey));
+    }
 
     /// <summary>持久化图标戳推进（仅图标缓存发布成功后经 LauncherCatalog 调用）。</summary>
     public void AdoptPersistedIconStamp(string? iconStamp)

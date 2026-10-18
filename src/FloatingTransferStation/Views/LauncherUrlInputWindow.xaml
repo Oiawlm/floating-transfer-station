@@ -8,20 +8,22 @@
         WindowStyle="None"
         ResizeMode="NoResize"
         AllowsTransparency="False"
-        Background="Transparent"
+        Background="{DynamicResource DialogSurfaceBrush}"
         Width="360"
         SizeToContent="Height"
         MinWidth="300"
         WindowStartupLocation="CenterOwner"
         FontFamily="Segoe UI Variable, Segoe UI"
         PreviewKeyDown="UrlInputWindow_PreviewKeyDown">
-  <!-- 快捷启动网页条目（#30 修订，Issue #179）：网页地址输入对话框。单行输入＋内联
-       错误＋确定/取消（Enter=确定、Esc=取消、上限 2048）；零网络（不做可达性探测）。
-       归一化唯一经 Core LauncherUrlInput，确认回传规范形结果（LauncherUrlNormalization），
-       取消/关闭/Esc 回传 null。壳技术同已安装应用选择器（Mica 玻璃帧 + DWM 圆角）。 -->
+  <!-- 快捷启动网页条目（#30 修订，Issue #179；壳统一 2026-10-18，Issue #186 D8）：
+       网页地址输入对话框。单行输入＋内联错误＋「添加」/取消（Enter=添加、Esc=取消、
+       上限 2048）；零网络（不做可达性探测）。归一化唯一经 Core LauncherUrlInput，
+       确认回传规范形结果（LauncherUrlNormalization），取消/关闭/Esc 回传 null。
+       壳技术（D8）：不透明 DialogSurfaceBrush＋1px 边框＋DWM 圆角/阴影唯一来源
+       （GlassFrameThickness=0——撤透明背景/Margin 6 假圆角/DropShadowEffect）。 -->
   <WindowChrome.WindowChrome>
     <WindowChrome CaptionHeight="0"
-                  GlassFrameThickness="-1"
+                  GlassFrameThickness="0"
                   ResizeBorderThickness="0"
                   CornerRadius="0"
                   UseAeroCaptionButtons="False" />
@@ -35,15 +37,8 @@
     </ResourceDictionary>
   </Window.Resources>
 
-  <Border Background="{DynamicResource WindowShellBrush}"
-          BorderBrush="{DynamicResource BorderBrush}"
-          BorderThickness="1"
-          CornerRadius="8"
-          Margin="6">
-    <Border.Effect>
-      <DropShadowEffect BlurRadius="12" ShadowDepth="2" Direction="270" Opacity="0.3" />
-    </Border.Effect>
-    <Grid Margin="1">
+  <Border Style="{StaticResource DialogShellStyle}">
+    <Grid>
       <Grid.RowDefinitions>
         <RowDefinition Height="40" />
         <RowDefinition Height="Auto" />
@@ -51,12 +46,13 @@
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
 
-      <!-- 标题行：拖拽区 + 标题 + 关闭。 -->
+      <!-- 标题行：拖拽区 + 标题 + 关闭（D8 内边距 24 由壳承载，标题行负边距回贴）。 -->
       <Grid Grid.Row="0"
+            Margin="-24,0,-24,0"
             Background="Transparent"
             MouseLeftButtonDown="Header_MouseLeftButtonDown">
         <TextBlock Text="添加网页地址"
-                   Margin="14,0,0,0"
+                   Margin="24,0,0,0"
                    FontSize="14"
                    FontWeight="SemiBold"
                    Foreground="{DynamicResource PrimaryTextBrush}"
@@ -70,19 +66,20 @@
                 AutomationProperties.Name="关闭网页地址输入"
                 Click="CloseButton_Click">
           <Viewbox Width="14" Height="14">
-            <Path Data="M0.7071068,0 L7,6.2928932 L13.292893,0 L14,0.7071068 L7.7071068,7 L14,13.292893 L13.292893,14 L7,7.7071068 L0.7071068,14 L0,13.292893 L6.2928932,7 L0,0.7071068 Z"
+            <Path Data="M0.7071068,0 L7,6.2928932 L13.292893,0 L14,0.7071068 L7,7.7071068 L14,13.292893 L13.292893,14 L7,7.7071068 L0.7071068,14 L0,13.292893 L6.2928932,7 L0,0.7071068 Z"
                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
                   Stretch="Uniform" />
           </Viewbox>
         </Button>
       </Grid>
 
-      <!-- 单行输入（上限 2048，无协议输入自动补 https://）。 -->
-      <Grid Grid.Row="1" Margin="12,4,12,4">
+      <!-- 单行输入（上限 2048，无协议输入自动补 https://；D8：高 36 圆角 4）。 -->
+      <Grid Grid.Row="1" Margin="0,4,0,4">
         <TextBox x:Name="UrlInputBox"
                  Style="{StaticResource ThemedTextBoxStyle}"
-                 Height="30"
+                 Height="36"
                  FontSize="13"
+                 Padding="10,0"
                  MaxLength="2048"
                  AutomationProperties.Name="网页地址"
                  TextChanged="UrlInputBox_TextChanged" />
@@ -99,26 +96,28 @@
       <!-- 内联错误（Core 归一化拒绝文案；确认未通过时显示，不关窗）。 -->
       <TextBlock x:Name="UrlErrorText"
                  Grid.Row="2"
-                 Margin="14,0,12,0"
+                 Margin="0,0,0,0"
                  FontSize="12"
                  Foreground="{DynamicResource DangerBrush}"
                  TextWrapping="Wrap"
                  Visibility="Collapsed" />
 
-      <!-- 底部动作行（Enter=确定经 IsDefault）。 -->
-      <Grid Grid.Row="3" Margin="12,8,12,12">
+      <!-- 底部动作行（Enter=添加经 IsDefault；D8：按钮右对齐、间距 8）。 -->
+      <Grid Grid.Row="3" Margin="0,12,0,0">
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
           <Button Content="取消"
                   FontSize="12"
-                  Padding="14,5"
+                  Height="32"
+                  Padding="14,0"
                   Margin="0,0,8,0"
                   Style="{StaticResource ThemedActionButtonStyle}"
                   AutomationProperties.Name="取消添加网页地址"
                   Click="CancelButton_Click" />
           <Button x:Name="UrlConfirmButton"
-                  Content="确定"
+                  Content="添加"
                   FontSize="12"
-                  Padding="14,5"
+                  Height="32"
+                  Padding="14,0"
                   IsDefault="True"
                   Style="{StaticResource ThemedActionButtonStyle}"
                   AutomationProperties.Name="确认添加网页地址"

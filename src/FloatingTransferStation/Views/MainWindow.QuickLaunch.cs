@@ -1356,6 +1356,14 @@ public partial class MainWindow
 
         switch (e.Key)
         {
+            case Key.Enter when e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Alt):
+                // Alt+Enter=编辑目标焦点项（D7 键盘路径，与右键菜单同入口）。
+                if (_launcherFocusedIndex >= 0 && _launcherFocusedIndex < _launchers.Items.Count)
+                {
+                    BeginEditLauncherTarget(_launchers.Items[_launcherFocusedIndex]);
+                }
+
+                return true;
             case Key.Enter:
                 if (_launcherFocusedIndex is var focus && focus >= 0 && focus < _launchers.Items.Count)
                 {
@@ -1402,7 +1410,7 @@ public partial class MainWindow
                 }
 
                 return true;
-            case Key.A when Keyboard.Modifiers == ModifierKeys.Control:
+            case Key.A when e.KeyboardDevice.Modifiers == ModifierKeys.Control:
                 // Ctrl+A=全选/再按清空（#30 修订：原「Ctrl+A 表面切换排除」随瓦片
                 // 获得多选修订——排除面其余项不变）。
                 if (LauncherSelectedCount() == _launchers.Items.Count)
@@ -2064,6 +2072,107 @@ public partial class MainWindow
         // 重命名直接进入既有改名会话（不另造第二套编辑器；编辑模式已移除，
         // 会话机器常态可用——挂起条件在 BeginLauncherTileRename 内统一承载）。
         BeginLauncherTileRename(item);
+    }
+
+    private void LauncherTileMenuOpen_Click(object sender, RoutedEventArgs e)
+    {
+        if (LauncherItemFromMenu(sender) is not { } item ||
+            FindLauncherTile(item) is not { } tile ||
+            IsLauncherLaunchLatched(item))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        LaunchLauncherItem(item, tile);
+    }
+
+    // ---- 编辑目标（#30 修订 2026-10-18，Issue #186 D7）：右键菜单「编辑目标…」/
+    // Alt+Enter；对话框确认走目录 UpdateTargetAsync（既有突变协议：原子保存、失败
+    // 还原+状态条；目标变更→IconStamp 置空→图标管线自动重取；用户名保留）；重复
+    // 拒绝=状态条「已在启动列表中」（对话框不突变）。对话框打开挂覆盖交互
+    // ModalDialog hold（与创建入口同一协议）。----
+
+    /// <summary>编辑目标对话框显示（测试缝：同创建入口 _showUrlDialog 族）。</summary>
+    internal Func<LauncherEditTargetWindow, bool?> _showEditTargetDialog = static dialog => dialog.ShowDialog();
+
+    private void LauncherTileMenuEditTarget_Click(object sender, RoutedEventArgs e)
+    {
+        if (LauncherItemFromMenu(sender) is { } item)
+        {
+            e.Handled = true;
+            BeginEditLauncherTarget(item);
+        }
+    }
+
+    private void BeginEditLauncherTarget(LauncherItem item)
+    {
+        if (_isClosing ||
+            _launchers is null ||
+            _launchers.IsReadOnlyFromNewerVersion ||
+            LauncherSelectedCount() > 0 ||
+            _launcherDraggingId is not null)
+        {
+            return;
+        }
+
+        if (_launcherRenamingItem?.Id == item.Id)
+        {
+            CommitLauncherTileRename();
+        }
+
+        var dialog = new LauncherEditTargetWindow(CurrentTheme, item) { Owner = this };
+        _panelState.BeginOverlayInteraction(PanelOverlayReason.ModalDialog);
+        try
+        {
+            if (_showEditTargetDialog(dialog) != true || dialog.Result is not { } edited)
+            {
+                return;
+            }
+
+            TrackPendingOperation(ApplyLauncherTargetEditAsync(item.Id, edited));
+        }
+        finally
+        {
+            EndOverlayInteractionAndReconcile(PanelOverlayReason.ModalDialog);
+        }
+    }
+
+    private async Task ApplyLauncherTargetEditAsync(Guid itemId, LauncherEditedTarget edited)
+    {
+        if (_launchers is null)
+        {
+            return;
+        }
+
+        var outcome = await _launchers.UpdateTargetAsync(
+            itemId,
+            edited.Kind,
+            edited.TargetPath,
+            edited.Arguments,
+            edited.WorkingDirectory);
+        await Dispatcher.InvokeAsync(() =>
+        {
+            switch (outcome)
+            {
+                case LauncherUpdateTargetOutcome.Updated:
+                    ShowStatus("目标已更新。");
+                    // 图标自动重取：IconKey 随目标变更（IconStamp=null 走提取路径）；
+                    // 对在屏瓦片直发一次重取（对齐「应用未注册」重枚举先例）。
+                    if (_launchers.Find(itemId) is { } updated)
+                    {
+                        RefreshLauncherIcon(updated);
+                    }
+
+                    break;
+                case LauncherUpdateTargetOutcome.Duplicate:
+                    ShowStatus("已在启动列表中");
+                    break;
+                default:
+                    // 保存失败状态条由目录协议发出（「启动项未保存，已还原。」）。
+                    break;
+            }
+        });
     }
 
     // ---- 拖拽重排（#30 修订 2026-10-18 起全时可用，Issue #186；取代「仅编辑态」）：

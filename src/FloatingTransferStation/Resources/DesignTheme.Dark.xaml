@@ -3,6 +3,8 @@
                     xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options">
   <SolidColorBrush x:Key="WindowShellBrush" Color="#CC202021" />
   <SolidColorBrush x:Key="WindowShellOpaqueBrush" Color="#202021" />
+  <!-- 对话框表面（#30 修订 2026-10-18，Issue #186 D8）：不透明主题表面。 -->
+  <SolidColorBrush x:Key="DialogSurfaceBrush" Color="#2B2B2B" />
   <SolidColorBrush x:Key="TabRailBrush" Color="#2B2B2C" />
   <SolidColorBrush x:Key="CardBrush" Color="#2D2D2E" />
   <SolidColorBrush x:Key="BorderBrush" Color="#414143" />

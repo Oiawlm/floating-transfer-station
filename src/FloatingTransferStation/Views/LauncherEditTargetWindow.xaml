@@ -1,0 +1,190 @@
+<Window x:Class="FloatingTransferStation.Views.LauncherEditTargetWindow"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="编辑目标"
+        Topmost="True"
+        ShowInTaskbar="False"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="False"
+        Background="{DynamicResource DialogSurfaceBrush}"
+        Width="420"
+        SizeToContent="Height"
+        MinWidth="340"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Segoe UI Variable, Segoe UI"
+        PreviewKeyDown="EditTargetWindow_PreviewKeyDown">
+  <!-- 编辑目标对话框（#30 修订 2026-10-18，Issue #186 D7）：目标创建后可改。
+       Url=地址字段（归一化唯一经 Core LauncherUrlInput，确认回传规范形）；
+       Application=目标路径＋「浏览…」＋可折叠高级区（参数/起始位置）；
+       PackagedApp=已安装应用选择器预选当前 AUMID。壳=DialogShellStyle（D8 统一：
+       不透明 DialogSurfaceBrush＋1px 边框＋DWM 圆角/阴影唯一来源）；主按钮「保存」；
+       重复拒绝由目录 UpdateTargetAsync 判定（Duplicate→状态条「已在启动列表中」，
+       对话框不关闭不突变）。确认回传 EditableTarget，取消/关闭/Esc 回传 null。 -->
+  <WindowChrome.WindowChrome>
+    <WindowChrome CaptionHeight="0"
+                  GlassFrameThickness="0"
+                  ResizeBorderThickness="0"
+                  CornerRadius="0"
+                  UseAeroCaptionButtons="False" />
+  </WindowChrome.WindowChrome>
+  <Window.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="../Resources/MainWindowStyles.xaml" />
+        <ResourceDictionary Source="../Resources/DesignTheme.Light.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Window.Resources>
+
+  <Border Style="{StaticResource DialogShellStyle}">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="32" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <!-- 标题行：拖拽区 + 标题 + 关闭（D8 内边距 24 由壳承载，标题行负边距回贴）。 -->
+      <Grid Grid.Row="0"
+            Margin="-24,0,-24,8"
+            Background="Transparent"
+            MouseLeftButtonDown="Header_MouseLeftButtonDown">
+        <TextBlock x:Name="DialogTitle"
+                   Text="编辑目标"
+                   Margin="24,0,0,0"
+                   FontSize="14"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource PrimaryTextBrush}"
+                   VerticalAlignment="Center"
+                   IsHitTestVisible="False" />
+        <Button x:Name="CloseButton"
+                Style="{StaticResource HeaderActionButtonStyle}"
+                HorizontalAlignment="Right"
+                Margin="0,0,8,0"
+                ToolTip="关闭"
+                AutomationProperties.Name="关闭编辑目标"
+                Click="CloseButton_Click">
+          <Viewbox Width="14" Height="14">
+            <Path Data="M0.7071068,0 L7,6.2928932 L13.292893,0 L14,0.7071068 L7,7.7071068 L14,13.292893 L13.292893,14 L7,7.7071068 L0.7071068,14 L0,13.292893 L6.2928932,7 L0,0.7071068 Z"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                  Stretch="Uniform" />
+          </Viewbox>
+        </Button>
+      </Grid>
+
+      <!-- 主字段行（按 Kind 切换：Url=地址；Application/PackagedApp=路径＋浏览）。 -->
+      <Grid Grid.Row="1" Margin="0,4,0,4">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <Grid Grid.Column="0">
+          <TextBox x:Name="TargetInputBox"
+                   Style="{StaticResource ThemedTextBoxStyle}"
+                   Height="36"
+                   FontSize="13"
+                   Padding="10,0"
+                   MaxLength="2048"
+                   AutomationProperties.Name="目标地址"
+                   TextChanged="TargetInputBox_TextChanged" />
+          <TextBlock x:Name="TargetInputHint"
+                     Text="例如 github.com"
+                     FontSize="13"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     VerticalAlignment="Center"
+                     HorizontalAlignment="Left"
+                     Margin="10,0,0,0"
+                     IsHitTestVisible="False" />
+        </Grid>
+        <Button x:Name="BrowseButton"
+                Grid.Column="1"
+                Content="浏览…"
+                FontSize="12"
+                Height="36"
+                Padding="12,0"
+                Margin="8,0,0,0"
+                Style="{StaticResource ThemedActionButtonStyle}"
+                AutomationProperties.Name="浏览目标文件"
+                Visibility="Collapsed"
+                Click="BrowseButton_Click" />
+      </Grid>
+
+      <!-- 内联错误（归一化/路径拒绝文案；确认未通过时显示，不关窗）。 -->
+      <TextBlock x:Name="ErrorText"
+                 Grid.Row="2"
+                 FontSize="12"
+                 Foreground="{DynamicResource DangerBrush}"
+                 TextWrapping="Wrap"
+                 Visibility="Collapsed" />
+
+      <!-- 可折叠高级区（仅 Application）：参数/起始位置。 -->
+      <StackPanel x:Name="AdvancedSection"
+                  Grid.Row="3"
+                  Visibility="Collapsed">
+        <ToggleButton x:Name="AdvancedToggle"
+                      Content="高级"
+                      FontSize="12"
+                      Foreground="{DynamicResource SecondaryTextBrush}"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      Cursor="Hand"
+                      HorizontalAlignment="Left"
+                      Padding="0,4,0,2"
+                      Focusable="False" />
+        <StackPanel x:Name="AdvancedPanel"
+                    Visibility="Collapsed"
+                    Margin="0,0,0,4">
+          <TextBlock Text="启动参数"
+                     FontSize="12"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Margin="0,4,0,2" />
+          <TextBox x:Name="ArgumentsBox"
+                   Style="{StaticResource ThemedTextBoxStyle}"
+                   Height="32"
+                   FontSize="13"
+                   Padding="8,0"
+                   MaxLength="2048"
+                   AutomationProperties.Name="启动参数" />
+          <TextBlock Text="起始位置（空=目标所在目录）"
+                     FontSize="12"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Margin="0,8,0,2" />
+          <TextBox x:Name="WorkingDirectoryBox"
+                   Style="{StaticResource ThemedTextBoxStyle}"
+                   Height="32"
+                   FontSize="13"
+                   Padding="8,0"
+                   MaxLength="1024"
+                   AutomationProperties.Name="起始位置" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- 底部动作行（D8：按钮右对齐、间距 8、高 32；主按钮「保存」）。 -->
+      <Grid Grid.Row="4" Margin="0,12,0,0">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+          <Button Content="取消"
+                  FontSize="12"
+                  Height="32"
+                  Padding="14,0"
+                  Margin="0,0,8,0"
+                  Style="{StaticResource ThemedActionButtonStyle}"
+                  AutomationProperties.Name="取消编辑目标"
+                  Click="CancelButton_Click" />
+          <Button x:Name="SaveButton"
+                  Content="保存"
+                  FontSize="12"
+                  Height="32"
+                  Padding="14,0"
+                  IsDefault="True"
+                  Style="{StaticResource ThemedActionButtonStyle}"
+                  AutomationProperties.Name="保存编辑目标"
+                  Click="SaveButton_Click" />
+        </StackPanel>
+      </Grid>
+    </Grid>
+  </Border>
+</Window>
