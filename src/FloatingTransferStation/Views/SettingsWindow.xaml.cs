@@ -19,11 +19,6 @@ namespace FloatingTransferStation.Views;
 /// </summary>
 public partial class SettingsWindow : Window
 {
-    // 冻结几何（契约 #24，Issue #106）：最大高 = 所在工作区高 − 48（矮屏抬到
-    // MinHeight 防冲突）；其余冻结值（默认 680×600、最小 560×460、最大宽 900）
-    // 在 XAML 声明，视口高度交给 * 行与内部 ScrollViewer（SizeToContent=Manual）。
-    private const double MaxHeightMargin = 48;
-
     private readonly ISettingsHost _host;
     private bool _isSynchronizingControls;
     private bool _micaApplied;
@@ -38,9 +33,10 @@ public partial class SettingsWindow : Window
         DesignThemeManager.Apply(this, host.CurrentTheme);
 
         // 固定视口（契约 #24，Issue #106）：窗口高度不再跟随内容（SizeToContent=Manual），
-        // 溢出由 SettingsScrollHost 滚动；最大高先按主屏工作区收敛、矮屏抬到最小高，
-        // 恢复持久化几何时（SourceInitialized）再按目标显示器工作区重算。
-        MaxHeight = Math.Max(MinHeight, SystemParameters.WorkArea.Height - MaxHeightMargin);
+        // 溢出由 SettingsScrollHost 滚动。窗口不声明 MaxWidth/MaxHeight（1.50.0 教训：
+        // 属性会在 HWND 超宽/最大化时把根视觉钳出死区）；交互缩放区间与最大化几何
+        // 全部经 WM_GETMINMAXINFO 轨道尺寸强制（SettingsWindowPlacement），恢复
+        // 持久化几何时（SourceInitialized）再由 Normalize 按目标显示器工作区钳制。
 
         _isSynchronizingControls = true;
         ThemeComboBox.ItemsSource = new[]
@@ -284,13 +280,35 @@ public partial class SettingsWindow : Window
 
     private bool _isInSystemSizing;
 
+    /// <summary>
+    /// 系统最大化意图（WM_SYSCOMMAND SC_MAXIMIZE → WM_SIZE 收口）：轨道尺寸是窗口
+    /// 管理器对一切尺寸变更的统一钳制边界，最大化时须让位给工作区（见 Placement）。
+    /// </summary>
+    private bool _isSystemMaximizing;
+
     private IntPtr WndProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        const int WmSize = 0x0005;
+        const int WmSysCommand = 0x0112;
         const int WmGetMinMaxInfo = 0x0024;
         const int WmEnterSizeMove = 0x0231;
         const int WmExitSizeMove = 0x0232;
+        const int ScMaximize = 0xF030;
+        const int SizeRestored = 0;
         switch (message)
         {
+            case WmSize:
+                if (wParam.ToInt64() == SizeRestored)
+                {
+                    _isSystemMaximizing = false;
+                }
+
+                break;
+            case WmSysCommand:
+                // 只观察不消费：让系统/WPF 正常处理命令本身。最大化期间保持让位
+                //（WPF/系统可能多次重申最大化矩形），其他命令（恢复/移动等）即清除。
+                _isSystemMaximizing = (wParam.ToInt64() & 0xFFF0) == ScMaximize;
+                break;
             case WmEnterSizeMove:
                 _isInSystemSizing = true;
                 break;
@@ -300,16 +318,22 @@ public partial class SettingsWindow : Window
                 CommitPlacement();
                 break;
             case WmGetMinMaxInfo:
+                // 冻结数值唯一来源 Design.SettingsWindowMetrics；最大轨道高由
+                // Placement 按窗口所在显示器工作区推导（40 字节结构体，契约 #24）。
+                // 最大化意图双检测：系统路径（Win+Up 等）经 WM_SYSCOMMAND SC_MAXIMIZE
+                //（WPF 在 WM_SIZE 后才更新 WindowState，须靠标志）；WPF WindowState
+                // 赋值路径（如测试）在消息到达前 DP 已是 Maximized，直接可见。
+                var maximizeIntent = _isSystemMaximizing || WindowState == WindowState.Maximized;
                 var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
                 handled = SettingsWindowPlacement.TryApplyMaximizeWorkArea(
                     hwnd,
                     lParam,
-                    MinWidth,
-                    MinHeight,
-                    MaxWidth,
-                    MaxHeight,
+                    FloatingTransferStation.Design.SettingsWindowMetrics.MinWidth,
+                    FloatingTransferStation.Design.SettingsWindowMetrics.MinHeight,
+                    FloatingTransferStation.Design.SettingsWindowMetrics.MaxWidth,
                     dpi.PixelsPerInchX / 96d,
-                    dpi.PixelsPerInchY / 96d);
+                    dpi.PixelsPerInchY / 96d,
+                    maximizeIntent);
                 break;
         }
 
@@ -319,7 +343,8 @@ public partial class SettingsWindow : Window
     /// <summary>
     /// 恢复持久化几何（契约 #24 §四.3）：整组非法（缺失/NaN/±∞/非正尺寸）或完全落在
     /// 所有显示器之外 → 回落 owner 相对默认定位；否则按持久化矩形中心解析目标显示器，
-    /// 先按其工作区重算 MaxHeight，再把矩形归一（部分越界钳入、负坐标合法）后应用。
+    /// 以其工作区按冻结式（工作区高 − 48，矮屏抬到最小高）归一矩形（部分越界钳入、
+    /// 负坐标合法）后应用。
     /// </summary>
     private void RestorePlacementOrDefault()
     {
@@ -337,10 +362,15 @@ public partial class SettingsWindow : Window
         }
 
         var workArea = ResolveWorkAreaFor(left!.Value + width!.Value / 2, top!.Value + height!.Value / 2);
-        MaxHeight = Math.Max(MinHeight, workArea.Height - MaxHeightMargin);
+        var maxHeight = Math.Max(
+            FloatingTransferStation.Design.SettingsWindowMetrics.MinHeight,
+            workArea.Height - FloatingTransferStation.Design.SettingsWindowMetrics.MaxHeightMargin);
         var rect = SettingsWindowPlacement.Normalize(
             left.Value, top.Value, width.Value, height.Value,
-            MinWidth, MaxWidth, MinHeight, MaxHeight,
+            FloatingTransferStation.Design.SettingsWindowMetrics.MinWidth,
+            FloatingTransferStation.Design.SettingsWindowMetrics.MaxWidth,
+            FloatingTransferStation.Design.SettingsWindowMetrics.MinHeight,
+            maxHeight,
             workArea);
         Width = rect.Width;
         Height = rect.Height;

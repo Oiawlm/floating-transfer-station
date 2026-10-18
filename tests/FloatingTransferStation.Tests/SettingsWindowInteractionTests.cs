@@ -593,8 +593,8 @@ public sealed class SettingsWindowInteractionTests
                 settings.Left >= work.Left - 0.5 && settings.Left + settings.ActualWidth <= work.Right + 0.5,
                 $"设置窗水平方向必须落在工作区内，Left={settings.Left}，右缘={settings.Left + settings.ActualWidth}。");
             Assert.IsTrue(
-                settings.ActualHeight <= settings.MaxHeight + 0.01,
-                $"设置窗实际高度必须服从最大高度，ActualHeight={settings.ActualHeight}。");
+                settings.ActualHeight <= Math.Max(460d, work.Height - 48d) + 0.01,
+                $"设置窗实际高度必须服从冻结最大高（工作区 − 48，矮屏抬到 460），ActualHeight={settings.ActualHeight}。");
 
             SaveVisualEvidence((Border)settings.FindName("WindowShell"), "settings-open-placement.png");
 
@@ -657,7 +657,8 @@ public sealed class SettingsWindowInteractionTests
 
     /// <summary>
     /// 设置窗固定视口与滚动回归（契约 #24，Issue #106）：SizeToContent=Manual 后
-    /// 窗口高度不再跟随内容，最大高按「工作区 − 48、矮屏抬到 MinHeight(460)」收敛；
+    /// 窗口高度不再跟随内容；恢复/默认高度受「工作区 − 48、矮屏抬到 MinHeight(460)」
+    /// 冻结式约束（经 WM_GETMINMAXINFO 轨道尺寸与恢复路径 Normalize 双路强制）；
     /// 内容溢出由共享视口滚动，页脚（退出按钮）在滚动区外保持常驻可见。
     /// </summary>
     [STATestMethod]
@@ -672,18 +673,13 @@ public sealed class SettingsWindowInteractionTests
             CompleteLayout(settings);
 
             var work = SystemParameters.WorkArea;
-            Assert.AreEqual(
-                Math.Max(460d, work.Height - 48d),
-                settings.MaxHeight,
-                0.01,
-                "最大高必须按冻结式收敛：max(最小高 460, 工作区高 − 48)。");
             var scroll = settings.FindName("SettingsScrollHost") as ScrollViewer;
             Assert.IsNotNull(scroll, "设置内容应包在共享 ScrollViewer 视口中。");
             Assert.AreEqual(ScrollBarVisibility.Auto, scroll.VerticalScrollBarVisibility);
             Assert.AreEqual(ScrollBarVisibility.Disabled, scroll.HorizontalScrollBarVisibility);
             Assert.IsTrue(
-                settings.ActualHeight <= settings.MaxHeight + 0.01,
-                $"设置窗实际高度必须服从最大高度，ActualHeight={settings.ActualHeight}。");
+                settings.ActualHeight <= Math.Max(460d, work.Height - 48d) + 0.01,
+                $"设置窗实际高度必须服从冻结最大高，ActualHeight={settings.ActualHeight}。");
             Assert.AreEqual(680d, settings.ActualWidth, 0.01, "默认宽度应为冻结值 680 DIP。");
 
             // 页脚在滚动区外：不滚动也完整可见。
