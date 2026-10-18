@@ -29,6 +29,12 @@ internal static class SettingsWindowPlacement
     /// <summary>虚拟桌面界缝合点（测试多屏布局用）：生产直接读 SystemParameters.VirtualScreen*。</summary>
     internal static Func<(double Left, double Top, double Width, double Height)>? VirtualScreenBoundsOverride;
 
+    /// <summary>
+    /// 显示器信息缝合点（WM_GETMINMAXINFO 路径，按 hwnd 键）：返回 null 走真实查询。
+    /// 供测试注入任务栏在左/上的假显示器，断言 PtMaxPosition = 工作区 − 显示器矩形。
+    /// </summary>
+    internal static Func<IntPtr, MonitorInfoEx?>? MonitorInfoResolverOverride;
+
     /// <summary>几何字段整组合法性：四个值齐备、全部有限、宽高为正。
     /// NaN/±∞/非正尺寸任一出现即整组作废（回落默认定位）。</summary>
     internal static bool IsValid(double? left, double? top, double? width, double? height) =>
@@ -128,10 +134,22 @@ internal static class SettingsWindowPlacement
     }
 
     /// <summary>
-    /// 无边框窗口的系统最大化修正（T7 评审采纳项）：按窗口所在显示器工作区改写
-    /// WM_GETMINMAXINFO 的最大化位置/尺寸（默认会超出工作区约一个 resize 边框的量），
-    /// 并按窗口 DPI 写入最小/最大轨道尺寸（WPF 侧被 handled 后不再自行填写）。
-    /// 返回 false = 环境不可用，交回 WPF 默认处理。
+    /// 无边框窗口的系统缩放与最大化修正（契约 #24）：按窗口所在显示器改写
+    /// WM_GETMINMAXINFO——最大化位置/尺寸取工作区（无边框窗口默认会探出约一个
+    /// resize 边框的量），并写入最小/最大交互轨道尺寸（[MinWidth, MaxWidth] ×
+    /// [MinHeight, 工作区高 − MaxHeightMargin]，物理像素；WPF 侧被 handled 后
+    /// 不再自行填写）。PtMaxPosition 语义是「最大化时窗口左上角相对显示器矩形
+    /// 的偏移」＝工作区原点 − 显示器原点（任务栏在左/上时为正）。最大轨道高由
+    /// 本方法查询到的显示器工作区直接推导（单次查询、窗口所在屏语义），不由
+    /// 调用方传入。轨道尺寸是窗口管理器对一切尺寸变更（拖拽缩放、程序化
+    /// SetWindowPos、贴靠与最大化）的统一钳制边界，因此系统最大化意图
+    /// （WM_SYSCOMMAND SC_MAXIMIZE，由调用方以 <paramref name="isSystemMaximizing"/>
+    /// 传入）时轨道上限让位给工作区尺寸——否则最大化会被 900/工作区−48 钳住，
+    /// 重新制造 1.50.0 的死区。结构体必须与 Win32 MINMAXINFO 严格同构
+    /// （5×POINT＝40 字节，POINT 为两个 32 位 LONG）——1.50.0 及之前用 short
+    /// （每 POINT 4 字节、整体 20 字节）导致轨道尺寸字段从未写入、交互缩放
+    /// 上下限失守。任一入参非有限（NaN/±∞）、DPI 非正或显示器查询失败 →
+    /// 返回 false，交回 WPF 默认处理、缓冲区不动。
     /// </summary>
     internal static bool TryApplyMaximizeWorkArea(
         IntPtr hwnd,
@@ -139,31 +157,58 @@ internal static class SettingsWindowPlacement
         double minWidth,
         double minHeight,
         double maxWidth,
-        double maxHeight,
         double dpiScaleX,
-        double dpiScaleY)
+        double dpiScaleY,
+        bool isSystemMaximizing)
     {
-        var monitor = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
-        if (monitor == IntPtr.Zero)
+        if (!double.IsFinite(minWidth) || !double.IsFinite(minHeight) || !double.IsFinite(maxWidth) ||
+            !double.IsFinite(dpiScaleX) || !double.IsFinite(dpiScaleY) ||
+            dpiScaleX <= 0 || dpiScaleY <= 0)
         {
             return false;
         }
 
-        var info = CreateMonitorInfo();
-        if (!GetMonitorInfo(monitor, ref info))
+        var info = MonitorInfoResolverOverride?.Invoke(hwnd);
+        if (info is null)
         {
-            return false;
+            var monitor = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
+            if (monitor == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            var queried = CreateMonitorInfo();
+            if (!GetMonitorInfo(monitor, ref queried))
+            {
+                return false;
+            }
+
+            info = queried;
         }
 
+        var minTrackX = ToTrackSize(minWidth, dpiScaleX);
+        var minTrackY = ToTrackSize(minHeight, dpiScaleY);
+        var maxTrackX = ToTrackSize(maxWidth, dpiScaleX);
+        var maxTrackY = Math.Max(
+            minTrackY,
+            info.Value.RcWork.Bottom - info.Value.RcWork.Top -
+            (int)Math.Round(Design.SettingsWindowMetrics.MaxHeightMargin * dpiScaleY));
         var mmi = Marshal.PtrToStructure<MinMaxInfo>(lParam);
-        mmi.PtMaxPosition.X = (short)(info.RcMonitor.Left - info.RcWork.Left);
-        mmi.PtMaxPosition.Y = (short)(info.RcMonitor.Top - info.RcWork.Top);
-        mmi.PtMaxSize.X = (short)(info.RcWork.Right - info.RcWork.Left);
-        mmi.PtMaxSize.Y = (short)(info.RcWork.Bottom - info.RcWork.Top);
-        mmi.PtMinTrackSize.X = ToTrackSize(minWidth, dpiScaleX);
-        mmi.PtMinTrackSize.Y = ToTrackSize(minHeight, dpiScaleY);
-        mmi.PtMaxTrackSize.X = ToTrackSize(maxWidth, dpiScaleX);
-        mmi.PtMaxTrackSize.Y = ToTrackSize(maxHeight, dpiScaleY);
+        mmi.PtMaxPosition.X = info.Value.RcWork.Left - info.Value.RcMonitor.Left;
+        mmi.PtMaxPosition.Y = info.Value.RcWork.Top - info.Value.RcMonitor.Top;
+        mmi.PtMaxSize.X = info.Value.RcWork.Right - info.Value.RcWork.Left;
+        mmi.PtMaxSize.Y = info.Value.RcWork.Bottom - info.Value.RcWork.Top;
+        if (isSystemMaximizing)
+        {
+            // 最大化不受交互上限约束（轨道是系统级钳制边界）：轨道让位给工作区尺寸。
+            maxTrackX = Math.Max(maxTrackX, mmi.PtMaxSize.X);
+            maxTrackY = Math.Max(maxTrackY, mmi.PtMaxSize.Y);
+        }
+
+        mmi.PtMinTrackSize.X = minTrackX;
+        mmi.PtMinTrackSize.Y = minTrackY;
+        mmi.PtMaxTrackSize.X = maxTrackX;
+        mmi.PtMaxTrackSize.Y = maxTrackY;
         Marshal.StructureToPtr(mmi, lParam, false);
         return true;
     }
@@ -174,21 +219,21 @@ internal static class SettingsWindowPlacement
         Y = (int)Math.Round(dipY * dpiY / 96d)
     };
 
-    private static short ToTrackSize(double dip, double dpiScale) =>
-        (short)Math.Clamp((long)Math.Round(dip * dpiScale), 0, short.MaxValue);
+    /// <summary>DIP → 物理像素轨道尺寸（MINMAXINFO 字段是 32 位 LONG，钳 [0, int.MaxValue]）。</summary>
+    private static int ToTrackSize(double dip, double dpiScale) =>
+        (int)Math.Clamp((long)Math.Round(dip * dpiScale), 0, int.MaxValue);
 
     private static MonitorInfoEx CreateMonitorInfo() =>
         new() { CbSize = Marshal.SizeOf<MonitorInfoEx>() };
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Pt
+    internal struct Pt
     {
         public int X;
         public int Y;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct Rect
+    internal struct Rect
     {
         public int Left;
         public int Top;
@@ -197,7 +242,7 @@ internal static class SettingsWindowPlacement
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-    private struct MonitorInfoEx
+    internal struct MonitorInfoEx
     {
         public int CbSize;
         public Rect RcMonitor;
@@ -207,21 +252,15 @@ internal static class SettingsWindowPlacement
         public string DeviceName;
     }
 
+    /// <summary>Win32 MINMAXINFO 镜像：5 个 POINT（int×2）＝40 字节，偏移 0/8/16/24/32。</summary>
     [StructLayout(LayoutKind.Sequential)]
-    private struct Points
+    internal struct MinMaxInfo
     {
-        public short X;
-        public short Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MinMaxInfo
-    {
-        public Points PtReserved;
-        public Points PtMaxSize;
-        public Points PtMaxPosition;
-        public Points PtMinTrackSize;
-        public Points PtMaxTrackSize;
+        public Pt PtReserved;
+        public Pt PtMaxSize;
+        public Pt PtMaxPosition;
+        public Pt PtMinTrackSize;
+        public Pt PtMaxTrackSize;
     }
 
     private const uint MonitorDefaultToNearest = 2;

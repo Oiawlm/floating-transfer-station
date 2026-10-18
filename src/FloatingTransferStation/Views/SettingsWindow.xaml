@@ -1,6 +1,7 @@
 <Window x:Class="FloatingTransferStation.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:design="clr-namespace:FloatingTransferStation.Design;assembly=FloatingTransferStation.Core"
         Title="设置"
         Topmost="True"
         ShowInTaskbar="False"
@@ -8,11 +9,10 @@
         ResizeMode="CanResize"
         AllowsTransparency="False"
         Background="Transparent"
-        Width="680"
-        Height="600"
-        MinWidth="560"
-        MinHeight="460"
-        MaxWidth="900"
+        Width="{x:Static design:SettingsWindowMetrics.DefaultWidth}"
+        Height="{x:Static design:SettingsWindowMetrics.DefaultHeight}"
+        MinWidth="{x:Static design:SettingsWindowMetrics.MinWidth}"
+        MinHeight="{x:Static design:SettingsWindowMetrics.MinHeight}"
         SizeToContent="Manual"
         WindowStartupLocation="Manual"
         FontFamily="Segoe UI Variable, Segoe UI"
@@ -20,7 +20,10 @@
   <!-- 复用主窗 Mica 壳技术：整窗玻璃帧承载 DWM 材质，圆角由 DWM 裁剪。
        几何契约（#24，Issue #106）：SizeToContent=Manual + CanResize + 系统级
        8 向缩放（ResizeBorderThickness=6），固定视口由内部 ScrollViewer 承担滚动；
-       MaxHeight 在 code-behind 按工作区冻结式收敛（矮屏抬到 MinHeight）。 -->
+       冻结数值全部来自 SettingsWindowMetrics 单点声明。交互缩放与最大化的
+       上限不由 Window.MaxWidth/MaxHeight 声明（1.50.0 教训：属性会把根视觉钳出
+       死区），而是经 WM_GETMINMAXINFO 轨道尺寸强制；壳层铺满整个 HWND，
+       内容列以 ContentColumnMaxWidth 居中有界。 -->
   <WindowChrome.WindowChrome>
     <WindowChrome CaptionHeight="0"
                   GlassFrameThickness="-1"
@@ -305,7 +308,11 @@
                       Grid.Column="1"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
-          <Grid Margin="16,14,16,16">
+          <!-- 内容列：720 上限内水平居中（壳层铺满 HWND，最大化/超宽时不留死区）。 -->
+          <Grid x:Name="SettingsContentHost"
+                Margin="16,14,16,16"
+                MaxWidth="{x:Static design:SettingsWindowMetrics.ContentColumnMaxWidth}"
+                HorizontalAlignment="Center">
             <StackPanel x:Name="AppearancePage">
               <Border Style="{StaticResource SettingsCardStyle}">
                 <StackPanel>
