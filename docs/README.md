@@ -7,6 +7,7 @@
 - [多窗口并行开发协议](multi-window.md)：多窗口并行的工作区隔离、冲突面申报与串行集成。
 - [设计规范](design.md)：界面颜色、圆角、间距与动效 token。
 - [设计契约清单](design-contracts.md)：已定型、不得回退的行为契约（断言/由来/锁定测试/关联）。
+- [README 风格指南](readme-style-guide.md)：README 与对外门面文档的写作规范（版面骨架、列表与序号、视觉件、中文排版、版本化联动、质量清单）。
 - [images/README.md](images/README.md)：README 视觉资产的构成与再生方式。
 
 ## 功能溯源
