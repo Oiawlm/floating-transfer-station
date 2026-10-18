@@ -24,10 +24,19 @@
        见 CardTextEditorStyle 注释）。 -->
   <sys:Double x:Key="CardTextLineHeight">20</sys:Double>
   <CornerRadius x:Key="ShellCornerRadius">8</CornerRadius>
+  <!-- 圆角两档阶梯（#30 修订 2026-10-18，Issue #186 D9）：控件 4 / 表面 8，
+       数值唯一来源=DesignTokens.ControlCornerRadiusPx / SurfaceCornerRadiusPx
+       （锁定测试镜像）；SurfaceCornerRadius 与 CardCornerRadius（=8）收敛同源。
+       既有 5/6/7 字面量（识别元素/头部钮/徽章）本次触面之外不强制收编。 -->
+  <CornerRadius x:Key="SurfaceCornerRadius">8</CornerRadius>
+  <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>
   <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="HeaderActionCornerRadius">7</CornerRadius>
   <CornerRadius x:Key="PinButtonCornerRadius">6</CornerRadius>
   <CornerRadius x:Key="SelectedCountBadgeCornerRadius">7</CornerRadius>
+  <!-- 选择环圆角（识别元素 r5，#30 修订 2026-10-18）：卡片与瓦片勾选钮共用，
+       镜像 DesignTokens.CheckboxCornerRadius。 -->
+  <CornerRadius x:Key="SelectionRingCornerRadius">5</CornerRadius>
   <converters:BooleanOrConverter x:Key="BooleanOrConverter" />
   <converters:NonEmptyTextConverter x:Key="NonEmptyTextConverter" />
 
@@ -138,6 +147,27 @@
     <Setter Property="Background" Value="{DynamicResource CardBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
+    <!-- 控件级圆角 4（#30 修订 2026-10-18 圆角阶梯 D9）：纯 Setter 样式经附加
+         资源承载（默认模板 Border 读模板内 CornerRadius——纯 Setter 路径下 WPF
+         默认 TextBox 模板的圆角由系统主题给 0，这里用模板内自绘保持阶梯同源）。 -->
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="TextBox">
+          <Border x:Name="Surface"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{StaticResource ControlCornerRadius}">
+            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="Surface" Property="Opacity" Value="0.5" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
     <Style.Triggers>
       <Trigger Property="IsEnabled" Value="False">
         <Setter Property="Opacity" Value="0.5" />
@@ -168,7 +198,7 @@
                   Background="{TemplateBinding Background}"
                   BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="6">
+                  CornerRadius="{StaticResource ControlCornerRadius}">
             <ContentPresenter HorizontalAlignment="Center"
                               VerticalAlignment="Center"
                               Margin="{TemplateBinding Padding}" />
@@ -329,7 +359,7 @@
                     Background="{TemplateBinding Background}"
                     BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}"
-                    CornerRadius="6">
+                    CornerRadius="{StaticResource ControlCornerRadius}">
               <Grid>
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*" />
@@ -1116,41 +1146,6 @@
     </Style.Triggers>
   </Style>
 
-  <!-- 危险动作图标钮模板（快捷启动瓦片 × 删除钮族）：结构与 CardIconButtonTemplate
-       同族（悬停/按压层 + 居中图标），但语义色恒为 DangerBrush——悬停不换强调色
-       （删除入口悬停保持危险色＋低透明度危险底，语义先于装饰）。两模板的布局层
-       保持逐段对应，改其一须同步另一（语义色差异是唯一意图分叉）。 -->
-  <ControlTemplate x:Key="DangerIconButtonTemplate" TargetType="Button">
-    <Border x:Name="DangerIconButtonSurface"
-            Background="{TemplateBinding Background}"
-            BorderBrush="{TemplateBinding BorderBrush}"
-            BorderThickness="{TemplateBinding BorderThickness}"
-            CornerRadius="{StaticResource PinButtonCornerRadius}">
-      <Grid>
-        <Border x:Name="HoverLayer"
-                Background="{DynamicResource DangerBrush}"
-                Opacity="0"
-                CornerRadius="{StaticResource PinButtonCornerRadius}"
-                IsHitTestVisible="False" />
-        <Border x:Name="PressedLayer"
-                Background="{DynamicResource DangerBrush}"
-                Opacity="0"
-                CornerRadius="{StaticResource PinButtonCornerRadius}"
-                IsHitTestVisible="False" />
-        <ContentPresenter HorizontalAlignment="Center"
-                          VerticalAlignment="Center" />
-      </Grid>
-    </Border>
-    <ControlTemplate.Triggers>
-      <Trigger Property="IsMouseOver" Value="True">
-        <Setter TargetName="HoverLayer" Property="Opacity" Value="0.14" />
-      </Trigger>
-      <Trigger Property="IsPressed" Value="True">
-        <Setter TargetName="HoverLayer" Property="Opacity" Value="0" />
-        <Setter TargetName="PressedLayer" Property="Opacity" Value="0.24" />
-      </Trigger>
-    </ControlTemplate.Triggers>
-  </ControlTemplate>
 
   <!-- 快捷启动瓦片右键上下文菜单（#30 修订，Issue #176）：查看态/编辑态瓦片右键
        出「删除/上移/下移/重命名」四项（Win11 开始菜单先例；上移/下移＝WCAG 2.5.7
@@ -1206,33 +1201,143 @@
     <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
   </Style>
 
-  <!-- 快捷启动瓦片 × 删除钮（#30 修订，Issue #176）：编辑态常驻的右上删除入口。
-       显隐与备注钮/AI 钮同族——基态 Collapsed＋Opacity 0＋FadeAnimation.
-       ManageVisibility（禁纯 Opacity 隐藏），由 UpdateLauncherEditVisuals 代码驱动
-       IsActive（激活即时 Visible=真实命中可达，契约 #13）；命中区 24×24
-       （WCAG 2.5.8）完全落在瓦片内（无负 Margin 外溢）；图标矢量 Path，
-       DangerBrush 语义色与全库一致。 -->
-  <Style x:Key="TileDeleteButtonStyle" TargetType="Button">
-    <Setter Property="Width" Value="24" />
-    <Setter Property="Height" Value="24" />
+  <!-- 菜单分组分隔线（#30 修订 2026-10-18：删除独立分组）。 -->
+  <Style x:Key="LauncherContextMenuSeparatorStyle" TargetType="Separator">
+    <Setter Property="Background" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Margin" Value="8,4" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Separator">
+          <Border Background="{TemplateBinding Background}"
+                  Height="{TemplateBinding Height}"
+                  Margin="{TemplateBinding Margin}"
+                  CornerRadius="0.5" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- 对话框壳（#30 修订 2026-10-18，Issue #186 D8）：一个壳，多窗复用（URL 输入/
+       已安装应用选择器/编辑目标）。不透明 DialogSurfaceBrush（两主题字典）＋1px
+       边框＋表面级圆角 8；圆角与阴影唯一来源=DWM（DwmWindowEffects，WindowChrome
+       GlassFrameThickness=0——撤透明背景/Margin 6 假圆角/DropShadowEffect 三件套）；
+       内容内边距 24。个别环境系统圆角/阴影缺失时回退为直角+边框（可用性兜底，
+       禁止第二套假阴影）。 -->
+  <Style x:Key="DialogShellStyle" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource DialogSurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{StaticResource SurfaceCornerRadius}" />
+    <Setter Property="Padding" Value="24" />
+  </Style>
+
+  <!-- 启动瓦片右上勾选钮（#30 修订 2026-10-18，Issue #186）：多选入口，视觉复用
+       SelectionButtonStyle（30×30 命中、16×16 环 r5、悬停环/选中填充/对勾），
+       绑定面按瓦片改写——瓦片非 ListBoxItem，可见性=悬停(瓦片)∨IsSelected∨
+       IsKeyboardFocused 三者或（悬停∨选中∨键盘聚焦可见，#13 族）；命中区完全
+       落在瓦片内。卡片 SelectionButtonStyle 行为零改动。 -->
+  <Style x:Key="LauncherTileSelectionButtonStyle" TargetType="Button">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
     <Setter Property="Opacity" Value="0" />
-    <Setter Property="Visibility" Value="Collapsed" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="Visibility" Value="Visible" />
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
-    <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="Focusable" Value="False" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-    <Setter Property="ToolTip" Value="删除" />
-    <Setter Property="AutomationProperties.Name" Value="删除启动项" />
-    <Setter Property="Template" Value="{StaticResource DangerIconButtonTemplate}" />
-    <Setter Property="views:FadeAnimation.IsActive" Value="False" />
+    <Setter Property="AutomationProperties.Name" Value="选择启动项" />
+    <Setter Property="ToolTip" Value="选择" />
+    <Setter Property="views:FadeAnimation.IsActive">
+      <Setter.Value>
+        <MultiBinding Converter="{StaticResource BooleanOrConverter}">
+          <Binding Path="IsMouseOver" RelativeSource="{RelativeSource AncestorType={x:Type Border}}" />
+          <Binding Path="IsSelected" />
+          <Binding Path="IsKeyboardFocused" />
+        </MultiBinding>
+      </Setter.Value>
+    </Setter>
     <Setter Property="views:FadeAnimation.AnimationsEnabled"
             Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
     <Setter Property="views:FadeAnimation.DurationMs"
-            Value="{x:Static design:DesignTokens.PressFeedbackMs}" />
-    <Setter Property="views:FadeAnimation.ManageVisibility" Value="True" />
+            Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Grid Width="30" Height="30" Background="Transparent">
+            <Border x:Name="SelectionSurface"
+                    Width="16"
+                    Height="16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="Transparent"
+                    BorderBrush="{DynamicResource SecondaryTextBrush}"
+                    BorderThickness="1.5"
+                    CornerRadius="{StaticResource SelectionRingCornerRadius}" />
+            <Border x:Name="SelectionHoverRing"
+                    Width="16"
+                    Height="16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BorderBrush="{DynamicResource AccentBrush}"
+                    BorderThickness="1.5"
+                    CornerRadius="{StaticResource SelectionRingCornerRadius}"
+                    Opacity="0"
+                    IsHitTestVisible="False"
+                    views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}"
+                    views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                    views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+            <Border x:Name="SelectionSelectedFill"
+                    Width="16"
+                    Height="16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource AccentBrush}"
+                    CornerRadius="{StaticResource SelectionRingCornerRadius}"
+                    Opacity="0"
+                    IsHitTestVisible="False"
+                    views:FadeAnimation.IsActive="{Binding IsSelected}"
+                    views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                    views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+            <Path x:Name="SelectionCheck"
+                  Width="9"
+                  Height="7"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  Data="M1,3.5 L3.5,6 L8,1"
+                  Stroke="{DynamicResource OnAccentBrush}"
+                  StrokeThickness="1.5"
+                  StrokeStartLineCap="Round"
+                  StrokeEndLineCap="Round"
+                  StrokeLineJoin="Round"
+                  Stretch="Fill"
+                  Opacity="0"
+                  Visibility="Collapsed"
+                  IsHitTestVisible="False"
+                  views:FadeAnimation.IsActive="{Binding IsSelected}"
+                  views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                  views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}"
+                  views:FadeAnimation.ManageVisibility="True" />
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <MultiDataTrigger>
+        <MultiDataTrigger.Conditions>
+          <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type Border}}}" Value="True" />
+        </MultiDataTrigger.Conditions>
+        <Setter Property="IsHitTestVisible" Value="True" />
+      </MultiDataTrigger>
+      <Trigger Property="IsKeyboardFocusWithin" Value="True">
+        <Setter Property="IsHitTestVisible" Value="True" />
+      </Trigger>
+      <DataTrigger Binding="{Binding IsSelected}" Value="True">
+        <Setter Property="IsHitTestVisible" Value="True" />
+      </DataTrigger>
+    </Style.Triggers>
   </Style>
 
   <!-- AI 追加按钮行（1.41.0，#16/#19 修订）：命中层右列改垂直 StackPanel——

@@ -63,16 +63,8 @@ public sealed partial class MainWindowInteractionTests
                     $"quicklaunch-view-{suffix}.png",
                     "FTS_QUICKLAUNCH_EVIDENCE_DIR");
 
-                // 编辑模式：右上 × 删除钮常驻是本批次修复对象（Issue #176）。
-                EnterLauncherEdit(window);
-                CompleteLayout(window);
-                SaveVisualEvidence(
-                    (Border)window.FindName("WindowShell"),
-                    $"quicklaunch-edit-{suffix}.png",
-                    "FTS_QUICKLAUNCH_EVIDENCE_DIR");
-
                 // 查看态右键菜单（独立 Popup 视觉树，单独实拍）。
-                ExitLauncherEditSilently(window);
+                // 2026-10-18 契约修订（Issue #186）：编辑模式移除，编辑态证据段退场。
                 CompleteLayout(window);
                 var tile = FindLauncherTile(window, window.LaunchersForTests().Items[1]);
                 Assert.IsNotNull(tile);
@@ -92,15 +84,6 @@ public sealed partial class MainWindowInteractionTests
         finally
         {
             CloseWindowWithoutSaving(window);
-        }
-    }
-
-    private static void ExitLauncherEditSilently(MainWindow window)
-    {
-        var editButton = (Button)window.FindName("LauncherEditButton")!;
-        if (Equals(editButton.Content, "完成"))
-        {
-            editButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, editButton));
         }
     }
 

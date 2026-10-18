@@ -87,11 +87,18 @@ public sealed partial class MainWindowInteractionTests
         PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
     }
 
-    /// <summary>真实点击编辑态瓦片进入就地改名（窗口随之成为前台，后续键入可达）。</summary>
-    private static TextBox BeginRenameByRealClick(MainWindow window, Border tile, string expectedPrefill)
+    /// <summary>进入就地改名：真实单击名称带（SendInput 硬件级，窗口随之成为前台，
+    /// 名称带单击不启动不选择）＋键盘 F2 进入既有改名会话；后续键入旅程保持
+    /// SendInput（1.49.1 Explicit 绑定键入断链的端到端守护）。点击点取名称带中心
+    /// （瓦片底部内边距上方；瓦片几何中心在图标启动区，单击会启动）。</summary>
+    private static TextBox BeginRenameByRealDoubleClick(MainWindow window, Border tile, string expectedPrefill)
     {
-        HoverRealAt(window, tile, new Point(tile.ActualWidth / 2, tile.ActualHeight / 2));
+        window.Topmost = true;
+        CompleteLayout(window);
+        HoverRealAt(window, tile, new Point(tile.ActualWidth / 2, tile.ActualHeight - 12));
         ClickBySendInput(window);
+        CompleteLayout(window);
+        window.RaiseEvent(NewKeyEventArgs(window, Key.F2));
         CompleteLayout(window);
         var editor = FindDescendant<TextBox>(tile);
         Assert.IsNotNull(editor, "就地改名编辑器出现。");
@@ -120,14 +127,13 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var catalog = window.LaunchersForTests();
 
-            EnterLauncherEdit(window);
             CompleteLayout(window);
             window.Topmost = true;
             CompleteLayout(window);
 
             var tile = FindLauncherTile(window, catalog.Items.Single());
             Assert.IsNotNull(tile);
-            var editor = BeginRenameByRealClick(window, tile, "example.com");
+            var editor = BeginRenameByRealDoubleClick(window, tile, "example.com");
 
             TypeTextBySendInput(window, "测试改名");
             CompleteLayout(window);
@@ -176,14 +182,13 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var catalog = window.LaunchersForTests();
 
-            EnterLauncherEdit(window);
             CompleteLayout(window);
             window.Topmost = true;
             CompleteLayout(window);
 
             var tile = FindLauncherTile(window, catalog.Items.Single());
             Assert.IsNotNull(tile);
-            var editor = BeginRenameByRealClick(window, tile, "应用甲");
+            var editor = BeginRenameByRealDoubleClick(window, tile, "应用甲");
 
             TypeTextBySendInput(window, "改名后的应用");
             CompleteLayout(window);
@@ -233,14 +238,13 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var catalog = window.LaunchersForTests();
 
-            EnterLauncherEdit(window);
             CompleteLayout(window);
             window.Topmost = true;
             CompleteLayout(window);
 
             var tile = FindLauncherTile(window, catalog.Items.Single());
             Assert.IsNotNull(tile);
-            var editor = BeginRenameByRealClick(window, tile, "原名");
+            var editor = BeginRenameByRealDoubleClick(window, tile, "原名");
 
             // 真实 Ctrl+A 全选＋Delete 清空，再真实 Enter＝空提交回退原名。
             ChordVkBySendInput(window, VkControl, VkA);
@@ -290,14 +294,13 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var catalog = window.LaunchersForTests();
 
-            EnterLauncherEdit(window);
             CompleteLayout(window);
             window.Topmost = true;
             CompleteLayout(window);
 
             var tile = FindLauncherTile(window, catalog.Items.Single());
             Assert.IsNotNull(tile);
-            var editor = BeginRenameByRealClick(window, tile, "example.org");
+            var editor = BeginRenameByRealDoubleClick(window, tile, "example.org");
 
             TypeTextBySendInput(window, "被取消的名字");
             CompleteLayout(window);

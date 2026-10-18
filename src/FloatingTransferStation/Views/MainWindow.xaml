@@ -598,9 +598,11 @@
           </Grid>
         </Border>
 
-        <!-- 快捷启动表面（#30）：瓦片网格宿主，与 BoardList 同格互斥（UpdatePanelSurface 三态分发）。
-             工具行 40 DIP（左：编辑/完成，中：编辑态提示，右：＋添加）；内容区为空态或瓦片网格；
-             文件拖入分流与放置态（2px accent 描边 + 8% 填充 + 「松开以添加」）。 -->
+        <!-- 快捷启动表面（#30 修订 2026-10-18，Issue #186）：瓦片网格宿主，与 BoardList
+             同格互斥（UpdatePanelSurface 三态分发）。工具行 40 DIP（右：＋添加；对齐
+             图片/待分类卡片范式后无编辑模式——改名/删除/拖拽由瓦片常态手势承载）；
+             内容区为空态或瓦片网格；文件拖入分流与放置态（2px accent 描边 + 8% 填充
+             + 「松开以添加」）。 -->
         <Border x:Name="LauncherContentHost"
                 Grid.Row="1"
                 Padding="12,8,12,10"
@@ -618,23 +620,8 @@
               <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <!-- 工具行：编辑钮在空项目数下禁用并 40% 透明（编辑模式切片 3 启用）。 -->
+            <!-- 工具行：仅保留＋添加（编辑模式已移除，#30 修订 2026-10-18，Issue #186）。 -->
             <Grid x:Name="LauncherToolbar" Grid.Row="0" Height="40" Margin="0,0,0,4">
-              <Button x:Name="LauncherEditButton"
-                      HorizontalAlignment="Left"
-                      VerticalAlignment="Center"
-                      Content="编辑"
-                      FontSize="12"
-                      Padding="10,3"
-                      Style="{StaticResource ThemedActionButtonStyle}"
-                      Click="LauncherEditButton_Click" />
-              <TextBlock x:Name="LauncherEditHint"
-                         HorizontalAlignment="Center"
-                         VerticalAlignment="Center"
-                         FontSize="12"
-                         Foreground="{DynamicResource SecondaryTextBrush}"
-                         Text="拖动排序 · 点 × 删除 · 单击改名"
-                         Visibility="Collapsed" />
               <Button x:Name="LauncherAddButton"
                       HorizontalAlignment="Right"
                       VerticalAlignment="Center"
@@ -722,9 +709,10 @@
             </StackPanel>
 
             <!-- 瓦片网格：垂直滚动 + overlay 瘦条（契约 #23 口径，不占布局宽）；不虚拟化
-                 （有界性以 200 上限承载）；列数由代码按内容区（ScrollViewer 视口）实测宽
-                 clamp(3..6) 设定，网格水平居中。宽度输入只来自容器视口——读网格自身渲染
-                 宽回写自身 Width 是自引用死锁（Issue #162 回归）。 -->
+                 （有界性以 200 上限承载）。拉伸填充单一几何源（#30 修订 2026-10-18，
+                 Issue #186）：列数/瓦片宽由 LauncherTilePanel 内经 LauncherGridMath 从
+                 视口宽现算并自行排版（行满排总宽=视口、无死区、末行左对齐），网格不设
+                 Width、不居中——ScrollChanged 回写自身 Width 的自引用结构已消灭。 -->
             <ScrollViewer x:Name="LauncherScroll"
                           Grid.Row="1"
                           Style="{StaticResource OverlayScrollViewerStyle}"
@@ -733,25 +721,25 @@
                           ScrollChanged="LauncherScroll_ScrollChanged"
                           Visibility="Collapsed">
               <ItemsControl x:Name="LauncherTileGrid"
-                            HorizontalAlignment="Center"
+                            HorizontalAlignment="Stretch"
                             Focusable="False">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
-                    <WrapPanel />
+                    <views:LauncherTilePanel />
                   </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                   <DataTemplate DataType="{x:Type models:LauncherItem}">
-                    <!-- 瓦片 84×100（DesignTokens 同源）、圆角 8、内边距 上8 下8 左右6、
-                         瓦片间沟道 8（Margin 4×4=LauncherTileGutterPx/2 两侧，锁定测试
-                         镜像）。悬停 167ms/-2px 与按压 83ms/0.96 走既有动画体系；启动
-                         确认/失败描边/重复脉冲为代码驱动的场景动画。 -->
+                    <!-- 瓦片几何（高 100、沟道 8、宽=视口摊分）由 LauncherTilePanel 排版
+                         承载（DesignTokens 同源经 LauncherGridMath）；瓦片根不再自带
+                         Width/Height/Margin。悬停 167ms/-2px 与按压 83ms/0.96 走既有
+                         动画体系；启动确认/失败描边/重复脉冲为代码驱动的场景动画。
+                         分区手势（#30 修订 2026-10-18，Issue #186）：启动区（图标格，
+                         Tag=LauncherLaunchZone）单击=启动；名称带（Tag=LauncherNameZone）
+                         单击=聚焦、双击=就地改名；右上勾选钮多选。区域判定沿可视树
+                         Tag 路径（与卡片对半分区同机制族，CardGestureZones）。 -->
                     <Border x:Name="TileRoot"
-                            Width="{x:Static design:DesignTokens.LauncherTileWidthPx}"
-                            Height="{x:Static design:DesignTokens.LauncherTileHeightPx}"
-                            Margin="4"
                             Padding="6,8,6,8"
-                            Background="{DynamicResource CardBrush}"
                             BorderBrush="Transparent"
                             BorderThickness="2"
                             CornerRadius="{StaticResource CardCornerRadius}"
@@ -771,17 +759,29 @@
                         </TransformGroup>
                       </Border.RenderTransform>
                       <Border.ContextMenu>
-                        <!-- 查看态/编辑态右键均可用；端点禁用在 Opening 时按当前
-                             下标设定；打开期间挂覆盖交互 Menu hold（不自动收起）。 -->
+                        <!-- 查看态瓦片右键均可用；端点禁用在 Opening 时按当前
+                             下标设定；打开期间挂覆盖交互 Menu hold（不自动收起）。
+                             终序（#30 修订 2026-10-18，Issue #186）：打开/重命名/
+                             编辑目标…/上移/下移/删除（删除独立分组）。 -->
                         <ContextMenu x:Name="TileContextMenu"
                                      Style="{StaticResource LauncherTileContextMenuStyle}"
                                      Opened="LauncherTile_ContextMenuOpened"
                                      Closed="LauncherTile_ContextMenuClosed">
-                          <MenuItem x:Name="TileMenuDelete"
-                                    Header="删除"
-                                    Style="{StaticResource LauncherContextMenuDangerItemStyle}"
-                                    AutomationProperties.Name="删除启动项"
-                                    Click="LauncherTileMenuDelete_Click" />
+                          <MenuItem x:Name="TileMenuOpen"
+                                    Header="打开"
+                                    Style="{StaticResource LauncherContextMenuItemStyle}"
+                                    AutomationProperties.Name="打开启动项"
+                                    Click="LauncherTileMenuOpen_Click" />
+                          <MenuItem x:Name="TileMenuRename"
+                                    Header="重命名"
+                                    Style="{StaticResource LauncherContextMenuItemStyle}"
+                                    AutomationProperties.Name="重命名启动项"
+                                    Click="LauncherTileMenuRename_Click" />
+                          <MenuItem x:Name="TileMenuEditTarget"
+                                    Header="编辑目标…"
+                                    Style="{StaticResource LauncherContextMenuItemStyle}"
+                                    AutomationProperties.Name="编辑启动项目标"
+                                    Click="LauncherTileMenuEditTarget_Click" />
                           <MenuItem x:Name="TileMenuMoveUp"
                                     Header="上移"
                                     Style="{StaticResource LauncherContextMenuItemStyle}"
@@ -792,20 +792,27 @@
                                     Style="{StaticResource LauncherContextMenuItemStyle}"
                                     AutomationProperties.Name="下移启动项"
                                     Click="LauncherTileMenuMoveDown_Click" />
-                          <MenuItem x:Name="TileMenuRename"
-                                    Header="重命名"
-                                    Style="{StaticResource LauncherContextMenuItemStyle}"
-                                    AutomationProperties.Name="重命名启动项"
-                                    Click="LauncherTileMenuRename_Click" />
+                          <Separator Style="{StaticResource LauncherContextMenuSeparatorStyle}" />
+                          <MenuItem x:Name="TileMenuDelete"
+                                    Header="删除"
+                                    Style="{StaticResource LauncherContextMenuDangerItemStyle}"
+                                    AutomationProperties.Name="删除启动项"
+                                    Click="LauncherTileMenuDelete_Click" />
                         </ContextMenu>
                       </Border.ContextMenu>
                       <Border.Style>
                         <Style TargetType="Border">
-                          <Setter Property="ToolTip" Value="{Binding DisplayName}" />
+                          <Setter Property="ToolTip" Value="{Binding ToolTipText}" />
+                          <Setter Property="Background" Value="{DynamicResource CardBrush}" />
                           <Style.Triggers>
                             <DataTrigger Binding="{Binding LaunchFailed}" Value="True">
                               <!-- 失败灰态：2px 危险色描边常显 + 图标 50% + 警告角标。 -->
                               <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                              <!-- 多选态（#30 修订 2026-10-18）：选中底色对齐卡片范式
+                                   （SelectedCardBrush），焦点描边（accent）独立并存。 -->
+                              <Setter Property="Background" Value="{DynamicResource SelectedCardBrush}" />
                             </DataTrigger>
                           </Style.Triggers>
                         </Style>
@@ -815,24 +822,21 @@
                           <RowDefinition Height="Auto" />
                           <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <!-- 编辑态常驻浅底（#30 §四）：进入编辑模式全体瓦片铺底。 -->
-                        <Border x:Name="TileEditLayer"
-                                Grid.RowSpan="2"
-                                Background="{DynamicResource HoverSurfaceBrush}"
-                                CornerRadius="6"
-                                Opacity="0"
-                                IsHitTestVisible="False" />
                         <Grid Grid.Row="0"
                               Width="48"
                               Height="48"
                               Margin="0,0,0,6"
-                              HorizontalAlignment="Center">
-                          <!-- 图标槽按 Kind 分支（#30 修订，Issue #179）：应用/打包应用走
-                               既有「占位字形 + Image 提取链」模板；Url 渲染静态地球字形——
-                               模板选择保证 Url 分支不实例化 Image，图标管线零触达（URL 的
-                               IconKey 是非空垃圾哈希，且 NormalizeTarget 是 DedupKey 组成
-                               部分，两条既有陷阱由此根治）。失败灰态在瓦片 Border 层
-                               DataTrigger 统一覆盖，两分支同受。 -->
+                              HorizontalAlignment="Center"
+                              Background="Transparent"
+                              Tag="{x:Static views:CardGestureZones.LauncherLaunchZone}">
+                          <!-- 启动区（#30 修订 2026-10-18）：单击=启动（选择非空时挂起改
+                               toggle）；拖拽仅从此区发起。图标槽按 Kind 分支（#30 修订，
+                               Issue #179）：应用/打包应用走既有「占位字形 + Image 提取链」
+                               模板；Url 渲染静态地球字形——模板选择保证 Url 分支不实例化
+                               Image，图标管线零触达（URL 的 IconKey 是非空垃圾哈希，且
+                               NormalizeTarget 是 DedupKey 组成部分，两条既有陷阱由此
+                               根治）。失败灰态在瓦片 Border 层 DataTrigger 统一覆盖，
+                               两分支同受。 -->
                           <ContentControl Focusable="False"
                                           Content="{Binding}">
                             <ContentControl.Style>
@@ -847,36 +851,61 @@
                             </ContentControl.Style>
                           </ContentControl>
                         </Grid>
-                        <!-- 名称 12px 两行（行高 16、CharacterEllipsis、tooltip 全名）；
-                             就地改名时被编辑器（DraftName 两行对齐）替换。 -->
-                        <TextBlock x:Name="TileNameText"
-                                   Grid.Row="1"
-                                   MaxHeight="32"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource PrimaryTextBrush}"
-                                   LineHeight="16"
-                                   LineStackingStrategy="BlockLineHeight"
-                                   Text="{Binding DisplayName}"
-                                   TextAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
-                                   TextWrapping="Wrap"
-                                   ToolTip="{Binding DisplayName}" />
-                        <!-- 就地改名编辑器（编辑模式单击瓦片进入；Enter 提交/Esc 取消/
-                             失焦提交；空提交=回退原名；IME 组合守卫与卡片编辑同族）。 -->
-                        <TextBox x:Name="TileNameEditor"
-                                 Grid.Row="1"
-                                 MaxHeight="32"
-                                 FontSize="12"
-                                 TextBlock.LineHeight="16"
-                                 TextBlock.LineStackingStrategy="BlockLineHeight"
-                                 MaxLength="64"
-                                 Padding="2,0"
-                                 Text="{Binding DraftName, UpdateSourceTrigger=Explicit}"
-                                 TextAlignment="Center"
-                                 TextWrapping="Wrap"
-                                 Visibility="Collapsed"
-                                 LostFocus="LauncherTileNameEditor_LostFocus"
-                                 PreviewKeyDown="LauncherTileNameEditor_PreviewKeyDown" />
+                        <!-- 名称带（#30 修订 2026-10-18）：底部整带命中，单击=不启动仅
+                             聚焦、双击=就地改名（DoubleClickWindow 系统时限）；悬停轻微
+                             底色提示可双击；选择非空时单击改 toggle。 -->
+                        <Border x:Name="TileNameBand"
+                                Grid.Row="1"
+                                Padding="0,2,0,2"
+                                CornerRadius="4"
+                                Tag="{x:Static views:CardGestureZones.LauncherNameZone}">
+                          <Border.Style>
+                            <Style TargetType="Border">
+                              <Setter Property="Background" Value="Transparent" />
+                              <Style.Triggers>
+                                <MultiDataTrigger>
+                                  <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True" />
+                                    <Condition Binding="{Binding IsEditingName}" Value="False" />
+                                  </MultiDataTrigger.Conditions>
+                                  <Setter Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
+                                </MultiDataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </Border.Style>
+                          <Grid>
+                            <!-- 名称 12px 两行（行高 16、CharacterEllipsis、tooltip 全名）；
+                                 就地改名时被编辑器（DraftName 两行对齐）替换。 -->
+                            <TextBlock x:Name="TileNameText"
+                                       MaxHeight="32"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource PrimaryTextBrush}"
+                                       LineHeight="16"
+                                       LineStackingStrategy="BlockLineHeight"
+                                       Text="{Binding DisplayName}"
+                                       TextAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       TextWrapping="Wrap"
+                                       ToolTip="{Binding ToolTipText}" />
+                            <!-- 就地改名编辑器（名称带双击/F2/菜单进入；Enter 提交/
+                                 Esc 取消/失焦提交；空提交=回退原名；IME 组合守卫与
+                                 卡片编辑同族；Explicit 绑定修复保持——1.49.1 键入
+                                 不生效根因修复，契约锁定）。 -->
+                            <TextBox x:Name="TileNameEditor"
+                                     MaxHeight="32"
+                                     FontSize="12"
+                                     TextBlock.LineHeight="16"
+                                     TextBlock.LineStackingStrategy="BlockLineHeight"
+                                     MaxLength="64"
+                                     Padding="2,0"
+                                     Text="{Binding DraftName, UpdateSourceTrigger=Explicit}"
+                                     TextAlignment="Center"
+                                     TextWrapping="Wrap"
+                                     Visibility="Collapsed"
+                                     LostFocus="LauncherTileNameEditor_LostFocus"
+                                     PreviewKeyDown="LauncherTileNameEditor_PreviewKeyDown" />
+                          </Grid>
+                        </Border>
                         <!-- 警告角标（失败灰态）。 -->
                         <Border x:Name="TileFailedBadge"
                                 Width="16"
@@ -894,29 +923,15 @@
                                      Foreground="{DynamicResource OnAccentBrush}"
                                      Text="!" />
                         </Border>
-                        <!-- 编辑态右上 × 删除钮（#30 修订，Issue #176）：常驻显示走
-                             FadeAnimation.ManageVisibility 显隐族（TileDeleteButtonStyle，
-                             83ms 淡入；点击删除走撤销提示条事务，不弹模态）；命中区
-                             24×24 完全落在瓦片内，图标矢量 Path 与全库一致。 -->
-                        <Button x:Name="TileDeleteButton"
-                                Margin="0,4,4,0"
+                        <!-- 右上勾选钮（#30 修订 2026-10-18，Issue #186）：多选入口，
+                             悬停∨选中∨键盘聚焦可见（视觉复用 SelectionButtonStyle，
+                             绑定面按瓦片改写）；点击 toggle 该瓦片选中。 -->
+                        <Button x:Name="TileSelectButton"
+                                Margin="0,1,1,0"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Top"
-                                AutomationProperties.Name="删除启动项"
-                                Padding="0"
-                                Click="LauncherTileDeleteButton_Click"
-                                Style="{StaticResource TileDeleteButtonStyle}">
-                          <Path Data="M6,6 L18,18 M18,6 L6,18"
-                                Width="12"
-                                Height="12"
-                                Stretch="Uniform"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
-                                StrokeThickness="1.5"
-                                StrokeStartLineCap="Round"
-                                StrokeEndLineCap="Round" />
-                        </Button>
+                                Click="LauncherTileSelectButton_Click"
+                                Style="{StaticResource LauncherTileSelectionButtonStyle}" />
                       </Grid>
                     </Border>
                   </DataTemplate>

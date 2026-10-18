@@ -3,6 +3,9 @@
                     xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options">
   <SolidColorBrush x:Key="WindowShellBrush" Color="#CCF7F8FA" />
   <SolidColorBrush x:Key="WindowShellOpaqueBrush" Color="#F7F8FA" />
+  <!-- 对话框表面（#30 修订 2026-10-18，Issue #186 D8）：不透明主题表面——撤
+       透明圈/手工阴影后两弹窗与编辑目标对话框的统一壳色。 -->
+  <SolidColorBrush x:Key="DialogSurfaceBrush" Color="#F9F9F9" />
   <SolidColorBrush x:Key="TabRailBrush" Color="#EFF1F4" />
   <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF" />
   <SolidColorBrush x:Key="BorderBrush" Color="#E2E5EA" />

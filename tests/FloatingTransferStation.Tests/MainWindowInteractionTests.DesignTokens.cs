@@ -95,10 +95,11 @@ public sealed partial class MainWindowInteractionTests
     [STATestMethod]
     public void DesignTokens_LauncherTileGeometryMirrorsTokens()
     {
-        // F7 守护（Issue #176 视觉一致性）：瓦片几何唯一数值来源=DesignTokens——
-        // 瓦片 84×100 与节距 92（宽+沟道 8）经 x:Static 同源引用；XAML Margin 4×4
-        // 恰为沟道的一半（两侧合计=沟道）。三处硬编码漂移（XAML 84、代码 84+8、
-        // 焦点导航 /92）由此锁定。
+        // F7 守护（Issue #186 拉伸填充修订；取代 Issue #176 的「Margin 镜像节距 92」
+        // 断言——契约 #30 修订留痕）：瓦片几何唯一计算来源=LauncherGridMath（数值
+        // 唯一来源=DesignTokens），承载=LauncherTilePanel 自行排版。布局事实断言：
+        // 瓦片高=token、瓦片宽=LauncherGridMath.TileWidth(视口, 列数)、相邻瓦片水平
+        // 节距=瓦片宽+沟道、面板布局宽=视口宽（拉伸填充无死区）、列数=公式值。
         using var directory = new TestDirectory();
         using var app = new StubAppFile();
         var board = new BoardService();
@@ -124,24 +125,35 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
             CompleteLayout(window);
             var catalog = window.LaunchersForTests();
+            var viewport = window.LauncherScroll.ViewportWidth;
+            Assert.IsTrue(
+                double.IsFinite(viewport) && viewport > 0,
+                $"前置：展开态视口宽有效（实际 {viewport}）。");
+            var columns = LauncherGridMath.ColumnCount(viewport);
+            var expectedTileWidth = LauncherGridMath.TileWidth(viewport, columns);
             var firstTile = FindLauncherTile(window, catalog.Items[0]);
             Assert.IsNotNull(firstTile);
-            Assert.AreEqual(DesignTokens.LauncherTileWidthPx, firstTile.ActualWidth, 0.01, "瓦片宽=token。");
             Assert.AreEqual(DesignTokens.LauncherTileHeightPx, firstTile.ActualHeight, 0.01, "瓦片高=token。");
+            Assert.AreEqual(expectedTileWidth, firstTile.ActualWidth, 0.05, "瓦片宽=LauncherGridMath 摊分（拉伸填充）。");
             Assert.AreEqual(
-                DesignTokens.LauncherTileGutterPx,
+                0,
                 firstTile.Margin.Left + firstTile.Margin.Right,
                 0.01,
-                "瓦片左右 Margin 合计=沟道 token。");
+                "瓦片根无自带 Margin（沟道由面板排版间距承载）。");
             if (FindLauncherTile(window, catalog.Items[1]) is { } secondTile)
             {
                 Assert.AreEqual(
-                    DesignTokens.LauncherTilePitchPx,
+                    expectedTileWidth + DesignTokens.LauncherTileGutterPx,
                     secondTile.TranslatePoint(new Point(), window).X -
                         firstTile.TranslatePoint(new Point(), window).X,
                     0.5,
-                    "相邻瓦片节距=token（布局事实）。");
+                    "相邻瓦片节距=瓦片宽+沟道（布局事实）。");
             }
+
+            var panel = FindDescendant<LauncherTilePanel>(window.LauncherTileGrid);
+            Assert.IsNotNull(panel, "ItemsPanel=LauncherTilePanel。");
+            Assert.AreEqual(columns, panel.EffectiveColumnCount, 0, "面板生效列数=公式值。");
+            Assert.AreEqual(viewport, panel.ActualWidth, 0.5, "面板布局宽=视口（拉伸填充无死区）。");
         }
         finally
         {

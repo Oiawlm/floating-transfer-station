@@ -500,4 +500,111 @@ public sealed class LauncherCatalogTests
         Assert.AreEqual(1, outcome.OverflowSkippedCount, "200 上限对 Url 条目同语义。");
         Assert.AreEqual(LauncherCatalog.MaxItems, catalog.Items.Count);
     }
+
+    // ---- 编辑目标（#30 修订 2026-10-18，Issue #186 D7）：目标创建后可改——走既有
+    // 串行突变协议（乐观应用→保存→失败回滚），目标变更刷新 IconStamp 触发图标
+    // 自动重取，用户名保留，规范化重复拒绝。----
+
+    [TestMethod]
+    public async Task UpdateTarget_ChangesKindTargetAndArgs_KeepsName_Persists()
+    {
+        var store = new RecordingLauncherStore();
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        var item = new LauncherItem(
+            Guid.NewGuid(), LauncherKind.Url, "https://old.example.com/", "我的站点", DateTimeOffset.UtcNow);
+        await catalog.AddRangeAsync([item]);
+
+        Assert.AreEqual(LauncherUpdateTargetOutcome.Updated, await catalog.UpdateTargetAsync(
+            item.Id,
+            LauncherKind.Url,
+            "https://new.example.com/path"));
+        var live = catalog.Items.Single();
+        Assert.AreEqual(LauncherKind.Url, live.Kind);
+        Assert.AreEqual("https://new.example.com/path", live.TargetPath);
+        Assert.AreEqual("我的站点", live.DisplayName, "用户名保留。");
+        Assert.AreEqual("https://new.example.com/path", store.Saved.Last().Items.Single().TargetPath, "目标持久化。");
+    }
+
+    [TestMethod]
+    public async Task UpdateTarget_RefreshesIconStampForAutomaticIconRefetch()
+    {
+        var store = new RecordingLauncherStore();
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        var item = new LauncherItem(
+            Guid.NewGuid(),
+            LauncherKind.Application,
+            @"C:\Apps\A.exe",
+            "应用",
+            DateTimeOffset.UtcNow,
+            iconStamp: "old-stamp");
+        await catalog.AddRangeAsync([item]);
+
+        Assert.AreEqual(LauncherUpdateTargetOutcome.Updated, await catalog.UpdateTargetAsync(item.Id, LauncherKind.Application, @"C:AppsB.exe"));
+        Assert.IsNull(catalog.Items.Single().IconStamp, "目标变更→IconStamp 置空→图标管线自动重取。");
+    }
+
+    [TestMethod]
+    public async Task UpdateTarget_DuplicateCanonicalTarget_IsRejectedWithoutMutation()
+    {
+        var store = new RecordingLauncherStore();
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        var first = Item(@"C:\Apps\A.exe");
+        var second = Item(@"C:\Apps\B.exe");
+        await catalog.AddRangeAsync([first, second]);
+
+        var rejected = await catalog.UpdateTargetAsync(second.Id, LauncherKind.Application, @"c:\apps\a.exe");
+        Assert.AreEqual(LauncherUpdateTargetOutcome.Duplicate, rejected, "规范化后与既有条目重复→拒绝。");
+        Assert.AreEqual(@"C:\Apps\B.exe", catalog.Items.Single(entry => entry.Id == second.Id).TargetPath, "拒绝不突变。");
+    }
+
+    [TestMethod]
+    public async Task UpdateTarget_SameTarget_NoOpSucceeds()
+    {
+        var store = new RecordingLauncherStore();
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        var item = Item(@"C:\Apps\A.exe");
+        await catalog.AddRangeAsync([item]);
+        var savesBefore = store.Saved.Count;
+
+        Assert.AreEqual(LauncherUpdateTargetOutcome.Updated, await catalog.UpdateTargetAsync(item.Id, LauncherKind.Application, @"C:\Apps\A.exe"));
+        Assert.AreEqual(savesBefore, store.Saved.Count, "目标未变=无写盘。");
+    }
+
+    [TestMethod]
+    public async Task UpdateTarget_SaveFailure_RestoresTargetKindArgsAndStamp()
+    {
+        var store = new RecordingLauncherStore();
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        var item = new LauncherItem(
+            Guid.NewGuid(),
+            LauncherKind.Application,
+            @"C:\Apps\A.exe",
+            "应用",
+            DateTimeOffset.UtcNow,
+            arguments: "/x",
+            workingDirectory: @"C:\Apps",
+            iconStamp: "stamp-1");
+        await catalog.AddRangeAsync([item]);
+
+        store.Respond = (_, _) => throw new IOException("fail");
+        Assert.AreEqual(LauncherUpdateTargetOutcome.Failed, await catalog.UpdateTargetAsync(
+            item.Id,
+            LauncherKind.Application,
+            @"C:\Apps\B.exe",
+            "/y",
+            @"C:\Other"));
+        var live = catalog.Items.Single();
+        Assert.AreEqual(@"C:\Apps\A.exe", live.TargetPath, "保存失败还原目标。");
+        Assert.AreEqual("/x", live.Arguments, "还原参数。");
+        Assert.AreEqual(@"C:\Apps", live.WorkingDirectory, "还原工作目录。");
+        Assert.AreEqual("stamp-1", live.IconStamp, "还原图标戳。");
+    }
+
+    [TestMethod]
+    public async Task UpdateTarget_UnknownIdOrReadOnly_Fails()
+    {
+        var store = new RecordingLauncherStore();
+        var catalog = await LauncherCatalog.LoadAsync(store, _ => { });
+        Assert.AreEqual(LauncherUpdateTargetOutcome.Failed, await catalog.UpdateTargetAsync(Guid.NewGuid(), LauncherKind.Url, "https://x.example.com/"));
+    }
 }

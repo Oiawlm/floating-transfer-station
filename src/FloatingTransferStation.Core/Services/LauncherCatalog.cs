@@ -16,6 +16,14 @@ public sealed record LauncherAddOutcome(
 /// <summary>移除结果（#30）：被删条目与其原下标（撤销提示条按 min(原下标, 当前数) 重插）。</summary>
 public sealed record LauncherRemoveOutcome(LauncherItem Item, int Index);
 
+/// <summary>编辑目标结果（#30 修订 2026-10-18，Issue #186）：更新成功 / 规范化重复拒绝 / 失败（未知条目、只读停用、保存失败）。</summary>
+public enum LauncherUpdateTargetOutcome
+{
+    Updated,
+    Duplicate,
+    Failed,
+}
+
 /// <summary>
 /// 启动项目录（#30，Issue #162；发布语义修订 Issue #176）：唯一突变入口，内部一条
 /// 串行突变链——信号量包住「乐观应用到内存与 Items（按操作类型的最小集合通知：
@@ -354,6 +362,72 @@ public sealed class LauncherCatalog
             }
 
             return true;
+        }
+        finally
+        {
+            _mutationGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// 编辑目标（#30 修订 2026-10-18，Issue #186 D7；同一串行协议）：目标三元组
+    /// 就地替换＋IconStamp 置空（图标管线自动重取），用户名保留；乐观上屏=属性
+    /// 通知（实例同体，零集合变更，对齐 RenameAsync 先例），保存失败还原全部
+    /// 旧值。规范化 (TargetPath, Arguments) 与**其他**条目重复 → Duplicate
+    /// （不突变、不写盘——UI 层提示「已在启动列表中」）；目标未变=Updated 无写盘。
+    /// </summary>
+    public async Task<LauncherUpdateTargetOutcome> UpdateTargetAsync(
+        Guid id,
+        LauncherKind kind,
+        string targetPath,
+        string? arguments = null,
+        string? workingDirectory = null,
+        CancellationToken cancellationToken = default)
+    {
+        await _mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (IsReadOnlyFromNewerVersion || _items.FirstOrDefault(item => item.Id == id) is not { } item)
+            {
+                return LauncherUpdateTargetOutcome.Failed;
+            }
+
+            var candidate = new LauncherItem(
+                id,
+                kind,
+                targetPath,
+                item.DisplayName,
+                item.CreatedAt,
+                arguments,
+                workingDirectory,
+                item.IconStamp);
+            if (_items.Any(entry => entry.Id != id && DedupKey(entry) == DedupKey(candidate)))
+            {
+                return LauncherUpdateTargetOutcome.Duplicate;
+            }
+
+            if (item.Kind == kind &&
+                item.TargetPath == targetPath &&
+                item.Arguments == arguments &&
+                item.WorkingDirectory == workingDirectory)
+            {
+                return LauncherUpdateTargetOutcome.Updated;
+            }
+
+            var original = (item.Kind, item.TargetPath, item.Arguments, item.WorkingDirectory, item.IconStamp);
+            item.AdoptEditedTarget(kind, targetPath, arguments, workingDirectory);
+            if (!await SaveWorkingAsync(_items, cancellationToken).ConfigureAwait(false))
+            {
+                item.AdoptEditedTarget(original.Item1, original.Item2, original.Item3, original.Item4);
+                if (item.IconStamp != original.Item5)
+                {
+                    item.AdoptPersistedIconStamp(original.Item5);
+                }
+
+                return LauncherUpdateTargetOutcome.Failed;
+            }
+
+            return LauncherUpdateTargetOutcome.Updated;
         }
         finally
         {

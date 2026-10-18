@@ -27,8 +27,21 @@ internal partial class LauncherUrlInputWindow : Window
     {
         InitializeComponent();
         DesignThemeManager.Apply(this, theme);
+        // D8：DWM 圆角＋系统阴影唯一来源（失败由 DialogShellFallback 回退直角矩形）。
+        SourceInitialized += (_, _) =>
+        {
+            _dialogShellApplied = DwmWindowEffects.TryApplyDialogShell(
+                new System.Windows.Interop.WindowInteropHelper(this).Handle,
+                theme == DesignTheme.Dark);
+            DialogShellFallback.Apply(this, _dialogShellApplied);
+        };
         Loaded += (_, _) => UrlInputBox.Focus();
     }
+
+    private bool _dialogShellApplied;
+
+    /// <summary>圆角/阴影 DWM 接入探针（D8 坑清单；测试与诊断用）。</summary>
+    internal bool DialogShellAppliedForTests => _dialogShellApplied;
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

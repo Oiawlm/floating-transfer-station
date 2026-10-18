@@ -55,7 +55,6 @@ public sealed partial class MainWindowInteractionTests
             var draggedTile = FindLauncherTile(window, dragged);
             Assert.IsNotNull(draggedTile, "前置：被拖瓦片已生成。");
 
-            EnterLauncherEdit(window);
             CompleteLayout(window);
 
             foreach (var animationsEnabled in new[] { true, false })
@@ -188,7 +187,6 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsNotNull(draggedTile);
             Assert.IsNotNull(targetTile);
 
-            EnterLauncherEdit(window);
             CompleteLayout(window);
             var grid = (ItemsControl)window.FindName("LauncherTileGrid")!;
             // 锚定条目（重排后按下标取容器天然换主；「保持」=同一条目的容器不变）。

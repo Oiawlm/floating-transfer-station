@@ -207,6 +207,25 @@ public sealed partial class MainWindowInteractionTests
             Source = source
         };
 
+    /// <summary>带 timestamp 与修饰键的鼠标事件构造（合成路径）：瓦片单击处理读
+    /// 全局 Keyboard.Modifiers——修饰键语义测试经 NewModifiedKeyEventArgs 同族的
+    /// ModifierKeyboardDevice 注入键盘设备（Keyboard.Modifiers 跟随焦点设备的
+    /// 修饰态），或测试直接用真实 SendInput 组合键注入。</summary>
+    private static MouseButtonEventArgs NewMouseButtonEventArgs(
+        RoutedEvent routedEvent,
+        DependencyObject source,
+        int timestamp,
+        ModifierKeys modifiers)
+    {
+        var device = new ModifierKeyboardDevice(modifiers);
+        var args = new MouseButtonEventArgs(Mouse.PrimaryDevice, timestamp, MouseButton.Left)
+        {
+            RoutedEvent = routedEvent,
+            Source = source
+        };
+        return args;
+    }
+
     private static TextCompositionEventArgs NewTextCompositionEventArgs(
         RoutedEvent routedEvent,
         IInputElement source,

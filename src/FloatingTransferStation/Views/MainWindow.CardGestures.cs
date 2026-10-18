@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -286,7 +285,8 @@ public partial class MainWindow
     /// <summary>
     /// 双击窗口判定（1.28.0 起只对左半文字卡的就地编辑生效，调用方先判区域）：
     /// 同一卡片、两击同区、系统双击时限内、按下位置在系统双击容差内。时限与
-    /// 容差取系统双击设置，与拖拽阈值一样尊重用户的鼠标配置。
+    /// 容差判定抽取为 <see cref="DoubleClickWindow"/> 共享助手（与启动瓦片名称带
+    /// 改名同一口径，卡片行为零改动）。
     /// </summary>
     private bool IsWithinDoubleClickWindow(BoardItem item)
     {
@@ -297,16 +297,12 @@ public partial class MainWindow
             return false;
         }
 
-        var delta = (long)_pressTimestamp - last.Timestamp;
-        // 系统双击容差是物理像素，GetPosition 是 DIP：按窗口 DPI 换算成 DIP
-        // 再比较（一次查询换算 X/Y，150%/200% 缩放下容差不失真）。
-        var dpi = VisualTreeHelper.GetDpi(this);
-        var toleranceX = GetSystemMetrics(SmCxddoubleclk) / dpi.DpiScaleX;
-        var toleranceY = GetSystemMetrics(SmCydoubleclk) / dpi.DpiScaleY;
-        return delta >= 0 &&
-            delta <= GetDoubleClickTime() &&
-            Math.Abs(_pressStartPosition.X - last.Position.X) <= toleranceX &&
-            Math.Abs(_pressStartPosition.Y - last.Position.Y) <= toleranceY;
+        return DoubleClickWindow.Contains(
+            last.Timestamp,
+            last.Position,
+            _pressTimestamp,
+            _pressStartPosition,
+            this);
     }
 
     private void ResetCardPressState()
@@ -347,13 +343,4 @@ public partial class MainWindow
 
         return CardHitZone.Content;
     }
-
-    private const int SmCxddoubleclk = 36;
-    private const int SmCydoubleclk = 37;
-
-    [DllImport("user32.dll")]
-    private static extern uint GetDoubleClickTime();
-
-    [DllImport("user32.dll")]
-    private static extern int GetSystemMetrics(int index);
 }

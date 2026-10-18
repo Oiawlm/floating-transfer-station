@@ -90,8 +90,13 @@ public static class DesignTokens
 
     // 圆角。窗壳圆角权威=DwmCornerRadius（DWM 裁剪与内容层自裁剪同值），
     // XAML 资源 ShellCornerRadius 由锁定测试镜像它——不设第二个壳圆角 token。
+    // 两档阶梯（#30 修订 2026-10-18，Issue #186 D9）：控件级 4（输入框/按钮/下拉/
+    // 复盘编辑框/行内编辑器）、表面级 8（卡/瓦片/弹窗壳/主壳——CardCornerRadius
+    // 同源收敛）；识别元素（选择环 r5 等）保留原值不入阶梯。
     public const int DwmCornerRadius = 8;
     public const int HeaderSurfaceCornerRadius = 11;
+    public const int ControlCornerRadiusPx = 4;
+    public const int SurfaceCornerRadiusPx = 8;
     public const int CardCornerRadius = 8;
     public const int ControlCornerRadius = 7;
     public const int PinButtonCornerRadius = 6;
@@ -105,11 +110,16 @@ public static class DesignTokens
     public const int CardGutterPx = 4;
     public const int CardPaddingPx = 12;
 
-    // 快捷启动瓦片布局（#30 §五；XAML 与代码同源引用，Issue #176 视觉一致性）：
-    // 瓦片 84×100、瓦片间沟道 8（XAML Margin 4×4=8/2 两侧）、节距=宽+沟道（列数
-    // 公式 clamp(floor((Wc+8)/92),3,6) 与网格宽度 columns*pitch-8 的唯一数值来源）。
+    // 快捷启动瓦片布局（#30 §五；2026-10-18 修订＝拉伸填充单一几何源，Issue #186）：
+    // 瓦片高 100、沟道 8、宽 84=下限（域内构造保证）、节距=下限宽+沟道=92（最小单元格，
+    // n 列最小视口=n×84+(n−1)×8 恰在此处瓦片宽=下限）。列数/瓦片宽唯一计算来源=
+    // LauncherGridMath（列数 clamp(floor((A+8)/92),3,6)、瓦片宽=(A−8(n−1))/n、行满排
+    // 总宽精确等于视口）；网格承载=LauncherTilePanel 自行排版，不再有「公式限宽＋
+    // WrapPanel 再量化」双口径与 ScrollChanged 自引用回写（Issue #162 回归结构消灭）。
     public const double LauncherTileWidthPx = 84;
     public const double LauncherTileHeightPx = 100;
     public const int LauncherTileGutterPx = 8;
     public const double LauncherTilePitchPx = LauncherTileWidthPx + LauncherTileGutterPx;
+    public const int LauncherTileMinColumns = 3;
+    public const int LauncherTileMaxColumns = 6;
 }
