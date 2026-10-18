@@ -72,7 +72,7 @@ Windows 正式版使用 .NET 10、WPF、MSTest 和 Inno Setup，引用 `Floating
 - 运行格式验证、受影响范围分层测试（`scripts/run-affected-tests.ps1`）、仓库卫生检查和严格构建，并在 PR 中记录结果；Release 全量由 CI `quality` 权威门承担，本地不重复全量。
 - CI 的 `quality` 任务名“格式、测试与构建”是 `main` 分支保护要求的检查名称；扩充安装包等检查时保留该名称，避免检查通过但 PR 仍无法合并。
 - UI 或交互变化附真实截图或录屏；不要使用生成图冒充产品现场。
-- 同步更新受影响的 README、路线图、架构说明或更新记录。
+- 同步更新受影响的 README、路线图、架构说明或更新记录；README 改动须遵循 [README 风格指南](docs/readme-style-guide.md) 的风格骨架与质量清单。
 - 拆分测试文件时保留测试发现与定向选集；当前窗口交互、生命周期测试采用同名 partial 类，避免因文件拆分漏跑测试。
 - 不提交 `.tools/`、`artifacts/`、`TestResults/`、用户数据、凭据或本机桌面截图。
 
