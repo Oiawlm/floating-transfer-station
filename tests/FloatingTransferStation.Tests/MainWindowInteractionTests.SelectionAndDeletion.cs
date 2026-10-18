@@ -147,18 +147,22 @@ public sealed partial class MainWindowInteractionTests
     [STATestMethod]
     public void HeaderDeleteWithoutSelection_RemovesOnlyTheActiveCategoryWithoutConfirmation()
     {
+        // 契约 #30 修订改写（2026-10-18，Issue #186）：Prompt 槽位已是启动角色，
+        // 激活启动标签时垃圾桶点击走启动分流（无选择=按钮隐藏/无操作）——「无选择
+        // 左键清空仅作用激活分类」的内容桶语义改用 Inbox（内容桶）承载；断言结构
+        // 不变（只清激活桶、他桶保留、一次落盘、按内容禁用）。
         using var directory = new TestDirectory();
         var board = new BoardService();
-        board.AddText("提示词一", BoardCategory.Prompt);
-        board.AddText("提示词二", BoardCategory.Prompt);
-        var inbox = board.AddText("待分类保留");
+        board.AddText("待清空一", BoardCategory.Inbox);
+        board.AddText("待清空二", BoardCategory.Inbox);
+        board.AddText("图片保留", BoardCategory.CustomerOriginal);
         var store = new RecordingBoardStore(directory.Root);
         var window = CreateWindow(board, store, WindowSettings.Default);
 
         try
         {
             window.Show();
-            ExpandCategory(window, BoardCategory.Prompt);
+            ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var delete = window.FindName("DeleteContentButton") as Button;
             Assert.IsNotNull(delete);
@@ -167,11 +171,11 @@ public sealed partial class MainWindowInteractionTests
             delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             CompleteLayout(window);
 
-            Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
-            Assert.AreSame(inbox, board.Items(BoardCategory.Inbox).Single());
+            Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
+            Assert.AreSame(board.Items(BoardCategory.CustomerOriginal).Single(), board.Items(BoardCategory.CustomerOriginal).First());
             Assert.AreEqual(1, store.SaveCount);
             Assert.IsFalse(store.LastPersistedSnapshot!.Items.Any(
-                item => item.Category == BoardCategory.Prompt));
+                item => item.Category == BoardCategory.Inbox));
             Assert.IsFalse(delete.IsEnabled);
         }
         finally
