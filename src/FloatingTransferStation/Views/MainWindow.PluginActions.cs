@@ -105,6 +105,20 @@ public partial class MainWindow
             return;
         }
 
+        await ExecutePluginActionAsync(handle);
+    }
+
+    /// <summary>
+    /// 执行一个插件动作（菜单点击与测试共用入口）：按菜单可见性同一判据重取
+    /// 选集快照（菜单打开期间可能已变）→ 后台跑管线 → 统一提交批量替换。
+    /// </summary>
+    internal async Task ExecutePluginActionAsync(PluginActionHandle handle)
+    {
+        if (_isPluginActionRunning || _isClosing)
+        {
+            return;
+        }
+
         // 菜单打开期间选集可能已变（点击目标卡已先单选/保持），执行前按菜单可见性
         // 同一判据重取快照；多选动作的输入恒为板序文字卡快照。
         var textCards = OrderedSelectedBoardItems()
