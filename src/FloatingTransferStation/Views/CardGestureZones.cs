@@ -40,4 +40,19 @@ public static class CardGestureZones
     /// 双击窗、不记双击痕迹、滑离释放取消意图；左键绝不 toggle 选中。
     /// </summary>
     public const string AiOrganizeCommand = "AiOrganize";
+
+    /// <summary>
+    /// 启动瓦片启动区（#30 修订 2026-10-18，Issue #186）：图标槽区域，单击=启动
+    /// （500ms 重入门闩保持），拖拽仅从此区发起；选择非空时单击改 toggle 选择
+    /// （启动挂起）。标记挂瓦片模板图标格 Tag 上，手势层沿可视树路径识别，
+    /// 区域判定与视觉布局解耦（与卡片对半分区同机制族）。
+    /// </summary>
+    public const string LauncherLaunchZone = "LauncherLaunchZone";
+
+    /// <summary>
+    /// 启动瓦片名称带（#30 修订 2026-10-18，Issue #186）：底部整带，单击=不启动
+    /// 仅聚焦，双击=就地改名（系统双击时限，与卡片左半同一家规）；选择非空时
+    /// 单击改 toggle 选择；不发起拖拽。
+    /// </summary>
+    public const string LauncherNameZone = "LauncherNameZone";
 }

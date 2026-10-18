@@ -19,29 +19,19 @@ namespace FloatingTransferStation.Tests;
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
-    private static Button? FindLauncherDeleteButton(MainWindow window, LauncherItem item)
-    {
-        var tile = FindLauncherTile(window, item);
-        return tile is null ? null : FindDescendant<Button>(tile) is { Name: "TileDeleteButton" } button ? button : null;
-    }
-
     private static Button? FindLauncherUndoButton(MainWindow window)
     {
         var toast = (Border)window.FindName("LauncherUndoToast")!;
         return FindDescendant<Button>(toast);
     }
 
-    private static void EnterLauncherEdit(MainWindow window)
-    {
-        ((Button)window.FindName("LauncherEditButton")!).RaiseEvent(
-            new RoutedEventArgs(Button.ClickEvent, window.FindName("LauncherEditButton")));
-    }
+    // 2026-10-18 契约 #30 修订（Issue #186）：编辑模式移除（D3）——原 EnterLauncherEdit
+    // 助手与 × 删除钮断言随之退场；改名/删除/拖拽由常态手势承载。测试进入改名会话走
+    // 键盘 F2（D6 语义路径），拖拽按压点取启动区（图标格）中心（名称带不发起拖拽）。
 
-    private static void ClickLauncherDeleteButton(MainWindow window, LauncherItem item)
+    private static void InvokeLauncherRenameViaF2(MainWindow window)
     {
-        var button = FindLauncherDeleteButton(window, item);
-        Assert.IsNotNull(button, "编辑态 × 删除钮已生成。");
-        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+        window.RaiseEvent(NewKeyEventArgs(window, Key.F2));
     }
 
     private static bool IsLauncherToastVisible(MainWindow window) =>
@@ -49,8 +39,11 @@ public sealed partial class MainWindowInteractionTests
         ((Border)window.FindName("LauncherUndoToast")!).Opacity > 0;
 
     [STATestMethod]
-    public void QuickLaunch_EditMode_EnterExitViaButtonEscBlankAndTabSwitch()
+    public void QuickLaunch_Selection_ClearViaEscBlankAndTabSwitch()
     {
+        // 契约 #30 修订改写（2026-10-18，Issue #186；原编辑模式进出旅程）：编辑模式
+        // 移除后，模式化会话由「多选会话」承接——清空路径=Esc/点空白/切标签（D5），
+        // 勾选钮与 Ctrl 单击建立选择。
         using var directory = new TestDirectory();
         using var app = new StubAppFile();
         var board = new BoardService();
@@ -69,37 +62,36 @@ public sealed partial class MainWindowInteractionTests
             window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
             ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
             CompleteLayout(window);
+            var catalog = window.LaunchersForTests();
+            var liveFirst = catalog.Items.Single(item => item.Id == first.Id);
+            var liveSecond = catalog.Items.Single(item => item.Id == second.Id);
 
-            EnterLauncherEdit(window);
-            CompleteLayout(window);
-            Assert.AreEqual("完成", ((Button)window.FindName("LauncherEditButton")).Content, "编辑钮切「完成」。");
-            Assert.AreEqual(
-                Visibility.Visible,
-                ((TextBlock)window.FindName("LauncherEditHint")).Visibility,
-                "编辑态提示可见。");
-            Assert.IsNotNull(FindLauncherDeleteButton(window, first), "× 删除钮常驻显示。");
+            // 勾选钮建立选择（两个）。
+            SelectLauncherTileViaButton(window, liveFirst);
+            SelectLauncherTileViaButton(window, liveSecond);
+            Assert.AreEqual(2, LauncherSelectedCountForTests(window), "勾选钮建立两选。");
+            Assert.AreEqual(Visibility.Visible, ((System.Windows.Controls.Button)window.FindName("DeleteContentButton")).Visibility, "选择非空=垃圾桶可见。");
 
-            // Esc 退出编辑模式。
+            // Esc 清空选择。
             window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
             CompleteLayout(window);
-            Assert.AreEqual("编辑", ((Button)window.FindName("LauncherEditButton")).Content, "Esc 退出编辑模式。");
+            Assert.AreEqual(0, LauncherSelectedCountForTests(window), "Esc 清空选择。");
+            Assert.AreEqual(Visibility.Collapsed, ((System.Windows.Controls.Button)window.FindName("DeleteContentButton")).Visibility, "清空后垃圾桶隐藏。");
 
-            // 再进入后点表面空白退出。
-            EnterLauncherEdit(window);
-            CompleteLayout(window);
+            // 再建立后点表面空白清空。
+            SelectLauncherTileViaButton(window, liveFirst);
             var host = (Border)window.FindName("LauncherContentHost");
             host.RaiseEvent(NewMouseButtonEventArgs(
                 UIElement.MouseLeftButtonDownEvent,
                 host));
             CompleteLayout(window);
-            Assert.AreEqual("编辑", ((Button)window.FindName("LauncherEditButton")).Content, "点空白退出编辑模式。");
+            Assert.AreEqual(0, LauncherSelectedCountForTests(window), "点空白清空选择。");
 
-            // 切标签自动退出。
-            EnterLauncherEdit(window);
-            CompleteLayout(window);
+            // 再建立后切标签清空。
+            SelectLauncherTileViaButton(window, liveFirst);
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
-            Assert.AreEqual("编辑", ((Button)window.FindName("LauncherEditButton")).Content, "切标签自动退出编辑模式。");
+            Assert.AreEqual(0, LauncherSelectedCountForTests(window), "切标签清空选择。");
         }
         finally
         {
@@ -107,13 +99,26 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
-    [STATestMethod]
-    public void QuickLaunch_EditMode_DeleteButtonVisibilityIsManaged()
+    private static void SelectLauncherTileViaButton(MainWindow window, LauncherItem item)
     {
-        // B1 守护（GOAL-LAUNCHER-UX-PERF-20261016 / 契约 #30 × 常驻）：编辑态每瓦片
-        // × 删除钮必须真正渲染——基态 Collapsed 的元素只靠 SetIsActive 永不显示
-        //（FadeAnimation 只在 ManageVisibility=true 时翻转 Visibility，合成事件
-        // 可达≠实机可达，契约 #13 缺陷族）。编辑态断言 Visible、退出后断言 Collapsed。
+        var tile = FindLauncherTile(window, item);
+        Assert.IsNotNull(tile);
+        var button = FindDescendant<Button>(tile) is { Name: "TileSelectButton" } selectButton
+            ? selectButton
+            : throw new AssertFailedException("勾选钮存在于瓦片模板。");
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+    }
+
+    private static int LauncherSelectedCountForTests(MainWindow window) =>
+        window.LaunchersForTests().Items.Count(entry => entry.IsSelected);
+
+    [STATestMethod]
+    public void QuickLaunch_SelectionButton_VisibilityIsManagedAndHitWithinTile()
+    {
+        // 契约 #30 修订改写（2026-10-18，Issue #186；原 × 删除钮显隐守护 B1）：多选
+        // 勾选钮承接 WCAG 命中区守护——基态隐（Opacity 0＋IsHitTestVisible=false），
+        // 悬停/选中/键盘聚焦可见（Visible 语义经绑定承载），命中区 ≥24×24 且完全
+        // 落在瓦片矩形内（无负 Margin 外溢，#13 族）。
         using var directory = new TestDirectory();
         using var app = new StubAppFile();
         var board = new BoardService();
@@ -134,44 +139,37 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var catalog = window.LaunchersForTests();
 
-            EnterLauncherEdit(window);
-            CompleteLayout(window);
             foreach (var item in catalog.Items)
             {
-                var button = FindLauncherDeleteButton(window, item);
-                Assert.IsNotNull(button, "× 删除钮存在于瓦片模板。");
-                Assert.AreEqual(
-                    Visibility.Visible,
-                    button.Visibility,
-                    $"编辑态「{item.DisplayName}」的 × 删除钮必须可见（Visibility==Visible）。");
-
-                // 命中区几何（WCAG 2.5.8，#30 修订 Issue #176）：≥24×24 且完全
-                // 落在瓦片矩形内（负 Margin 外溢曾把命中区推进瓦片间隙）。
                 var tile = FindLauncherTile(window, item);
                 Assert.IsNotNull(tile);
+                var button = FindDescendant<Button>(tile) is { Name: "TileSelectButton" } selectButton
+                    ? selectButton
+                    : throw new AssertFailedException("勾选钮存在于瓦片模板。");
+
+                // 命中区几何（WCAG 2.5.8）：≥24×24 且完全落在瓦片矩形内。
                 Assert.IsTrue(button.ActualWidth >= 24 && button.ActualHeight >= 24,
-                    $"× 命中区 {button.ActualWidth:0.#}×{button.ActualHeight:0.#} 必须 ≥24×24。");
+                    $"勾选钮命中区 {button.ActualWidth:0.#}×{button.ActualHeight:0.#} 必须 ≥24×24。");
                 var topLeft = button.TranslatePoint(new Point(0, 0), tile);
                 var hitRect = new Rect(topLeft, new Size(button.ActualWidth, button.ActualHeight));
                 var tileRect = new Rect(0, 0, tile.ActualWidth, tile.ActualHeight);
                 Assert.IsTrue(
                     tileRect.Contains(hitRect),
-                    $"× 命中区必须完全落在瓦片内（hit={hitRect} tile={tileRect}）。");
+                    $"勾选钮命中区必须完全落在瓦片内（hit={hitRect} tile={tileRect}）。");
             }
 
-            // 退出编辑模式后 × 隐藏（ManageVisibility 失活动画完成后 Collapsed；
-            // 本测试关闭动效=立即切换）。
-            window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
+            // 选中态常显：选择非空后按钮 IsHitTestVisible=true（绑定面承载，动效关闭
+            // 下 Opacity 即时到位）。
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            var liveFirst = catalog.Items.Single(candidate => candidate.Id == first.Id);
+            SelectLauncherTileViaButton(window, liveFirst);
             CompleteLayout(window);
-            foreach (var item in catalog.Items)
-            {
-                var button = FindLauncherDeleteButton(window, item);
-                Assert.IsNotNull(button);
-                Assert.AreEqual(
-                    Visibility.Collapsed,
-                    button.Visibility,
-                    $"退出编辑态后「{item.DisplayName}」的 × 删除钮必须收起。");
-            }
+            var selectedTile = FindLauncherTile(window, liveFirst);
+            var selectedButton = FindDescendant<Button>(selectedTile!) is { Name: "TileSelectButton" } b
+                ? b
+                : throw new AssertFailedException("选中瓦片勾选钮存在。");
+            Assert.IsTrue(selectedButton.IsHitTestVisible, "选中态勾选钮可命中（常显语义）。");
+            Assert.IsTrue(selectedButton.Opacity > 0, "选中态勾选钮可见。");
         }
         finally
         {
@@ -180,10 +178,11 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void QuickLaunch_RealInputDeleteButton_ClickDeletesAndUndoRestores()
+    public void QuickLaunch_RealInput_KeyboardDeleteAndUndoRestores()
     {
-        // 契约 #13：× 删除钮必须经真实输入管线可用（合成事件可达≠实机可达——
-        // B1 的旧实现基态 Collapsed 永不渲染，本旅程端到端守护）。
+        // 契约 #30 修订改写（2026-10-18，Issue #186；原 × 删除钮真输入旅程）：删除
+        // 入口键盘直达（D6：Delete=删焦点项），撤销仍走真实输入管线（SendInput 点击
+        // 提示条「撤销」，契约 #13 端到端守护保留）。
         using var directory = new TestDirectory();
         using var app = new StubAppFile();
         var board = new BoardService();
@@ -209,36 +208,24 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var catalog = window.LaunchersForTests();
             var middle = catalog.Items[1];
-
-            EnterLauncherEdit(window);
-            CompleteLayout(window);
             window.Topmost = true;
             CompleteLayout(window);
+            Keyboard.ClearFocus();
 
-            // 真实光标点击编辑态 ×：删除生效并出撤销提示条。启动表面按钮区
-            // PostMessage 直投不可达（与头部按钮区同现象，Updates.cs 探针实证；
-            // 瓦片本体可用），按钮真实输入走 SendInput 硬件级注入（光标先悬停到位）。
-            var tile = FindLauncherTile(window, middle);
-            Assert.IsNotNull(tile);
-            var button = FindLauncherDeleteButton(window, middle);
-            Assert.IsNotNull(button);
-            Assert.AreEqual(Visibility.Visible, button.Visibility, "前置：编辑态 × 可见。");
-            var buttonCenterInTile = button.TranslatePoint(
-                new Point(button.ActualWidth / 2, button.ActualHeight / 2),
-                tile);
-            HoverRealAt(window, tile, buttonCenterInTile);
-            ClickBySendInput(window);
+            // 焦点第二项（Right 从无焦点聚焦第 1 项）→ Delete 删除：撤销提示条出现。
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Right));
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Delete));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
             CompleteLayout(window);
 
-            Assert.AreEqual(2, catalog.Items.Count, "真实点击 × 后删除生效。");
+            Assert.AreEqual(2, catalog.Items.Count, "键盘 Delete 后删除生效。");
             Assert.IsFalse(catalog.Items.Contains(middle), "被删条目离开集合。");
             Assert.IsTrue(IsLauncherToastVisible(window), "撤销提示条出现。");
             Assert.AreEqual(
                 $"已删除「{middle.DisplayName}」",
                 ((TextBlock)window.FindName("LauncherUndoToastText")).Text);
 
-            // 撤销也走真实输入：点击提示条内「撤销」按原下标恢复。
+            // 撤销走真实输入：点击提示条内「撤销」按原下标恢复。
             var toast = (Border)window.FindName("LauncherUndoToast")!;
             var undo = FindLauncherUndoButton(window);
             Assert.IsNotNull(undo);
@@ -262,8 +249,11 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void QuickLaunch_EditMode_RenameCommitCancelAndEmptyFallback()
+    public void QuickLaunch_RenameViaNameBand_CommitCancelAndEmptyFallback()
     {
+        // 契约 #30 修订改写（2026-10-18，Issue #186；原「编辑态单击进入改名」）：
+        // 名称带双击=就地改名（DoubleClickWindow 系统时限，合成双击=同瓦片同位置
+        // 两击）；提交/取消/空回退语义与 Explicit 绑定修复保持。
         using var directory = new TestDirectory();
         using var app = new StubAppFile();
         var board = new BoardService();
@@ -285,16 +275,12 @@ public sealed partial class MainWindowInteractionTests
             var catalog = window.LaunchersForTests();
             var liveFirst = catalog.Items.Single(item => item.Id == first.Id);
 
-            EnterLauncherEdit(window);
-            CompleteLayout(window);
-
-            // 单击瓦片=就地改名：编辑器预填全选。
+            // 名称带双击=就地改名：编辑器预填全选（第一击不启动不选择，第二击进会话）。
             var tile = FindLauncherTile(window, liveFirst);
             Assert.IsNotNull(tile);
-            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile));
-            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, timestamp: 9));
+            DoubleClickLauncherNameBand(tile);
             CompleteLayout(window);
-            var editor = FindDescendant<TextBox>(tile);
+            var editor = FindDescendant<TextBox>(tile!);
             Assert.IsNotNull(editor, "就地改名编辑器出现。");
             Assert.IsTrue(editor.IsKeyboardFocusWithin);
             Assert.AreEqual("原名", editor.Text);
@@ -314,10 +300,9 @@ public sealed partial class MainWindowInteractionTests
 
             // Esc 取消：不改名。
             tile = FindLauncherTile(window, catalog.Items.Single(item => item.Id == first.Id));
-            tile!.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile));
-            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, timestamp: 11));
+            DoubleClickLauncherNameBand(tile!);
             CompleteLayout(window);
-            editor = FindDescendant<TextBox>(tile);
+            editor = FindDescendant<TextBox>(tile!);
             liveFirst.DraftName = "不该出现";
             editor!.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
             CompleteLayout(window);
@@ -328,10 +313,9 @@ public sealed partial class MainWindowInteractionTests
 
             // 空提交=回退原名。
             tile = FindLauncherTile(window, catalog.Items.Single(item => item.Id == first.Id));
-            tile!.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile));
-            tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, timestamp: 12));
+            DoubleClickLauncherNameBand(tile!);
             CompleteLayout(window);
-            editor = FindDescendant<TextBox>(tile);
+            editor = FindDescendant<TextBox>(tile!);
             liveFirst.DraftName = "   ";
             editor!.RaiseEvent(NewKeyEventArgs(window, Key.Enter));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
@@ -344,6 +328,19 @@ public sealed partial class MainWindowInteractionTests
         {
             CloseWindowWithoutSaving(window);
         }
+    }
+
+    /// <summary>名称带合成双击（两击同位置、时限内）。MouseLeftButtonDown/Up 是
+    /// Direct 路由事件，必须从瓦片根（handler 宿主）RaiseEvent；Source 参数传名称带
+    /// ——手势层经 OriginalSource 可视树路径解析出 NameZone，与真实命中同构。</summary>
+    private static void DoubleClickLauncherNameBand(Border tile)
+    {
+        var band = FindDescendants<Border>(tile)
+            .First(candidate => candidate.Tag as string == CardGestureZones.LauncherNameZone);
+        tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, band, timestamp: 100));
+        tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, band, timestamp: 110));
+        tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, band, timestamp: 200));
+        tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, band, timestamp: 210));
     }
 
     [STATestMethod]
@@ -374,8 +371,9 @@ public sealed partial class MainWindowInteractionTests
             var catalog = window.LaunchersForTests();
             var middle = catalog.Items[1];
 
-            EnterLauncherEdit(window);
-            ClickLauncherDeleteButton(window, middle);
+            // 删除入口=键盘 Delete 焦点项（编辑模式移除，2026-10-18 契约修订）。
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Right));
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Delete));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(250));
             CompleteLayout(window);
 
@@ -395,8 +393,9 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(1, catalog.Items.IndexOf(middle), "按原下标重插（min(原下标, 当前数)）。");
             Assert.IsFalse(IsLauncherToastVisible(window), "撤销后提示条隐藏。");
 
-            // 4s 超时销毁记录：删除后推进计时器 tick，撤销不可再恢复。
-            ClickLauncherDeleteButton(window, middle);
+            // 4s 超时销毁记录：再次删除后推进计时器 tick，撤销不可再恢复
+            // （恢复后焦点仍钳在 middle 下标，键盘 Delete 直达）。
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Delete));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(250));
             InvokePrivate(window, "LauncherUndoTimer_Tick", null, EventArgs.Empty);
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
@@ -440,13 +439,16 @@ public sealed partial class MainWindowInteractionTests
             var catalog = window.LaunchersForTests();
             var first = catalog.Items[0];
             var second = catalog.Items[1];
+            Keyboard.ClearFocus();
 
-            EnterLauncherEdit(window);
-            ClickLauncherDeleteButton(window, first);
+            // 删除入口=键盘 Delete 焦点项（编辑模式移除，2026-10-18 契约修订）；
+            // Left 从无焦点聚焦第 0 项删 first；焦点钳制后再 Delete 删 second。
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Left));
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Delete));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
 
             // 新删除替换旧记录：提示条文案换为第二个，旧的不可再恢复。
-            ClickLauncherDeleteButton(window, second);
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Delete));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(250));
             CompleteLayout(window);
             Assert.AreEqual(0, catalog.Items.Count, "两删后清空。");
@@ -473,8 +475,11 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void QuickLaunch_EditMode_KeyboardDeleteAndEnterRename()
+    public void QuickLaunch_Keyboard_DeleteAndF2Rename()
     {
+        // 契约 #30 修订改写（2026-10-18，Issue #186；原「编辑模式键盘族」）：常态键盘
+        // 语义——F2=改名焦点项（不再进编辑模式）、Delete=删焦点项（带撤销）、
+        // 方向键导航、Enter=启动（另测）。
         using var directory = new TestDirectory();
         using var app = new StubAppFile();
         var board = new BoardService();
@@ -496,34 +501,30 @@ public sealed partial class MainWindowInteractionTests
             var catalog = window.LaunchersForTests();
             Keyboard.ClearFocus();
 
-            // 查看态 F2=进入编辑模式（键盘层级②）。
-            window.RaiseEvent(NewKeyEventArgs(window, Key.F2));
-            CompleteLayout(window);
-            Assert.AreEqual("完成", ((Button)window.FindName("LauncherEditButton")).Content, "F2 进入编辑模式。");
-            Assert.IsTrue(GetPrivateField<bool>(window, "_launcherEditMode"), "探针：F2 后编辑态。");
-
-            // 键盘 Delete=删焦点瓦片（不弹模态；撤销条兜底）。
-            window.RaiseEvent(NewKeyEventArgs(window, Key.Right));
-            Assert.IsTrue(GetPrivateField<bool>(window, "_launcherEditMode"), "探针：Right 后编辑态。");
+            // 键盘 Delete=删焦点瓦片（方向键初始化焦点：Left 从无焦点聚焦第 0 项；
+            // 不弹模态，撤销条兜底）。
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Left));
             window.RaiseEvent(NewKeyEventArgs(window, Key.Delete));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(250));
-            Assert.IsTrue(GetPrivateField<bool>(window, "_launcherEditMode"), $"探针：Delete 后编辑态（items={window.LaunchersForTests().Items.Count}）。");
             CompleteLayout(window);
-            Assert.AreEqual(1, catalog.Items.Count, "编辑态 Delete 删焦点瓦片。");
+            Assert.AreEqual(1, catalog.Items.Count, $"常态 Delete 删焦点瓦片（focus after Right={GetPrivateField<int>(window, "_launcherFocusedIndex")}）。");
+            Assert.IsFalse(
+                catalog.Items.Any(item => item.Id == first.Id),
+                $"删除的是焦点项（remaining={string.Join(",", catalog.Items.Select(entry => entry.DisplayName))}）。");
             Assert.IsTrue(IsLauncherToastVisible(window), "删除有撤销提示条兜底（无模态）。");
 
-            // 键盘 Enter=改名焦点瓦片。
-            window.RaiseEvent(NewKeyEventArgs(window, Key.Enter));
+            // 键盘 F2=改名焦点项（进入既有改名会话，无编辑模式）。
+            window.RaiseEvent(NewKeyEventArgs(window, Key.F2));
             CompleteLayout(window);
             var remaining = catalog.Items.Single();
             Assert.IsTrue(
                 remaining.IsEditingName,
-                $"前置：Enter 已进入改名（DraftName={remaining.DraftName}；edit={GetPrivateField<bool>(window, "_launcherEditMode")}；focus={GetPrivateField<int>(window, "_launcherFocusedIndex")}；focused={Keyboard.FocusedElement?.GetType().Name ?? "null"}）。");
+                $"前置：F2 已进入改名（DraftName={remaining.DraftName}；focus={GetPrivateField<int>(window, "_launcherFocusedIndex")}；focused={Keyboard.FocusedElement?.GetType().Name ?? "null"}）。");
             var focusedTile = FindLauncherTile(window, remaining);
             Assert.IsNotNull(focusedTile);
             var editor = FindDescendant<TextBox>(focusedTile);
             Assert.AreEqual("TileNameEditor", editor?.Name);
-            Assert.IsNotNull(editor, "键盘 Enter 进入改名编辑器。");
+            Assert.IsNotNull(editor, "键盘 F2 进入改名编辑器。");
             Assert.IsTrue(editor.IsKeyboardFocusWithin, "前置：编辑器持有焦点。");
             remaining.DraftName = "改名了";
             Assert.AreEqual("改名了", editor.Text, "前置：DraftName 绑定回显。");
@@ -575,7 +576,6 @@ public sealed partial class MainWindowInteractionTests
             var catalog = window.LaunchersForTests();
             var dragged = catalog.Items[0];
 
-            EnterLauncherEdit(window);
             CompleteLayout(window);
             window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
 
@@ -700,7 +700,6 @@ public sealed partial class MainWindowInteractionTests
             var catalog = window.LaunchersForTests();
             var dragged = catalog.Items[0];
 
-            EnterLauncherEdit(window);
             CompleteLayout(window);
             window.Topmost = true;
             CompleteLayout(window);
@@ -788,7 +787,6 @@ public sealed partial class MainWindowInteractionTests
             var dragged = catalog.Items[0];
             var target = catalog.Items[3];
 
-            EnterLauncherEdit(window);
             CompleteLayout(window);
             window.Topmost = true;
             CompleteLayout(window);
@@ -884,7 +882,6 @@ public sealed partial class MainWindowInteractionTests
             window.Topmost = true;
             CompleteLayout(window);
 
-            EnterLauncherEdit(window);
             CompleteLayout(window);
 
             // 第一轮拖拽提交：松手后让位动画路径已走过（减动效下为立即重置；本
@@ -1022,7 +1019,6 @@ public sealed partial class MainWindowInteractionTests
             window.Topmost = true;
             CompleteLayout(window);
 
-            EnterLauncherEdit(window);
             CompleteLayout(window);
 
             // 起拖 1 号瓦片（不松手）。
@@ -1122,7 +1118,6 @@ public sealed partial class MainWindowInteractionTests
             var dragged = catalog.Items[0];
             var target = catalog.Items[2];
 
-            EnterLauncherEdit(window);
             CompleteLayout(window);
 
             var draggedTile = FindLauncherTile(window, dragged);

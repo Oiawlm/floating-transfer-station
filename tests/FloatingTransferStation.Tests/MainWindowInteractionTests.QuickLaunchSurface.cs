@@ -1416,18 +1416,32 @@ public sealed partial class MainWindowInteractionTests
             var secondTile = FindLauncherTile(window, catalog.Items[1]);
             Assert.IsNotNull(secondTile, "前置：乙瓦片已生成。");
 
-            // 右移聚焦 → Enter 启动（门闩外）。
+            // 右移聚焦 → Space=toggle 选择（#30 修订：原「Space=启动」废止；选择
+            // 非空后再按取消、末项取消不启动）。启动断言放最后（启动成功 250ms 后
+            // 面板自动收起并销毁撤销提示条，#30 §三.7 既有行为）。
             window.RaiseEvent(NewKeyEventArgs(window, Key.Right));
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Space));
+            CompleteLayout(window);
+            Assert.AreEqual(1, window.LaunchersForTests().Items.Count(entry => entry.IsSelected), "Space=toggle 焦点瓦片选择。");
+            Assert.AreEqual(0, starter.Started.Count, "Space 不启动。");
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Space));
+            CompleteLayout(window);
+            Assert.AreEqual(0, window.LaunchersForTests().Items.Count(entry => entry.IsSelected), "再按 Space 取消选择（末项取消不启动）。");
+            Assert.AreEqual(0, starter.Started.Count, "取消选择的 Space 不得顺带启动。");
+
+            // Delete=删除焦点项（#30 修订：原「查看态 Delete 无操作」废止；带撤销）。
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Delete));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(600));
+            CompleteLayout(window);
+
+            Assert.AreEqual(1, window.LaunchersForTests().Items.Count, "Delete 删除焦点项。");
+            Assert.IsTrue(IsLauncherToastVisible(window), "删除带撤销提示条。");
+
+            // Enter=启动聚焦瓦片（门闩外）。
             window.RaiseEvent(NewKeyEventArgs(window, Key.Enter));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(60));
 
             Assert.AreEqual(1, starter.Started.Count, "键盘 Enter=启动聚焦瓦片（一次有效请求）。");
-
-            // 查看态 Delete 无操作：不删除、已处理。
-            window.RaiseEvent(NewKeyEventArgs(window, Key.Delete));
-            CompleteLayout(window);
-
-            Assert.AreEqual(2, window.LaunchersForTests().Items.Count, "查看态 Delete 无操作。");
         }
         finally
         {
@@ -1684,18 +1698,18 @@ public sealed partial class MainWindowInteractionTests
             SaveWindowShot(window, Path.Combine(outputDirectory, "quicklaunch-surface-dark.png"));
             DesignThemeManager.Apply(window, DesignTheme.Light);
 
-            // 编辑模式 + 撤销提示条：删除一个瓦片后截图。
+            // 撤销提示条：键盘 Delete 一个瓦片后截图（2026-10-18 契约修订：
+            // 编辑模式移除，删除入口=键盘 Delete，edit-mode 截图段退场）。
             Assert.IsGreaterThan(1, window.LaunchersForTests().Items.Count, "前置：瓦片充足。");
-            InvokePrivate(window, "EnterLauncherEditMode");
             var victim = window.LaunchersForTests().Items[1];
-            ClickLauncherDeleteButtonForDocs(window, victim);
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Right));
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Delete));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             CompleteLayout(window);
-            SaveWindowShot(window, Path.Combine(outputDirectory, "quicklaunch-edit-mode.png"));
+            SaveWindowShot(window, Path.Combine(outputDirectory, "quicklaunch-undo-toast.png"));
 
             // ＋ 两入口菜单（切片 4）：Popup 渲染在独立视觉树（PopupRoot），
             // 截图取菜单面板本体（Popup.Child）。
-            InvokePrivate(window, "ExitLauncherEditMode");
             CompleteLayout(window);
             window.LauncherAddButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, window.LauncherAddButton));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
@@ -1757,15 +1771,6 @@ public sealed partial class MainWindowInteractionTests
         encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
         using var stream = File.Create(filePath);
         encoder.Save(stream);
-    }
-
-    private static void ClickLauncherDeleteButtonForDocs(MainWindow window, LauncherItem item)
-    {
-        var tile = FindLauncherTile(window, item);
-        Assert.IsNotNull(tile);
-        var button = FindDescendant<Button>(tile);
-        Assert.IsNotNull(button);
-        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
     }
 
     private static void SaveWindowShot(MainWindow window, string filePath)

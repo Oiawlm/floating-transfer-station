@@ -60,13 +60,18 @@ public partial class MainWindow
         DeleteContentButton.Visibility = isReview || isLauncher ? Visibility.Collapsed : Visibility.Visible;
         if (isLauncher)
         {
-            // 启动表面空态/网格与工具行状态随激活刷新（绑定集合变化另行驱动）。
+            // 启动表面空态/网格与工具行状态随激活刷新（绑定集合变化另行驱动）；
+            // 垃圾桶随多选进入「删除已选 N 项」语义（#30 修订 2026-10-18，Issue #186）。
             UpdateLauncherSurfaceState();
+            UpdateLauncherDeleteButtonForSelection();
+            DeleteContentButton.Visibility = LauncherSelectedCount() > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
-        else if (_launcherEditMode || _launcherUndoTimer.IsEnabled)
+        else
         {
-            // 切标签自动退出编辑模式；提示条与撤销记录随切标签一起销毁（#30 §三.7）。
-            ExitLauncherEditMode();
+            // 切标签：改名会话提交、多选清空；提示条与撤销记录随切标签一起销毁
+            // （#30 §三.7；2026-10-18 起「编辑模式自动退出」由前两者承接）。
+            CommitLauncherTileRename();
+            ClearLauncherSelection();
             DestroyLauncherUndoToast();
         }
 

@@ -369,7 +369,21 @@ public partial class MainWindow : Window
 
     private async Task DeleteFromTrashButtonAsync(bool rightClick)
     {
-        if (_isClosing || _isDeletePending || _viewModel.ActivePanel is not { } activePanel)
+        if (_isClosing || _isDeletePending)
+        {
+            return;
+        }
+
+        // 启动表面分流（#30 修订 2026-10-18，Issue #186）：垃圾桶按钮为内容桶/启动
+        // 表面共享实例——启动激活时有选择=整批删除（带撤销），无选择=按钮本就隐藏
+        // （防御直达）；内容桶语义照旧。
+        if (IsLauncherActive())
+        {
+            await DeleteFromLauncherTrashAsync();
+            return;
+        }
+
+        if (_viewModel.ActivePanel is not { } activePanel)
         {
             return;
         }

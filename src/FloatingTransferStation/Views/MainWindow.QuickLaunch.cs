@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -25,10 +26,18 @@ public partial class MainWindow
     private readonly Dictionary<Guid, Border> _launcherTileContainers = [];
     private Guid? _launcherPressItemId;
     private System.Windows.Point _launcherPressStartPosition;
+    private string? _launcherPressZone;
     private int _launcherFocusedIndex = -1;
     private int _expandSessionId;
     private int _launchCollapseSession;
     private bool _launcherEntrancePlayed;
+
+    // 多选会话（#30 修订 2026-10-18，Issue #186）：权威状态=条目 IsSelected（绑定源），
+    // 锚点=最近一次单选/Ctrl 选中的下标（Shift 范围选基准，语义对齐卡片 RangeSelection）。
+    private Guid? _launcherSelectionAnchorId;
+
+    // 名称带双击窗痕迹（DoubleClickWindow 共享判定）：同瓦片、时限内、容差内两击=改名。
+    private (Guid ItemId, int Timestamp, System.Windows.Point Position)? _launcherLastClick;
 
     // 再展开抑制解除观测轮询（#30，Issue #173）：收起后仅把手接收鼠标消息，指针
     // 离开收起把手矩形只能靠全局轮询观测；节奏与贴边隐藏回位轮询一致（业界主流
@@ -113,21 +122,26 @@ public partial class MainWindow
             });
         }
 
-        if (_launcherEditMode && _launchers.Count == 0)
+        // 选择集随集合变更收敛：被删条目移出选择（批量删除路径会先清空，此处
+        // 兜底覆盖旁路突变），焦点索引钳制到当前计数域。
+        if (_launchers.Count == 0)
         {
-            // 删空最后瓦片：编辑模式无对象，自动退出（空态工具行编辑钮回到禁用）。
-            ExitLauncherEditMode();
+            ClearLauncherSelection();
+        }
+        else if (_launchers.Items.Any(item => item.IsSelected))
+        {
+            UpdateLauncherDeleteButtonForSelection();
         }
 
-        if (_launcherEditMode)
+        if (_launcherFocusedIndex >= _launchers.Count)
         {
-            UpdateLauncherEditVisuals();
+            _launcherFocusedIndex = _launchers.Count - 1;
+            ApplyLauncherFocusVisual();
         }
     }
 
-    /// <summary>空态/网格切换与工具行状态（编辑钮无项目禁用 40% 透明）。全部读目录
-    /// 权威计数——PublishInline 的 Clear→Add 瞬态会让 Items.Count 闪 0（若据此钳制
-    /// 焦点索引会被毒化为 -1）。</summary>
+    /// <summary>空态/网格切换与工具行状态。全部读目录权威计数——PublishInline 的
+    /// Clear→Add 瞬态会让 Items.Count 闪 0（若据此钳制焦点索引会被毒化为 -1）。</summary>
     private void UpdateLauncherSurfaceState()
     {
         if (!IsLauncherSurfaceReady())
@@ -138,8 +152,11 @@ public partial class MainWindow
         var isEmpty = _launchers.Count == 0;
         LauncherEmptyState.SetCurrentValue(VisibilityProperty, isEmpty ? Visibility.Visible : Visibility.Collapsed);
         LauncherScroll.SetCurrentValue(VisibilityProperty, isEmpty ? Visibility.Collapsed : Visibility.Visible);
-        LauncherEditButton.SetCurrentValue(IsEnabledProperty, !isEmpty && !_launchers.IsReadOnlyFromNewerVersion);
-        LauncherEditButton.SetCurrentValue(OpacityProperty, isEmpty ? 0.4 : 1.0);
+        if (isEmpty)
+        {
+            ClearLauncherSelection();
+        }
+
         if (_launcherFocusedIndex >= _launchers.Count)
         {
             _launcherFocusedIndex = _launchers.Count - 1;
@@ -485,7 +502,10 @@ public partial class MainWindow
         ShowStatus(string.Join("，", segments) + "。");
     }
 
-    // ---- 瓦片交互：单击启动（按下/抬起同瓦片、位移 <4 DIP、500ms 重入门闩）----
+    // ---- 瓦片分区手势（#30 修订 2026-10-18，Issue #186）：启动区单击=启动（500ms
+    // 重入门闩保持）；名称带单击=聚焦、双击=就地改名；右上勾选钮 toggle 多选；
+    // Ctrl+单击=toggle、Shift+单击=范围选；选择非空 ⇒ 瓦片非控件区单击=toggle 选择
+    // （启动挂起）。区域判定沿可视树 Tag 路径（CardGestureZones，与卡片同机制族）。----
 
     private void LauncherTile_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -496,6 +516,7 @@ public partial class MainWindow
 
         _launcherPressItemId = item.Id;
         _launcherPressStartPosition = e.GetPosition(this);
+        _launcherPressZone = ResolveLauncherZone(e.OriginalSource as DependencyObject);
         AnimateLauncherPressScale(tile, pressed: true);
         e.Handled = true;
     }
@@ -508,7 +529,9 @@ public partial class MainWindow
         }
 
         var pressId = _launcherPressItemId;
+        var pressZone = _launcherPressZone;
         _launcherPressItemId = null;
+        _launcherPressZone = null;
         AnimateLauncherPressScale(tile, pressed: false);
         if (_launcherDraggingId is not null)
         {
@@ -528,21 +551,84 @@ public partial class MainWindow
         }
 
         e.Handled = true;
-        _launcherFocusedIndex = IndexOfLauncherItem(item);
-        ApplyLauncherFocusVisual();
-        if (_launcherEditMode)
+        // 修饰键读输入设备全局态（MouseEventArgs 无自带 KeyboardDevice；真实输入
+        // 与合成注入都在 Click/Up 分发前置位 Keyboard.Modifiers 即可达）。
+        var modifiers = Keyboard.Modifiers;
+        var hasSelection = LauncherSelectedCount() > 0;
+
+        // 选择非空：瓦片非控件区（启动区/名称带）单击一律 toggle 选择（启动挂起；
+        // 取消最后一项的这击不得顺带启动）。勾选钮自身经按钮 Click 路径（不进此分支）。
+        if (hasSelection && modifiers == ModifierKeys.None)
         {
-            // 编辑态单击=就地改名（不启动）。
-            BeginLauncherTileRename(item);
+            ToggleLauncherSelection(item);
             return;
         }
 
+        if (modifiers.HasFlag(ModifierKeys.Control))
+        {
+            // Ctrl+单击=逐击 toggle（对齐卡片 RangeSelection 语义，锚点更新）。
+            _launcherFocusedIndex = IndexOfLauncherItem(item);
+            ApplyLauncherFocusVisual();
+            ToggleLauncherSelection(item);
+            return;
+        }
+
+        if (modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            // Shift+单击=范围选（当前可见序=目录数组序；非叠加=先清空再范围选）。
+            _launcherFocusedIndex = IndexOfLauncherItem(item);
+            ApplyLauncherFocusVisual();
+            SelectLauncherRange(item, additive: false);
+            return;
+        }
+
+        _launcherFocusedIndex = IndexOfLauncherItem(item);
+        ApplyLauncherFocusVisual();
+        if (pressZone == CardGestureZones.LauncherNameZone)
+        {
+            // 名称带单击=不启动不选择（仅聚焦）；双击窗内的第二击=就地改名。
+            if (_launcherLastClick is { } last &&
+                last.ItemId == item.Id &&
+                DoubleClickWindow.Contains(last.Timestamp, last.Position, e.Timestamp, _launcherPressStartPosition, this))
+            {
+                _launcherLastClick = null;
+                BeginLauncherTileRename(item);
+                return;
+            }
+
+            _launcherLastClick = (item.Id, e.Timestamp, _launcherPressStartPosition);
+            return;
+        }
+
+        // 启动区（与瓦片余面）单击=启动瞬时＋500ms 重入门闩。
         if (IsLauncherLaunchLatched(item))
         {
             return;
         }
 
         LaunchLauncherItem(item, tile);
+    }
+
+    private void LauncherTile_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        // 右键不启动、不改选择（启动判定要求左键 PointerUp 同瓦片 <4 DIP，结构
+        // 不可达；菜单由 TileRoot.ContextMenu 承载）。
+    }
+
+    /// <summary>沿命中元素向上的可视树路径取第一个瓦片分区标记；未遇到标记
+    /// （瓦片内边距环带、容器自身）归启动区——贴边点击承载启动/拖拽，不误触名称带。</summary>
+    private static string? ResolveLauncherZone(DependencyObject? source)
+    {
+        for (var current = source; current is not null; current = System.Windows.Media.VisualTreeHelper.GetParent(current))
+        {
+            if (current is FrameworkElement { Tag: string tag } &&
+                (tag == CardGestureZones.LauncherLaunchZone || tag == CardGestureZones.LauncherNameZone))
+            {
+                return tag;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>500ms 重入门闩按瓦片计：同瓦片双击抖动不重复派发；不同瓦片的连击
@@ -607,11 +693,11 @@ public partial class MainWindow
             _launchCollapseSession != _expandSessionId ||
             IsPanelEditHoldActive() ||
             _panelState.IsPanelHoldActive ||
-            _panelState.HasOverlayInteraction ||
-            IsLauncherEditModeActive())
+            _panelState.HasOverlayInteraction)
         {
             // 任一抑制条件在等待期出现即取消本次收起（失败启动在 LaunchLauncherItem
-            // 内已直接停表＝更新的失败取消收起保展开反馈）。
+            // 内已直接停表＝更新的失败取消收起保展开反馈）。改名编辑器持有焦点的
+            // 抑制由 IsPanelEditHoldActive 族承载（#7 编辑保持；编辑模式已移除）。
             return;
         }
 
@@ -629,11 +715,13 @@ public partial class MainWindow
         CompletePanelCollapseHandoff(collapsedPlacement);
     }
 
-    /// <summary>收起态落地共用尾段（入场重播标记重置 + 几何交接）；面板收起自动退出
-    /// 编辑模式并销毁撤销提示条（#30 §四/§三.7）；＋菜单随收起关闭。</summary>
+    /// <summary>收起态落地共用尾段（入场重播标记重置 + 几何交接）；面板收起自动
+    /// 提交改名会话并清空多选、销毁撤销提示条（#30 §四/§三.7；2026-10-18 起
+    /// 「编辑模式自动退出」由「改名提交+选择清空」承接）；＋菜单随收起关闭。</summary>
     private void CompletePanelCollapseHandoff(WindowPlacement collapsedPlacement)
     {
-        ExitLauncherEditMode();
+        CommitLauncherTileRename();
+        ClearLauncherSelection();
         DestroyLauncherUndoToast();
         LauncherAddMenu.IsOpen = false;
         ResetLauncherEntranceReplay();
@@ -786,11 +874,12 @@ public partial class MainWindow
         SetLauncherDropHighlight(active: false);
     }
 
-    /// <summary>点空白退出编辑模式（#30 §四）：命中瓦片/工具行/提示条/滚动区内容的
-    /// 按下不在此列（由各自控件消费），命中表面背景即退出。</summary>
+    /// <summary>点空白清空选择（#30 修订 2026-10-18，取代原「点空白退出编辑模式」）：
+    /// 命中瓦片/工具行/提示条/滚动区内容的按下不在此列（由各自控件消费），命中
+    /// 表面背景即清空多选（Esc 优先级=编辑器>选择，编辑器层先行）。</summary>
     private void LauncherSurface_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (!_launcherEditMode)
+        if (LauncherSelectedCount() == 0)
         {
             return;
         }
@@ -801,7 +890,8 @@ public partial class MainWindow
             return;
         }
 
-        ExitLauncherEditMode();
+        ClearLauncherSelection();
+        e.Handled = true;
     }
 
     private static bool IsWithinLauncherTile(DependencyObject source)
@@ -1233,17 +1323,25 @@ public partial class MainWindow
         _launcherDragHitSlots = null;
     }
 
-    // ---- 键盘层级（§一）：①改名编辑器原生 ②编辑态（切片 3）③查看态（Enter/Space 启动、
-    // 方向键导航）④窗口级命令照复盘现状。每层消费后标记已处理。----
+    // ---- 键盘层级（#30 修订 2026-10-18，Issue #186）：①改名编辑器原生 → ②瓦片键盘
+    // （Enter=启动、Space=toggle 选择、F2=改名、Alt+Enter=编辑目标、Delete=删
+    // （选择非空→批量、否则焦点项，均带撤销）、Ctrl+A=全选/清空、Esc=编辑器>选择>
+    // （点空白同语义）、方向键=网格导航）→ ③窗口级命令照复盘现状。每层消费后标记
+    // 已处理。编辑模式（原层级②）已随 D3 移除——改名/删除/拖拽由常态手势承载。----
 
-    /// <summary>返回 true=按键已被启动表面消费（调用方据此短路既有窗口级处理）。</summary>
+    /// <summary>返回 true=按键已被启动表面消费（调用方据此短路既有窗口级处理）。
+    /// 面板收起态不消费（瓦片键盘语义只属于展开态；窗口级命令照常到达）。</summary>
     private bool HandleLauncherPreviewKey(KeyEventArgs e)
     {
-        if (!IsLauncherActive() || _launchers is null || _launchers.Items.Count == 0)
+        if (!IsLauncherActive() ||
+            !_viewModel.IsPanelExpanded ||
+            _launchers is null ||
+            _launchers.Items.Count == 0)
         {
-            if (IsLauncherActive() && e.Key is Key.Delete or Key.Enter or Key.Space)
+            if (IsLauncherActive() && _viewModel.IsPanelExpanded &&
+                e.Key is Key.Delete or Key.Enter or Key.Space)
             {
-                // 空列表：启动表面消费启动/删除键（查看态 Delete 无操作）。
+                // 空列表：启动表面消费启动/删除键。
                 return e.Key is Key.Enter or Key.Space or Key.Delete;
             }
 
@@ -1256,15 +1354,9 @@ public partial class MainWindow
             return false;
         }
 
-        if (IsLauncherEditModeActive())
-        {
-            return HandleLauncherEditKey(e);
-        }
-
         switch (e.Key)
         {
             case Key.Enter:
-            case Key.Space:
                 if (_launcherFocusedIndex is var focus && focus >= 0 && focus < _launchers.Items.Count)
                 {
                     var item = _launchers.Items[focus];
@@ -1276,6 +1368,15 @@ public partial class MainWindow
                 }
 
                 return true;
+            case Key.Space:
+                // Space=toggle 焦点瓦片选择（#30 修订：原「Space=启动」随交互统一废止；
+                // 启动仍由 Enter 与单击承载）。
+                if (_launcherFocusedIndex >= 0 && _launcherFocusedIndex < _launchers.Items.Count)
+                {
+                    ToggleLauncherSelection(_launchers.Items[_launcherFocusedIndex]);
+                }
+
+                return true;
             case Key.Left:
                 MoveLauncherFocus(-1, 0);
                 return true;
@@ -1289,30 +1390,39 @@ public partial class MainWindow
                 MoveLauncherFocus(0, 1);
                 return true;
             case Key.Delete:
-                // 查看态 Delete 无操作（结构性排除，键盘层级③）。
-                return true;
-            case Key.F2:
-                // 查看态 F2=进入编辑模式（#30 §四；优先于窗口级标签改名 F2）。
-                EnterLauncherEditMode();
-                return true;
-            default:
-                return false;
-        }
-    }
-
-    private bool HandleLauncherEditKey(KeyEventArgs e)
-    {
-        switch (e.Key)
-        {
-            case Key.Delete:
-                if (_launcherFocusedIndex >= 0 && _launcherFocusedIndex < _launchers.Items.Count)
+                // Delete=删除：选择非空→整批（带撤销）；否则焦点项（#30 修订：
+                // 原「查看态 Delete 无操作」废止——常态手势承载后删除键盘可达）。
+                if (LauncherSelectedCount() > 0)
+                {
+                    TrackPendingOperation(DeleteSelectedLauncherItemsAsync());
+                }
+                else if (_launcherFocusedIndex >= 0 && _launcherFocusedIndex < _launchers.Items.Count)
                 {
                     TrackPendingOperation(DeleteLauncherItemAsync(_launchers.Items[_launcherFocusedIndex]));
                 }
 
                 return true;
+            case Key.A when Keyboard.Modifiers == ModifierKeys.Control:
+                // Ctrl+A=全选/再按清空（#30 修订：原「Ctrl+A 表面切换排除」随瓦片
+                // 获得多选修订——排除面其余项不变）。
+                if (LauncherSelectedCount() == _launchers.Items.Count)
+                {
+                    ClearLauncherSelection();
+                }
+                else
+                {
+                    foreach (var entry in _launchers.Items)
+                    {
+                        entry.IsSelected = true;
+                    }
+
+                    _launcherSelectionAnchorId = null;
+                    UpdateLauncherDeleteButtonForSelection();
+                }
+
+                return true;
             case Key.F2:
-            case Key.Enter:
+                // F2=改名焦点项（优先于窗口级标签改名 F2）。
                 if (_launcherFocusedIndex >= 0 && _launcherFocusedIndex < _launchers.Items.Count)
                 {
                     BeginLauncherTileRename(_launchers.Items[_launcherFocusedIndex]);
@@ -1320,28 +1430,18 @@ public partial class MainWindow
 
                 return true;
             case Key.Escape:
-                ExitLauncherEditMode();
-                return true;
-            case Key.Left:
-                MoveLauncherFocus(-1, 0);
-                return true;
-            case Key.Right:
-                MoveLauncherFocus(1, 0);
-                return true;
-            case Key.Up:
-                MoveLauncherFocus(0, -1);
-                return true;
-            case Key.Down:
-                MoveLauncherFocus(0, 1);
-                return true;
+                // Esc=编辑器>选择（编辑器层在层级①已短路；此处清空多选）。
+                if (LauncherSelectedCount() > 0)
+                {
+                    ClearLauncherSelection();
+                    return true;
+                }
+
+                return false;
             default:
                 return false;
         }
     }
-
-    private bool _launcherEditMode;
-
-    private bool IsLauncherEditModeActive() => _launcherEditMode;
 
     private void MoveLauncherFocus(int deltaColumns, int deltaRows)
     {
@@ -1362,86 +1462,225 @@ public partial class MainWindow
         }
 
         _launcherTileContainers.Clear();
+        // 焦点指示同步到勾选钮可见性绑定（IsKeyboardFocused 会话态，#13 族）。
+        foreach (var entry in _launchers.Items)
+        {
+            entry.IsKeyboardFocused = false;
+        }
+
         if (_launcherFocusedIndex < 0 || _launchers is null || _launcherFocusedIndex >= _launchers.Items.Count)
         {
             return;
         }
 
-        if (FindLauncherTile(_launchers.Items[_launcherFocusedIndex]) is { } focused)
+        var focusedItem = _launchers.Items[_launcherFocusedIndex];
+        focusedItem.IsKeyboardFocused = true;
+        if (FindLauncherTile(focusedItem) is { } focused)
         {
-            _launcherTileContainers[_launchers.Items[_launcherFocusedIndex].Id] = focused;
+            _launcherTileContainers[focusedItem.Id] = focused;
             focused.SetCurrentValue(Border.BorderBrushProperty, (Brush)FindResource("AccentBrush"));
             focused.BringIntoView();
         }
     }
 
-    // ---- 编辑模式（#30 §四）：进入=工具行按钮 / F2；退出=完成钮 / Esc / 点空白 /
-    // 切标签自动退出 / 面板收起自动退出。编辑态：瓦片常驻浅底 + 右上 × 删除钮（常驻）+
-    // 单击=就地改名 + 拖拽重排（阈值 4 DIP）+ Delete 删焦点瓦片 + 方向键导航。----
+    // ---- 多选与批量删除（#30 修订 2026-10-18，Issue #186；对齐卡片范式）：
+    // 权威状态=条目 IsSelected（绑定源）；勾选钮/Ctrl 单击=toggle（锚点更新）、
+    // Shift 单击=范围选（目录数组序）、Ctrl+A=全选/清空；选择非空 ⇒ 单击语义切换
+    // 为选择（启动挂起）、勾选钮常显（绑定面承载）、头部垃圾桶=「删除已选 N 项」
+    // ＋角标（复用既有 DeleteContentButton/SelectedCountBadge 机制，修订 #30
+    // 「启动表面结构性隐藏」条款；批量置顶钮保持隐藏）；Esc/点空白=清空；
+    // 取消最后一项选择的单击不得顺带启动（单击分支先判选择）；选择期挂起改名
+    // 与拖拽会话。----
 
-    private void LauncherEditButton_Click(object sender, RoutedEventArgs e)
+    private int LauncherSelectedCount()
     {
-        if (_launcherEditMode)
+        var count = 0;
+        if (_launchers is not null)
         {
-            ExitLauncherEditMode();
+            foreach (var entry in _launchers.Items)
+            {
+                if (entry.IsSelected)
+                {
+                    count++;
+                }
+            }
         }
-        else
-        {
-            EnterLauncherEditMode();
-        }
+
+        return count;
     }
 
-    private void EnterLauncherEditMode()
+    private void ToggleLauncherSelection(LauncherItem item)
     {
-        if (_isClosing || _launchers is null || _launchers.Items.Count == 0 || _launcherEditMode)
+        item.IsSelected = !item.IsSelected;
+        // 锚点跟随选择事实（对齐卡片 RangeSelection 的「锚点恒为选中项」读取
+        // 前提）：建立选中=锚到本项；取消选中=锚点不得留在未选中项上——转移到
+        // 任一仍选中项，无选中则清空（Shift 范围选的基准由此保持有效）。
+        if (item.IsSelected)
+        {
+            _launcherSelectionAnchorId = item.Id;
+        }
+        else if (_launcherSelectionAnchorId == item.Id)
+        {
+            _launcherSelectionAnchorId = _launchers.Items.FirstOrDefault(entry => entry.IsSelected)?.Id;
+        }
+
+        UpdateLauncherDeleteButtonForSelection();
+    }
+
+    /// <summary>Shift+单击=范围选（锚点↔目标的目录数组序区间；非叠加=先清空；
+    /// 无锚点时自锚——语义对齐卡片 RangeSelection）。</summary>
+    private void SelectLauncherRange(LauncherItem target, bool additive)
+    {
+        var items = _launchers.Items;
+        var targetIndex = items.IndexOf(target);
+        var anchorIndex = _launcherSelectionAnchorId is { } anchorId
+            ? items.IndexOf(items.FirstOrDefault(entry => entry.Id == anchorId)!)
+            : -1;
+        if (anchorIndex < 0 || items.ElementAtOrDefault(anchorIndex)?.IsSelected != true)
+        {
+            anchorIndex = targetIndex;
+            _launcherSelectionAnchorId = target.Id;
+        }
+
+        if (!additive)
+        {
+            foreach (var entry in items)
+            {
+                entry.IsSelected = false;
+            }
+        }
+
+        for (var index = Math.Min(anchorIndex, targetIndex); index <= Math.Max(anchorIndex, targetIndex); index++)
+        {
+            items[index].IsSelected = true;
+        }
+
+        UpdateLauncherDeleteButtonForSelection();
+    }
+
+    private void ClearLauncherSelection()
+    {
+        if (_launchers is null)
         {
             return;
         }
 
-        _launcherEditMode = true;
-        LauncherEditButton.SetCurrentValue(ContentControl.ContentProperty, "完成");
-        LauncherEditHint.SetCurrentValue(VisibilityProperty, Visibility.Visible);
-        if (_launcherFocusedIndex < 0)
+        foreach (var entry in _launchers.Items)
         {
-            _launcherFocusedIndex = 0;
+            entry.IsSelected = false;
         }
 
-        ApplyLauncherFocusVisual();
-        UpdateLauncherEditVisuals();
+        _launcherSelectionAnchorId = null;
+        UpdateLauncherDeleteButtonForSelection();
     }
 
-    private void ExitLauncherEditMode()
+    /// <summary>头部垃圾桶随选择集刷新（复用内容桶既有按钮与角标机制）：有选择=
+    /// 「删除已选 N 项」+角标可见+按钮可见；无选择=隐藏（启动表面无清空语义——
+    /// 批量置顶钮保持隐藏，修订 #30「启动表面结构性隐藏」条款仅限删除钮选择态）。</summary>
+    private void UpdateLauncherDeleteButtonForSelection()
     {
-        if (!_launcherEditMode)
+        if (_isClosing)
         {
             return;
         }
 
-        CommitLauncherTileRename();
-        _launcherEditMode = false;
-        LauncherEditButton.SetCurrentValue(ContentControl.ContentProperty, "编辑");
-        LauncherEditHint.SetCurrentValue(VisibilityProperty, Visibility.Collapsed);
-        EndLauncherTileDrag(apply: false);
-        UpdateLauncherEditVisuals();
+        var count = LauncherSelectedCount();
+        if (count > 0)
+        {
+            var label = $"删除已选 {count} 项";
+            DeleteContentButton.ToolTip = label;
+            AutomationProperties.SetName(DeleteContentButton, label);
+            SelectedCountText.Text = count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            SelectedCountBadge.Visibility = Visibility.Visible;
+            FadeAnimation.SetIsActive(SelectedCountBadge, true);
+            DeleteContentButton.Visibility = Visibility.Visible;
+        }
+        else if (IsLauncherActive())
+        {
+            SelectedCountBadge.Visibility = Visibility.Collapsed;
+            FadeAnimation.SetIsActive(SelectedCountBadge, false);
+            DeleteContentButton.Visibility = Visibility.Collapsed;
+        }
     }
 
-    /// <summary>编辑态瓦片视觉：常驻浅底（Opacity 1/0）与 × 删除钮可见性（83ms 淡入
-    /// 由 FadeAnimation 承载；多选 40ms 交错的视觉近似为同帧淡入——重排动画另有专门路径）。
-    /// 容器经单遍快照解析（每条目逐次树查找的 O(n)² 模式不再）。</summary>
-    private void UpdateLauncherEditVisuals()
+    /// <summary>启动表面垃圾桶点击：选择非空=整批删除（带撤销）；无选择=无操作
+    /// （按钮隐藏，防御直达）。经 DeleteFromTrashButtonAsync 按激活表面分流进入。</summary>
+    private async Task DeleteFromLauncherTrashAsync()
     {
-        foreach (var (_, tile) in SnapshotLauncherTiles())
+        if (LauncherSelectedCount() == 0)
         {
-            if (FindTemplatePart<Border>(tile, "TileEditLayer") is { } editLayer)
+            return;
+        }
+
+        await DeleteSelectedLauncherItemsAsync();
+    }
+
+    private void LauncherTileSelectButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: LauncherItem item })
+        {
+            e.Handled = true;
+            ToggleLauncherSelection(item);
+        }
+    }
+
+    /// <summary>批量删除（单次原子聚合为逐条删除事务）：每条走既有删除事务链
+    /// （RemoveAsync 单条撤销记录被链尾覆盖为最后一条——整批撤销经聚合记录按
+    /// 原下标逆序重插）。</summary>
+    private async Task DeleteSelectedLauncherItemsAsync()
+    {
+        if (_launchers is null || _launcherRenamingItem is not null || _launcherDraggingId is not null)
+        {
+            return;
+        }
+
+        // 会话标记是权威（绑定源），顺序取目录数组序——撤销按原下标逆序重插。
+        var selected = _launchers.Items.Where(entry => entry.IsSelected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        ClearLauncherSelection();
+        var removals = new List<LauncherRemoveOutcome>(selected.Count);
+        foreach (var item in selected)
+        {
+            if (_launcherRenamingItem?.Id == item.Id)
             {
-                editLayer.SetCurrentValue(UIElement.OpacityProperty, _launcherEditMode ? 1d : 0d);
+                CancelLauncherTileRename();
             }
 
-            if (FindTemplatePart<Button>(tile, "TileDeleteButton") is { } deleteButton)
+            var outcome = await _launchers.RemoveAsync(item.Id);
+            if (outcome is not null)
             {
-                FadeAnimation.SetIsActive(deleteButton, _launcherEditMode);
+                removals.Add(outcome);
             }
         }
+
+        if (removals.Count == 0)
+        {
+            return;
+        }
+
+        await Dispatcher.InvokeAsync(() =>
+        {
+            _launcherUndoRecord = null;
+            _launcherUndoBatch = removals;
+            LauncherUndoToastText.SetCurrentValue(
+                TextBlock.TextProperty,
+                removals.Count == 1
+                    ? $"已删除「{removals[0].Item.DisplayName}」"
+                    : $"已删除 {removals.Count} 项");
+            FadeAnimation.SetIsActive(LauncherUndoToast, true);
+            _launcherUndoTimer.Stop();
+            _launcherUndoTimer.Start();
+            if (_launcherFocusedIndex >= _launchers.Items.Count)
+            {
+                _launcherFocusedIndex = _launchers.Items.Count - 1;
+            }
+
+            ApplyLauncherFocusVisual();
+        });
     }
 
     private T? FindTemplatePart<T>(FrameworkElement tile, string name)
@@ -1455,15 +1694,20 @@ public partial class MainWindow
         return Descendants<T>(tile).FirstOrDefault(element => element.Name == name);
     }
 
-    // ---- 就地改名（编辑态单击/F2/Enter）：预填全选、Enter 提交/Esc 取消/失焦提交、
-    // 空提交=回退原名、IME 组合守卫（组合期的 Esc 属输入法操作不触发取消）。----
+    // ---- 就地改名（名称带双击/F2/菜单「重命名」）：预填全选、Enter 提交/Esc 取消/
+    // 失焦提交、空提交=回退原名绝不删除、IME 组合守卫（组合期的 Esc 属输入法操作
+    // 不触发取消）。选择非空或拖拽在途时挂起（D5：选择期挂起改名会话）。----
 
     private LauncherItem? _launcherRenamingItem;
     private bool _launcherRenameComposing;
 
     private void BeginLauncherTileRename(LauncherItem item)
     {
-        if (!_launcherEditMode)
+        if (_isClosing ||
+            _launchers is null ||
+            _launchers.IsReadOnlyFromNewerVersion ||
+            LauncherSelectedCount() > 0 ||
+            _launcherDraggingId is not null)
         {
             return;
         }
@@ -1599,10 +1843,15 @@ public partial class MainWindow
         CommitLauncherTileRename();
     }
 
-    // ---- 删除安全网（#30 §三.7）：单条最新删除记录 + 4s 撤销提示条事务。----
+    // ---- 删除安全网（#30 §三.7；2026-10-18 扩展批量，Issue #186）：单条最新删除
+    // 记录（单删）或整批记录（批删，按原下标逆序重插）+ 4s 撤销提示条事务；
+    // 新删除替换旧记录（旧的不可再恢复，计时重置）。----
 
     private readonly DispatcherTimer _launcherUndoTimer = new() { Interval = TimeSpan.FromSeconds(4) };
+
+    /// <summary>撤销记录：单删=单条、批删=整批（#11 整批撤销在瓦片侧的承载）。</summary>
     private LauncherRemoveOutcome? _launcherUndoRecord;
+    private IReadOnlyList<LauncherRemoveOutcome>? _launcherUndoBatch;
 
     private async Task DeleteLauncherItemAsync(LauncherItem item)
     {
@@ -1626,6 +1875,7 @@ public partial class MainWindow
         {
             // 新删除替换旧记录（旧的不可再恢复），计时重置 4s。
             _launcherUndoRecord = outcome;
+            _launcherUndoBatch = null;
             LauncherUndoToastText.SetCurrentValue(
                 TextBlock.TextProperty,
                 $"已删除「{outcome.Item.DisplayName}」");
@@ -1643,6 +1893,12 @@ public partial class MainWindow
 
     private async void LauncherUndoToast_Click(object sender, RoutedEventArgs e)
     {
+        if (_launcherUndoBatch is { } batch)
+        {
+            await UndoLauncherBatchAsync(batch);
+            return;
+        }
+
         if (_launcherUndoRecord is not { } record)
         {
             return;
@@ -1664,10 +1920,35 @@ public partial class MainWindow
         });
     }
 
+    /// <summary>整批撤销：按原下标**逆序**重插（后插的低下标不被先插的高下标挤位，
+    /// min(原下标, 当前数) 与单条语义同源）；任一条保存失败即中止（记录保留、提示条
+    /// 保留可重试，已重插的条目随重试幂等——RestoreAsync 对已在集合的条目返回 false）。</summary>
+    private async Task UndoLauncherBatchAsync(IReadOnlyList<LauncherRemoveOutcome> batch)
+    {
+        foreach (var record in batch.OrderByDescending(entry => entry.Index))
+        {
+            var restored = await _launchers.RestoreAsync(record.Item, Math.Min(record.Index, _launchers.Items.Count));
+            if (!restored)
+            {
+                return;
+            }
+        }
+
+        await Dispatcher.InvokeAsync(() =>
+        {
+            _launcherUndoBatch = null;
+            _launcherUndoRecord = null;
+            _launcherUndoTimer.Stop();
+            FadeAnimation.SetIsActive(LauncherUndoToast, false);
+            AnimateLauncherShifts();
+        });
+    }
+
     /// <summary>提示条与记录随切标签/面板收起一起销毁。</summary>
     private void DestroyLauncherUndoToast()
     {
         _launcherUndoRecord = null;
+        _launcherUndoBatch = null;
         _launcherUndoTimer.Stop();
         FadeAnimation.SetIsActive(LauncherUndoToast, false);
     }
@@ -1677,6 +1958,7 @@ public partial class MainWindow
         _launcherUndoTimer.Stop();
         FadeAnimation.SetIsActive(LauncherUndoToast, false);
         _launcherUndoRecord = null;
+        _launcherUndoBatch = null;
     }
 
     private void LauncherTileDeleteButton_Click(object sender, RoutedEventArgs e)
@@ -1688,12 +1970,12 @@ public partial class MainWindow
         }
     }
 
-    // ---- 瓦片右键上下文菜单（#30 修订，Issue #176）：删除/上移/下移/重命名四项
-    // 全部复用既有事务与会话（删除走 × 同一撤销事务、上移/下移走 MoveAsync、重命名
-    // 进入既有编辑模式＋改名会话）；上移/下移＝WCAG 2.5.7 拖动单指针替代（与契约
-    // #21 标签顺序行同源）。菜单打开期间挂覆盖交互 Menu hold（不自动收起）；Esc
-    // 只关菜单（菜单是独立 HWND，键盘先归菜单）；右键不启动——启动判定要求左键
-    // PointerUp 同瓦片 <4 DIP，结构上不可达。----
+    // ---- 瓦片右键上下文菜单（#30 修订，Issue #176；2026-10-18 终序，Issue #186）：
+    // 打开/重命名/上移/下移四项复用既有事务与会话（删除/上移/下移走删除撤销事务
+    // 与 MoveAsync；重命名直接进入既有改名会话——不再经编辑模式）；上移/下移＝
+    // WCAG 2.5.7 拖动单指针替代（与契约 #21 标签顺序行同源）。菜单打开期间挂覆盖
+    // 交互 Menu hold（不自动收起）；Esc 只关菜单（菜单是独立 HWND，键盘先归菜单）；
+    // 右键不启动——启动判定要求左键 PointerUp 同瓦片 <4 DIP，结构上不可达。----
 
     private void LauncherTile_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
@@ -1779,19 +2061,16 @@ public partial class MainWindow
         }
 
         e.Handled = true;
-        if (!_launcherEditMode)
-        {
-            // 重命名是结构修改：先进编辑模式再入改名会话（不另造第二套编辑器，
-            // 改名会话机器与编辑态语义保持一体）。
-            EnterLauncherEditMode();
-        }
-
+        // 重命名直接进入既有改名会话（不另造第二套编辑器；编辑模式已移除，
+        // 会话机器常态可用——挂起条件在 BeginLauncherTileRename 内统一承载）。
         BeginLauncherTileRename(item);
     }
 
-    // ---- 拖拽重排（编辑态；阈值 4 DIP；查看态拖拽=无操作）：
-    // 拾起=瓦片跟随指针；让位指示=目标瓦片 accent 描边；放置=单次 MoveAsync +
-    // 邻位让位/归位动画（变更前位置缓存 → 变更后位移回零 167ms）。----
+    // ---- 拖拽重排（#30 修订 2026-10-18 起全时可用，Issue #186；取代「仅编辑态」）：
+    // 阈值 4 DIP 不变（评审 #11 驳回项）；仅从启动区发起（名称带/勾选钮不发起）；
+    // 选择非空或改名在途挂起。拾起=瓦片跟随指针；让位指示=目标瓦片 accent 描边；
+    // 放置=单次 MoveAsync + 邻位让位/归位动画（变更前位置缓存 → 变更后位移回零
+    // 167ms）。----
 
     private Guid? _launcherDraggingId;
     private System.Windows.Point _launcherDragStart;
@@ -1811,10 +2090,10 @@ public partial class MainWindow
 
     private void LauncherTile_PreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (!_launcherEditMode ||
-            sender is not Border { DataContext: LauncherItem pressed } tile ||
+        if (sender is not Border { DataContext: LauncherItem pressed } tile ||
             _launcherPressItemId != pressed.Id ||
-            _launcherRenamingItem is not null)
+            _launcherRenamingItem is not null ||
+            LauncherSelectedCount() > 0)
         {
             return;
         }
@@ -1822,6 +2101,13 @@ public partial class MainWindow
         var position = e.GetPosition(this);
         if (_launcherDraggingId is null)
         {
+            // 全时拖拽的发起约束：仅名称带/勾选钮不发起（未标记瓦片区按「未遇到
+            // 标记归启动区」语义可拖——贴边环带承载拖拽，与卡片贴边语义同构）。
+            if (_launcherPressZone == CardGestureZones.LauncherNameZone)
+            {
+                return;
+            }
+
             var displacement = position - _launcherPressStartPosition;
             if (Math.Abs(displacement.X) < 4 && Math.Abs(displacement.Y) < 4)
             {

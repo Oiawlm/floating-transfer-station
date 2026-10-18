@@ -92,6 +92,24 @@ public sealed class LauncherItem : INotifyPropertyChanged, IEquatable<LauncherIt
         set => SetField(ref field, value);
     }
 
+    /// <summary>多选会话态（#30 修订 2026-10-18，Issue #186）：瓦片选择视觉与右上
+    /// 勾选钮的绑定源；批量删除按本标记聚合（权威集合仍以目录数组序为准）。</summary>
+    [JsonIgnore]
+    public bool IsSelected
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
+    /// <summary>键盘焦点指示（会话态）：勾选钮随键盘导航可见（#13 族），由窗口焦点
+    /// 视觉维护点统一置位/复位。</summary>
+    [JsonIgnore]
+    public bool IsKeyboardFocused
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
     /// <summary>最近一次启动失败态（会话态）：图标 50% 透明 + 警告角标；成功启动或会话内重新提取图标时清除。</summary>
     [JsonIgnore]
     public bool LaunchFailed

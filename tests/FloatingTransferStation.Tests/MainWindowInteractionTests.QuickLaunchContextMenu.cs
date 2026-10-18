@@ -261,7 +261,6 @@ public sealed partial class MainWindowInteractionTests
             InvokeMenuItem(MenuItemOf(menu, "TileMenuRename"));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
             CompleteLayout(window);
-            Assert.IsTrue(GetPrivateField<bool>(window, "_launcherEditMode"), "菜单重命名进入编辑模式。");
             var renaming = catalog.Items[0];
             Assert.IsTrue(renaming.IsEditingName, "菜单重命名进入改名会话。");
             var editor = FindDescendant<TextBox>(firstTile);
@@ -272,7 +271,6 @@ public sealed partial class MainWindowInteractionTests
             editor.RaiseEvent(NewKeyEventArgs(window, Key.Enter));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             Assert.AreEqual("菜单改名", catalog.Items[0].DisplayName, "菜单改名提交生效。");
-            Assert.IsTrue(GetPrivateField<bool>(window, "_launcherEditMode"), "改名提交后保持编辑模式（改名是编辑态语义，提交不退出）。");
 
             // 删除：与 × 同一撤销事务（提示条＋原下标重插）。
             window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
