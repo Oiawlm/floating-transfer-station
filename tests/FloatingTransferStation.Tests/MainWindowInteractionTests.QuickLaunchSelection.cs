@@ -165,6 +165,7 @@ public sealed partial class MainWindowInteractionTests
             var trash = (Button)window.FindName("DeleteContentButton")!;
             Assert.AreEqual(Visibility.Visible, trash.Visibility, "选择非空=垃圾桶可见。");
             Assert.AreEqual("删除已选 2 项", AutomationProperties.GetName(trash), "头部按钮=删除已选 N 项。");
+            Assert.IsTrue(trash.IsEnabled, "选择非空=垃圾桶可点（T7 后实机可达守护：IsEnabled 按表面由代码管理）。");
             Assert.AreEqual(Visibility.Visible, ((Border)window.FindName("SelectedCountBadge")).Visibility, "角标可见。");
             Assert.AreEqual("2", ((TextBlock)window.FindName("SelectedCountText")).Text, "角标计数=2。");
 

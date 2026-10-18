@@ -56,6 +56,10 @@ public partial class MainWindow
         else
         {
             UpdateBatchPinButton();
+            // 内容桶垃圾桶禁用判定（#30 修订 2026-10-18，Issue #186：原 XAML
+            // DataTrigger 以 ActivePanel.Items.Count 判定，启动分类 board 集合恒空
+            // 会结构性禁用启动多选垃圾桶——禁用迁代码侧按表面管理）：无内容禁用。
+            DeleteContentButton.IsEnabled = _viewModel.ActivePanel is { } panel && panel.Items.Count > 0;
         }
         DeleteContentButton.Visibility = isReview || isLauncher ? Visibility.Collapsed : Visibility.Visible;
         if (isLauncher)

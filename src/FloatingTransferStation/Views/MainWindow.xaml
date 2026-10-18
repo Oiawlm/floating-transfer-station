@@ -315,11 +315,11 @@
                     <Style TargetType="Button"
                            BasedOn="{StaticResource HeaderActionButtonStyle}">
                       <Setter Property="Padding" Value="5" />
-                      <Style.Triggers>
-                        <DataTrigger Binding="{Binding ActivePanel.Items.Count}" Value="0">
-                          <Setter Property="IsEnabled" Value="False" />
-                        </DataTrigger>
-                      </Style.Triggers>
+                      <!-- IsEnabled 按激活表面由代码侧管理（#30 修订 2026-10-18，
+                           Issue #186）：内容桶=无内容禁用（UpdatePanelSurface）；
+                           启动表面=有选择启用「删除已选 N 项」（原 DataTrigger 以
+                           ActivePanel.Items.Count 判定，启动分类 board 集合恒空＝
+                           启动多选垃圾桶被结构性禁用，实机点不动）。 -->
                     </Style>
                   </Button.Style>
                   <!-- 图标始终居中（与其他头部按钮同一 16×16 网格规范）；
