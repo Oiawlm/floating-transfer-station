@@ -894,37 +894,26 @@ public partial class MainWindow
             });
     }
 
-    // ---- 瓦片网格几何：列数 clamp(floor((Wc+8)/92), 3, 6)，网格水平居中 ----
+    // ---- 瓦片网格几何：单一几何源=LauncherTilePanel（拉伸填充，#30 修订 2026-10-18，
+    // Issue #186）。列数/瓦片宽由面板在 Measure/Arrange 内经 LauncherGridMath 从视口
+    // 宽现算；ScrollChanged 只保留拖拽命中槽刷新，不再回写网格宽度（自引用结构消灭，
+    // 窄轨跳帧补算特例随之失去存在必要）。
 
     private void LauncherScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        // 拖动在途的滚动改变瓦片窗口坐标：落点命中槽即时重建（其余路径只关心
-        // 视口宽）。Wc=内容区视口实测宽（容器侧唯一可靠可用宽输入；overlay 瘦条
-        // 不占布局宽，视口与滚动条可见性解耦）。网格自身渲染宽是布局输出，回写
-        // 自身 Width 即自引用死锁（Issue #162 回归）。窄轨/收起期视口为 0：跳过
-        // 本帧，展开后 ScrollChanged 按新视口补算。网格水平居中由限定宽度 +
-        // HorizontalAlignment=Center 承载；200 上限承载有界性（不预建虚拟化）。
-        // 非有限（NaN/∞）一并跳过：防御性守卫，真实布局管线不会产生非有限视口。
+        // 拖动在途的滚动改变瓦片窗口坐标：落点命中槽即时重建（其余路径无需响应——
+        // 几何随布局系统自动更新）。Wc=内容区视口实测宽的输入职责已内化到面板。
         if (_launcherDraggingId is { } draggingId && _launcherDragHitSlots is not null)
         {
             RefreshLauncherDragHitSlots(draggingId);
         }
-
-        var viewportWidth = e.ViewportWidth;
-        if (!double.IsFinite(viewportWidth) || viewportWidth <= 0)
-        {
-            return;
-        }
-
-        var tilePitch = DesignTokens.LauncherTilePitchPx;
-        var columns = Math.Clamp(
-            (int)Math.Floor((viewportWidth + DesignTokens.LauncherTileGutterPx) / tilePitch),
-            3,
-            6);
-        LauncherTileGrid.Width = Math.Min(
-            viewportWidth,
-            columns * tilePitch - DesignTokens.LauncherTileGutterPx);
     }
+
+    /// <summary>瓦片网格面板（ItemsPanel）；焦点导航与拖拽槽共用的几何探针。</summary>
+    private LauncherTilePanel? LauncherTilePanelRoot =>
+        _launcherTilePanelRoot ??= Descendants<LauncherTilePanel>(LauncherTileGrid).FirstOrDefault();
+
+    private LauncherTilePanel? _launcherTilePanelRoot;
 
     // ---- 动效（§五）：悬停/按压走变换，入场/落位/确认/失败为场景动画，全部减动效降级 ----
 
@@ -1356,10 +1345,9 @@ public partial class MainWindow
 
     private void MoveLauncherFocus(int deltaColumns, int deltaRows)
     {
-        var columns = Math.Max(
-            1,
-            (int)Math.Floor((LauncherTileGrid.ActualWidth + DesignTokens.LauncherTileGutterPx) /
-                DesignTokens.LauncherTilePitchPx));
+        // 列数与瓦片排版同一来源（LauncherTilePanel→LauncherGridMath），导航步长
+        // 恒与真实布局一致（旧「网格宽/92 再量化」口径随双几何源一并消灭）。
+        var columns = Math.Max(1, LauncherTilePanelRoot?.EffectiveColumnCount ?? 1);
         var current = _launcherFocusedIndex < 0 ? 0 : _launcherFocusedIndex;
         var target = current + deltaColumns + deltaRows * columns;
         _launcherFocusedIndex = Math.Clamp(target, 0, _launchers.Items.Count - 1);
@@ -1811,7 +1799,7 @@ public partial class MainWindow
     private Border? _launcherDropTargetTile;
 
     // 命中缓存（起拖一次解析）：被拖瓦片容器引用、接管基值、其余瓦片的**布局槽**
-    // 矩形（LayoutInformation.GetLayoutSlot 经 WrapPanel→窗口换算——不含任何
+    // 矩形（LayoutInformation.GetLayoutSlot 经 LauncherTilePanel→窗口换算——不含任何
     // RenderTransform：链式拖拽时上一轮让位/归位动画的 FLIP 残差、悬停抬升都不
     // 会污染落点判定）。拖动期间不变量＝「布局不变」（捕获期间输入全归被拖瓦片、
     // 无重排）；滚动与集合变更（保存失败回滚在门内逆操作 Items）两类例外在
@@ -1897,7 +1885,7 @@ public partial class MainWindow
     /// 回滚的逆操作 Move）都经此重建；仍是单遍 O(n)。</summary>
     private void RefreshLauncherDragHitSlots(Guid draggedId)
     {
-        var panel = Descendants<WrapPanel>(LauncherTileGrid).FirstOrDefault();
+        var panel = LauncherTilePanelRoot;
         if (panel is null)
         {
             _launcherDragHitSlots = [];

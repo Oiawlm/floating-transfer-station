@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Launcher;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
@@ -1972,9 +1973,10 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
-    // ---- 瓦片网格宽度输入（#30 回归修复）：宽度只来自容器视口，禁自引用回写 ----
-    // 首次带数据布局发生在窄轨（58 DIP 收起几何）时，网格不得把自身渲染宽钉死成
-    // 本地 Width；展开至宽视口后必须按视口恢复列槽宽度并保持瓦片可见。
+    // ---- 瓦片网格宽度输入（#30 修订 2026-10-18 拉伸填充，Issue #186；取代
+    // 「限宽公式」断言——契约修订留痕）：单一几何源=LauncherTilePanel，网格不设
+    // Width。窄轨首布局后展开至宽视口必须拉伸填充（面板宽=视口、瓦片宽=摊分公式）
+    // 并保持瓦片可见；旧自引用回写结构已消灭，不存在「Width 被钉死」路径。
 
     [STATestMethod]
     public void QuickLaunch_GridWidth_FirstLayoutAtNarrowTrackRecoversAfterExpand()
@@ -1994,25 +1996,25 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
             CompleteLayout(window);
 
-            // 收起（真实路径）→ 数据在收起态到达（窄轨首布局，Width 被钉死 0=用户
-            // 报告的「添加后一片空白」）→ 再展开必须恢复。
+            // 收起（真实路径）→ 数据在收起态到达（窄轨首布局）→ 再展开必须恢复。
             CollapseForSetup(window);
             InvokePrivateTask(window, "ImportLauncherFilesAsync", new[] { app.Path }, 0);
             CompleteLayout(window);
 
-            // 再展开（真实路径：悬停意图提交→宽几何）：网格必须按视口恢复列槽宽度，
-            // 且精确等于视口公式（宽度输入只来自容器视口）；随后跨列数边界改宽再验。
+            // 再展开（真实路径：悬停意图提交→宽几何）：面板必须拉伸填充视口
+            // （宽度唯一来源=布局系统给的可用宽）；随后跨列数边界改宽再验。
             ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
             CompleteLayout(window);
-            AssertGridWidthMatchesViewportFormula(window);
+            AssertTilePanelFillsViewport(window);
 
             window.Width = 480;
             CompleteLayout(window);
-            AssertGridWidthMatchesViewportFormula(window);
+            AssertTilePanelFillsViewport(window);
 
+            var viewport = window.LauncherScroll.ViewportWidth;
             Assert.IsTrue(
-                window.LauncherTileGrid.ActualWidth >= 3 * 92 - 8,
-                $"展开至宽视口后瓦片网格宽度必须恢复（实际 {window.LauncherTileGrid.ActualWidth}）。");
+                double.IsFinite(viewport) && viewport >= 286 - 0.5,
+                $"展开至宽视口后视口宽必须恢复到合法面板域（实际 {viewport}）。");
             Assert.AreEqual(1, window.LaunchersForTests().Items.Count);
             Assert.IsNotNull(FindLauncherTile(window, window.LaunchersForTests().Items[0]), "瓦片容器已生成。");
         }
@@ -2022,20 +2024,30 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
-    /// <summary>网格宽度必须精确等于「视口实测宽 → clamp 列数 → 限宽」公式（按测试
-    /// 运行时实读的 LauncherScroll.ViewportWidth 计算期望，跨列数边界取两个宽度）。</summary>
-    private static void AssertGridWidthMatchesViewportFormula(MainWindow window)
+    /// <summary>拉伸填充布局事实（按测试运行时实读的 LauncherScroll.ViewportWidth
+    /// 计算期望）：网格 Width 未被设置（自引用路径不存在）、面板布局宽=视口、
+    /// 首瓦片宽=LauncherGridMath 摊分、生效列数=公式值。</summary>
+    private static void AssertTilePanelFillsViewport(MainWindow window)
     {
         var viewport = window.LauncherScroll.ViewportWidth;
         Assert.IsTrue(
             double.IsFinite(viewport) && viewport > 0,
             $"前置：展开态视口宽有效（实际 {viewport}）。");
-        var columns = Math.Clamp((int)Math.Floor((viewport + 8) / 92), 3, 6);
+        Assert.IsTrue(
+            double.IsNaN(window.LauncherTileGrid.Width),
+            "网格 Width 不得被代码设置（单一几何源=面板）。");
+        var panel = FindDescendant<LauncherTilePanel>(window.LauncherTileGrid);
+        Assert.IsNotNull(panel, "ItemsPanel=LauncherTilePanel。");
+        Assert.AreEqual(viewport, panel.ActualWidth, 0.5, $"面板布局宽=视口（viewport={viewport}）。");
+        var columns = LauncherGridMath.ColumnCount(viewport);
+        Assert.AreEqual(columns, panel.EffectiveColumnCount, 0, "面板生效列数=公式值。");
+        var firstTile = FindLauncherTile(window, window.LaunchersForTests().Items[0]);
+        Assert.IsNotNull(firstTile, "前置：瓦片容器已生成。");
         Assert.AreEqual(
-            Math.Min(viewport, columns * 92 - 8),
-            window.LauncherTileGrid.Width,
-            0.5,
-            $"网格宽度=视口公式（viewport={viewport}, columns={columns}）。");
+            LauncherGridMath.TileWidth(viewport, columns),
+            firstTile.ActualWidth,
+            0.05,
+            "瓦片宽=LauncherGridMath 摊分（余宽入瓦片、无死区）。");
     }
 
     [STATestMethod]

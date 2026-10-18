@@ -915,7 +915,7 @@ public sealed partial class MainWindowInteractionTests
 
             // 给若干瓦片挂 FLIP 残差（模拟让位动画在途的 RenderTransform 偏移）。
             var grid = (ItemsControl)window.FindName("LauncherTileGrid")!;
-            var panel = FindDescendants<WrapPanel>(grid).First();
+            var panel = FindDescendants<LauncherTilePanel>(grid).First();
             foreach (var (_, tile) in GetLauncherSnapshotForTests(window))
             {
                 var translate = GetLauncherTileTranslate(tile);
@@ -1064,7 +1064,7 @@ public sealed partial class MainWindowInteractionTests
 
             // 其后的移动落点按新序判定（0 号槽位置命中 → 目标下标 0）。
             var grid = (ItemsControl)window.FindName("LauncherTileGrid")!;
-            var panel = FindDescendants<WrapPanel>(grid).First();
+            var panel = FindDescendants<LauncherTilePanel>(grid).First();
             var container0 = grid.ItemContainerGenerator.ContainerFromIndex(0);
             var slot0 = System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(
                 (FrameworkElement)container0);

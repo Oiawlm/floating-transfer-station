@@ -722,9 +722,10 @@
             </StackPanel>
 
             <!-- 瓦片网格：垂直滚动 + overlay 瘦条（契约 #23 口径，不占布局宽）；不虚拟化
-                 （有界性以 200 上限承载）；列数由代码按内容区（ScrollViewer 视口）实测宽
-                 clamp(3..6) 设定，网格水平居中。宽度输入只来自容器视口——读网格自身渲染
-                 宽回写自身 Width 是自引用死锁（Issue #162 回归）。 -->
+                 （有界性以 200 上限承载）。拉伸填充单一几何源（#30 修订 2026-10-18，
+                 Issue #186）：列数/瓦片宽由 LauncherTilePanel 内经 LauncherGridMath 从
+                 视口宽现算并自行排版（行满排总宽=视口、无死区、末行左对齐），网格不设
+                 Width、不居中——ScrollChanged 回写自身 Width 的自引用结构已消灭。 -->
             <ScrollViewer x:Name="LauncherScroll"
                           Grid.Row="1"
                           Style="{StaticResource OverlayScrollViewerStyle}"
@@ -733,23 +734,20 @@
                           ScrollChanged="LauncherScroll_ScrollChanged"
                           Visibility="Collapsed">
               <ItemsControl x:Name="LauncherTileGrid"
-                            HorizontalAlignment="Center"
+                            HorizontalAlignment="Stretch"
                             Focusable="False">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
-                    <WrapPanel />
+                    <views:LauncherTilePanel />
                   </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                   <DataTemplate DataType="{x:Type models:LauncherItem}">
-                    <!-- 瓦片 84×100（DesignTokens 同源）、圆角 8、内边距 上8 下8 左右6、
-                         瓦片间沟道 8（Margin 4×4=LauncherTileGutterPx/2 两侧，锁定测试
-                         镜像）。悬停 167ms/-2px 与按压 83ms/0.96 走既有动画体系；启动
-                         确认/失败描边/重复脉冲为代码驱动的场景动画。 -->
+                    <!-- 瓦片几何（高 100、沟道 8、宽=视口摊分）由 LauncherTilePanel 排版
+                         承载（DesignTokens 同源经 LauncherGridMath）；瓦片根不再自带
+                         Width/Height/Margin。悬停 167ms/-2px 与按压 83ms/0.96 走既有
+                         动画体系；启动确认/失败描边/重复脉冲为代码驱动的场景动画。 -->
                     <Border x:Name="TileRoot"
-                            Width="{x:Static design:DesignTokens.LauncherTileWidthPx}"
-                            Height="{x:Static design:DesignTokens.LauncherTileHeightPx}"
-                            Margin="4"
                             Padding="6,8,6,8"
                             Background="{DynamicResource CardBrush}"
                             BorderBrush="Transparent"
