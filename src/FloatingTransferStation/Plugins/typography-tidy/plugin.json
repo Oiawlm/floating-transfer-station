@@ -1,0 +1,145 @@
+{
+  "id": "typography-tidy",
+  "name": "中文排版整理",
+  "version": "1.0.0",
+  "description": "对选中的文字卡做中文排版整理：中英文之间加空格、压缩连续空格，并可选把紧跟中文的半角标点转为全角（设置可开关）。",
+  "kind": "text-actions",
+  "actions": [
+    {
+      "id": "tidy-card",
+      "title": "整理这张卡片",
+      "accept": "text",
+      "selection": "single",
+      "output": "replace",
+      "settings": [
+        {
+          "key": "punct-to-fullwidth",
+          "label": "半角标点转全角（仅限紧跟中文时）",
+          "type": "bool",
+          "default": false
+        }
+      ],
+      "rules": [
+        {
+          "pattern": "([A-Za-z0-9])([\\u4e00-\\u9fff])",
+          "replacement": "$1 $2",
+          "description": "英文/数字后接中文时补空格（$1 演示 .NET 替换语义）"
+        },
+        {
+          "pattern": "([\\u4e00-\\u9fff])([A-Za-z0-9])",
+          "replacement": "$1 $2",
+          "description": "中文后接英文/数字时补空格"
+        },
+        {
+          "pattern": " {2,}",
+          "replacement": " ",
+          "description": "压缩连续空格为单个空格"
+        },
+        {
+          "pattern": ",(?=[\\u4e00-\\u9fff])",
+          "replacement": "，",
+          "when": "punct-to-fullwidth",
+          "description": "半角逗号→全角（仅当紧跟中文）"
+        },
+        {
+          "pattern": "\\.(?=[\\u4e00-\\u9fff])",
+          "replacement": "。",
+          "when": "punct-to-fullwidth",
+          "description": "半角句号→全角（仅当紧跟中文）"
+        },
+        {
+          "pattern": ":(?=[\\u4e00-\\u9fff])",
+          "replacement": "：",
+          "when": "punct-to-fullwidth",
+          "description": "半角冒号→全角（仅当紧跟中文）"
+        },
+        {
+          "pattern": ";(?=[\\u4e00-\\u9fff])",
+          "replacement": "；",
+          "when": "punct-to-fullwidth",
+          "description": "半角分号→全角（仅当紧跟中文）"
+        },
+        {
+          "pattern": "\\?(?=[\\u4e00-\\u9fff])",
+          "replacement": "？",
+          "when": "punct-to-fullwidth",
+          "description": "半角问号→全角（仅当紧跟中文）"
+        },
+        {
+          "pattern": "!(?=[\\u4e00-\\u9fff])",
+          "replacement": "！",
+          "when": "punct-to-fullwidth",
+          "description": "半角叹号→全角（仅当紧跟中文）"
+        }
+      ]
+    },
+    {
+      "id": "tidy-batch",
+      "title": "批量整理选中卡片",
+      "accept": "text",
+      "selection": "multi",
+      "output": "replace",
+      "settings": [
+        {
+          "key": "punct-to-fullwidth",
+          "label": "半角标点转全角（仅限紧跟中文时）",
+          "type": "bool",
+          "default": false
+        }
+      ],
+      "rules": [
+        {
+          "pattern": "([A-Za-z0-9])([\\u4e00-\\u9fff])",
+          "replacement": "$1 $2",
+          "description": "英文/数字后接中文时补空格（$1 演示 .NET 替换语义）"
+        },
+        {
+          "pattern": "([\\u4e00-\\u9fff])([A-Za-z0-9])",
+          "replacement": "$1 $2",
+          "description": "中文后接英文/数字时补空格"
+        },
+        {
+          "pattern": " {2,}",
+          "replacement": " ",
+          "description": "压缩连续空格为单个空格"
+        },
+        {
+          "pattern": ",(?=[\\u4e00-\\u9fff])",
+          "replacement": "，",
+          "when": "punct-to-fullwidth",
+          "description": "半角逗号→全角（仅当紧跟中文）"
+        },
+        {
+          "pattern": "\\.(?=[\\u4e00-\\u9fff])",
+          "replacement": "。",
+          "when": "punct-to-fullwidth",
+          "description": "半角句号→全角（仅当紧跟中文）"
+        },
+        {
+          "pattern": ":(?=[\\u4e00-\\u9fff])",
+          "replacement": "：",
+          "when": "punct-to-fullwidth",
+          "description": "半角冒号→全角（仅当紧跟中文）"
+        },
+        {
+          "pattern": ";(?=[\\u4e00-\\u9fff])",
+          "replacement": "；",
+          "when": "punct-to-fullwidth",
+          "description": "半角分号→全角（仅当紧跟中文）"
+        },
+        {
+          "pattern": "\\?(?=[\\u4e00-\\u9fff])",
+          "replacement": "？",
+          "when": "punct-to-fullwidth",
+          "description": "半角问号→全角（仅当紧跟中文）"
+        },
+        {
+          "pattern": "!(?=[\\u4e00-\\u9fff])",
+          "replacement": "！",
+          "when": "punct-to-fullwidth",
+          "description": "半角叹号→全角（仅当紧跟中文）"
+        }
+      ]
+    }
+  ]
+}

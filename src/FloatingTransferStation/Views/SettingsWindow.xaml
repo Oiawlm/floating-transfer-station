@@ -626,6 +626,7 @@
                       <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="PluginDirectoryText"
                              Grid.Column="0"
@@ -649,8 +650,16 @@
                             ToolTip="恢复默认插件目录（数据目录下 plugins）"
                             AutomationProperties.Name="恢复默认插件目录"
                             Click="ResetPluginDirectoryButton_Click" />
-                    <Button x:Name="OpenPluginDirectoryButton"
+                    <Button x:Name="RescanPluginsButton"
                             Grid.Column="3"
+                            Style="{StaticResource ThemedActionButtonStyle}"
+                            Content="重新扫描"
+                            Margin="0,0,8,0"
+                            ToolTip="重新扫描插件目录并重建插件列表与管线（无需重启）"
+                            AutomationProperties.Name="重新扫描插件"
+                            Click="RescanPluginsButton_Click" />
+                    <Button x:Name="OpenPluginDirectoryButton"
+                            Grid.Column="4"
                             Style="{StaticResource ThemedActionButtonStyle}"
                             Content="打开"
                             ToolTip="在资源管理器中打开插件目录"

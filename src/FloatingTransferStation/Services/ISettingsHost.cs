@@ -18,6 +18,13 @@ public interface ISettingsHost
     PluginCatalog? PluginCatalog { get; }
     void ApplyPreferences(AppPreferences preferences);
     Task ApplyPluginEnabledAsync(string pluginId, bool enabled);
+
+    /// <summary>写入插件动作设置值（1.51.0）：重建动作管线即时生效并原子持久化。</summary>
+    Task SetPluginActionSettingAsync(string pluginId, string actionId, string key, string value);
+
+    /// <summary>重新扫描插件目录（1.51.0）：重跑发现与状态载入并重建全部管线快照。</summary>
+    Task RescanPluginsAsync();
+
     bool TryApplyGlobalHotkeyPreference(bool enabled);
     void RequestApplicationExit();
     DataDirectoryChangePreview DescribeDataDirectoryChange(string targetParentDirectory);

@@ -41,13 +41,13 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 右键卡片复制（1.15.0 起，设置可关闭；1.17.0 起限于右半）：
-    /// 不进入选择、不打开菜单。左半右键无操作、不拦截（内容区不承载复制手势）。
+    /// 右键卡片复制（1.15.0 起，设置可关闭；1.17.0 起限于右半）：不进入选择。
+    /// 1.51.0 起非复制路径打开「插件动作」右键菜单（命中卡不在选集内时先单选；
+    /// 复制手势仍只复制、不改选择）。
     /// </summary>
     private void BoardList_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (_isClosing ||
-            !_preferences.RightClickCardCopyEnabled ||
             e.OriginalSource is not DependencyObject source ||
             FindAncestor<ListBoxItem>(source) is not { } container ||
             container.DataContext is not BoardItem item)
@@ -55,13 +55,16 @@ public partial class MainWindow
             return;
         }
 
-        if (ResolveCardHitZone(source, container) != CardHitZone.Operations)
+        if (ResolveCardHitZone(source, container) == CardHitZone.Operations &&
+            _preferences.RightClickCardCopyEnabled)
         {
+            e.Handled = true;
+            CopyBoardItemsToClipboard([item]);
             return;
         }
 
         e.Handled = true;
-        CopyBoardItemsToClipboard([item]);
+        TryOpenPluginActionsMenu(item);
     }
 
     /// <summary>
