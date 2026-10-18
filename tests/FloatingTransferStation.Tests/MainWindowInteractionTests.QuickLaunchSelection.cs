@@ -366,4 +366,105 @@ public sealed partial class MainWindowInteractionTests
             "修饰键注入必须成功。");
         PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(60));
     }
+
+    // ---- T7 评审修订（wbx job 20261018-211654-wxb，Issue #186）：评审意见回归锁定 ----
+
+    [STATestMethod]
+    public void QuickLaunch_Selection_T7_CtrlAKeepsAnchorForShiftRange()
+    {
+        // 评审意见 7：Ctrl+A 全选不清锚点（锚点恒为选中项）——全选后 Shift 单击
+        // 仍从既有锚点建立范围（先清空再范围选）。
+        using var directory = new TestDirectory();
+        var stubs = Enumerable.Range(0, 4).Select(_ => new StubAppFile()).ToArray();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var items = Enumerable.Range(0, 4)
+            .Select(index => new LauncherItem(
+                Guid.NewGuid(), LauncherKind.Application, stubs[index].Path, $"应用{index}", DateTimeOffset.UtcNow))
+            .ToArray();
+        var window = CreateLauncherWindowSync(directory, board, store, starter, items);
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var catalog = window.LaunchersForTests();
+            ForegroundActivateLauncherSurface(window);
+
+            // 勾选第 0 项（锚点=0）→ Ctrl+A 全选 → Shift 单击第 3 项：范围 [0..3]。
+            SelectLauncherTileViaButton(window, catalog.Items[0]);
+            PressCtrlABySendInput(window);
+            Assert.AreEqual(4, LauncherSelectedCountForTests(window), "前置：全选。");
+            ShiftClickLauncherTile(window, catalog.Items[3]);
+            Assert.AreEqual(4, LauncherSelectedCountForTests(window), "全选后 Shift 范围选仍覆盖锚点域。");
+        }
+        finally
+        {
+            foreach (var stub in stubs)
+            {
+                stub.Dispose();
+            }
+
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QuickLaunch_Selection_T7_BatchUndoSameIndexRestoresOriginalOrder()
+    {
+        // 评审意见 1：连续删除同槽位（记录下标重复）后整批撤销按删除记录逆序重放，
+        // 恢复原始顺序（B、C 而非 C、B）。
+        using var directory = new TestDirectory();
+        var stubs = Enumerable.Range(0, 3).Select(_ => new StubAppFile()).ToArray();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var items = Enumerable.Range(0, 3)
+            .Select(index => new LauncherItem(
+                Guid.NewGuid(), LauncherKind.Application, stubs[index].Path, $"应用{index}", DateTimeOffset.UtcNow))
+            .ToArray();
+        var window = CreateLauncherWindowSync(directory, board, store, starter, items);
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var catalog = window.LaunchersForTests();
+
+            // 选第 1、2 项批量删除：两条记录的下标都是 1（删除时刻快照）。
+            SelectLauncherTileViaButton(window, catalog.Items[1]);
+            SelectLauncherTileViaButton(window, catalog.Items[2]);
+            var trash = (System.Windows.Controls.Button)window.FindName("DeleteContentButton")!;
+            trash.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, trash));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(600));
+            CompleteLayout(window);
+            Assert.AreEqual(1, catalog.Items.Count, "前置：批量删除生效。");
+
+            // 整批撤销：恢复 2 项且保持原相对顺序（应用1 在前）。
+            var undo = FindLauncherUndoButton(window);
+            Assert.IsNotNull(undo);
+            undo.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, undo));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(600));
+            CompleteLayout(window);
+            Assert.AreEqual(3, catalog.Items.Count, "整批撤销恢复 3 项。");
+            Assert.AreEqual(items[1].Id, catalog.Items[1].Id, "同下标对按删除序恢复（先删 B 后 C → B 在前）。");
+            Assert.AreEqual(items[2].Id, catalog.Items[2].Id, "C 在 B 后。");
+        }
+        finally
+        {
+            foreach (var stub in stubs)
+            {
+                stub.Dispose();
+            }
+
+            CloseWindowWithoutSaving(window);
+        }
+    }
 }

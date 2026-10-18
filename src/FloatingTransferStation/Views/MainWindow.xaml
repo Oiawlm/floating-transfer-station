@@ -740,7 +740,6 @@
                          Tag 路径（与卡片对半分区同机制族，CardGestureZones）。 -->
                     <Border x:Name="TileRoot"
                             Padding="6,8,6,8"
-                            Background="{DynamicResource CardBrush}"
                             BorderBrush="Transparent"
                             BorderThickness="2"
                             CornerRadius="{StaticResource CardCornerRadius}"
@@ -804,6 +803,7 @@
                       <Border.Style>
                         <Style TargetType="Border">
                           <Setter Property="ToolTip" Value="{Binding ToolTipText}" />
+                          <Setter Property="Background" Value="{DynamicResource CardBrush}" />
                           <Style.Triggers>
                             <DataTrigger Binding="{Binding LaunchFailed}" Value="True">
                               <!-- 失败灰态：2px 危险色描边常显 + 图标 50% + 警告角标。 -->
@@ -857,11 +857,11 @@
                         <Border x:Name="TileNameBand"
                                 Grid.Row="1"
                                 Padding="0,2,0,2"
-                                Background="Transparent"
                                 CornerRadius="4"
                                 Tag="{x:Static views:CardGestureZones.LauncherNameZone}">
                           <Border.Style>
                             <Style TargetType="Border">
+                              <Setter Property="Background" Value="Transparent" />
                               <Style.Triggers>
                                 <MultiDataTrigger>
                                   <MultiDataTrigger.Conditions>

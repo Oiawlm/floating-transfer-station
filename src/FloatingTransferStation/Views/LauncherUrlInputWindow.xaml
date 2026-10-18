@@ -20,7 +20,7 @@
        上限 2048）；零网络（不做可达性探测）。归一化唯一经 Core LauncherUrlInput，
        确认回传规范形结果（LauncherUrlNormalization），取消/关闭/Esc 回传 null。
        壳技术（D8）：不透明 DialogSurfaceBrush＋1px 边框＋DWM 圆角/阴影唯一来源
-       （GlassFrameThickness=0——撤透明背景/Margin 6 假圆角/DropShadowEffect）。 -->
+       （GlassFrameThickness=0——撤透明背景、Margin 6 假圆角与手工阴影三件套）。 -->
   <WindowChrome.WindowChrome>
     <WindowChrome CaptionHeight="0"
                   GlassFrameThickness="0"

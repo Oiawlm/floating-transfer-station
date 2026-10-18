@@ -35,6 +35,7 @@
         <ResourceDictionary Source="../Resources/MainWindowStyles.xaml" />
         <ResourceDictionary Source="../Resources/DesignTheme.Light.xaml" />
       </ResourceDictionary.MergedDictionaries>
+      <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
     </ResourceDictionary>
   </Window.Resources>
 
@@ -122,22 +123,22 @@
                  Visibility="Collapsed" />
 
       <!-- 可折叠高级区（仅 Application）：参数/起始位置。 -->
-      <StackPanel x:Name="AdvancedSection"
-                  Grid.Row="3"
-                  Visibility="Collapsed">
-        <ToggleButton x:Name="AdvancedToggle"
-                      Content="高级"
-                      FontSize="12"
-                      Foreground="{DynamicResource SecondaryTextBrush}"
-                      Background="Transparent"
-                      BorderThickness="0"
-                      Cursor="Hand"
-                      HorizontalAlignment="Left"
-                      Padding="0,4,0,2"
-                      Focusable="False" />
-        <StackPanel x:Name="AdvancedPanel"
-                    Visibility="Collapsed"
-                    Margin="0,0,0,4">
+        <StackPanel x:Name="AdvancedSection"
+                    Grid.Row="3"
+                    Visibility="Collapsed">
+          <ToggleButton x:Name="AdvancedToggle"
+                        Content="高级"
+                        FontSize="12"
+                        Foreground="{DynamicResource SecondaryTextBrush}"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        HorizontalAlignment="Left"
+                        Padding="0,4,0,2"
+                        Focusable="False" />
+          <StackPanel x:Name="AdvancedPanel"
+                      Visibility="{Binding IsChecked, ElementName=AdvancedToggle, Converter={StaticResource BooleanToVisibilityConverter}}"
+                      Margin="0,0,0,4">
           <TextBlock Text="启动参数"
                      FontSize="12"
                      Foreground="{DynamicResource SecondaryTextBrush}"

@@ -72,6 +72,8 @@ public sealed class LauncherItem : INotifyPropertyChanged, IEquatable<LauncherIt
             if (SetField(ref _displayName, LimitDisplayName(value)))
             {
                 // 持久化形态的改名经 LauncherCatalog 串行协议发布；本属性仍通知 UI 即时回显。
+                // ToolTipText 派生自名称与目标（T7 评审修订：改名/目标变更连带刷新提示）。
+                OnPropertyChanged(nameof(ToolTipText));
             }
         }
     }
@@ -153,6 +155,7 @@ public sealed class LauncherItem : INotifyPropertyChanged, IEquatable<LauncherIt
         }
 
         OnPropertyChanged(nameof(IconKey));
+        OnPropertyChanged(nameof(ToolTipText));
     }
 
     /// <summary>持久化图标戳推进（仅图标缓存发布成功后经 LauncherCatalog 调用）。</summary>

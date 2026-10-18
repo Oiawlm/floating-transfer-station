@@ -1354,7 +1354,10 @@ public partial class MainWindow
             return false;
         }
 
-        switch (e.Key)
+        // 真实键盘按住 Alt 时 WPF 把 Key 报为 Key.System、实际键在 SystemKey
+        // （T7 评审修订，Issue #186；合成事件构造 Key.Enter 不经此路径）。
+        var effectiveKey = e.Key == Key.System ? e.SystemKey : e.Key;
+        switch (effectiveKey)
         {
             case Key.Enter when e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Alt):
                 // Alt+Enter=编辑目标焦点项（D7 键盘路径，与右键菜单同入口）。
@@ -1412,7 +1415,8 @@ public partial class MainWindow
                 return true;
             case Key.A when e.KeyboardDevice.Modifiers == ModifierKeys.Control:
                 // Ctrl+A=全选/再按清空（#30 修订：原「Ctrl+A 表面切换排除」随瓦片
-                // 获得多选修订——排除面其余项不变）。
+                // 获得多选修订——排除面其余项不变）。锚点恒为选中项（T7 评审修订）：
+                // 全选不清锚点，无效锚点补为焦点项，Shift 范围选基准不因全选失效。
                 if (LauncherSelectedCount() == _launchers.Items.Count)
                 {
                     ClearLauncherSelection();
@@ -1424,7 +1428,13 @@ public partial class MainWindow
                         entry.IsSelected = true;
                     }
 
-                    _launcherSelectionAnchorId = null;
+                    if (_launcherSelectionAnchorId is not { } anchorId ||
+                        _launchers.Items.FirstOrDefault(entry => entry.Id == anchorId)?.IsSelected != true)
+                    {
+                        var anchorIndex = _launcherFocusedIndex >= 0 ? _launcherFocusedIndex : 0;
+                        _launcherSelectionAnchorId = _launchers.Items[anchorIndex].Id;
+                    }
+
                     UpdateLauncherDeleteButtonForSelection();
                 }
 
@@ -1928,18 +1938,27 @@ public partial class MainWindow
         });
     }
 
-    /// <summary>整批撤销：按原下标**逆序**重插（后插的低下标不被先插的高下标挤位，
-    /// min(原下标, 当前数) 与单条语义同源）；任一条保存失败即中止（记录保留、提示条
-    /// 保留可重试，已重插的条目随重试幂等——RestoreAsync 对已在集合的条目返回 false）。</summary>
+    /// <summary>整批撤销（T7 评审修订，Issue #186）：按**删除记录的逆序**逐条重插
+    /// ——记录下标是删除时刻的快照（连续删除同槽位会重复），倒序重放即撤销栈语义，
+    /// 相同下标的先删后恢复不会错序；min(原下标, 当前数) 与单条语义同源。恢复成功
+    /// 的条目即从待恢复批次移除（部分保存失败后可重试剩余——已恢复条目不再阻塞）；
+    /// 全部恢复完成才销毁提示条，失败保留剩余与提示条可重试。</summary>
     private async Task UndoLauncherBatchAsync(IReadOnlyList<LauncherRemoveOutcome> batch)
     {
-        foreach (var record in batch.OrderByDescending(entry => entry.Index))
+        var pending = new List<LauncherRemoveOutcome>(batch);
+        while (pending.Count > 0)
         {
+            var record = pending[^1];
             var restored = await _launchers.RestoreAsync(record.Item, Math.Min(record.Index, _launchers.Items.Count));
             if (!restored)
             {
+                // 保存失败：保留剩余（含本条）与提示条，可重试至超时。
                 return;
             }
+
+            pending.RemoveAt(pending.Count - 1);
+            var snapshot = pending.ToArray();
+            await Dispatcher.InvokeAsync(() => _launcherUndoBatch = snapshot);
         }
 
         await Dispatcher.InvokeAsync(() =>

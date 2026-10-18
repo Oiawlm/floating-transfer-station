@@ -48,11 +48,14 @@ internal partial class InstalledAppPickerWindow : Window
     {
         InitializeComponent();
         DesignThemeManager.Apply(this, theme);
-        // D8：DWM 圆角＋系统阴影唯一来源（失败回退直角+边框，可用性兜底）。
+        // D8：DWM 圆角＋系统阴影唯一来源（失败由 DialogShellFallback 回退直角矩形）。
         SourceInitialized += (_, _) =>
+        {
             _dialogShellApplied = DwmWindowEffects.TryApplyDialogShell(
                 new System.Windows.Interop.WindowInteropHelper(this).Handle,
                 theme == DesignTheme.Dark);
+            DialogShellFallback.Apply(this, _dialogShellApplied);
+        };
 
         var existing = existingAumids ?? throw new ArgumentNullException(nameof(existingAumids));
         _rows = installedApps
