@@ -555,7 +555,11 @@ public partial class MainWindow : Window
                 () =>
                 {
                     _isDeletePending = false;
-                    DeleteContentButton.ClearValue(IsEnabledProperty);
+                    // IsEnabled 按激活表面重算（#30 修订 2026-10-18，Issue #186：
+                    // 原 XAML DataTrigger 已迁代码侧——内容桶=无内容禁用；启动
+                    // 表面由 UpdateLauncherDeleteButtonForSelection 管理，本行不触碰）。
+                    DeleteContentButton.IsEnabled = IsLauncherActive() ||
+                        (_viewModel.ActivePanel is { } panelAfter && panelAfter.Items.Count > 0);
                     RestoreDeletedCardFade();
                 },
                 DispatcherPriority.Send);
