@@ -77,7 +77,6 @@ public partial class MainWindow
         await Dispatcher.InvokeAsync(() =>
         {
             _launchers = catalog;
-            Console.Error.WriteLine($"[LOADPROBE] count={catalog.Count} readonly={catalog.IsReadOnlyFromNewerVersion}");
             LauncherTileGrid.ItemsSource = _launchers.Items;
             _launchers.Items.CollectionChanged += (_, _) => OnLauncherItemsChanged();
             OnLauncherItemsChanged();
