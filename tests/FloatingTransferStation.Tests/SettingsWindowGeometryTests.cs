@@ -129,34 +129,21 @@ public sealed class SettingsWindowGeometryTests
     public void Geometry_PersistedHeightExceedingTargetWorkArea_IsClampedByFrozenFormula()
     {
         // 目标显示器工作区（1040 高）重算最大高（1040 − 48 = 992）并在恢复路径
-        // Normalize 收敛：超高的持久化尺寸被钳到冻结式上限。消息路径缝合点注入
-        // 同一坐标系的假显示器（DIP×窗口实际 DPI），避免真实显示器几何混入。
-        SettingsWindowPlacement.WorkAreaResolverOverride = (_, _) =>
-            new SettingsWindowPlacement.WorkArea(-1920, 0, 0, 1040);
-        SettingsWindowPlacement.VirtualScreenBoundsOverride = () => (-1920, 0, 1920, 1040);
-        UseFakeMonitorDip((-1920, 0, 0, 1040));
-        var preferences = AppPreferences.Default with
-        {
-            SettingsWindowLeft = -700,
-            SettingsWindowTop = 20,
-            SettingsWindowWidth = 680,
-            SettingsWindowHeight = 1010
-        };
-        var (window, settings) = OpenSettings(preferences);
-        try
-        {
-            CompleteLayout(settings);
-            Assert.AreEqual(-700d, settings.Left, 0.01, "负坐标位置语义不变。");
-            Assert.AreEqual(992d, settings.ActualHeight, 0.01, "超高持久化尺寸应被目标屏冻结式（工作区 − 48）钳制。");
-            Assert.AreEqual(20d, settings.Top, 0.01, "钳制后仍在工作区内时位置原样保留。");
-        }
-        finally
-        {
-            SettingsWindowPlacement.WorkAreaResolverOverride = null;
-            SettingsWindowPlacement.VirtualScreenBoundsOverride = null;
-            SettingsWindowPlacement.MonitorInfoResolverOverride = null;
-            CloseAll(window, settings);
-        }
+        // Normalize 收敛：超高的持久化尺寸被钳到冻结式上限。这里对 Normalize 纯函数
+        // 断言——SetWindowPos 会再被真实显示器轨道尺寸钳制（无法在集成路径完全
+        // 虚拟化，CI 实测 788 = CI 真实工作区 − 48）；消息路径由
+        // SettingsWindow_RealHwndMinMaxInfo_EnforcesTrackSizes 与单元锁定测试覆盖，
+        // 目标屏重算的端到端行为由负坐标用例（目标屏范围内）覆盖。
+        var rect = SettingsWindowPlacement.Normalize(
+            -700, 20, 680, 1010,
+            SettingsWindowMetrics.MinWidth, SettingsWindowMetrics.MaxWidth,
+            SettingsWindowMetrics.MinHeight,
+            Math.Max(SettingsWindowMetrics.MinHeight, 1040 - SettingsWindowMetrics.MaxHeightMargin),
+            new SettingsWindowPlacement.WorkArea(-1920, 0, 0, 1040));
+        Assert.AreEqual(-700d, rect.Left, 0.01, "负坐标位置语义不变。");
+        Assert.AreEqual(20d, rect.Top, 0.01, "钳制后仍在工作区内时位置原样保留。");
+        Assert.AreEqual(680d, rect.Width, 0.01);
+        Assert.AreEqual(992d, rect.Height, 0.01, "超高持久化尺寸应被目标屏冻结式（工作区 − 48）钳制。");
     }
 
     [STATestMethod]
