@@ -168,21 +168,21 @@
 
 **快捷启动**
 
-<img src="docs/images/quicklaunch-surface-light.png" width="440" alt="启动标签瓦片表面：应用图标与名称的两行瓦片网格，工具行右上是＋添加按钮（浅色主题）">
+<img src="docs/images/quicklaunch-surface-light.png" width="440" alt="启动标签瓦片表面：应用图标与名称的两行瓦片网格随面板宽度拉伸铺满，工具行右上是＋添加按钮（浅色主题）">
 
-*启动标签：单击瓦片即启动应用；深色主题见 [quicklaunch-surface-dark.png](docs/images/quicklaunch-surface-dark.png)*
+*启动标签：瓦片网格随面板宽度拉伸铺满（无死区），单击瓦片即启动应用；深色主题见 [quicklaunch-surface-dark.png](docs/images/quicklaunch-surface-dark.png)*
 
-<img src="docs/images/quicklaunch-edit-mode.png" width="440" alt="编辑模式：瓦片常驻浅底、右上 × 删除钮与「拖动排序 · 点 × 删除 · 单击改名」提示，底部出现已删除提示条">
+<img src="docs/images/quicklaunch-selection-dark.png" width="440" alt="启动标签多选：瓦片右上角勾选钮选中后高亮，头部垃圾桶变为「删除已选 N 项」并显示计数角标（深色主题）">
 
-*编辑模式：每个瓦片右上角 × 删除（4 秒可撤销）、单击改名、拖动排序（跟手无迟滞）；深色主题见 [quicklaunch-edit-mode-dark.png](docs/images/quicklaunch-edit-mode-dark.png)*
+*多选与批量删除：瓦片悬停/选中时右上角出现勾选钮（Ctrl/Shift/Ctrl+A 支持），选中后头部垃圾桶变为「删除已选 N 项」，删除可整批撤销；名称带双击就地改名，拖动排序全时可用*
 
-<img src="docs/images/quicklaunch-contextmenu-light.png" alt="查看态右键菜单：删除、上移、下移、重命名四项，删除为红色危险色">
+<img src="docs/images/quicklaunch-contextmenu-light.png" alt="查看态右键菜单：打开、重命名、编辑目标、上移、下移与分组独立的删除危险项">
 
-*右键任意瓦片：删除（4 秒可撤销）／上移／下移（端点自动置灰）／重命名——不开编辑模式也能整理；深色主题见 [quicklaunch-contextmenu-dark.png](docs/images/quicklaunch-contextmenu-dark.png)*
+*右键任意瓦片：打开／重命名／编辑目标…（创建后可改目标，Alt+Enter 同入口）／上移／下移（端点自动置灰）／删除（独立分组，可撤销）*
 
-<img src="docs/images/quicklaunch-picker.png" width="360" alt="已安装应用选择器：搜索框 + 复选应用列表 + 底部取消与添加按钮，两条已勾选">
+<img src="docs/images/quicklaunch-url-dialog-light.png" width="360" alt="添加网页地址对话框：不透明主题表面、1px 边框与系统圆角阴影，输入框圆角聚焦描边，底部取消与添加按钮右对齐">
 
-*「＋ 添加」→「已安装应用…」：搜索过滤、多选一次添加（含商店等打包应用）*
+*「＋ 添加」→「网页地址…」对话框：与主面板一致的主题化不透明表面与系统圆角阴影；「已安装应用…」支持搜索过滤与多选一次添加（含商店等打包应用）；深色主题见 [quicklaunch-url-dialog-dark.png](docs/images/quicklaunch-url-dialog-dark.png)*
 
 **复盘与更新**
 
