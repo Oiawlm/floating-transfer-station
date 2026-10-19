@@ -173,6 +173,7 @@ $fullRules = @(
 # ③ 守卫反向校验（表条目无对应方法＝死条目）。新增/拆分测试文件必须同步登记本表。
 $interactionTestPrefixes = @{
     'BoardDragOverPerf'      = @('BoardDragOverPerf')
+    'BoardEmptyState'        = @('BoardEmptyState')
     'BtnGridEvidence'        = @('Evidence')
     'CardAi'                 = @('CardAi')
     'CardAiEvidence'         = @('Evidence')
