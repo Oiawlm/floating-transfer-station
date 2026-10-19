@@ -72,6 +72,9 @@ public enum AutoCleanupRetention
 /// 快捷启动迁移版本戳（#30，Issue #162；0 = 未归位）：只门控一次性名称归位
 /// （「文本」→「启动」）——戳 ≥1 后 settings.json 的 CategoryNames["Prompt"]
 /// 是合法用户改名存储；每次启动的存量收编（阶段 1）不受戳门控，防降级泄漏。
+/// 1.52.0 起新增 AI 整理提示词覆盖（null = 内置默认「语音转文字整理器」，
+/// 纯空白按未配置处理；明文存储，提示词非机密，DPAPI 仅用于 API Key），
+/// 旧配置缺字段免迁移回落 null；上限与生效语义见 AiOrganizePrompt。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -93,7 +96,8 @@ public sealed record AppPreferences(
     bool AutoUpdateCheckEnabled = true,
     PinnedDividerStyle PinnedDivider = PinnedDividerStyle.Solid,
     AutoCleanupRetention AutoCleanupRetention = AutoCleanupRetention.TwentyFourHours,
-    int QuickLaunchMigrationVersion = 0)
+    int QuickLaunchMigrationVersion = 0,
+    string? AiOrganizeSystemPromptOverride = null)
 {
     public static AppPreferences Default { get; } = new();
 }

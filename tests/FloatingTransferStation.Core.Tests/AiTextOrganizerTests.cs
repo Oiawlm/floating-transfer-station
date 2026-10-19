@@ -142,6 +142,95 @@ public sealed class AiTextOrganizerTests
     }
 
     [TestMethod]
+    public async Task OrganizeAsync_OverrideSendsOverrideVerbatimAsSystemMessage()
+    {
+        // 用户自定义提示词逐字作为 system 消息（契约 #29 修订）：不改写、不 Trim，
+        // user 消息仍为原文逐字，其余 payload 参数不受覆盖影响。
+        var handler = RespondWith(HttpStatusCode.OK, CompletionBody("整理后的文本"));
+        var organizer = new AiTextOrganizer(new DeepSeekClient(handler));
+        const string overridePrompt = " 你是我的专属文本整理器，输出纯文本。\n";
+
+        var outcome = await organizer.OrganizeAsync("原始转写稿", ApiKey, overridePrompt);
+
+        Assert.IsTrue(outcome.IsSuccess);
+        var body = JsonDocument.Parse(handler.LastRequestBody!).RootElement;
+        var messages = body.GetProperty("messages");
+        Assert.AreEqual(2, messages.GetArrayLength());
+        Assert.AreEqual(
+            overridePrompt,
+            messages[0].GetProperty("content").GetString(),
+            "system 消息必须是覆盖提示词逐字。");
+        Assert.AreEqual("原始转写稿", messages[1].GetProperty("content").GetString());
+        Assert.AreEqual(DeepSeekClient.DefaultModel, body.GetProperty("model").GetString());
+    }
+
+    [TestMethod]
+    public async Task OrganizeAsync_NullOrWhitespaceOverrideFallsBackToBuiltinPrompt()
+    {
+        // 空白回退内置默认（契约 #29 修订）：绝不发送空或空白 system 消息
+        // （部分 OpenAI 兼容端点对空 system 直接 400）。
+        foreach (var blankOverride in new string?[] { null, "", " \n\t " })
+        {
+            var handler = RespondWith(HttpStatusCode.OK, CompletionBody("整理后的文本"));
+            var organizer = new AiTextOrganizer(new DeepSeekClient(handler));
+
+            var outcome = await organizer.OrganizeAsync("原文", ApiKey, blankOverride);
+
+            Assert.IsTrue(outcome.IsSuccess, $"空白覆盖 {blankOverride ?? "null"} 必须回退默认并可正常整理。");
+            var body = JsonDocument.Parse(handler.LastRequestBody!).RootElement;
+            Assert.AreEqual(
+                AiOrganizePrompt.SystemPrompt,
+                body.GetProperty("messages")[0].GetProperty("content").GetString(),
+                "空白覆盖必须回退内置默认提示词（单一事实源，逐字）。");
+        }
+    }
+
+    [TestMethod]
+    public async Task OrganizeAsync_OverlongOverrideFailsLocallyWithoutRequest()
+    {
+        // 1 万字上限兜底（设置页前置校验之外的 Core 第二防线，与超长文本守卫同族）：
+        // 超长覆盖本地失败零请求；恰好等长的覆盖放行。
+        var rejectHandler = new FakeHttpMessageHandler(
+            (_, _) => throw new AssertFailedException("超长覆盖不得发起请求。"));
+        var rejectOrganizer = new AiTextOrganizer(new DeepSeekClient(rejectHandler));
+
+        var outcome = await rejectOrganizer.OrganizeAsync(
+            "原文",
+            ApiKey,
+            new string('提', AiOrganizePrompt.MaxOverrideLength + 1));
+
+        Assert.IsFalse(outcome.IsSuccess);
+        Assert.AreEqual("整理提示词超过 1 万字，请在设置中缩短。", outcome.ErrorMessage);
+        Assert.AreEqual(0, rejectHandler.CallCount);
+
+        var passHandler = RespondWith(HttpStatusCode.OK, CompletionBody("整理后的文本"));
+        var passOrganizer = new AiTextOrganizer(new DeepSeekClient(passHandler));
+        var boundary = await passOrganizer.OrganizeAsync(
+            "原文",
+            ApiKey,
+            new string('提', AiOrganizePrompt.MaxOverrideLength));
+        Assert.IsTrue(boundary.IsSuccess, "恰好 1 万字的覆盖必须放行（上限含端点）。");
+
+        // 上限按 UTF-16 码元计（与 2 万字输入门槛同口径）：代理对字符每个占 2 码元。
+        var surrogateOutcome = await rejectOrganizer.OrganizeAsync(
+            "原文",
+            ApiKey,
+            string.Concat(Enumerable.Repeat("\U0001F600", AiOrganizePrompt.MaxOverrideLength / 2 + 1)));
+        Assert.IsFalse(
+            surrogateOutcome.IsSuccess,
+            "5,001 个 emoji＝10,002 个 UTF-16 码元，必须按超长拦截。");
+
+        // 超长但纯空白的覆盖按 S2 空白语义回退默认，不触发超长失败。
+        var whitespaceHandler = RespondWith(HttpStatusCode.OK, CompletionBody("整理后的文本"));
+        var whitespaceOrganizer = new AiTextOrganizer(new DeepSeekClient(whitespaceHandler));
+        var whitespaceOutcome = await whitespaceOrganizer.OrganizeAsync(
+            "原文",
+            ApiKey,
+            new string(' ', AiOrganizePrompt.MaxOverrideLength + 1));
+        Assert.IsTrue(whitespaceOutcome.IsSuccess, "纯空白覆盖无论多长都按未配置回退默认。");
+    }
+
+    [TestMethod]
     public async Task OrganizeAsync_ClientFailureSurfacesChineseMessage()
     {
         var handler = RespondWith(HttpStatusCode.Unauthorized, "{}");
