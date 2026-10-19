@@ -181,6 +181,7 @@ public partial class MainWindow : Window
         InitializeCategoryNameEditing();
         InitializePanelTextEditing();
         InitializeCardEditSessionTracking();
+        InitializeBoardEmptyState();
         InitializeQuickLaunch(launcherStore, appLauncher);
         SourceInitialized += MainWindow_SourceInitialized;
 

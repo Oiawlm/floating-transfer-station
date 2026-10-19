@@ -49,6 +49,9 @@ public partial class MainWindow
         LauncherContentHost.Visibility = isLauncher ? Visibility.Visible : Visibility.Collapsed;
         BoardList.Visibility = isReview || isLauncher ? Visibility.Collapsed : Visibility.Visible;
         InsertionIndicator.Visibility = isReview || isLauncher ? Visibility.Collapsed : Visibility.Visible;
+        // 内容桶空态随表面切换（契约 #33）：仅板面可见，复盘/启动表面隐藏
+        //（两者各有专属空态/内容宿主）；集合与搜索触发另行驱动本单点。
+        UpdateBoardEmptyState();
         if (isReview || isLauncher)
         {
             BatchPinButton.Visibility = Visibility.Collapsed;

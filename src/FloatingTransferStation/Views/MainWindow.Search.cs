@@ -85,6 +85,8 @@ public partial class MainWindow
 
         ClearUserSelection();
         _viewModel.EnterSearch();
+        // 搜索态空集语义由 SearchEmptyHint 承载，内容桶空态让位（契约 #33）。
+        UpdateBoardEmptyState();
         UpdateSearchPresentation();
         ApplySearchFilter();
         FocusSearchInput();
@@ -99,6 +101,7 @@ public partial class MainWindow
         }
 
         _viewModel.ExitSearch();
+        UpdateBoardEmptyState();
         ClearSearchControls();
         UpdateSearchPresentation();
         ApplySearchFilter();
