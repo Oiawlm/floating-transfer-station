@@ -11,6 +11,17 @@ namespace FloatingTransferStation.Tests;
 [TestClass]
 public sealed class ImageInputLimitsTests
 {
+    [TestMethod]
+    public void ImageInputLimits_Default_MatchesDocumentedBudgets()
+    {
+        // 默认档位镜像：README「当前限制」与架构说明宣称 64 MiB / 6,400 万像素
+        // 输入上限与 512 MiB 解码缓冲，默认构造必须与文档同值（拒绝，不缩放）。
+        var limits = ImageInputLimits.Default;
+        Assert.AreEqual(64 * 1024 * 1024, limits.MaxEncodedBytes);
+        Assert.AreEqual(64_000_000L, limits.MaxPixels);
+        Assert.AreEqual(512, limits.MaxDecodedBufferMegabytes);
+    }
+
     [STATestMethod]
     public void ReadCandidates_OverByteBudgetFallsBackToAnotherRepresentation()
     {
