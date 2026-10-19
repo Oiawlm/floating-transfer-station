@@ -856,6 +856,62 @@ public sealed class SettingsWindowAiTests
         }
     }
 
+    /// <summary>1.52.0 发布证据（FTS_RELEASE_152_EVIDENCE_DIR 设置时产出真实 WPF
+    /// 渲染截图）：浅/深主题 AI 设置页（整理提示词新卡滚入视野、Key 掩码态）——
+    /// 浅色拍默认态（空框＋内置默认状态行），深色拍自定义态（覆盖文本＋已自定义）。
+    /// Key 只用假值且截图呈现为掩码圆点。</summary>
+    [STATestMethod]
+    public void Evidence_CaptureRelease152AiPromptScreens()
+    {
+        var evidenceDirectory = Environment.GetEnvironmentVariable("FTS_RELEASE_152_EVIDENCE_DIR");
+        if (string.IsNullOrWhiteSpace(evidenceDirectory))
+        {
+            Assert.Inconclusive("未设置 FTS_RELEASE_152_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        var handler = new StubHttpMessageHandler();
+        var protector = new FakeSecretProtector();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with
+            {
+                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey)
+            }
+        };
+        using var directory = new TestDirectory();
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            protector,
+            new DeepSeekClient(handler),
+            CreateEmptyPluginCatalog(directory.Root));
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            RevealAiPromptCard(settings);
+            SaveWindowShell(settings, evidenceDirectory!, "settings-ai-prompt-light.png");
+
+            DesignThemeManager.Apply(settings, DesignTheme.Dark);
+            PromptBox(settings).Focus();
+            PromptBox(settings).Text = "你是我的专属文本整理器：忠实原意，理顺口语跳跃，清理口误与重复，输出可直接使用的文字。";
+            CompleteLayout(settings);
+            RevealAiPromptCard(settings);
+            SaveWindowShell(settings, evidenceDirectory!, "settings-ai-prompt-dark.png");
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    /// <summary>把整理提示词卡滚入视野（状态行贴视口内可见），并完成布局。</summary>
+    private static void RevealAiPromptCard(Window settings)
+    {
+        PromptResetButton(settings).BringIntoView();
+        CompleteLayout(settings);
+    }
+
     /// <summary>设置窗限高滚动：把 AI 设置节滚入视野（测试按钮贴视口下缘可见）。</summary>
     private static void RevealAiSection(Window settings)
     {
