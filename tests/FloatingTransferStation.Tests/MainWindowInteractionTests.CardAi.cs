@@ -481,11 +481,10 @@ public sealed partial class MainWindowInteractionTests
             store,
             ShowStatus,
             operationGate: operationGate);
-        var preferences = (plaintextKey is null
-                ? AppPreferences.Default
-                : AppPreferences.Default with { DeepSeekApiKeyProtected = "fake-cipher" })
-            with
-        { AiOrganizeSystemPromptOverride = aiOrganizeSystemPromptOverride };
+        var preferences = plaintextKey is null
+            ? AppPreferences.Default
+            : AppPreferences.Default with { DeepSeekApiKeyProtected = "fake-cipher" };
+        preferences = preferences with { AiOrganizeSystemPromptOverride = aiOrganizeSystemPromptOverride };
         window = new MainWindow(
             board,
             store,
