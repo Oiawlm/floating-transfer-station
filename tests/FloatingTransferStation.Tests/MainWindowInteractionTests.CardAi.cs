@@ -380,6 +380,75 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
+    [STATestMethod]
+    public void CardAi_OverridePreferenceSendsOverrideAsSystemAndUndoRestores()
+    {
+        // 契约 #29 修订（合成事件路径）：设置 → AI 设置 的自定义整理提示词经
+        // 偏好进入编排——system 消息=覆盖逐字、user 仍原文逐字；成功落板后
+        // Ctrl+Z（合成 PreviewKeyDown）走 AI 文本替换批恢复原文。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText(LongCardText, BoardCategory.Inbox);
+        var handler = new FakeOrganizerHandler(
+            """{"id":"1","model":"deepseek-flash","choices":[{"index":0,"message":{"role":"assistant","content":"覆盖提示词整理结果"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}""");
+        const string overridePrompt = "你是我的专属文本整理器，只输出整理后的文字。";
+        var window = CreateCardAiWindow(
+            directory,
+            board,
+            handler,
+            aiOrganizeSystemPromptOverride: overridePrompt);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            var button = CardAiButtonOf(ContainerOf(window, item));
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+
+            // 等整条管线结束（含落板保存、操作门释放）再断言/撤销——门被占用时
+            // Ctrl+Z 的信号量等待续体会落线程池线程（既有真实输入用例同口径）。
+            PumpUntil(window, () => !item.IsAiOrganizing, "覆盖提示词路径必须完成整理。");
+            PumpUntil(
+                window,
+                () => board.FindItem(item.Id)!.Text == "覆盖提示词整理结果",
+                "覆盖提示词整理结果必须落板替换正文。");
+            Assert.AreEqual(1, handler.CallCount);
+            var body = System.Text.Json.JsonDocument.Parse(handler.LastRequestBody!).RootElement;
+            var messages = body.GetProperty("messages");
+            Assert.AreEqual(2, messages.GetArrayLength());
+            Assert.AreEqual("system", messages[0].GetProperty("role").GetString());
+            Assert.AreEqual(
+                overridePrompt,
+                messages[0].GetProperty("content").GetString(),
+                "system 消息必须是偏好覆盖提示词逐字（不是内置默认）。");
+            Assert.AreEqual("user", messages[1].GetProperty("role").GetString());
+            Assert.AreEqual(LongCardText, messages[1].GetProperty("content").GetString(), "user 消息仍必须是原文逐字。");
+
+            // 撤销：AI 文本替换批恢复原文（合成 PreviewKeyDown）。真实输入事件
+            // 恒在调度器 SynchronizationContext 下执行（WPF 输入管线保证）；
+            // 合成路径须显式装回同款上下文，否则 async void 续体落线程池、
+            // 状态条跨线程访问（生产无此路径）。
+            var previousContext = SynchronizationContext.Current;
+            SynchronizationContext.SetSynchronizationContext(
+                new System.Windows.Threading.DispatcherSynchronizationContext(window.Dispatcher));
+            try
+            {
+                window.RaiseEvent(NewModifiedKeyEventArgs(window, Key.Z, ModifierKeys.Control));
+                PumpUntil(window, () => board.FindItem(item.Id)!.Text == LongCardText, "Ctrl+Z 必须恢复替换前的原文。");
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previousContext);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
     /// <summary>手势层合成入口：在 AI 钮上发出一对预览按下/抬起（照备注钮同法）。</summary>
     private static void RaiseAiButtonClick(MainWindow window, BoardItem item)
     {
@@ -396,7 +465,8 @@ public sealed partial class MainWindowInteractionTests
         TestDirectory directory,
         BoardService board,
         FakeOrganizerHandler handler,
-        string? plaintextKey = "sk-test-fake-key")
+        string? plaintextKey = "sk-test-fake-key",
+        string? aiOrganizeSystemPromptOverride = null)
     {
         var paths = AppPaths.ForTests(directory.Root);
         var store = new LocalStore(paths, new AtomicTextWriter());
@@ -414,6 +484,7 @@ public sealed partial class MainWindowInteractionTests
         var preferences = plaintextKey is null
             ? AppPreferences.Default
             : AppPreferences.Default with { DeepSeekApiKeyProtected = "fake-cipher" };
+        preferences = preferences with { AiOrganizeSystemPromptOverride = aiOrganizeSystemPromptOverride };
         window = new MainWindow(
             board,
             store,
@@ -447,6 +518,7 @@ public sealed partial class MainWindowInteractionTests
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public int CallCount { get; private set; }
+        public string? LastRequestBody { get; private set; }
 
         public void Release() => _release.TrySetResult();
 
@@ -455,6 +527,9 @@ public sealed partial class MainWindowInteractionTests
             CancellationToken cancellationToken)
         {
             CallCount++;
+            LastRequestBody = request.Content is null
+                ? null
+                : await request.Content.ReadAsStringAsync(cancellationToken);
             if (delayUntilReleased)
             {
                 await _release.Task.WaitAsync(cancellationToken);

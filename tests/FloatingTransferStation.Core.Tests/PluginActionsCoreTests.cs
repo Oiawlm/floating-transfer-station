@@ -321,7 +321,7 @@ public sealed class PluginActionsCoreTests
 
         Assert.IsTrue(result.IsSuccess);
         Assert.HasCount(1, result.Cards!);
-        Assert.AreEqual(keep, result.Cards[0].ItemId);
+        Assert.AreEqual(keep, result.Cards![0].ItemId);
         Assert.AreEqual(1, result.SkippedEmptyCount);
     }
 

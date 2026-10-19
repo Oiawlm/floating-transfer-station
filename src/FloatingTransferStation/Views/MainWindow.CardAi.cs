@@ -65,6 +65,7 @@ public partial class MainWindow
         var operation = _aiTextOrganizer.OrganizeAsync(
             originalText,
             apiKey,
+            _preferences.AiOrganizeSystemPromptOverride,
             _windowOperationCancellation.Token);
         TrackPendingOperation(operation);
         try

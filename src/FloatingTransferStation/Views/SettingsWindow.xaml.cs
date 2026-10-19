@@ -120,6 +120,11 @@ public partial class SettingsWindow : Window
             }
         }
 
+        // 整理提示词（1.52.0）：null 态不预填默认全文（保住「是否默认」判定
+        // 基线），状态标签随回填显式当前口径。
+        AiOrganizePromptBox.Text =
+            host.CurrentPreferences.AiOrganizeSystemPromptOverride ?? string.Empty;
+
         _isSynchronizingControls = false;
 
         DataDirectoryText.Text = host.DataDirectory;
@@ -825,6 +830,72 @@ public partial class SettingsWindow : Window
             isError ? "DangerBrush" : "AccentBrush");
         DeepSeekStatusText.Visibility = Visibility.Visible;
     }
+
+    // ---- AI 整理提示词（1.52.0，契约 #29 修订）----
+
+    private void AiOrganizePromptBox_LostFocus(object sender, RoutedEventArgs e) =>
+        CommitAiOrganizePrompt();
+
+    private void AiOrganizePromptBox_TextChanged(object sender, TextChangedEventArgs e) =>
+        UpdateAiOrganizePromptState();
+
+    private void AiOrganizePromptFillDefaultButton_Click(object sender, RoutedEventArgs e)
+    {
+        // 点击已先触发编辑框失焦提交（若持有焦点）；以默认全文为微调起点填入
+        // 框内——填入≠生效，保存点仍是下一次失焦，用户可先改再保存。
+        e.Handled = true;
+        AiOrganizePromptBox.Text = AiOrganizePrompt.SystemPrompt;
+        AiOrganizePromptBox.CaretIndex = AiOrganizePromptBox.Text.Length;
+    }
+
+    private void AiOrganizePromptResetButton_Click(object sender, RoutedEventArgs e)
+    {
+        // 点击已先触发失焦提交（即便刚保存了旧值也会被下一步覆盖）：清空并
+        // 立即提交 null——「恢复默认」不需要再失焦一次才生效，最终态恒为 null。
+        e.Handled = true;
+        AiOrganizePromptBox.Text = string.Empty;
+        CommitAiOrganizePrompt();
+    }
+
+    /// <summary>
+    /// 生效点是失焦（对齐 Key 框失焦提交先例）：Trim 后空白＝null（内置默认，
+    /// 绝不发送空白 system）；超长（1 万字）就地红字提示且不保存；否则保存
+    /// Trim 后文本。生效值未变化时跳过提交（按钮可重复点击，不产生无谓写盘）。
+    /// </summary>
+    private void CommitAiOrganizePrompt()
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        var trimmed = AiOrganizePromptBox.Text.Trim();
+        if (trimmed.Length > AiOrganizePrompt.MaxOverrideLength)
+        {
+            AiOrganizePromptErrorText.Text = "整理提示词超过 1 万字，未保存。";
+            AiOrganizePromptErrorText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        AiOrganizePromptErrorText.Visibility = Visibility.Collapsed;
+        var effective = trimmed.Length == 0 ? null : trimmed;
+        if (string.Equals(
+                effective,
+                _host.CurrentPreferences.AiOrganizeSystemPromptOverride,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(
+            _host.CurrentPreferences with { AiOrganizeSystemPromptOverride = effective });
+    }
+
+    /// <summary>状态显式可见（禁止静默回退）：空框＝内置默认，非空＝已自定义。</summary>
+    private void UpdateAiOrganizePromptState() =>
+        AiOrganizePromptStateText.Text = string.IsNullOrWhiteSpace(AiOrganizePromptBox.Text)
+            ? "当前使用内置默认。"
+            : "已自定义。";
 
     private void OpenDataDirectoryButton_Click(object sender, RoutedEventArgs e)
     {

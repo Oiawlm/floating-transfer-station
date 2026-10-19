@@ -414,4 +414,52 @@ public sealed class AppPreferencesTests
             restored.AutoCleanupRetention,
             "旧 preferences.json 缺字段时必须回落到默认 24 小时。");
     }
+
+    [TestMethod]
+    public void Default_HasNoAiOrganizeSystemPromptOverride()
+    {
+        Assert.IsNull(
+            AppPreferences.Default.AiOrganizeSystemPromptOverride,
+            "默认不得携带自定义整理提示词（null = 内置默认）。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesAiOrganizeSystemPromptOverride()
+    {
+        // LocalStore 以 camelCase + 字符串枚举持久化：往返与键名一起验证。
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var preferences = AppPreferences.Default with
+        {
+            AiOrganizeSystemPromptOverride = "你是我的专属文本整理器。"
+        };
+
+        var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+        StringAssert.Contains(serialized, "\"aiOrganizeSystemPromptOverride\"", "落盘键名必须是 camelCase。");
+        var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+        Assert.AreEqual(preferences, restored);
+        Assert.AreEqual("你是我的专属文本整理器。", restored!.AiOrganizeSystemPromptOverride);
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutAiOrganizeSystemPromptField_FallsBackToNull()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","autoCleanupEnabled":false}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsNull(
+            restored.AiOrganizeSystemPromptOverride,
+            "1.52.0 之前的 preferences.json 必须回落到内置默认提示词（null）。");
+    }
 }

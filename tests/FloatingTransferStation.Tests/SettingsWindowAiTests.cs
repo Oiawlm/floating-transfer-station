@@ -11,10 +11,12 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 设置窗口「AI 设置」节（1.27.0 DeepSeek 接入地基）的交互守护：
-/// Key 失焦保存密文（断言不含明文）、空输入清除、显示/隐藏切换不落盘明文、
-/// 无模型选择 UI（模型恒为 DeepSeekClient.DefaultModel，契约 #28）、测试连接
-/// 就地文案、解密失败降级。明文 Key 只用假值。
+/// 设置窗口「AI 设置」节的交互守护：Key 失焦保存密文（断言不含明文）、空输入
+/// 清除、显示/隐藏切换不落盘明文、无模型选择 UI（模型恒为
+/// DeepSeekClient.DefaultModel，契约 #28）、测试连接就地文案、解密失败降级；
+/// 整理提示词编辑卡（1.52.0，契约 #29 修订）——null 态空框＋状态显式、失焦
+/// Trim 保存/清空存 null、恢复默认终态 null（含失焦先行次序幂等）、填入默认
+/// 全文待失焦保存、超长前置校验不保存＋就地红字。明文 Key 只用假值。
 /// </summary>
 [TestClass]
 public sealed class SettingsWindowAiTests
@@ -323,6 +325,291 @@ public sealed class SettingsWindowAiTests
         }
     }
 
+    // ---- 整理提示词编辑卡（1.52.0，契约 #29 修订）----
+
+    private static TextBox PromptBox(Window settings) =>
+        (TextBox)settings.FindName("AiOrganizePromptBox");
+
+    private static TextBlock PromptStateText(Window settings) =>
+        (TextBlock)settings.FindName("AiOrganizePromptStateText");
+
+    private static TextBlock PromptErrorText(Window settings) =>
+        (TextBlock)settings.FindName("AiOrganizePromptErrorText");
+
+    private static Button PromptFillDefaultButton(Window settings) =>
+        (Button)settings.FindName("AiOrganizePromptFillDefaultButton");
+
+    private static Button PromptResetButton(Window settings) =>
+        (Button)settings.FindName("AiOrganizePromptResetButton");
+
+    /// <summary>让编辑框真实持有焦点后移走（真实失焦次序），并等待保存完成。</summary>
+    private static void CommitPromptByFocusChange(
+        Window settings,
+        RecordingPreferencesStore preferencesStore,
+        Func<bool> saved)
+    {
+        Keyboard.Focus((RadioButton)settings.FindName("SettingsNavAi")!);
+        PumpUntil(settings.Dispatcher, saved);
+        Assert.IsNotNull(preferencesStore.LastSaved);
+    }
+
+    [STATestMethod]
+    public void StoredOverride_FillsBoxAndShowsCustomizedState()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with
+            {
+                AiOrganizeSystemPromptOverride = "我的自定义整理规则。"
+            }
+        };
+        var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+
+            Assert.AreEqual("我的自定义整理规则。", PromptBox(settings).Text, "存量覆盖必须回填编辑框。");
+            Assert.AreEqual("已自定义。", PromptStateText(settings).Text, "状态必须显式「已自定义」。");
+            Assert.IsNull(preferencesStore.LastSaved, "打开设置不得触发保存。");
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    [STATestMethod]
+    public void NullOverride_ShowsEmptyBoxWithDefaultStateHint()
+    {
+        // S3：null 态不预填默认全文（保住「是否默认」判定基线），状态显式可见。
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeSecretProtector());
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+
+            var box = PromptBox(settings);
+            Assert.AreEqual(string.Empty, box.Text, "默认（null）必须显示空框，绝不预填默认全文。");
+            Assert.AreEqual("当前使用内置默认。", PromptStateText(settings).Text);
+            Assert.IsTrue(box.AcceptsReturn, "编辑框必须接受多行输入。");
+            Assert.AreEqual(TextWrapping.Wrap, box.TextWrapping);
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    [STATestMethod]
+    public void PromptEdit_LostFocus_PersistsTrimmedOverrideAndSwitchesState()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var box = PromptBox(settings);
+            Assert.AreEqual("当前使用内置默认。", PromptStateText(settings).Text, "前置条件：初始为默认态。");
+
+            box.Focus();
+            box.Text = "  你是我的专属整理器，只输出整理后的文字。  ";
+            Assert.AreEqual("已自定义。", PromptStateText(settings).Text, "输入内容后状态标签必须切换。");
+            CommitPromptByFocusChange(
+                settings,
+                preferencesStore,
+                () => preferencesStore.LastSaved?.AiOrganizeSystemPromptOverride is not null);
+
+            Assert.AreEqual(
+                "你是我的专属整理器，只输出整理后的文字。",
+                preferencesStore.LastSaved!.AiOrganizeSystemPromptOverride,
+                "失焦必须保存 Trim 后文本。");
+            Assert.AreEqual(
+                preferencesStore.LastSaved.AiOrganizeSystemPromptOverride,
+                window.CurrentPreferences.AiOrganizeSystemPromptOverride,
+                "内存偏好与持久化值一致（下一次整理即生效，契约 #5）。");
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    [STATestMethod]
+    public void ClearedPrompt_LostFocus_SavesNull()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeSystemPromptOverride = "旧自定义提示词" }
+        };
+        var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var box = PromptBox(settings);
+            box.Focus();
+            box.Text = "   ";
+            CommitPromptByFocusChange(
+                settings,
+                preferencesStore,
+                () => preferencesStore.LastSaved is not null);
+
+            Assert.IsNull(
+                preferencesStore.LastSaved!.AiOrganizeSystemPromptOverride,
+                "清空/纯空白失焦必须存 null（回退内置默认，绝不发送空白 system）。");
+            Assert.AreEqual("当前使用内置默认。", PromptStateText(settings).Text);
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    [STATestMethod]
+    public void ResetButton_ClickAfterFocusLoss_FinalStateIsNull()
+    {
+        // ThemedActionButtonStyle 恒 Focusable=False：点击按钮不使编辑框失焦，
+        // 恢复默认由按钮处理函数清空并直接提交 null，最终态恒为 null、无需再
+        // 失焦一次；失焦先行提交旧值的次序（Tab 离开后点击）也被随后的 null
+        // 提交覆盖——两种次序收敛同一终态。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeSystemPromptOverride = "旧自定义提示词" }
+        };
+        var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var box = PromptBox(settings);
+            var resetButton = PromptResetButton(settings);
+            box.Focus();
+            box.Text = "编辑到一半的提示词";
+            resetButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpUntil(
+                settings.Dispatcher,
+                () => preferencesStore.LastSaved?.AiOrganizeSystemPromptOverride is null);
+
+            Assert.AreEqual(string.Empty, box.Text, "恢复默认必须清空编辑框。");
+            Assert.IsNull(window.CurrentPreferences.AiOrganizeSystemPromptOverride);
+            Assert.AreEqual("当前使用内置默认。", PromptStateText(settings).Text);
+            Assert.AreEqual(Visibility.Collapsed, PromptErrorText(settings).Visibility);
+
+            // 失焦先行的次序：失焦提交新值，按钮点击随即覆盖为 null。
+            box.Focus();
+            box.Text = "再次自定义的提示词";
+            Keyboard.Focus((RadioButton)settings.FindName("SettingsNavAi")!);
+            PumpUntil(
+                settings.Dispatcher,
+                () => preferencesStore.LastSaved?.AiOrganizeSystemPromptOverride == "再次自定义的提示词");
+            resetButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpUntil(
+                settings.Dispatcher,
+                () => preferencesStore.LastSaved?.AiOrganizeSystemPromptOverride is null);
+            Assert.IsNull(window.CurrentPreferences.AiOrganizeSystemPromptOverride);
+
+            // 幂等：重复点击不再产生新保存（提交函数值未变即早退）。
+            var savedCount = preferencesStore.SaveCount;
+            resetButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            CompleteLayout(settings);
+            Assert.AreEqual(savedCount, preferencesStore.SaveCount, "重复恢复默认不得产生无谓写盘。");
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    [STATestMethod]
+    public void FillDefaultButton_PutsSystemPromptInBoxAwaitingFocusSave()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeSystemPromptOverride = "旧自定义提示词" }
+        };
+        var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var box = PromptBox(settings);
+            var fillButton = PromptFillDefaultButton(settings);
+            box.Focus();
+            box.Text = "编辑到一半的提示词";
+            fillButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+
+            Assert.AreEqual(
+                AiOrganizePrompt.SystemPrompt,
+                box.Text,
+                "填入默认全文必须把内置默认逐字填入编辑框（微调起点）。");
+            Assert.AreEqual("已自定义。", PromptStateText(settings).Text);
+            Assert.IsNull(
+                preferencesStore.LastSaved,
+                "填入≠生效：按钮不保存，保存点仍是编辑框下一次失焦。");
+
+            // 用户离开编辑框（按钮不可夺焦，此处以导航项承接焦点）后提交全文。
+            Keyboard.Focus((RadioButton)settings.FindName("SettingsNavAi")!);
+            PumpUntil(
+                settings.Dispatcher,
+                () => preferencesStore.LastSaved?.AiOrganizeSystemPromptOverride == AiOrganizePrompt.SystemPrompt);
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    [STATestMethod]
+    public void OverlongPrompt_LostFocus_ShowsErrorAndKeepsPreference()
+    {
+        // 设置页前置校验（S5 第一防线）：超长不保存＋就地红字提示。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeSystemPromptOverride = "旧自定义提示词" }
+        };
+        var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var box = PromptBox(settings);
+            box.Focus();
+            box.Text = new string('提', AiOrganizePrompt.MaxOverrideLength + 1);
+            Keyboard.Focus((RadioButton)settings.FindName("SettingsNavAi")!);
+            CompleteLayout(settings);
+
+            Assert.AreEqual(Visibility.Visible, PromptErrorText(settings).Visibility);
+            StringAssert.Contains(PromptErrorText(settings).Text, "超过 1 万字");
+            StringAssert.Contains(PromptErrorText(settings).Text, "未保存");
+            Assert.AreEqual(
+                "旧自定义提示词",
+                window.CurrentPreferences.AiOrganizeSystemPromptOverride,
+                "超长输入不得改动偏好。");
+
+            // 缩短到限内再失焦：错误清除、新值保存（就地反馈可恢复）。
+            box.Focus();
+            box.Text = "缩短后的提示词";
+            Keyboard.Focus((RadioButton)settings.FindName("SettingsNavAi")!);
+            PumpUntil(
+                settings.Dispatcher,
+                () => preferencesStore.LastSaved?.AiOrganizeSystemPromptOverride == "缩短后的提示词");
+            Assert.AreEqual(Visibility.Collapsed, PromptErrorText(settings).Visibility);
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
     [STATestMethod]
     public void TestConnection_ProbesModelsWithoutSelectionState()
     {
@@ -569,6 +856,62 @@ public sealed class SettingsWindowAiTests
         }
     }
 
+    /// <summary>1.52.0 发布证据（FTS_RELEASE_152_EVIDENCE_DIR 设置时产出真实 WPF
+    /// 渲染截图）：浅/深主题 AI 设置页（整理提示词新卡滚入视野、Key 掩码态）——
+    /// 浅色拍默认态（空框＋内置默认状态行），深色拍自定义态（覆盖文本＋已自定义）。
+    /// Key 只用假值且截图呈现为掩码圆点。</summary>
+    [STATestMethod]
+    public void Evidence_CaptureRelease152AiPromptScreens()
+    {
+        var evidenceDirectory = Environment.GetEnvironmentVariable("FTS_RELEASE_152_EVIDENCE_DIR");
+        if (string.IsNullOrWhiteSpace(evidenceDirectory))
+        {
+            Assert.Inconclusive("未设置 FTS_RELEASE_152_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        var handler = new StubHttpMessageHandler();
+        var protector = new FakeSecretProtector();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with
+            {
+                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey)
+            }
+        };
+        using var directory = new TestDirectory();
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            protector,
+            new DeepSeekClient(handler),
+            CreateEmptyPluginCatalog(directory.Root));
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            RevealAiPromptCard(settings);
+            SaveWindowShell(settings, evidenceDirectory!, "settings-ai-prompt-light.png");
+
+            DesignThemeManager.Apply(settings, DesignTheme.Dark);
+            PromptBox(settings).Focus();
+            PromptBox(settings).Text = "你是我的专属文本整理器：忠实原意，理顺口语跳跃，清理口误与重复，输出可直接使用的文字。";
+            CompleteLayout(settings);
+            RevealAiPromptCard(settings);
+            SaveWindowShell(settings, evidenceDirectory!, "settings-ai-prompt-dark.png");
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    /// <summary>把整理提示词卡滚入视野（状态行贴视口内可见），并完成布局。</summary>
+    private static void RevealAiPromptCard(Window settings)
+    {
+        PromptResetButton(settings).BringIntoView();
+        CompleteLayout(settings);
+    }
+
     /// <summary>设置窗限高滚动：把 AI 设置节滚入视野（测试按钮贴视口下缘可见）。</summary>
     private static void RevealAiSection(Window settings)
     {
@@ -682,6 +1025,7 @@ public sealed class SettingsWindowAiTests
 
     private sealed class RecordingPreferencesStore : IPreferencesStore
     {
+        public int SaveCount { get; private set; }
         public AppPreferences? LastSaved { get; private set; }
         public AppPreferences Seeded { get; set; } = AppPreferences.Default;
 
@@ -692,6 +1036,7 @@ public sealed class SettingsWindowAiTests
             AppPreferences preferences,
             CancellationToken cancellationToken = default)
         {
+            SaveCount++;
             LastSaved = preferences;
             return Task.CompletedTask;
         }
