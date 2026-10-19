@@ -226,6 +226,11 @@
 ```powershell
 & .\scripts\bootstrap-dotnet.ps1
 & .\.tools\dotnet\dotnet.exe restore FloatingTransferStation.slnx
+
+# 开发循环测试：按变更集选受影响区域（Core.Tests 恒跑基线；纯文档变更自动跳过）
+& .\scripts\run-affected-tests.ps1
+
+# 全量测试（发行打包与 CI 质量门使用；本地开发循环不要求）
 & .\.tools\dotnet\dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore
 ```
 
