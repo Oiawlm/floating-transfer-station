@@ -329,18 +329,30 @@ public sealed class SettingsWindowPluginTests
             var textBox = FindDescendants<TextBox>(panel).Single();
             Assert.AreEqual(string.Empty, textBox.Text);
 
-            // 改 bool → 原子持久化 + 管线重建（when 门控的规则生效）。
+            // 改 bool → 原子持久化 + 管线重建（when 门控的规则生效）。内存值先于
+            // 落盘生效（生产契约：改动即时生效、持久化异步原子），所以持久化断言
+            // 必须轮询文件内容而非仅等内存值——否则快盘上掩盖时序、慢盘（CI）上
+            // 读到不存在的文件。
             toggles[0].IsChecked = true;
-            PumpDispatcherUntil(
-                settings.Dispatcher,
-                () => catalog.GetActionSettingOverrides("typography-tidy", "tidy-card")
-                    .TryGetValue("punct-to-fullwidth", out var value) && value == "true");
+            var stateFile = AppPaths.FromDataDirectory(directory.Root).PluginStateFile;
             Assert.AreEqual(
                 "true",
                 catalog.GetActionSettingOverrides("typography-tidy", "tidy-card")["punct-to-fullwidth"]);
-            var stateFile = AppPaths.FromDataDirectory(directory.Root).PluginStateFile;
-            var persisted = File.ReadAllText(stateFile);
-            StringAssert.Contains(persisted, "punct-to-fullwidth");
+            PumpDispatcherUntil(
+                settings.Dispatcher,
+                () =>
+                {
+                    try
+                    {
+                        return File.Exists(stateFile) &&
+                            File.ReadAllText(stateFile).Contains("punct-to-fullwidth");
+                    }
+                    catch (IOException)
+                    {
+                        // 原子写经 .tmp + Replace，读取瞬间可能撞上中间态。
+                        return false;
+                    }
+                });
 
             // 试运行按钮存在且可点（对话框逻辑由独立用例驱动）。
             var trialButton = FindDescendants<Button>(panel).Single(button =>
