@@ -304,15 +304,25 @@
                          Checked="SettingsNavItem_Checked" />
           </StackPanel>
         </Border>
+        <!-- 共享滚动视口挂既有 keyed overlay 模板（契约 #23 机制扩展，2026-10-19
+             Issue #200）：五内容页高度不同，默认模板的布局滚动条出现/消失会让内容
+             列在「全宽」与「全宽−滚动条宽」间跳变——溢出页卡片比不溢出页窄。单格
+             叠加让条带悬浮内容之上、永不占布局宽，五页卡片宽度在任何窗口高度下
+             逐 DIP 相等；条带 8 DIP 落在内容列 16 DIP 右边距带内，与卡片零相交。
+             样式与本窗合并字典中的隐式瘦条 ScrollBar 样式同源（MainWindowStyles）。 -->
         <ScrollViewer x:Name="SettingsScrollHost"
                       Grid.Column="1"
+                      Style="{StaticResource OverlayScrollViewerStyle}"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
-          <!-- 内容列：720 上限内水平居中（壳层铺满 HWND，最大化/超宽时不留死区）。 -->
+          <!-- 内容列：720 上限内铺满视口（Stretch＋MaxWidth：槽宽不足取槽宽、
+               超出上限取 720 并居中——WPF 对受 Max 钳制的 Stretch 自动按居中落位，
+               兼得 #24「720 上限水平居中」）。Center 会让列宽随最宽卡片收窄，
+               五页内容不同宽 → 卡片宽度页页不等（2026-10-19 根因修订，Issue #200）。 -->
           <Grid x:Name="SettingsContentHost"
                 Margin="16,14,16,16"
                 MaxWidth="{x:Static design:SettingsWindowMetrics.ContentColumnMaxWidth}"
-                HorizontalAlignment="Center">
+                HorizontalAlignment="Stretch">
             <StackPanel x:Name="AppearancePage">
               <Border Style="{StaticResource SettingsCardStyle}">
                 <StackPanel>

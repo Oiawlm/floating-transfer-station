@@ -508,6 +508,38 @@
           </StackPanel>
         </Border>
 
+        <!-- 内容桶空态引导（契约 #33，复用 LauncherEmptyState 先例：图标＋标题＋
+             副文案，内容区垂直居中，无 CTA——内容桶的进入路径是复制/拖入，无显式
+             添加动作）。可见性与文案由 UpdatePanelSurface 表面单点＋激活桶集合
+             变化管理；文案按 (BoardCategory, IsDefaultCapture) 二维矩阵派生（默认
+             接收桶＝复制自动收集，非默认桶＝拖入收集）。纯信息性：IsHitTestVisible=
+             False 让拖放与点击命中穿透回 BoardList（兄弟层不截获隧道事件）。搜索态
+             让位给 SearchEmptyHint（无匹配语义）。 -->
+        <StackPanel x:Name="BoardEmptyState"
+                    Grid.Row="1"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    IsHitTestVisible="False"
+                    Visibility="Collapsed">
+          <TextBlock HorizontalAlignment="Center"
+                     FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                     FontSize="36"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="&#xE8C8;" />
+          <TextBlock x:Name="BoardEmptyStateTitle"
+                     Margin="0,10,0,2"
+                     HorizontalAlignment="Center"
+                     FontSize="14"
+                     FontWeight="SemiBold"
+                     Foreground="{DynamicResource PrimaryTextBrush}"
+                     Text="还没有内容" />
+          <TextBlock x:Name="BoardEmptyStateHint"
+                     HorizontalAlignment="Center"
+                     FontSize="12"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="把内容拖到这里即可收集" />
+        </StackPanel>
+
         <Border x:Name="ReviewContentHost"
                 Grid.Row="1"
                 Padding="12,8,12,10"
