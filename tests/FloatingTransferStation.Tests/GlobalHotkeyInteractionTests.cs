@@ -290,6 +290,29 @@ public sealed class GlobalHotkeyInteractionTests
         }
     }
 
+    [TestMethod]
+    public void Win32GlobalHotkeySource_ExposesDocumentedCtrlAltVCombination()
+    {
+        // 组合键常量镜像：设置界面与文档宣称的唤起组合是 Ctrl + Alt + V，
+        // Win32 实现的显示文本、热键 id、虚拟键与修饰键必须与之同源。
+        // 常量经反射读元数据（绕开编译期内联，改动常量值即测试红）；
+        // 真实 RegisterHotKey 路径依赖全局组合键占用状态，不进自动化。
+        var sourceType = typeof(Win32GlobalHotkeySource);
+        Assert.AreEqual(
+            "Ctrl + Alt + V",
+            sourceType.GetProperty(nameof(Win32GlobalHotkeySource.DisplayText))!.GetValue(null));
+        Assert.AreEqual(0x4654, (int)sourceType.GetField(
+            nameof(Win32GlobalHotkeySource.HotkeyId))!.GetRawConstantValue()!);
+        Assert.AreEqual(0x56u, (uint)sourceType.GetField(
+            nameof(Win32GlobalHotkeySource.VirtualKeyV))!.GetRawConstantValue()!);
+        Assert.AreEqual(0x0002u, (uint)typeof(NativeMethods).GetField(
+            nameof(NativeMethods.ModControl),
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetRawConstantValue()!);
+        Assert.AreEqual(0x0001u, (uint)typeof(NativeMethods).GetField(
+            nameof(NativeMethods.ModAlt),
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetRawConstantValue()!);
+    }
+
     private sealed class IdleHotkeyClipboardReader : IClipboardReader
     {
         public Task<ClipboardSnapshot> ReadAsync(CancellationToken cancellationToken = default) =>

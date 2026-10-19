@@ -265,4 +265,46 @@ public sealed partial class MainWindowInteractionTests
             CloseWindow(window);
         }
     }
+
+    [STATestMethod]
+    public void Search_RealKeyboardCtrlFEntersAndWindowEscExits()
+    {
+        // 键盘直达守护：Ctrl+F 进入、窗口级 Esc 退出——既有用例均直呼
+        // Enter/ExitSearchMode，两个键盘入口此前零覆盖。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("苹果新鲜到货", BoardCategory.Inbox);
+        board.AddText("香蕉");
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(item);
+            Assert.AreEqual(1, list.SelectedItems.Count);
+
+            window.RaiseEvent(NewModifiedKeyEventArgs(window, Key.F, ModifierKeys.Control));
+            CompleteLayout(window);
+
+            Assert.IsTrue(viewModel.IsSearchActive, "Ctrl+F 进入搜索态。");
+            Assert.AreEqual(0, list.SelectedItems.Count, "进入搜索态清空选择（与放大镜入口同语义）。");
+
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
+            CompleteLayout(window);
+
+            Assert.IsFalse(viewModel.IsSearchActive, "Esc 退出搜索态。");
+            Assert.AreEqual(
+                Visibility.Visible,
+                ((StackPanel)window.FindName("HeaderActions")).Visibility,
+                "退出搜索后头部操作区还原。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
 }

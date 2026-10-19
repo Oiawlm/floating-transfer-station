@@ -192,15 +192,6 @@
 - **锁定**：`tests/FloatingTransferStation.Tests/SettingsWindowNavPaneTests.cs`（冻结顺序与命名、SelectionItem 语义 UIA 路径、↑↓ 循环/Home/End/Tab、双主题导航完好、双主题全节渲染巡检、动效关闭即时切换；2026-10-13 起含 `WindowShell_OpaqueFallbackFollowsLiveThemeSwitch` 不透明壳兜底活切换跟随）、`tests/FloatingTransferStation.Tests/SettingsWindowPluginTests.cs`（插件行渲染/开关即时生效/清单非法行可见不可启用/双主题渲染；2026-10-13 起含 `PluginRows_FollowLiveThemeSwitchWithoutRebuild` 插件行画刷活切换跟随，含 DangerBrush 分支）、`tests/FloatingTransferStation.Tests/SettingsWindowGeometryTests.cs`（2026-10-19 修订：`MinMaxInfo_MarshalLayout_MatchesWin32` 40 字节/偏移锁定、`TryApplyMaximizeWorkArea_WritesTrackSizesAtNativeOffsets` 物理偏移写入、`SettingsWindow_RealHwndMinMaxInfo_EnforcesTrackSizes` 真实 HWND 消息路径、`TryApplyMaximizeWorkArea_LargeMaxWidth_NotNarrowedByShort` 32 位不窄化、`TryApplyMaximizeWorkArea_TaskbarLeftOrTop_PtMaxPositionSign` 方向符号、`TryApplyMaximizeWorkArea_SystemMaximizing_TrackYieldsToWorkArea` 最大化让位、`TryApplyMaximizeWorkArea_NonFiniteInput_FallsBackToWpfDefault` 非有限回退、`Geometry_MaximizedShellSpansWindowAndContentStaysBounded` 最大化壳层铺满+内容列居中有界、`Geometry_PersistedHeightExceedingTargetWorkArea_IsClampedByFrozenFormula` 恢复冻结式钳制、`Geometry_SmallDisplayWorkArea_ClampsRestoredHeightToMinHeight` 矮屏抬底；及既有冻结约束声明、持久化往返原样恢复、负坐标合法（假左副屏）、部分越界钳入、NaN 回落默认定位、全屏外回落、结束才落盘（拖中零写盘/DragCompleted/EXITSIZEMOVE 路径）+最大化不落盘、显示器断开退主屏钳制）、`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`（几何字段 JSON 往返与旧文件回落）、`tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs`（`SettingsWindow_FixedViewportScrollsOverflowAndKeepsFooterVisible`：固定视口滚动 + 页脚常驻可见，2026-10-19 起按冻结式断言实际高度；2026-10-19 起含 `SettingsWindow_CardWidthUnifiedAcrossPagesAndScrollBarVisibility` 五页卡片等宽，锁定见 #23 扩展）。
 - **关联**：契约记录 Issue Oiawlm/floating-transfer-station#106；CHANGELOG 未发布区；#5（ApplyPreferences 管线）、#13（标签顺序真实输入用例先导航到「面板」页再消息直驱）、#21（标签顺序节语义零变化，仅容器迁页）不受影响；1.38.0 置顶分隔节修订 Issue #135；2026-10-13 画刷活切换锁定修订 Issue Oiawlm/floating-transfer-station#140（AI 节模型收敛部分见 #28，Issue #141）。
 
-## 十、本次新增（26，检查更新与一键更新）
-
-### 26. 检查更新与一键更新
-
-- **断言**：面板头部按钮行最左常驻「更新」按钮（填充图标 16×16，横杠+向上箭头），双语义由「本地版本 < 远端 tag（剥 v 前缀后 Version 严格大于）」唯一派生——无更新=次级文字色「检查更新」，点击手动检查并就地反馈一次（已是最新版本/失败原因）；有更新=强调色点亮 + ToolTip 与 AutomationProperties.Name 携带新版本号，点击执行完整一键更新，原子顺序固定：下载精确名资产（FloatingTransferStation-Setup-{version}.exe）到 %TEMP% 专用子目录（先清理同版本旧文件与半成品）→ 下载 SHA256SUMS.txt 校验通过才继续 → 排空既有保存管线（提交在编辑内容、冲刷复盘、等待在途操作归零）→ 以 /SILENT /SUPPRESSMSGBOXES /NORESTART 启动安装器（脱钩进程）→ 经既有优雅退出路径关闭 → 安装器 [Run] 条目自动重启新版本（该条目已去 skipifsilent——契约性修订，静默安装后自动重启）。校验失败或下载失败：清理临时文件、状态条提示、按钮保持点亮可重试，绝不启动安装器；绝不带着未排空的写盘启动安装器。自动检查节奏=启动 30 秒后首检 + 每 24 小时一次，任何失败（网络/403/404/429/5xx/超时/坏 JSON/解析）完全静默；检测到新版本且面板可见时状态条提示一次（同一版本不重复提示）；无弹窗、无 toast。精确名资产或校验清单缺失（AssetMissing）仅在手动检查时状态条提示并回退打开发布页（仅 https 地址，浏览器回退每会话至多一次），自动检查对 AssetMissing 同样静默。检查与下载全程单飞防重入（在途时点击与定时 tick 都被忽略）；检查响应/校验清单/安装包读取均有硬字节上限。设置「通用」节「自动检查更新」开关（默认开启，旧 preferences.json 缺字段回落开启），走 ApplyPreferences 唯一管线即时生效：关=停检查定时器，开=恢复节奏；手动检查不受开关影响。仓库 API/HTML 地址常量单一来源 ProductIdentity（更新服务与设置窗页脚链接共用，XAML 无字面量）；仅在自动节奏与用户点击时对 GitHub 联网，零遥测。
-- **由来**：用户需求「软件能感知 GitHub 上的新版本并推送到界面——顶部按钮行最左新增更新按钮，用户可自主选择是否点击更新」，三项裁决：①应用内下载+静默安装+自动重启；②按钮常驻双语义；③启动 30 秒延迟首检+每 24 小时一次、设置可关（默认开）。全部逻辑在 Core 可测服务（UpdateService，HttpMessageHandler/进程启动器注入离线可测），UI 只做接线；业界先例（Chrome/PowerToys 着色点亮、Sparkle 24h 节奏、通知疲劳防护）支撑「点亮+状态条一次、无 toast」的克制取向；Inno AppMutex 在安装器启动瞬间检查、静默下互斥提示框默认取 Cancel（安装器静默退出=更新静默失败），故「先排空后启动随即退出」是硬性时序；竞态万一失守仅静默失败，按钮状态由版本比较派生仍可重试。wbx 双 lane 批判评审（job 20261012-220201-djr）修正 1 BLOCKER（资产 302→CDN 必须跟随重定向）与多项失败折叠/资源上限/取消清理问题。
-- **锁定**：`tests/FloatingTransferStation.Core.Tests/UpdateServiceTests.cs`（版本比较矩阵、失败折叠为无更新、精确名匹配与 AssetMissing 信号、SHA256 校验通过/失败与清理、同版本旧文件清理、取消清理上抛、静默安装参数、请求头与 URL 契约）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.Updates.cs`（按钮最左、双态点亮与文案、自动静默/手动反馈、单飞防重入、下载失败保持可用可重试、安装→退出顺序、头部悬停淡显与 #17 armed 常显继承、SendInput 真实输入可达、设置开关即时生效与持久化）、`tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs`（头部按钮顺序断言：更新按钮最左，齿轮右移一位）、`tests/FloatingTransferStation.Tests/LifecycleTests.ReleaseMetadata.cs`（RepoUrl_IsSingleSourcedFromProductIdentity：设置窗 XAML 无仓库地址字面量）、`tests/FloatingTransferStation.Tests/LifecycleTests.Installer.cs`（[Run] 体精确等于去 skipifsilent 后的启动条目）、`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`（自动检查字段默认开启、JSON 往返、缺字段回落）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.HeaderIconMetrics.cs`（更新按钮图标纳入 16×16 填充图标居中扫描）。
-- **关联**：CHANGELOG 未发布区；#5（ApplyPreferences 唯一管线）、#8（version.txt 唯一版本来源）、#13（SendInput 真实输入，PostMessage 在头部区不可达为测试环境既有限制）、#17（armed 常显机制复用）、#24（「通用」节枚举补列）。无独立 spec（交接提示词 GOAL-UPDATE-CHECK-20261012-PROMPT 锁定决策，如实标注）。
-
 ## 十、本次新增（25，两态行距同源与光标行带精度）
 
 ### 25. 两态行距同源（单一资源）与光标锚点行带精度
@@ -210,7 +201,16 @@
 - **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardCaretAnchor.cs`（`CardCaretAnchor_DoubleClickPlacesCaretAtClickedLineRealInput` Win32 消息直驱端到端含跨行与左缘下界、`CardCaretAnchor_TypingStartsAtClickedPosition`、`CardCaretAnchor_EditorLineMetricsMatchDisplay` 含两态总高一致、`CardCaretAnchor_DoubleClickKeepsSelectionEmptySynthetic`、`CardCaretAnchor_WrappedLineDoubleClickMapsToSameVisualLine`）。
 - **关联**：CHANGELOG 未发布区（无独立 spec，如实标注）；#22（2026-10-12 修订的点击定位光标语义与备注显示行行距引用，行距原字面量 20 收拢为本条资源）、#13（真实输入口径）、#7（编辑持焦零改动）、#14（对半分区零改动）。
 
-## 十一、本次新增（27，1.38.0）
+## 十一、本次新增（26，检查更新与一键更新）
+
+### 26. 检查更新与一键更新
+
+- **断言**：面板头部按钮行最左常驻「更新」按钮（填充图标 16×16，横杠+向上箭头），双语义由「本地版本 < 远端 tag（剥 v 前缀后 Version 严格大于）」唯一派生——无更新=次级文字色「检查更新」，点击手动检查并就地反馈一次（已是最新版本/失败原因）；有更新=强调色点亮 + ToolTip 与 AutomationProperties.Name 携带新版本号，点击执行完整一键更新，原子顺序固定：下载精确名资产（FloatingTransferStation-Setup-{version}.exe）到 %TEMP% 专用子目录（先清理同版本旧文件与半成品）→ 下载 SHA256SUMS.txt 校验通过才继续 → 排空既有保存管线（提交在编辑内容、冲刷复盘、等待在途操作归零）→ 以 /SILENT /SUPPRESSMSGBOXES /NORESTART 启动安装器（脱钩进程）→ 经既有优雅退出路径关闭 → 安装器 [Run] 条目自动重启新版本（该条目已去 skipifsilent——契约性修订，静默安装后自动重启）。校验失败或下载失败：清理临时文件、状态条提示、按钮保持点亮可重试，绝不启动安装器；绝不带着未排空的写盘启动安装器。自动检查节奏=启动 30 秒后首检 + 每 24 小时一次，任何失败（网络/403/404/429/5xx/超时/坏 JSON/解析）完全静默；检测到新版本且面板可见时状态条提示一次（同一版本不重复提示）；无弹窗、无 toast。精确名资产或校验清单缺失（AssetMissing）仅在手动检查时状态条提示并回退打开发布页（仅 https 地址，浏览器回退每会话至多一次），自动检查对 AssetMissing 同样静默。检查与下载全程单飞防重入（在途时点击与定时 tick 都被忽略）；检查响应/校验清单/安装包读取均有硬字节上限。设置「通用」节「自动检查更新」开关（默认开启，旧 preferences.json 缺字段回落开启），走 ApplyPreferences 唯一管线即时生效：关=停检查定时器，开=恢复节奏；手动检查不受开关影响。仓库 API/HTML 地址常量单一来源 ProductIdentity（更新服务与设置窗页脚链接共用，XAML 无字面量）；仅在自动节奏与用户点击时对 GitHub 联网，零遥测。
+- **由来**：用户需求「软件能感知 GitHub 上的新版本并推送到界面——顶部按钮行最左新增更新按钮，用户可自主选择是否点击更新」，三项裁决：①应用内下载+静默安装+自动重启；②按钮常驻双语义；③启动 30 秒延迟首检+每 24 小时一次、设置可关（默认开）。全部逻辑在 Core 可测服务（UpdateService，HttpMessageHandler/进程启动器注入离线可测），UI 只做接线；业界先例（Chrome/PowerToys 着色点亮、Sparkle 24h 节奏、通知疲劳防护）支撑「点亮+状态条一次、无 toast」的克制取向；Inno AppMutex 在安装器启动瞬间检查、静默下互斥提示框默认取 Cancel（安装器静默退出=更新静默失败），故「先排空后启动随即退出」是硬性时序；竞态万一失守仅静默失败，按钮状态由版本比较派生仍可重试。wbx 双 lane 批判评审（job 20261012-220201-djr）修正 1 BLOCKER（资产 302→CDN 必须跟随重定向）与多项失败折叠/资源上限/取消清理问题。
+- **锁定**：`tests/FloatingTransferStation.Core.Tests/UpdateServiceTests.cs`（版本比较矩阵、失败折叠为无更新、精确名匹配与 AssetMissing 信号、SHA256 校验通过/失败与清理、同版本旧文件清理、取消清理上抛、静默安装参数、请求头与 URL 契约）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.Updates.cs`（按钮最左、双态点亮与文案、自动静默/手动反馈、单飞防重入、下载失败保持可用可重试、安装→退出顺序、头部悬停淡显与 #17 armed 常显继承、SendInput 真实输入可达、设置开关即时生效与持久化）、`tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs`（头部按钮顺序断言：更新按钮最左，齿轮右移一位）、`tests/FloatingTransferStation.Tests/LifecycleTests.ReleaseMetadata.cs`（RepoUrl_IsSingleSourcedFromProductIdentity：设置窗 XAML 无仓库地址字面量）、`tests/FloatingTransferStation.Tests/LifecycleTests.Installer.cs`（[Run] 体精确等于去 skipifsilent 后的启动条目）、`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`（自动检查字段默认开启、JSON 往返、缺字段回落）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.HeaderIconMetrics.cs`（更新按钮图标纳入 16×16 填充图标居中扫描）。
+- **关联**：CHANGELOG 未发布区；#5（ApplyPreferences 唯一管线）、#8（version.txt 唯一版本来源）、#13（SendInput 真实输入，PostMessage 在头部区不可达为测试环境既有限制）、#17（armed 常显机制复用）、#24（「通用」节枚举补列）。无独立 spec（交接提示词 GOAL-UPDATE-CHECK-20261012-PROMPT 锁定决策，如实标注）。
+
+## 十二、本次新增（27，1.38.0）
 
 ### 27. 置顶分区分隔样式（1.38.0 起）
 
@@ -219,7 +219,7 @@
 - **锁定**：`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`（默认 Solid、四值 camelCase 字符串枚举 JSON 往返、旧 JSON 缺字段回落 Solid）、`tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs`（`PinnedDividerComboBox_OffersFourBuiltInStylesDefaultingToSolid` 四项顺序/Tag/默认选中/初始化守卫零保存、`PinnedDividerComboBox_AppliesImmediatelyPersistsAndSurvivesReopen` 即时生效+落盘+重开回显）、`tests/FloatingTransferStation.Tests/SettingsWindowNavPaneTests.cs`（冻结表外观=主题/动效/置顶分隔，双主题全节渲染巡检覆盖新锚点）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.PinnedDivider.cs`（`PinnedDivider_AppearsOnlyOnTheBoundaryContainer`、`PinnedDivider_NoPinnedItemsShowsNothing`、`PinnedDivider_StyleSwapAtRuntimeUpdatesRealizedContainers`、`PinnedDivider_NoneKeepsBoundaryGeometryIdenticalToSpacingOnlyBaseline`、`PinnedDivider_DoesNotChangeCardWidthOrViewportGeometry`）。
 - **关联**：契约 #24 修订与新功能记录 Issue Oiawlm/floating-transfer-station#135；#2（分区顺序零改动）、#5（ApplyPreferences 管线）、#15（虚拟化有界实现）、#23（viewport 几何）；CHANGELOG 未发布区。无独立 spec（唯一事实源为维护者本地调研底稿 RESEARCH-PINNED-DIVIDER-20261013，如实标注）。
 
-## 十二、本次新增（28，AI 唯一模型与设置窗代码构建行动态画刷）
+## 十三、本次新增（28，AI 唯一模型与设置窗代码构建行动态画刷）
 
 ### 28. AI 唯一模型、/models 探活与设置窗代码构建行动态画刷（2026-10-14 修订探活语义，Issue #161）
 
@@ -228,7 +228,7 @@
 - **锁定**：`tests/FloatingTransferStation.Core.Tests/DeepSeekClientTests.cs`（2026-10-14 起：`TestConnectionAsync_Success_ProbesModelsWithGetRequest`（GET/URL/Bearer/无请求体）、`TestConnectionAsync_MappedStatusFailures_SurfaceChineseMessages`（含垃圾错误体不改变状态码分类）、`TestConnectionAsync_EmptyModelsList_StillSucceeds`、`TestConnectionAsync_NonStandardSuccessStatus_FailsWithStatusCode`（201/204 不成功）、`TestConnectionAsync_Malformed200Body_FailsAsUnparseable`、`TestConnectionAsync_UnmappedNetworkException_MapsToNetworkError`、`ChatAsync_UnmappedNetworkException_MapsToNetworkError`、`ChatAsync_UnexpectedException_MapsToUnknownWithExceptionTypeName`、`ChatAsync_KeyWithInvalidHeaderCharacters_MapsFailureWithoutLeakingKey`；既有 `ChatAsync_SendsBearerAuthToOfficialEndpointAndSerializesRequest`、`TestConnectionAsync_WithEmptyKey_FailsLocallyWithoutRequest`、`TestConnectionAsync_Failure_SurfacesMappedChineseMessage` 随新语义继续锁定）、`tests/FloatingTransferStation.Tests/SettingsWindowAiTests.cs`（`AiSection_HasNoModelSelector`、2026-10-14 起 `TestConnection_ProbesModelsWithoutSelectionState`、`TestConnection_WithUnmappedNetworkException_ShowsMappedChineseFailure`；既有未保存草稿直测/无效 Key/空 Key 用例随新语义继续锁定）、`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`（`Default_HasNoDeepSeekKeyAndOmitsModelField` 默认序列化不含 deepSeekModel、`LegacyPreferencesFile_WithRetiredDeepSeekModelField_LoadsViaProductionStore` 旧键容忍）、`tests/FloatingTransferStation.Tests/SettingsWindowCategoryOrderTests.cs`（`OrderRows_FollowLiveThemeSwitchWithoutRebuild`）、`tests/FloatingTransferStation.Tests/SettingsWindowPluginTests.cs`（`PluginRows_FollowLiveThemeSwitchWithoutRebuild`）、`tests/FloatingTransferStation.Tests/SettingsWindowNavPaneTests.cs`（`WindowShell_OpaqueFallbackFollowsLiveThemeSwitch`）。
 - **关联**：契约记录 Issue Oiawlm/floating-transfer-station#140（深色适配）与 Issue Oiawlm/floating-transfer-station#141（模型收敛）；2026-10-14 探活与异常映射修订 Issue Oiawlm/floating-transfer-station#161；#21/#24 同批修订；#5（即时生效唯一管线）、#9（插件边界）、#1（原子写不受影响）；无独立 spec（唯一事实源为维护者本地调研底稿 RESEARCH-DARKMODE-AI-MODEL-20261013 与 RESEARCH-AI-TEST-CONNECTION-20261014，如实标注）。
 
-## 十三、本次新增（29，文字卡 AI 整理）
+## 十四、本次新增（29，文字卡 AI 整理）
 
 ### 29. 文字卡 AI 整理（截断门槛＋直接替换＋Ctrl+Z 恢复）
 
@@ -237,7 +237,7 @@
 - **锁定**：`tests/FloatingTransferStation.Core.Tests/AiTextOrganizerTests.cs`（payload 五断言/围栏剥除/空结果/length/超长零请求/失败透传/提示词常量锁定；2026-10-19 起含覆盖逐字进 system/空白回退默认/超长覆盖本地失败零请求——含代理对码元与超长纯空白边界）、`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs`（`AiOrganizeSystemPromptOverride` 默认 null、camelCase JSON 往返、旧文件缺字段回落）、`tests/FloatingTransferStation.Tests/SettingsWindowAiTests.cs`（整理提示词编辑卡，2026-10-19 起：null 态空框＋状态行显式、失焦 Trim 保存、清空存 null、恢复默认终态 null（含失焦先行次序幂等）、填入默认全文待失焦、超长前置校验不保存＋就地红字、状态标签切换）、`tests/FloatingTransferStation.Tests/BoardMutationServiceUndoTests.cs`（`ReplaceItemTextUndoable_*` 五用例）、`tests/FloatingTransferStation.Core.Tests/BoardItemPreviewTextTests.cs`（`IsAiOrganizing_RaisesNotificationAndStaysOutOfSnapshot`）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardAi.cs`（`CardAi_ButtonVisibilityMatrix`、`CardAi_ShortCardKeepsBaselineHeightAndAppendRowCollapses`、`CardAi_RealInputClickOrganizesAndRealKeyboardCtrlZRestores` 真实输入链、`CardAi_NoKeyShowsStatusWithoutAnyRequest`、`CardAi_InFlightManualTextChangeAbandonsResult`、`CardAi_SyntheticClickEventRoutesThroughButtonClick`、`CardAi_OverridePreferenceSendsOverrideAsSystemAndUndoRestores` 覆盖偏好合成端到端）。
 - **关联**：契约记录 Issue Oiawlm/floating-transfer-station#146；#11（撤销泛化）、#13（真实输入口径）、#16/#19（操作区几何）、#22（备注族门槛同源）、#28（唯一模型）、#24（AI 页整理提示词卡，2026-10-19 修订 Issue #195）；无独立 spec（唯一事实源为维护者本地调研底稿 RESEARCH-CARD-AI-ORGANIZE-20261013，如实标注）。
 
-## 十四、本次新增（30，快捷启动标签）
+## 十五、本次新增（30，快捷启动标签）
 
 ### 30. 快捷启动标签（角色机制、迁移、排除面、存储/启动/图标、编辑模式与已安装应用选择器；记录 Issue #162）
 
@@ -256,7 +256,7 @@
 - **关联**：契约记录 Issue Oiawlm/floating-transfer-station#162（三合一：#30 新增 + #18/#21 修订）；#2（迁移收编保置顶分区与批内序）、#4（复盘语义零回退，排除面泛化的先例）、#18（清扫范围角色化）、#21（成员集表述）、#5（迁移各文件原子保存）、#1（保存失败全还原）；2026-10-16 再展开抑制窗观测式解除修订 Issue Oiawlm/floating-transfer-station#170（调研底稿为维护者本地资料 RESEARCH-REEXPAND-DEADLOCK-20261016.md，如实标注）；2026-10-16 再展开抑制窗观测区收敛＋条件布防＋交接盲窗补发二次修订 Issue Oiawlm/floating-transfer-station#173（调研底稿为维护者本地资料 RESEARCH-REEXPAND-OBSERVATION-20261016.md，如实标注）；2026-10-16 删除入口常驻修复＋瓦片右键菜单＋重排乐观发布＋拖动链路根因修订 Issue Oiawlm/floating-transfer-station#176（四点修订：× 几何与显隐机制、查看态右键菜单（含 WCAG 2.5.7 上移/下移）、串行化协议乐观上屏＋失败逆操作回滚（对齐 #21/Issue #153 先例）、键盘层级补菜单路径；调研底稿为维护者本地资料 RESEARCH-LAUNCHER-UX-PERF-20261016.md，含量化前后对比，如实标注）；2026-10-17 网页地址入口 UI 修订 Issue Oiawlm/floating-transfer-station#179（调研底稿为维护者本地资料 RESEARCH-QUICKLAUNCH-URL-20261017.md，如实标注）。**2026-10-18 布局/交互统一与外观体系修订（Issue Oiawlm/floating-transfer-station#186，五点）**：①布局根因修复——实机复现实证「一行 2 卡」（310/360 宽档）源于列数公式（按 n−1 条沟道）与 WrapPanel（每瓦片 92 节距）双口径失配使 grid.Width 恒少 8 DIP＝恒少一列＋行内 84 DIP 死区；改拉伸填充单一几何源（LauncherGridMath＋LauncherTilePanel，消灭自引用回写与窄轨跳帧特例）；②交互统一——「编辑模式」（全应用唯一模式化交互）全链删除，瓦片三分区常态手势＋多选＋批量删除整批撤销对齐图片/待分类卡片范式（#14 机制族复用；头部垃圾桶「删除已选 N 项」修订结构性隐藏条款）；③编辑目标新能力（目标创建后可改，UpdateTargetAsync 走同一突变协议）；④对话框壳统一（不透明 DialogSurfaceBrush＋DWM 圆角/阴影唯一来源，撤「透明背景＋Margin 6 假圆角＋手工阴影」三件套——用户原话「奇丑无比，跟整个界面 UI 不搭」）与圆角两档阶梯（控件 4/表面 8，DesignTokens 同源；复盘编辑器随 ThemedTextBox 入系——用户「试着调整一下圆角」）；⑤失败反馈小步（ToolTip 名称＋目标、灰态不挡右键菜单）。用户初步设想三处经外部评审否决（tile 左上双击编辑区/头部编辑钮/拖拽阈值与撤销时长改动）如实记录于维护者本地调研底稿 docs/handoff/RESEARCH-LAUNCHER-UI-UNIFY-20261018.md（含 ChatGPT gpt-6.1-sol 设计评审 wbx job 20261018-082439-5hz 采纳表，如实标注）；CHANGELOG 未发布区；设计定稿为维护者本地资料 RESEARCH-QUICKLAUNCH-20261014.md（v2），如实标注。
 
 
-## 十五、本次新增（31，插件 L1 文本动作协议）
+## 十六、本次新增（31，插件 L1 文本动作协议）
 
 ### 31. 插件动作协议（声明式卡片动作：宿主统一提交、全有或全无、资源预算、右键菜单唯一入口）
 
@@ -265,7 +265,7 @@
 - **锁定**：`tests/FloatingTransferStation.Core.Tests/PluginActionsCoreTests.cs`（清单校验正反例、双 kind 共存、`$1` 捕获 vs cleaner 字面、when 门控随设置重建、空结果跳过、预算/超时/输出超限整批失败无部分提交）、`tests/FloatingTransferStation.Tests/PluginActionMenuTests.cs`（菜单可见性选集矩阵、批量替换撤销批语义、运行中禁再入口径）、`tests/FloatingTransferStation.Tests/PluginCatalogTests.cs`（设置持久化往返＋旧文件兼容＋孤儿剔除＋重扫）、`tests/FloatingTransferStation.Tests/SettingsWindowPluginTests.cs`（来源徽章/设置控件渲染与持久化/试运行/重新扫描）。
 - **关联**：#9（插件系统边界修订）、#11（撤销批泛化机器复用）、#22（手工编辑不进撤销栈）、[docs/plugins.md](plugins.md)（能力阶梯与 L2 准入条件）、CHANGELOG 未发布区。
 
-## 十六、本次新增（32，受影响测试选区协议）
+## 十七、本次新增（32，受影响测试选区协议）
 
 ### 32. 受影响测试选区协议（三分语义、空选集两分、词根派生＋一致性守卫、全量白名单；记录 Issue #198）
 
@@ -273,7 +273,7 @@
 - **由来**：用户抱怨「明明只改设置，却跑了启动界面与其他界面的测试」——2026-10-19 规划窗口全仓清扫定位五个执行层漏洞（R1 文档触发全量、R2 宽泛 fullRules、R3 测试文件全族放宽＋部分命中漏洞、R4 活文档口径矛盾、R5 两种正当模式未区分；实证 b03a748 改设置 AI 编辑卡→全族、cf0dd31 改 docs→全量 12 分钟），用户拍板：只改选择器语义与文档、不动 1000+ 测试与测试类结构、不引入 TestCategory 标注；Core.Tests 恒跑基线保留；纯文档/文档图片变更豁免。行业共识（Nx affected／Jest --findRelatedTests／Azure TIA）即「本地受影响子集＋CI 权威全量＋选择器自身回归测试与漂移检查」；本仓库形态（两个测试工程、区域语义跨层、partial 大类共享类名）取「手维护语义映射＋保守未知回退＋自动一致性校验」，不追求依赖图全自动化。取证过程同步修掉两处既有死词根欠选（DailyReview、ClipboardDelivery 的 `CtrlC` 族）。
 - **锁定**：`scripts/test-affected-selector.ps1`（选择器契约测试：15 场景矩阵含三分语义、空选集两分、词根派生类边界形态、多前缀并集、豁免边界（未知后缀/断言文档不豁免）、恒非零漂移检查、一致性守卫真实目录零违规＋偏离方法名报错、端到端 `-ChangeSet` 参数接线；0 退出码＝通过）、`tests/FloatingTransferStation.Tests/LifecycleTests.ReleaseMetadata.cs`（CONTRIBUTING 必须记载分层测试入口与「权威全量门」分工、本地全量命令不得回归——本协议的文档面锁定）；执行集断言与历史回放实据见 PR 描述（QuickLaunch=0/SettingsWindow>0/Core>0；b03a748→CardAi 区域非全族、cf0dd31→docs 豁免不触发全量）。
 - **关联**：记录 Issue Oiawlm/floating-transfer-station#198；CONTRIBUTING.md「开发环境/提交 PR 前」、README.md「本地开发」、`.github/PULL_REQUEST_TEMPLATE.md`（口径对齐）；CHANGELOG 未发布区。
-## 十七、本次新增（33，内容桶空状态引导；记录 Issue #200）
+## 十八、本次新增（33，内容桶空状态引导；记录 Issue #200）
 
 ### 33. 内容桶空状态引导（2026-10-19 起；记录 Issue #200）
 
@@ -281,6 +281,78 @@
 - **由来**：内容桶为空时整片空白，新用户无从得知内容如何进入；默认接收迁移后两个桶的进入方式不同（自动收集 vs 仅拖入），空态是唯一能就地告知的位置。启动表面已有空态先例（1.50.0 `LauncherEmptyState`），内容桶空态复用同一设计语言与表面单点（`UpdatePanelSurface`）管理范式。
 - **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.BoardEmptyState.cs`（`BoardEmptyState_CopyMatrixDerivesByCategoryAndDefaultCapture` 二维矩阵四臂、`BoardEmptyState_CopyMatrixRejectsNonContentBucketCategories` 无兜底臂防御、`BoardEmptyState_TracksEmptyBucketAcrossItemLifecycle` 到达即隐/清空即归、`BoardEmptyState_CopySwitchesWhenDefaultCaptureMoves` 默认接收迁移文案换格、`BoardEmptyState_HiddenOnReviewAndLauncherSurfaces` 表面互斥（与启动空态对照）、`BoardEmptyState_YieldsToSearchAndReturnsOnExit` 搜索让位/退出回归、`BoardEmptyState_DoesNotInterceptBoardListHitTesting` 命中穿透抵达 BoardList、`BoardEmptyState_BackgroundCollectionChangeMarshalsToUiThread` 后台集合变化封送回 UI 线程（外部拖入导入路径线程模型，CI 实证曾崩测试宿主））。
 - **关联**：#30（CategoryRole 表面三态与 `UpdatePanelSurface` 单点）、#13（真实输入可达性——空态无交互元素故无新增输入路径）、Issue #200；CHANGELOG 未发布区。
+
+## 十九、补登（34–43，历史已定型但此前未入清单，2026-10-19 全量沉淀）
+
+### 34. 设计 token 单一源与主题字典体系
+
+- **断言**：设计颜色、动效时长与圆角/间距/瓦片几何以 `DesignTokens`（`src/FloatingTransferStation.Core/Design/DesignTokens.cs`）为唯一权威来源，WPF 侧资源（画刷、圆角镜像、瓦片几何镜像）与窗口动画时长静态字段仅作对应镜像，任何位置不得另写第二份同义数值；结构尺寸（轨道宽、面板宽区间、最小窗高等）不是设计 token，权威来源是 Core 的 `WindowSettings`（几何钳制锁定见 #6/#17）。两本主题字典分工：`DesignTheme.Light.xaml`/`DesignTheme.Dark.xaml` 只定义同名颜色画刷键（两套值键位齐备、零样式/模板），样式集中于 `MainWindowStyles.xaml`；`DesignThemeManager` 切换主题＝在 `MergedDictionaries` 原索引整本替换主题字典、不重建窗口，主题切换即全部键位跟随新字典。主题来源优先级：`FTS_PREVIEW_THEME` 预览覆盖（`DesignThemeManager.PreviewOverride`，本机预览与截图取证专用，配合 `FTS_PREVIEW_DATA_DIR` 不影响已安装应用）＞用户强制 `ThemeMode`（浅/深，强制模式不响应系统亮暗广播）＞跟随系统（`WM_SETTINGCHANGE` 的 ImmersiveColorSet＋注册表 `AppsUseLightTheme`）。Mica 材质（`DWMWA_SYSTEMBACKDROP_TYPE`）不可用时回退不透明壳色，回退画刷同样经动态资源跟随活切换（锁定见 #24）。
+- **由来**：1.7.0 引入共享 token、深浅双主题跟随系统与 Mica 窗口壳；1.8.0 起 `ThemeMode` 强制浅/深；1.50.0 收敛「控件 4/表面 8」两档圆角阶梯进 token；2026-10-16 快捷启动（Issue #176）确立瓦片几何同源原则。本条把散落在[设计规范](design.md)与各契约的数值治理规则收拢为独立契约——它是全部风格资产的地基（S4 必落项）。2026-10-19 补登轮机械审计核实锁定实存。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.DesignTokens.cs`（`DesignTokens_AreMirroredByWpfBrushResources`、`DesignTokens_AreMirroredByWpfCornerRadiusResources`、`WindowAnimationDurations_AreSourcedFromDesignTokens`、`DesignTokens_LauncherTileGeometryMirrorsTokens`）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.DesignTheme.cs`（`ThemeSwitch_SwapsEveryTokenBrushBetweenLightAndDark` 整本替换全键位换装、`ThemeSwitch_UpdatesRenderedShellAndRailSurfaces`、`ThemeEvidence_RendersBothThemes`）；Mica 失败回退画刷活切换锁定见 #24（`WindowShell_OpaqueFallbackFollowsLiveThemeSwitch`）。补测候选（如实标注）：系统亮暗跟随分支（`DetectSystemTheme` 与广播重估）、`FTS_PREVIEW_THEME` 预览覆盖路径、强制主题不响应广播的行为面（`ThemeMode` 偏好保存面已由设置窗测试覆盖）。
+- **关联**：[设计规范](design.md)（token 人类可读权威）；#6（可见态外形恒定）、#17（结构尺寸钳制）、#24（不透明壳兜底）、#30（瓦片几何 token）；CHANGELOG 1.7.0/1.50.0。
+
+### 35. 应用图标管线（规格 JSON 唯一事实源）
+
+- **断言**：应用图标以规格 JSON `src/FloatingTransferStation/Assets/AppIcon/app-icon.json`（canvas 256、配色与母版几何、逐尺寸手调覆盖、20px 派生规则）为唯一规格源，仓库内生成器工程 `FloatingTransferStation.IconTool`（零 NuGet 依赖，WPF 离屏渲染）据其生成 ICO——帧集恰为 16/20/24/32/48/64/128/256 八档，256 帧为 PNG、其余为 32bpp DIB 双倍高含 AND mask；主工程 `<ApplicationIcon>` 与安装器 `SetupIconFile` 接线同一产物。16px 逐像素（整数对齐直边零走样＋AND mask 全零）与 256 母版几何/配色/贴边（竖线胶囊＋贴边直角竖版长方形）由契约测试冻结。
+- **由来**：1.46.0 新增应用图标——规格驱动＋确定性生成取代手工位图维护，避免「改一处图标、八档帧漂移」；exe、开始菜单、控制面板卸载条目、任务管理器与安装向导随之上妆。2026-10-19 补登轮机械审计核实锁定实存。
+- **锁定**：`tests/FloatingTransferStation.Tests/AppIconContractTests.cs`（`Icon_FrameInventory_MatchesFrozenFrameSet` 帧集＋ICO 结构、`Icon_Master256Frame_HoldsGeometryPaletteAndSeamContract` 母版几何/配色/贴边、`Icon_Dib16Frame_EncodesExactPixelsAndEmptyAndMask` 16px 逐像素与 mask）。补测候选（如实标注）：规格 JSON 与生成产物的一致性（CHANGELOG 1.46.0 宣称的「重跑逐字节一致」为生成器属性声明，无自动化）、两处接线断言。
+- **关联**：CHANGELOG 1.46.0（无独立 spec，如实标注）。
+
+### 36. 卡片剪贴板递送（复制出去）
+
+- **断言**：卡片右半右键复制不改选择、不动板数据、不触发自动采集；`Ctrl+C` 仅在面板展开＋有选择＋无文本编辑焦点＋偏好开启时处理，否则保持按键未处理且不改剪贴板（文字编辑焦点让位编辑器）；复制负载——文字按板内顺序合并为 UnicodeText，图片提供 FileDropList＋Bitmap，纯图片按来源顺序文件组、混合选择同时提供文字与图片文件组；复制负载携带内部条目标记并被自动采集跳过（不产生重复卡）；复制手势在搜索过滤态保持可用。
+- **由来**：1.15.0 用户定稿「右键复制这一张＋Ctrl+C 复制选中」——交付是中转站的终态动作，负载与拖出同构保证「拖得出去的都复制得出去」；内部条目标记防「复制→立即自动回收→重复卡」回环。2026-10-19 补登轮机械审计核实锁定实存。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.ClipboardDelivery.cs`（`RightClickCopy_CopiesTextCardWithoutTouchingSelectionOrBoard`、`RightClickCopy_ImageCardDeliversFileDropAndBitmap`、`RightClickCopy_DisabledPreferenceKeepsGestureIdle`、`RightClickCopy_ContentZoneIsNotIntercepted`、`RightClickCopy_RemainsAvailableInSearchFilterMode`、`CtrlC_CopiesSelectionMergedInBoardOrder`、`CtrlC_MixedSelectionMergesTextAndImageFileGroup`、`CtrlC_WithoutSelectionLeavesClipboardAndKeyUnhandled`、`CtrlC_TextEditingFocusYieldsToTheEditor`、`CtrlC_DisabledPreferenceLeavesKeyUnhandled`、`RightClickCopy_DoesNotTriggerAutomaticRecapture`）。补测候选（如实标注）：面板收起态 `Ctrl+C` 分支、纯图片多选的文件组顺序（混合合并与板序语义已锁定）。
+- **关联**：ROADMAP/CHANGELOG 1.15.0（无独立 spec，如实标注）；#10（重复采集抑制的跳过面）、#13（真实输入口径）。
+
+### 37. 内容搜索切片 1（当前分类只读过滤视图）
+
+- **断言**：搜索仅过滤当前内容桶分类，复盘与启动标签不进入搜索（`EnterSearchMode` 对非内容桶直接返回）；入口为放大镜或 `Ctrl+F`（面板展开且无文本编辑焦点）；文本按大小写不敏感子串匹配，类型 chip 与关键词取交集，两个 chip 均选或均不选＝不过滤类型；过滤只经 BoardList 集合视图 Filter 单点：源集合、板序、置顶分区、持久化零改动；进入清空选择，结果保持先置顶区后普通区；无结果时 `SearchEmptyHint` 呈现、内容桶空态让位（#33 互斥）；搜索态抑制自动收起并禁用拖拽与 `Ctrl+A`（拖拽落点按过滤视图计算会错位）；`Esc` 或切换分类退出，退出时清空关键词与 chip、移除 Filter 并恢复头部操作区与列表视图。
+- **由来**：1.13.0 夜间循环切片 1（按设计草案实施）——后续切片（全分类、命中高亮）在候选池，本条锁定已定型切片的只读边界，防止后续切片回退。2026-10-19 补登轮为其键盘入口补最小守护测试（`Ctrl+F` 进/`Esc` 出此前零覆盖）。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.Search.cs`（`Search_FiltersCurrentCategoryAndExitRestoresAllItems`、`Search_TypeChipsFilterByKindAndBothChipsMeanAll`、`Search_EmptyResultsShowHintAndClearFilterRestores`、`Search_ActiveSuppressesAutoCollapseUntilExit`、`Search_ExitsOnCategorySwitchAndIgnoresReviewTab`、`Search_ClearsSelectionOnEnterAndKeepsPinnedOrderInResults`、`Search_RealKeyboardCtrlFEntersAndWindowEscExits`——2026-10-19 补登轮新增键盘直达守护）、`tests/FloatingTransferStation.Core.Tests/MainWindowViewModelSearchTests.cs`（`EnterExitSearch_TogglesStateAndClearsConditions`、`ExitSearch_WithoutActiveSearch_IsNoOp`、`SearchProperties_RaiseChangeNotification`）。
+- **关联**：ROADMAP/CHANGELOG 1.13.0（无独立 spec，如实标注）；#33（搜索态空态让位）。
+
+### 38. 数据目录迁移原子性（应用内搬迁协议）
+
+- **断言**：应用内数据目录搬迁复用与卸载器同源的受管形状守卫，由 Core `DataDirectoryRelocation` 执行：非法目标形状校验拒绝（根/受管祖先/已存在目标等）→ 暂存复制 → 逐项校验 → 同卷原子发布与登记更新；**发布提交前**的登记或标记写入失败回滚已发布目录与登记、恢复操作门与窗口交互，不留半迁移状态；**提交完成后**的重启进程创建失败不回滚——保留已提交登记并退出应用。成功创建重启进程时以 `--relocated` 启动并限时等待旧实例释放单实例锁；旧目录仅在新实例成功启动且形状守卫通过后延迟清理，校验不过保留；迁移期间经静默作用域暂停采集等写入者（预检拒绝不进入静默期）；插件目录为用户偏好且落在数据目录之内时拒绝。
+- **由来**：1.16.0 用户定稿方向「设置内更改数据目录与插件目录」——数据目录搬迁必须与安装器同一迁移协议（用户数据是唯一不可再生资产）；「先验证后发布＋延迟清理」来自卸载边界硬化（#3）的同族教训。2026-10-19 补登轮机械审计核实锁定实存。
+- **锁定**：`tests/FloatingTransferStation.Core.Tests/DataDirectoryRelocationTests.cs`（形状校验/暂存/校验/发布/丢弃全链 18 测试，含 `Plan_RejectsUnchangedPath`、`Plan_RejectsExistingTargetDataDirectory`、`Plan_RejectsExistingTargetManagedParent`）、`tests/FloatingTransferStation.Core.Tests/RelocationCleanupTests.cs`（标记往返与延迟清理）、`tests/FloatingTransferStation.Tests/DataDirectoryChangeServiceTests.cs`（`ChangeAsync_CommitFailureRollsBackPublishedDirectoryAndResumes`、`ChangeAsync_MarkerFailureRollsBackDirectoryAndRestoresRegistration`、`ChangeAsync_SpawnFailureKeepsRegistrationAndExits`、`ChangeAsync_HappyPathCommitsRegistrationWritesMarkerAndSpawns`、`ChangeAsync_PlanRefusalFailsWithoutQuiesce`）、`tests/FloatingTransferStation.Tests/MainWindowDataRelocationTests.cs`（`ChangeDataDirectory_SuccessPublishesCommitsMarkerAndClosesWindow`、`ChangeDataDirectory_CommitFailureResumesWindowAndReopensGate`、`ChangeDataDirectory_SpawnFailureExitsWithoutRollback` 及插件目录拒绝）。
+- **关联**：ROADMAP/CHANGELOG 1.16.0（无独立 spec，如实标注）；#1（原子写）、#3（卸载边界同族形状守卫）、#8（登记目录）、#12（名称相近语义不同——#12 是窗口矩形迁移原子性，「一次提交不留半态」原则同源）。
+
+### 39. 外部拖入导入原子性（负载识别与门内一次提交）
+
+- **断言**：外部拖入负载由 `ExternalDropPayloadReader` 一次性快照识别——携带本应用内部条目标记的数据绝不进入外部导入（防回环），图像候选优先于文本，文件组保留原始 FileDrop 清单与来源顺序供目标角色解释（#30 分流），缺失文件不回落为文本；图像文件逐个归一化后在共享操作门内一次保存落板——归一化失败不提交并清理已产生副本，保存失败回滚本批板数据，失败或取消时对本批已产生副本逐条尝试清理（某条失败不阻止其余条目）并汇总上报；手势层在拖入期间揭示分类轨道、会话结束恢复收起几何，导入失败状态条提示且不改变收起态。
+- **由来**：1.0.0 起的核心路径（「把内容拖到真正需要它的软件里」的反向入口），1.9.0 随插件管线收敛为原子提交（「文件列表先逐个归一化，保留可用图片的来源顺序，再在操作门内一次提交；提交失败撤销本批插入并清理副本」，架构说明口径）；2026-10-14 快捷启动切片 2（Issue #162）修订负载识别保留 FileList 原始清单。2026-10-19 补登轮机械审计核实锁定实存。
+- **锁定**：`tests/FloatingTransferStation.Tests/ExternalDropImportServiceTests.cs`（`ImportImageFiles_NormalizesAndCommitsSourceOrderInOneSave`、`ImportImageFiles_NormalizationFailureCleansEarlierFilesWithoutBoardCommit`、`ImportImageFiles_SaveFailureRollsBackExactBoardAndDeletesWholeBatch`、`ImportImageFiles_CleanupFailureTriesEveryPathAndReportsCombinedStatus`、`ImportImageFiles_CanceledWhileWaitingForGateCleansFilesAndRethrows`、`ImportImageFiles_CanceledCleanupFailureTriesEveryPathAndRethrowsWithoutStatus`、`ImportImageFiles_SealedGateRejectsAndCleansWithoutThrowing`、`ImportImageFiles_SharedGateKeepsPersistedSnapshotEqualToRestoredBoard`、`Import_InvalidTargetCategoryFailsBeforeNormalization` 等 12 测试）、`tests/FloatingTransferStation.Tests/ExternalDropPayloadReaderTests.cs`（内部格式拒绝/保序/不回落等 23 测试）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.DragAndDrop.cs`（`ExternalRail_*` 手势层族）。
+- **关联**：[架构说明](architecture.md)「核心数据流」；#10（批量导入与外部拖入永不因重复被抑制）、#30（FileList 分流）、#33（后台导入集合变化封送回 UI 线程）。
+
+### 40. 全局快捷键（默认关闭、显式开启、占用如实回退）
+
+- **断言**：全局唤起热键 `Ctrl + Alt + V` 的组合与标识以 `Win32GlobalHotkeySource` 为单一来源（显示文本/热键 id/虚拟键/修饰键常量）；偏好默认关闭，仅用户在设置中显式开启（或启动时读到已开启偏好）才尝试注册；注册失败（如组合键被占用）状态条如实提示、开关回退且不写开启偏好；注册成功即时持久化，关闭开关或窗口关闭即注销；`WM_HOTKEY` 仅本应用热键 id 触发「展开面板到默认接收分类」，不匹配 id 忽略；已展开时再次触发保持现状（幂等，不收起）；偏好保存走 `ApplyPreferences` 唯一管线（#5）。
+- **由来**：1.10.0 夜间循环「键盘直达」切片——热键是唯一的全局系统钩子，必须默认关闭且失败如实（「装完就抢全局键」是信任边界反面）；贴边隐藏（#17）离屏找回复用其唤起路径。2026-10-19 补登轮为其组合键常量补镜像守护（此前「组合键是什么」这一用户契约句零断言）。
+- **锁定**：`tests/FloatingTransferStation.Tests/GlobalHotkeyInteractionTests.cs`（`HotkeyPreference_OffByDefault_NeverRegistersAndToggleShowsOff`、`HotkeyToggle_OnRegistersAndPersists_OffUnregisters`、`HotkeyToggle_RegistrationFailureRevertsToggleShowsStatusAndSkipsPreference`、`StartupWithHotkeyPreference_RegistersOnceAndUnregistersOnClose`、`HotkeyMessage_ExpandsPanelToDefaultCategory_IgnoringMismatchedIds`（含再触发幂等）、`Win32GlobalHotkeySource_ExposesDocumentedCtrlAltVCombination`——2026-10-19 补登轮新增组合键常量镜像）；注册时机/失败路径/注销边界全部经可注入 `IGlobalHotkeySource` 替身锁定，真实 `RegisterHotKey` 调用不进自动化（依赖全局组合键占用状态，属环境依赖的测试边界，非补测候选）。
+- **关联**：ROADMAP/CHANGELOG 1.10.0（无独立 spec，如实标注）；#5（偏好即时生效管线）、#17（离屏态热键找回兜底）、#26（同族状态条反馈）。
+
+### 41. 动效基础设施（可中断性与减动效退化）
+
+- **断言**：动效数值治理见 #34（时长与缓动唯一来源 `DesignTokens`）；本条锁定动画运行语义——展开 167ms（减速入场）与收起 200ms（加速出场）不对称，均取自 token；动画可中断可重定向：`SnapshotAndReplace` 手法允许新动画替换在途动画、新动画或停止先复位终值、`FillBehavior.Stop` 结束不滞留动画值，动效不阻断命中测试；「减弱动效」（系统偏好或 `AppPreferences.AnimationsEnabled=false`，本地覆盖同一系统键）下新项出现、状态提示、删除反馈与收起出场直接达到终态，恢复开启即解除覆盖；入场缓动语义边界锁定为 Ease(0.5)>0.8、出场 Ease(0.5)<0.15——不做 KeySpline 精确控制点的逐字镜像（如实标注）。
+- **由来**：1.7.0 Fluent 动效升级确立三档（83/167/250，锚定微软官方 timing-and-easing 表）与两条曲线；[设计规范](design.md) §六是评审基准（原则文档），本条把其中可判定的基础设施语义（可中断性、减动效退化）登记为契约；「新增场景不加档、复用既有时长档」自 #30 起为锚定原则（启动确认/落位 250ms＝SlowDurationMs），不是可测断言故不入本条断言。2026-10-19 补登轮机械审计核实锁定实存。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.MotionTransitions.cs`（`FadeAnimation_UsesLockedEasingCurvesAndInterruptibleHandoff` 时长/缓动边界/可中断/不滞留、`NewItems_PlayStaggeredEntranceAnimations`、`NewItems_AppearImmediatelyWhenSystemAnimationsAreDisabled`、`StatusOverlay_IsImmediateWhenSystemAnimationsAreDisabled`、`DeleteCardFade_IsSkippedWhenSystemAnimationsAreDisabled`、`DeleteCardFade_RestoresCardsWhenSaveFailsAndRollsBack`、`CardLift_AnimatesOnHoverActivation`、`PinnedMove_DoesNotReplayCardEntranceAnimation`）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.VisualTransitions.cs`（`CollapseExit_ReentryDuringExitCancelsPendingCollapseAndKeepsPanelExpanded` 可中断先复位、`CollapseExit_IsImmediateWhenSystemAnimationsAreDisabled`）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.DesignTokens.cs`（`WindowAnimationDurations_AreSourcedFromDesignTokens`）。
+- **关联**：[设计规范](design.md) §二/§三/§六（评审基准）；#34（token 单一源）、#30（场景时长复用锚定）；CHANGELOG 1.7.0。
+
+### 42. 把手悬停展开与保持展开（悬停意图事务与会话级保持原因）
+
+- **断言**：收起把手悬停展开是悬停意图事务——`PanelStateMachine.BeginHover` 布防，仅当指针仍在面板表面内 `TryCommitHover` 才提交展开，离开取消当前意图，迟到的旧离开事件不取消已被取代的新意图；「保持展开」是独立的用户显式保持原因，与指针在内/拖拽/文本编辑原因取并集——开启后指针离开、他应用打字均不收起，按钮转强调色并跟随可访问状态；解除时指针在面板内仍保持展开、在外等 250ms 后执行出场收起；保持状态下外部拖放结束后恢复展开（回原分类与滚动位置），保持不在则回落收起；全局热键唤起不解除保持。开关为会话级、不写入 `preferences.json`（重启回落自动收起）。启动收起的再展开抑制窗（观测把手矩形、观测离场解除）语义归 #30，本条不重复。
+- **由来**：悬停展开是收起形态的原生交互（1.0 起收成一条标签＋移入展开）；1.12.0 新增「保持展开」（演示/投屏场景需要会话级暂停自动收起，设计即明确不持久化）；2026-10-16 起再展开抑制窗两轮修订（Issue #170/#173）并入状态机后，本条把悬停/保持本体语义独立登记（抑制窗归 #30）。2026-10-19 补登轮机械审计核实锁定实存。
+- **锁定**：`tests/FloatingTransferStation.Tests/PanelStateMachineTests.cs`（`PanelHold_KeepsPanelOpenAcrossPointerLeaveUntilHoldEnds`、`PanelHold_UnionsWithTextEditingAcrossPointerLeave`、`PanelHold_UnionsWithDragAcrossPointerLeave`、`PanelHold_SurvivesExternalDropCollapse`、`HoverCommit_RequiresPointerToRemainInsideSurface`、`CancelHover_IgnoresLateLeaveForSupersededCategory`）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.PanelHold.cs`（`PanelHold_KeepsPanelExpandedAcrossPointerLeaveUntilReleased`、`PanelHold_ReleaseWithPointerInsideKeepsPanelExpanded`、`PanelHold_ButtonAccessibilityStateFollowsToggle`、`PanelHold_ExternalDropRailRestoresExpandedPanel`、`PanelHold_ExternalDropRailFallsBackToCollapsedWhenNotHeld`、`PanelHold_GlobalHotkeyKeepsHeldPanelUnchanged`）。补测候选（如实标注）：「不写入 preferences.json」无直接断言（会话级语义经重启回落行为与设计决策承载）。
+- **关联**：CHANGELOG 1.12.0（保持展开，无独立 spec，如实标注）；#7（编辑保持原因族）、#12（迁移原子性）、#30（再展开抑制窗与覆盖交互 hold）。
+
+### 43. 图像容量预算（三道闸拒绝、绝不缩放）
+
+- **断言**：默认图像预算＝单编码表示或源文件 ≤64 MiB、像素数 ≤6,400 万、ImageSharp 解码缓冲 ≤512 MiB（`ImageInputLimits.Default` 与 README「当前限制」宣称值镜像锁定）；预算超限拒绝该候选、绝不以缩放使其通过，并尝试同内容其他表示，所有候选均超限才报告预算失败；已知长度的可定位流超预算时不读取且流位置不变；文件字节预算与可识别像素预算分别在解码像素或写盘输出前检查；解码中发现的缓冲超限同样按预算失败处理；多帧输入仅解码首帧，后续帧损坏不阻塞首帧路径。
+- **由来**：1.4.4 剪贴板/图片边界硬化（「粘贴超大图片内存耗尽」防线）——容量上限必须「拒绝不缩放」，静默缩图会让用户误以为原图已保存；1.6.0 随双平台发布完善。2026-10-19 补登轮为默认档位补常量镜像守护（此前所有测试用小自定义预算构造，默认值零断言）。
+- **锁定**：`tests/FloatingTransferStation.Tests/ImageInputLimitsTests.cs`（`ImageInputLimits_Default_MatchesDocumentedBudgets`——2026-10-19 补登轮新增默认档镜像、`ReadCandidates_OverByteBudgetFallsBackToAnotherRepresentation`、`ReadCandidates_AllRepresentationsOverBudgetReportsLimitFailure`、`ReadCandidates_OverBudgetSeekableStreamIsNotReadAndPositionIsUnchanged`、`NormalizeFile_RejectsPixelBudgetBeforeDecodingDamagedPixels`、`NormalizeFile_RejectsEncodedByteBudgetWithoutWriting`、`NormalizeClipboard_SkipsOverPixelBudgetAndPreservesFallbackResolution`、`NormalizeClipboard_RejectsPixelBudgetBeforeWriting`、`NormalizeAnimatedInput_DoesNotDecodeCorruptLaterFrame`、`ExternalDrop_AllImagesOverBudgetRejectsWithoutTextFallback` 等 18 测试）。
+- **关联**：README「当前限制」（64 MiB/6,400 万像素用户口径）；[架构说明](architecture.md)；#10（保存失败不记指纹）、#39（外部拖入同闸）；CHANGELOG 1.4.4。
 
 ## 维护规则
 
