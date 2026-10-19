@@ -152,7 +152,9 @@
 
 **插件**
 
-<img src="docs/images/plugins-section.png" width="550" alt="设置窗口插件区块：内建「整理空白」示例插件，默认关闭">
+声明式插件，两类：**文本整理**（`text-cleaner`，文字入库前自动应用正则规则）与**文本动作**（`text-actions`，文字卡右键菜单「插件动作」对选中卡片批量应用规则——全有或全无、Ctrl+Z 可恢复）。设置区提供来源徽章、动作设置行内编辑、逐动作「试运行…」与「重新扫描」。放入带 `plugin.json` 的文件夹即可使用，内置「整理空白」与「中文排版整理」两个示例；作者指南见 [docs/plugins.md](docs/plugins.md)。
+
+<img src="docs/images/plugins-section.png" width="550" alt="设置窗口插件区块：内建示例插件，默认关闭">
 
 *声明式插件默认关闭，放入即出现在设置里；深色主题见 [settings-plugins-dark.png](docs/images/settings-plugins-dark.png)*
 

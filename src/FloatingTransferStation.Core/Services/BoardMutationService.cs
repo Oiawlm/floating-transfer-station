@@ -319,6 +319,94 @@ public sealed class BoardMutationService
             return true;
         }, cancellationToken);
 
+    /// <summary>批量文本替换的一项：目标卡、新文本与提交前捕获的期望原文（并发守卫）。</summary>
+    public sealed record BoardTextReplacement(Guid ItemId, string NewText, string ExpectedCurrentText);
+
+    /// <summary>
+    /// 批量把多张文字卡正文替换为动作输出（插件 L1 动作协议的宿主提交端，1.51.0）：
+    /// 与 <see cref="ReplaceItemTextUndoableAsync"/> 同族共用保存管线与撤销栈机器，
+    /// 不另造平行路径。门内逐卡复检：条目不存在/非文字卡/当前正文与期望原文不符
+    /// （等待门期间被手工编辑等改写）→ 整批放弃并提示；与原文同文的卡幂等跳过；
+    /// 其余一次性落盘（单次 SaveBoardAsync），失败全量还原不入栈。成功压入
+    /// 「动作文本替换批」（撤销＝逐卡恢复原文，作废消费语义与单卡批一致）。
+    /// </summary>
+    public Task<bool> ReplaceItemsTextUndoableAsync(
+        IReadOnlyList<BoardTextReplacement> replacements,
+        CancellationToken cancellationToken = default) =>
+        _operationGate.RunAsync(async () =>
+        {
+            ArgumentNullException.ThrowIfNull(replacements);
+            if (replacements.Count == 0)
+            {
+                return true;
+            }
+
+            var pending = new List<(Guid ItemId, string Original, string NewText)>();
+            foreach (var replacement in replacements)
+            {
+                var item = _board.FindItem(replacement.ItemId);
+                if (item is not { Kind: BoardItemKind.Text })
+                {
+                    _showStatus("选中的卡片已变化，本次批量替换已放弃。");
+                    return false;
+                }
+
+                var original = item.Text ?? string.Empty;
+                if (!string.Equals(original, replacement.ExpectedCurrentText, StringComparison.Ordinal))
+                {
+                    _showStatus("选中的卡片内容已变化，本次批量替换已放弃。");
+                    return false;
+                }
+
+                if (string.Equals(original, replacement.NewText, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                pending.Add((replacement.ItemId, original, replacement.NewText));
+            }
+
+            if (pending.Count == 0)
+            {
+                return true;
+            }
+
+            var previousTexts = pending.ToDictionary(entry => entry.ItemId, entry => entry.Original);
+            try
+            {
+                foreach (var (itemId, _, newText) in pending)
+                {
+                    _board.UpdateText(itemId, newText);
+                }
+
+                await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                foreach (var (itemId, original, _) in pending)
+                {
+                    _board.UpdateText(itemId, previousTexts[itemId]);
+                }
+
+                _showStatus("内容未保存，已还原原文本。");
+                return false;
+            }
+            catch
+            {
+                foreach (var (itemId, original, _) in pending)
+                {
+                    _board.UpdateText(itemId, previousTexts[itemId]);
+                }
+
+                throw;
+            }
+
+            RecordUndoableBatch(new UndoableMultiTextBatch(
+                this,
+                pending.Select(entry => (entry.ItemId, entry.Original, entry.NewText)).ToList()));
+            return true;
+        }, cancellationToken);
+
     /// <summary>
     /// 撤销最近一批可撤销操作(删除批按锚点插回原分类不回退删除后的其他改动 /
     /// AI 文本替换批恢复原文):多批次时后进先出,恢复的总是最近一批。空栈返回
@@ -585,6 +673,79 @@ public sealed class BoardMutationService
             }
 
             return restored;
+        }
+
+        public void OnEvicted()
+        {
+        }
+    }
+
+    /// <summary>
+    /// 动作文本替换批（多卡）：撤销＝逐卡恢复捕获的原文，沿用单卡文本批的作废
+    /// 消费语义——条目已被删除，或撤销时正文已不是本批写入的结果（之后的手工
+    /// 编辑不进撤销栈、#22 口径），该卡跳过且本批照常消费；一次落盘恢复全部
+    /// 可恢复卡，失败回滚并提示。无独占资源，驱逐 no-op。
+    /// </summary>
+    private sealed class UndoableMultiTextBatch(
+        BoardMutationService owner,
+        IReadOnlyList<(Guid ItemId, string Original, string Replaced)> items) : IUndoableBatch
+    {
+        public async Task<bool> UndoAsync(CancellationToken cancellationToken)
+        {
+            var restorable = new List<(Guid ItemId, string Original, string Current)>();
+            foreach (var (itemId, original, replaced) in items)
+            {
+                if (owner._board.FindItem(itemId) is not { Kind: BoardItemKind.Text } item)
+                {
+                    continue;
+                }
+
+                var current = item.Text ?? string.Empty;
+                if (!string.Equals(current, replaced, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                restorable.Add((itemId, original, current));
+            }
+
+            if (restorable.Count == 0)
+            {
+                owner._showStatus("卡片内容已变化，没有需要恢复的原文。");
+                return true;
+            }
+
+            var currents = restorable.ToDictionary(entry => entry.ItemId, entry => entry.Current);
+            try
+            {
+                foreach (var (itemId, original, _) in restorable)
+                {
+                    owner._board.UpdateText(itemId, original);
+                }
+
+                await owner._store.SaveBoardAsync(owner._board.CreateSnapshot(), cancellationToken);
+                owner._showStatus($"已恢复 {restorable.Count} 张卡片的原文。");
+                return true;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                foreach (var (itemId, _, _) in restorable)
+                {
+                    owner._board.UpdateText(itemId, currents[itemId]);
+                }
+
+                owner._showStatus("撤销未保存，卡片保持动作后的内容。");
+                return false;
+            }
+            catch
+            {
+                foreach (var (itemId, _, _) in restorable)
+                {
+                    owner._board.UpdateText(itemId, currents[itemId]);
+                }
+
+                throw;
+            }
         }
 
         public void OnEvicted()

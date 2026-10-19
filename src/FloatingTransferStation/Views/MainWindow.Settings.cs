@@ -125,6 +125,53 @@ public partial class MainWindow : Window, ISettingsHost
         }
     }
 
+    /// <summary>
+    /// 写入插件动作设置值：重建动作管线即时生效并原子持久化（1.51.0）；
+    /// 持久化失败经状态条提示，界面值保持本次输入。
+    /// </summary>
+    public async Task SetPluginActionSettingAsync(string pluginId, string actionId, string key, string value)
+    {
+        if (_pluginCatalog is null)
+        {
+            return;
+        }
+
+        var operation = SetPluginActionSettingCoreAsync(pluginId, actionId, key, value);
+        TrackPendingOperation(operation);
+        await operation;
+    }
+
+    private async Task SetPluginActionSettingCoreAsync(string pluginId, string actionId, string key, string value)
+    {
+        var catalog = _pluginCatalog;
+        if (catalog is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await catalog.SetActionSettingValueAsync(pluginId, actionId, key, value);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or KeyNotFoundException)
+        {
+            ShowStatus("插件设置暂未保存。");
+        }
+    }
+
+    /// <summary>重新扫描插件目录：重跑发现与状态载入并重建全部管线快照（1.51.0）。</summary>
+    public async Task RescanPluginsAsync()
+    {
+        if (_pluginCatalog is null)
+        {
+            return;
+        }
+
+        var operation = _pluginCatalog.RescanAsync();
+        TrackPendingOperation(operation);
+        await operation;
+    }
+
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;

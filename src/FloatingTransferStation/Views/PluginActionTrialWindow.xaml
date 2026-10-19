@@ -1,0 +1,126 @@
+<Window x:Class="FloatingTransferStation.Views.PluginActionTrialWindow"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="插件动作试运行"
+        Topmost="True"
+        ShowInTaskbar="False"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        AllowsTransparency="False"
+        Background="{DynamicResource DialogSurfaceBrush}"
+        Width="480"
+        Height="460"
+        MinWidth="400"
+        MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Segoe UI Variable, Segoe UI"
+        PreviewKeyDown="TrialWindow_PreviewKeyDown">
+  <!-- 插件动作试运行（1.51.0，契约「插件动作协议」诊断口径）：输入 ≤10k 字符 →
+       运行 → 输出＋总耗时＋规则命中计数；校验与执行复用正式加载器（每次运行
+       按当前设置现建管线），只读演练、不改任何卡片内容。壳技术（#30 D8 同族）：
+       不透明 DialogSurfaceBrush＋1px 边框＋DWM 圆角/阴影唯一来源。 -->
+  <WindowChrome.WindowChrome>
+    <WindowChrome CaptionHeight="0"
+                  GlassFrameThickness="0"
+                  ResizeBorderThickness="4"
+                  CornerRadius="0"
+                  UseAeroCaptionButtons="False" />
+  </WindowChrome.WindowChrome>
+  <Window.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="../Resources/MainWindowStyles.xaml" />
+        <ResourceDictionary Source="../Resources/DesignTheme.Light.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+      <!-- 说明文字样式（与设置窗局部 NoteCaptionStyle 同族；主题键动态解析）。 -->
+      <Style x:Key="NoteCaptionStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+      </Style>
+    </ResourceDictionary>
+  </Window.Resources>
+
+  <Border Style="{StaticResource DialogShellStyle}">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <Grid Grid.Row="0"
+            Margin="-24,0,-24,12"
+            Background="Transparent"
+            MouseLeftButtonDown="Header_MouseLeftButtonDown">
+        <TextBlock x:Name="TrialTitleText"
+                   Text="插件动作试运行"
+                   Margin="24,0,0,0"
+                   FontSize="14"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource PrimaryTextBrush}"
+                   VerticalAlignment="Center"
+                   IsHitTestVisible="False" />
+        <Button x:Name="TrialCloseButton"
+                Style="{StaticResource HeaderActionButtonStyle}"
+                HorizontalAlignment="Right"
+                Margin="0,0,12,0"
+                ToolTip="关闭试运行"
+                AutomationProperties.Name="关闭试运行"
+                Click="TrialCloseButton_Click">
+          <Viewbox Width="14" Height="14">
+            <Path Data="M0.7071068,0 L7,6.2928932 L13.292893,0 L14,0.7071068 L7.7071068,7 L14,13.292893 L13.292893,14 L7,7.7071068 L0.7071068,14 L0,13.292893 L6.2928932,7 L0,0.7071068 Z"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                  Stretch="Uniform" />
+          </Viewbox>
+        </Button>
+      </Grid>
+
+      <TextBox x:Name="TrialInputBox"
+               Grid.Row="1"
+               Style="{StaticResource ThemedTextBoxStyle}"
+               AcceptsReturn="True"
+               TextWrapping="Wrap"
+               VerticalContentAlignment="Top"
+               VerticalScrollBarVisibility="Auto"
+               FontSize="12"
+               AutomationProperties.Name="试运行输入" />
+      <TextBlock x:Name="TrialInputHint"
+                 Grid.Row="2"
+                 Style="{StaticResource NoteCaptionStyle}"
+                 Margin="0,4,0,0"
+                 Text="输入 1–10000 字符；运行不改任何卡片内容。" />
+
+      <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
+        <Button x:Name="TrialRunButton"
+                Style="{StaticResource ThemedActionButtonStyle}"
+                Content="运行"
+                MinWidth="88"
+                AutomationProperties.Name="运行试运行"
+                Click="TrialRunButton_Click" />
+        <TextBlock x:Name="TrialStatusText"
+                   Style="{StaticResource NoteCaptionStyle}"
+                   Margin="12,0,0,0"
+                   VerticalAlignment="Center"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+
+      <TextBox x:Name="TrialOutputBox"
+               Grid.Row="4"
+               Style="{StaticResource ThemedTextBoxStyle}"
+               Margin="0,8,0,0"
+               Height="110"
+               IsReadOnly="True"
+               AcceptsReturn="True"
+               TextWrapping="Wrap"
+               VerticalContentAlignment="Top"
+               VerticalScrollBarVisibility="Auto"
+               FontSize="12"
+               Visibility="Collapsed"
+               AutomationProperties.Name="试运行输出" />
+    </Grid>
+  </Border>
+</Window>

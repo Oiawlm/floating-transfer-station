@@ -1028,6 +1028,8 @@ public partial class SettingsWindow : Window
 
     private Border CreatePluginRow(PluginEntry entry)
     {
+        var content = new StackPanel();
+
         var row = new Grid { Background = System.Windows.Media.Brushes.Transparent };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -1040,7 +1042,7 @@ public partial class SettingsWindow : Window
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(10, 8, 10, 8),
             Margin = new Thickness(0, 0, 0, 6),
-            Child = row
+            Child = content
         };
         surface.SetResourceReference(Border.BackgroundProperty, "CardBrush");
         surface.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
@@ -1049,10 +1051,11 @@ public partial class SettingsWindow : Window
             ? $"{manifest.Name}  {manifest.Version}"
             : $"{System.IO.Path.GetFileName(entry.Directory)}（无法加载）";
         var detail = entry.Manifest is { } valid
-            ? (valid.Description ?? (valid.Kind == PluginKind.TextCleaner ? "文本整理插件" : string.Empty))
+            ? (valid.Description ?? (valid.Kind == PluginKind.TextCleaner ? "文本整理插件" : "文本动作插件"))
             : entry.LoadError ?? "清单无效。";
 
         var textPanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 6) };
+        var titleLine = new StackPanel { Orientation = Orientation.Horizontal };
         var titleBlock = new TextBlock
         {
             Text = title,
@@ -1060,6 +1063,19 @@ public partial class SettingsWindow : Window
             TextTrimming = TextTrimming.CharacterEllipsis
         };
         titleBlock.SetResourceReference(TextElement.ForegroundProperty, "PrimaryTextBrush");
+        titleLine.Children.Add(titleBlock);
+        // 来源徽章（1.51.0）：内置/用户覆盖；ToolTip=插件实际目录（含用户覆盖路径）。
+        var badge = new TextBlock
+        {
+            Text = entry.Origin == PluginOrigin.User ? "用户覆盖" : "内置",
+            FontSize = 11,
+            Margin = new Thickness(6, 1, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = entry.Directory
+        };
+        badge.SetResourceReference(TextElement.ForegroundProperty, "SecondaryTextBrush");
+        titleLine.Children.Add(badge);
+        textPanel.Children.Add(titleLine);
         var detailBlock = new TextBlock
         {
             Text = detail,
@@ -1070,7 +1086,6 @@ public partial class SettingsWindow : Window
         detailBlock.SetResourceReference(
             TextElement.ForegroundProperty,
             entry.Manifest is null ? "DangerBrush" : "SecondaryTextBrush");
-        textPanel.Children.Add(titleBlock);
         textPanel.Children.Add(detailBlock);
         Grid.SetColumn(textPanel, 0);
         row.Children.Add(textPanel);
@@ -1091,7 +1106,212 @@ public partial class SettingsWindow : Window
         Grid.SetColumn(toggle, 1);
         row.Children.Add(toggle);
 
+        content.Children.Add(row);
+        if (entry.Manifest is { Kind: PluginKind.TextActions } actionsManifest)
+        {
+            content.Children.Add(BuildPluginActionsPanel(actionsManifest, entry));
+        }
+
         return surface;
+    }
+
+    /// <summary>
+    /// text-actions 插件行的动作区：逐动作标题＋选型摘要＋声明式设置字段（改动
+    /// 即时经宿主原子持久化并重建管线）＋「试运行…」入口（诊断对话框复用正式
+    /// 加载器口径）。所有画刷走动态资源，主题活切换即跟随。
+    /// </summary>
+    private FrameworkElement BuildPluginActionsPanel(PluginManifest manifest, PluginEntry entry)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        foreach (var action in manifest.Actions!)
+        {
+            var actionPanel = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+
+            var headerLine = new Grid { Background = System.Windows.Media.Brushes.Transparent };
+            headerLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            headerLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var actionTitle = new TextBlock
+            {
+                Text = $"动作：{action.Title}（{(action.Selection == PluginActionSelection.Multi ? "多选" : "单选")}）",
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            actionTitle.SetResourceReference(TextElement.ForegroundProperty, "SecondaryTextBrush");
+            Grid.SetColumn(actionTitle, 0);
+            headerLine.Children.Add(actionTitle);
+            var trialButton = new Button
+            {
+                Style = TryFindResource("ThemedActionButtonStyle") as Style,
+                Content = "试运行…",
+                FontSize = 11,
+                Padding = new Thickness(8, 2, 8, 2),
+                ToolTip = "用当前设置试跑该动作（不改卡片内容）",
+                Tag = (entry.Id, action.Id)
+            };
+            System.Windows.Automation.AutomationProperties.SetName(trialButton, $"{action.Title}试运行"); trialButton.Click += PluginActionTrialButton_Click;
+            Grid.SetColumn(trialButton, 1);
+            headerLine.Children.Add(trialButton);
+            actionPanel.Children.Add(headerLine);
+
+            foreach (var setting in action.Settings)
+            {
+                actionPanel.Children.Add(BuildPluginSettingRow(entry, action, setting));
+            }
+
+            panel.Children.Add(actionPanel);
+        }
+
+        return panel;
+    }
+
+    /// <summary>单个声明式设置字段的标签＋控件行；值经宿主按插件 id 原子持久化。</summary>
+    private FrameworkElement BuildPluginSettingRow(PluginEntry entry, PluginActionDefinition action, PluginActionSetting setting)
+    {
+        var line = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var overrides = _host.PluginCatalog?.GetActionSettingOverrides(entry.Id, action.Id)
+            ?? new Dictionary<string, string>();
+        var currentValue = action.ResolveSettingValue(overrides, setting.Key);
+
+        var label = new TextBlock
+        {
+            Text = setting.Label,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0)
+        };
+        label.SetResourceReference(TextElement.ForegroundProperty, "PrimaryTextBrush");
+        Grid.SetColumn(label, 0);
+        line.Children.Add(label);
+
+        FrameworkElement control;
+        switch (setting.Type)
+        {
+            case PluginSettingType.Bool:
+                {
+                    var toggle = new CheckBox
+                    {
+                        Style = TryFindResource("ToggleSwitchStyle") as Style,
+                        IsChecked = string.Equals(currentValue, "true", StringComparison.Ordinal),
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        Tag = (entry.Id, action.Id, setting.Key)
+                    };
+                    toggle.Checked += PluginSetting_ValueChanged;
+                    toggle.Unchecked += PluginSetting_ValueChanged;
+                    control = toggle;
+                    break;
+                }
+
+            case PluginSettingType.Choice:
+                {
+                    var combo = new ComboBox
+                    {
+                        Style = TryFindResource("ThemedComboBoxStyle") as Style,
+                        ItemsSource = setting.Options,
+                        MinWidth = 140,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        Tag = (entry.Id, action.Id, setting.Key)
+                    };
+                    combo.SelectedItem = setting.Options.FirstOrDefault(option => option == currentValue) ?? setting.Options[0];
+                    combo.SelectionChanged += PluginSetting_ValueChanged;
+                    control = combo;
+                    break;
+                }
+
+            default:
+                {
+                    var box = new TextBox
+                    {
+                        Text = currentValue,
+                        MaxLength = 200,
+                        MinWidth = 140,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        Style = TryFindResource("ThemedTextBoxStyle") as Style,
+                        Tag = (entry.Id, action.Id, setting.Key)
+                    };
+                    box.LostFocus += PluginSetting_ValueChanged;
+                    control = box;
+                    break;
+                }
+        }
+
+        Grid.SetColumn(control, 1);
+        line.Children.Add(control);
+        return line;
+    }
+
+    private async void PluginSetting_ValueChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isSynchronizingControls ||
+            sender is not FrameworkElement { Tag: ValueTuple<string, string, string> tag })
+        {
+            return;
+        }
+
+        var (pluginId, actionId, key) = tag;
+        var value = sender switch
+        {
+            CheckBox toggle => (toggle.IsChecked == true).ToString().ToLowerInvariant(),
+            ComboBox combo => combo.SelectedItem as string ?? string.Empty,
+            TextBox box => box.Text,
+            _ => string.Empty
+        };
+
+        try
+        {
+            await _host.SetPluginActionSettingAsync(pluginId, actionId, key, value);
+            PluginStatusText.Text = string.Empty;
+            PluginStatusText.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or KeyNotFoundException)
+        {
+            PluginStatusText.Text = "插件设置暂未保存，请稍后重试。";
+            PluginStatusText.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void PluginActionTrialButton_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is not Button { Tag: ValueTuple<string, string> tag })
+        {
+            return;
+        }
+
+        var (pluginId, actionId) = tag;
+        var trial = new PluginActionTrialWindow(_host, pluginId, actionId);
+        trial.Owner = this;
+        trial.ShowDialog();
+    }
+
+    private async void RescanPluginsButton_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (_host.PluginCatalog is null)
+        {
+            return;
+        }
+
+        RescanPluginsButton.IsEnabled = false;
+        try
+        {
+            await _host.RescanPluginsAsync();
+            PluginListPanel.Children.Clear();
+            PopulatePluginSection();
+            PluginStatusText.Text = string.Empty;
+            PluginStatusText.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            PluginStatusText.Text = "重新扫描失败，请稍后重试。";
+            PluginStatusText.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            RescanPluginsButton.IsEnabled = true;
+        }
     }
 
     private async void PluginToggle_StateChanged(object sender, RoutedEventArgs e)
