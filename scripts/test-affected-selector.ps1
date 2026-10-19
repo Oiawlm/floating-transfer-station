@@ -10,10 +10,10 @@ param(
 $ErrorActionPreference = 'Stop'
 $selectorScript = Join-Path $PSScriptRoot 'run-affected-tests.ps1'
 
-# 点源加载：只取数据表与函数（$DefineOnly 哨兵阻断主执行）。
-$DefineOnly = $true
+# 点源加载：只取数据表与函数（$FTS_SELECTOR_DEFINE_ONLY 哨兵阻断主执行）。
+$FTS_SELECTOR_DEFINE_ONLY = $true
 . $selectorScript
-$DefineOnly = $false
+$FTS_SELECTOR_DEFINE_ONLY = $false
 
 $failures = [System.Collections.Generic.List[string]]::new()
 $script:passedCount = 0
@@ -30,9 +30,12 @@ function Assert-Scenario([string]$name, [scriptblock]$body) {
 function Assert-True([bool]$condition, [string]$message) {
     if (-not $condition) { throw $message }
 }
-function Assert-Throws([scriptblock]$body, [string]$message) {
-    try { & $body | Out-Null } catch { return }
-    throw $message
+function Assert-Throws([scriptblock]$body, [string]$expectedSubstring, [string]$message) {
+    try { & $body | Out-Null } catch {
+        if ($_.Exception.Message -like "*$expectedSubstring*") { return }
+        throw "$message（异常原因不符：$($_.Exception.Message)）"
+    }
+    throw "$message（未抛出任何异常）"
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -114,9 +117,68 @@ Assert-Scenario '豁免边界：白名单后缀之外不豁免；根目录断言
 }
 
 Assert-Scenario '过滤器恒非零漂移检查：死词根 fail fast' {
-    Assert-Throws { Assert-FilterSelectsTests 'X' 'FullyQualifiedName~NoSuchMethodAnywhere12345' @('A.B_C'), @('D.E_F') } '死过滤器应抛错'
-    Assert-Throws { Assert-FilterSelectsTests 'X' 'FullyQualifiedName~Live1|FullyQualifiedName~Dead1' @('A.Live1_M'), @('D.E_F') } '部分死词根应抛错'
+    Assert-Throws { Assert-FilterSelectsTests 'X' 'FullyQualifiedName~NoSuchMethodAnywhere12345' @('A.B_C'), @('D.E_F') } '命中 0 条' '死过滤器应抛错'
+    Assert-Throws { Assert-FilterSelectsTests 'X' 'FullyQualifiedName~Live1|FullyQualifiedName~Dead1' @('A.Live1_M'), @('D.E_F') } '死词根' '部分死词根应抛错'
     Assert-FilterSelectsTests 'X' 'FullyQualifiedName~Live1' @('A.Live1_M'), @() | Out-Null
+}
+
+function Invoke-SelectorCli([string]$argumentList) {
+    # 子进程调用并整段捕获（含 stderr）；PS5.1 下 2>&1 遇 EAP=Stop 会把子进程 stderr 当异常抛，先放宽。
+    $previousEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        return (& powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& '$selectorScript' $argumentList" 2>&1 |
+            ForEach-Object { "$_" }) -join "`n"
+    } finally {
+        $ErrorActionPreference = $previousEap
+    }
+}
+
+Assert-Scenario '-Areas 显式选区不被豁免类变更集吞掉（评审 #1）' {
+    # 纯文档变更集＋显式 -Areas → Affected（显式选区即执行意图）；经端到端 -Explain 验证打印。
+    $output = Invoke-SelectorCli "-Explain -ChangeSet @('docs/x.md') -Areas SettingsWindow"
+    Assert-True ($output -match '计划模式：Affected') "应打印 Affected 计划，实际：$output"
+    Assert-True ($output -match '区域 SettingsWindow') '应列出 SettingsWindow 区域'
+    # -Areas 解析为空（逗号/空白）→ 报错而非空跑
+    $output2 = Invoke-SelectorCli "-Explain -Areas ', ,'"
+    Assert-True ($output2 -match '解析后为空') "空 -Areas 应报错，实际：$output2"
+}
+
+Assert-Scenario '-ChangeSet 显式空数组＝空变更集（不回退 git 推导，评审 #5）' {
+    $output = Invoke-SelectorCli '-Explain -ChangeSet @()'
+    Assert-True ($output -match '显式空＝空变更集') "应注明显式空变更集，实际：$output"
+    Assert-True ($output -match '计划模式：Exempt') '显式空变更集应为 Exempt'
+}
+
+Assert-Scenario '方法解析器变体：同行签名/[TestMethod()]/组合特性均识别（评审 #2）' {
+    $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("selector-parser-" + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $tempDir | Out-Null
+    try {
+        $probe = Join-Path $tempDir 'ParserProbe.cs'
+        @'
+    [TestMethod] public void SameLineProbe_X() { }
+    [TestMethod()]
+    public void ParenProbe_X()
+    {
+    }
+    [STATestMethod, Timeout(5000)]
+    public void ComboProbe_X()
+    {
+    }
+    [TestMethod]
+    [Ignore]
+    public void IgnoredProbe_X()
+    {
+    }
+'@ | Set-Content -Path $probe -Encoding UTF8
+        $names = @(Get-TestMethodNames $probe)
+        Assert-True ($names -contains 'SameLineProbe_X') "同行签名应识别，实际：$($names -join ',')"
+        Assert-True ($names -contains 'ParenProbe_X') "[TestMethod()] 应识别，实际：$($names -join ',')"
+        Assert-True ($names -contains 'ComboProbe_X') "组合特性应识别，实际：$($names -join ',')"
+        Assert-True ($names -notcontains 'IgnoredProbe_X') '[Ignore] 方法应跳过'
+    } finally {
+        Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
+    }
 }
 
 Assert-Scenario '全仓规则过滤器与派生词根在真实清单上恒非零' {
@@ -164,13 +226,11 @@ Assert-Scenario '一致性守卫：偏离词根的方法名报错（文件:方�
 }
 
 Assert-Scenario '端到端：-Explain -ChangeSet 子进程输出计划（参数接线）' {
-    # 真实子进程验证 CLI 契约（子脚本内 exit 会让管道捕获提前解栈，故用 powershell.exe -File）。
-    $output = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $selectorScript -Explain -ChangeSet 'docs/e2e.md' 2>&1 |
-        ForEach-Object { "$_" }) -join "`n"
+    # 真实子进程验证 CLI 契约（子脚本内 exit 会让管道捕获提前解栈，故用独立 powershell.exe 进程）。
+    $output = Invoke-SelectorCli "-Explain -ChangeSet @('docs/e2e.md')"
     Assert-True ($LASTEXITCODE -eq 0) "豁免计划应 exit 0，实际 $LASTEXITCODE"
     Assert-True ($output -match '计划模式：Exempt') "子进程应打印豁免计划，实际：$output"
-    $output2 = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $selectorScript -Explain -ChangeSet 'scripts/run-affected-tests.ps1' 2>&1 |
-        ForEach-Object { "$_" }) -join "`n"
+    $output2 = Invoke-SelectorCli "-Explain -ChangeSet @('scripts/run-affected-tests.ps1')"
     Assert-True ($output2 -match '计划模式：Full') '脚本自身变更应计划全量'
     Assert-True ($output2 -match '构建/测试基础设施脚本') '理由应为基础设施脚本'
 }

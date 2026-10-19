@@ -4,7 +4,7 @@
 # 两种模式：默认按 merge-base origin/main 取整条分支变更集（分支集成语义）；
 # 开发循环的「本次编辑反馈」用 -Base HEAD。-ChangeSet 显式注入变更集（契约测试/历史回放）。
 # Core.Tests 整项目恒跑（强制基线）；除 -Full/回退外不运行 solution 级无 filter 的全量测试。
-# 点源加载（先 $DefineOnly=$true 再 . 本文件）只定义数据与函数，供契约测试复用。
+# 点源加载（先 $FTS_SELECTOR_DEFINE_ONLY=$true 再 . 本文件）只定义数据与函数，供契约测试复用。
 [CmdletBinding()]
 param(
     [string]$Base,
@@ -107,7 +107,8 @@ $rules = @(
     @{ Name = 'Core.BoardItem'; Filter = 'FullyQualifiedName~Board'; Globs = @(
         'src/FloatingTransferStation.Core/Models/BoardItem.cs', 'src/FloatingTransferStation.Core/Models/BoardItemKind.cs',
         'src/FloatingTransferStation.Core/Models/BoardSnapshot.cs') },
-    @{ Name = 'Core.DailyReviewDocument'; Filter = 'FullyQualifiedName~DailyReview'; Globs = @(
+    # Review 词根补充：App 侧方法全为 Review* 前缀（评审修订 #3——solution 级运行也须选中 App 族）
+    @{ Name = 'Core.DailyReviewDocument'; Filter = 'FullyQualifiedName~DailyReview|FullyQualifiedName~Review'; Globs = @(
         'src/FloatingTransferStation.Core/Models/DailyReviewDocument.cs', 'src/FloatingTransferStation.Core/Models/DailyReviewFileChangedEventArgs.cs') },
     @{ Name = 'Core.PluginManifest'; Filter = 'FullyQualifiedName~Plugin'; Globs = @(
         'src/FloatingTransferStation.Core/Models/PluginManifest.cs') },
@@ -120,7 +121,7 @@ $rules = @(
         'src/FloatingTransferStation.Core/Services/AtomicTextWriter.cs') },
     @{ Name = 'Core.BoardItemCollection'; Filter = 'FullyQualifiedName~Board'; Globs = @(
         'src/FloatingTransferStation.Core/Services/BoardItemCollection.cs') },
-    @{ Name = 'Core.DailyReviewMerge'; Filter = 'FullyQualifiedName~DailyReview'; Globs = @(
+    @{ Name = 'Core.DailyReviewMerge'; Filter = 'FullyQualifiedName~DailyReview|FullyQualifiedName~Review'; Globs = @(
         'src/FloatingTransferStation.Core/Services/DailyReviewMerge.cs') },
     @{ Name = 'Core.DataDirectory'; Filter = 'FullyQualifiedName~Relocation|FullyQualifiedName~DataDirectory'; Globs = @(
         'src/FloatingTransferStation.Core/Services/DataDirectoryCleanupProcessor.cs',
@@ -276,14 +277,19 @@ function Get-DerivedArea([string]$file) {
 }
 
 function Get-TestMethodNames([string]$path) {
-    # 静态解析：[(*Test*Method)] 行之后 10 行内的方法签名；跳过 [Ignore]（不执行的方法不入清单）。
+    # 静态解析：含 TestMethod 的特性行（覆盖 [TestMethod()]/[STATestMethod]/[TestMethod, Timeout(..)]
+    # 与特性同行签名），向下扫描至下一特性行或 25 行窗口；跳过 [Ignore]（不执行的方法不入清单）。
     $names = @()
-    $lines = Get-Content $path
+    $lines = Get-Content -LiteralPath $path
     for ($i = 0; $i -lt $lines.Count; $i++) {
-        if ($lines[$i] -notmatch '^\s*\[\w*TestMethod\w*\]') { continue }
+        if ($lines[$i] -notmatch '\[[^\]]*TestMethod[^\]]*\]') { continue }
         $ignored = $false
         $method = $null
-        for ($j = $i + 1; $j -lt [Math]::Min($i + 10, $lines.Count); $j++) {
+        if ($lines[$i] -match '(?:public|internal)\s+(?:async\s+)?(?:Task|void)\s+([A-Za-z0-9_]+)\s*\(') {
+            $method = $Matches[1] # 特性与签名同行（签名正则不会误匹配特性文本本身）
+        }
+        for ($j = $i + 1; $j -lt [Math]::Min($i + 25, $lines.Count); $j++) {
+            if ($j -gt $i -and $lines[$j] -match '\[[^\]]*TestMethod[^\]]*\]') { break }
             if ($lines[$j] -match '^\s*\[Ignore') { $ignored = $true }
             if ($lines[$j] -match '(?:public|internal)\s+(?:async\s+)?(?:Task|void)\s+([A-Za-z0-9_]+)\s*\(') { $method = $Matches[1]; break }
         }
@@ -388,8 +394,12 @@ function Get-AffectedTestPlan([string[]]$changedFiles, [switch]$ForceFull) {
 function Show-TestPlan($plan) {
     Write-Host "计划模式：$($plan.Mode)。"
     if ($plan.Mode -eq 'Full') {
-        Write-Host '回退/强制全量。理由：'
-        foreach ($reason in $plan.FullReasons) { Write-Host "  - $reason" }
+        if ($plan.FullReasons.Count) {
+            Write-Host '回退/强制全量。理由：'
+            foreach ($reason in $plan.FullReasons) { Write-Host "  - $reason" }
+        } else {
+            Write-Host '-Full 强制全量。'
+        }
     } elseif ($plan.Mode -eq 'Exempt') {
         if ($plan.ExemptFiles.Count) {
             Write-Host '纯文档变更（豁免类），未选任何测试：'
@@ -415,7 +425,7 @@ function Invoke-TestRun([string]$Title, [string]$Project, [string]$Filter) {
     $testArgs = @('test', $Project, '-c', $Configuration, '--no-build', '--results-directory', $results, '--logger', "trx;LogFilePrefix=$prefix")
     if ($Filter) { $testArgs += @('--filter', $Filter) }
     Write-Host "运行 $Title ..."
-    & $DotnetPath @testArgs
+    & $DotnetPath @testArgs | Out-Host # dotnet 输出直送控制台，不进函数返回值（保持计数纯净）
     if ($LASTEXITCODE -ne 0) { throw "$Title 失败（dotnet 退出码 $LASTEXITCODE）。" }
     $trxFiles = @(Get-ChildItem $results -Filter "$prefix*.trx" -ErrorAction SilentlyContinue)
     if (-not $trxFiles.Count) { throw "$Title 未找到 TRX 结果（$prefix*.trx）。" }
@@ -429,7 +439,7 @@ function Invoke-TestRun([string]$Title, [string]$Project, [string]$Filter) {
     return $total
 }
 
-if ($DefineOnly) { return }
+if ($FTS_SELECTOR_DEFINE_ONLY) { return }
 
 if (-not $DotnetPath) {
     $local = Join-Path $repoRoot '.tools\dotnet\dotnet.exe'
@@ -449,16 +459,22 @@ $appInventory = @(Get-TestInventory $appTestsDir)
 $coreInventory = @(Get-TestInventory $coreTestsDir)
 foreach ($rule in $rules) { Assert-FilterSelectsTests $rule.Name $rule.Filter $appInventory $coreInventory }
 
-if ($ChangeSet) {
+if ($PSBoundParameters.ContainsKey('ChangeSet')) {
     $changed = @($ChangeSet)
-    Write-Host "变更集来自 -ChangeSet 参数（$($changed.Count) 个文件，契约测试/历史回放模式）。"
+    Write-Host "变更集来自 -ChangeSet 参数（$($changed.Count) 个文件，契约测试/历史回放模式；显式空＝空变更集）。"
+} elseif ($Full) {
+    # -Full 强制全量：变更集仅用于打印理由，git 失败不阻断全量执行。
+    $changed = @()
 } else {
     if (-not $Base) {
         $Base = (git -C $repoRoot merge-base origin/main HEAD).Trim()
-        if (-not $Base) { throw '无法解析 merge-base origin/main HEAD；请确认远端与当前分支。' }
+        if ($LASTEXITCODE -ne 0 -or -not $Base) { throw '无法解析 merge-base origin/main HEAD；请确认远端与当前分支。' }
     }
-    $changed = @(@(git -C $repoRoot diff --no-renames --name-only $Base) + @(git -C $repoRoot ls-files --others --exclude-standard)) |
-        Where-Object { $_ } | Sort-Object -Unique
+    $diffFiles = @(git -C $repoRoot diff --no-renames --name-only $Base)
+    if ($LASTEXITCODE -ne 0) { throw "git diff $Base 失败（退出码 $LASTEXITCODE）；拒绝把 git 故障当空变更集处理。" }
+    $untrackedFiles = @(git -C $repoRoot ls-files --others --exclude-standard)
+    if ($LASTEXITCODE -ne 0) { throw "git ls-files 失败（退出码 $LASTEXITCODE）；拒绝把 git 故障当空变更集处理。" }
+    $changed = @($diffFiles + $untrackedFiles) | Where-Object { $_ } | Sort-Object -Unique
     Write-Host "基线 $Base；变更集 $($changed.Count) 个文件。"
 }
 
@@ -466,6 +482,7 @@ $plan = Get-AffectedTestPlan $changed -ForceFull:$Full
 
 if ($Areas) {
     $requested = @($Areas -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if (-not $requested) { throw "-Areas '$Areas' 解析后为空；请至少给出一个有效区域名。" }
     $known = @($rules | ForEach-Object { $_.Name } | Sort-Object -Unique)
     $unknown = @($requested | Where-Object { $known -notcontains $_ })
     if ($unknown) { throw "未知区域：$($unknown -join ', ')。当前可选：$($known -join ', ')" }
@@ -479,7 +496,11 @@ if ($Areas) {
     }
     foreach ($name in $selected.Keys) { $selected[$name].Files.Add('（-Areas 显式指定）') }
     $plan.Selected = $selected
-    if ($plan.Mode -eq 'Full') { Write-Host '注意：变更集存在回退全量的文件，全量优先于 -Areas 显式选区（未知路径保护）。' }
+    if ($plan.Mode -eq 'Full') {
+        Write-Host '注意：变更集存在回退全量的文件，全量优先于 -Areas 显式选区（未知路径保护）。'
+    } else {
+        $plan.Mode = 'Affected' # 显式选区即执行意图：豁免类变更集不得吞掉 -Areas
+    }
 } else {
     # 派生区域过滤器同样须过漂移检查（词根表改动即时暴露死词根）。
     foreach ($name in @($plan.Selected.Keys)) {
