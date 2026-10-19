@@ -18,15 +18,21 @@ public partial class MainWindow
 {
     private bool _isPluginActionRunning;
 
-    /// <summary>右键卡片：构建并打开「插件动作」菜单；无可执行项不弹菜单。</summary>
-    private void TryOpenPluginActionsMenu(BoardItem clickedItem)
+    /// <summary>最近一次打开的插件动作菜单（测试与取证截图定位用；仅诊断，不参与逻辑）。</summary>
+    internal ContextMenu? LastPluginActionsMenuForEvidence { get; private set; }
+
+    /// <summary>
+    /// 右键卡片：构建并打开「插件动作」菜单；返回是否真正打开（无可执行项
+    /// ——无插件目录/动作不可用——不弹菜单也不拦截，维持既有右键语义）。
+    /// </summary>
+    private bool TryOpenPluginActionsMenu(BoardItem clickedItem)
     {
         if (_isClosing ||
             _isPluginActionRunning ||
             _pluginCatalog is not { } catalog ||
             _viewModel.IsSearchActive)
         {
-            return;
+            return false;
         }
 
         // 命中卡不在选集 → 先单选它；已在选集 → 保持当前多选。
@@ -39,7 +45,7 @@ public partial class MainWindow
         var available = BuildAvailablePluginActions();
         if (available.Count == 0)
         {
-            return;
+            return false;
         }
 
         var menu = new ContextMenu
@@ -68,13 +74,15 @@ public partial class MainWindow
 
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
         menu.IsOpen = true;
+        LastPluginActionsMenuForEvidence = menu;
+        return true;
     }
 
     /// <summary>
     /// 按当前选集组成解析可执行动作：single=选集恰为一张文字卡（含图片的选集不满足）；
     /// multi=文字卡 ≥2（图片卡忽略）。
     /// </summary>
-    private List<PluginActionHandle> BuildAvailablePluginActions()
+    internal List<PluginActionHandle> BuildAvailablePluginActions()
     {
         var selected = OrderedSelectedBoardItems();
         var textCount = selected.Count(item => item.Kind == BoardItemKind.Text);

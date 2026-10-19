@@ -63,8 +63,12 @@ public partial class MainWindow
             return;
         }
 
-        e.Handled = true;
-        TryOpenPluginActionsMenu(item);
+        // 仅当动作菜单真正打开时才拦截右键；无插件/无可执行项维持既有语义
+        //（偏好关闭时右键不拦截，ContentZone 左半无操作）。
+        if (TryOpenPluginActionsMenu(item))
+        {
+            e.Handled = true;
+        }
     }
 
     /// <summary>

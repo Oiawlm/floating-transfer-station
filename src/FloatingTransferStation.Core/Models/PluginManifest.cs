@@ -294,7 +294,8 @@ public sealed record PluginManifest(
         }
 
         var settings = new List<PluginActionSetting>();
-        if (actionElement.TryGetProperty("settings", out var settingsElement))
+        if (actionElement.TryGetProperty("settings", out var settingsElement) &&
+            settingsElement.ValueKind is not JsonValueKind.Null)
         {
             if (settingsElement.ValueKind != JsonValueKind.Array ||
                 settingsElement.GetArrayLength() > MaximumActionSettings)

@@ -236,7 +236,27 @@ public sealed class PluginCatalog
         var action = entry?.Manifest?.Actions?.FirstOrDefault(candidate => candidate.Id == actionId);
         return action is null
             ? null
-            : PluginActionPipeline.TryBuild(action, GetActionSettingOverrides(pluginId, actionId));
+            : PluginActionPipeline.TryBuild(action, ResolveActionSettings(action, GetActionSettingOverrides(pluginId, actionId)));
+    }
+
+    /// <summary>把声明设置与用户覆盖解析成完整值表（覆盖优先，缺省回落清单默认）。</summary>
+    private static Dictionary<string, string> ResolveActionSettings(
+        PluginActionDefinition action,
+        IReadOnlyDictionary<string, string> overrides)
+    {
+        var resolved = action.Settings.ToDictionary(
+            setting => setting.Key,
+            setting => setting.Default ?? string.Empty,
+            StringComparer.Ordinal);
+        foreach (var (key, value) in overrides)
+        {
+            if (resolved.ContainsKey(key))
+            {
+                resolved[key] = value;
+            }
+        }
+
+        return resolved;
     }
 
     private PluginStateSnapshot CreateStateSnapshot()
@@ -432,8 +452,7 @@ public sealed class PluginCatalog
 
             foreach (var action in manifest.Actions!)
             {
-                var overrides = GetActionSettingOverrides(entry.Id, action.Id);
-                if (PluginActionPipeline.TryBuild(action, overrides) is not { } pipeline)
+                if (PluginActionPipeline.TryBuild(action, ResolveActionSettings(action, GetActionSettingOverrides(entry.Id, action.Id))) is not { } pipeline)
                 {
                     continue;
                 }

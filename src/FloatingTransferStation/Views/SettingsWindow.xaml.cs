@@ -1148,7 +1148,7 @@ public partial class SettingsWindow : Window
                 ToolTip = "用当前设置试跑该动作（不改卡片内容）",
                 Tag = (entry.Id, action.Id)
             };
-            System.Windows.Automation.AutomationProperties.SetName(trialButton, $"{action.Title}试运行");            trialButton.Click += PluginActionTrialButton_Click;
+            System.Windows.Automation.AutomationProperties.SetName(trialButton, $"{action.Title}试运行"); trialButton.Click += PluginActionTrialButton_Click;
             Grid.SetColumn(trialButton, 1);
             headerLine.Children.Add(trialButton);
             actionPanel.Children.Add(headerLine);
@@ -1190,51 +1190,51 @@ public partial class SettingsWindow : Window
         switch (setting.Type)
         {
             case PluginSettingType.Bool:
-            {
-                var toggle = new CheckBox
                 {
-                    Style = TryFindResource("ToggleSwitchStyle") as Style,
-                    IsChecked = string.Equals(currentValue, "true", StringComparison.Ordinal),
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    Tag = (entry.Id, action.Id, setting.Key)
-                };
-                toggle.Checked += PluginSetting_ValueChanged;
-                toggle.Unchecked += PluginSetting_ValueChanged;
-                control = toggle;
-                break;
-            }
+                    var toggle = new CheckBox
+                    {
+                        Style = TryFindResource("ToggleSwitchStyle") as Style,
+                        IsChecked = string.Equals(currentValue, "true", StringComparison.Ordinal),
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        Tag = (entry.Id, action.Id, setting.Key)
+                    };
+                    toggle.Checked += PluginSetting_ValueChanged;
+                    toggle.Unchecked += PluginSetting_ValueChanged;
+                    control = toggle;
+                    break;
+                }
 
             case PluginSettingType.Choice:
-            {
-                var combo = new ComboBox
                 {
-                    Style = TryFindResource("ThemedComboBoxStyle") as Style,
-                    ItemsSource = setting.Options,
-                    MinWidth = 140,
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    Tag = (entry.Id, action.Id, setting.Key)
-                };
-                combo.SelectedItem = setting.Options.FirstOrDefault(option => option == currentValue) ?? setting.Options[0];
-                combo.SelectionChanged += PluginSetting_ValueChanged;
-                control = combo;
-                break;
-            }
+                    var combo = new ComboBox
+                    {
+                        Style = TryFindResource("ThemedComboBoxStyle") as Style,
+                        ItemsSource = setting.Options,
+                        MinWidth = 140,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        Tag = (entry.Id, action.Id, setting.Key)
+                    };
+                    combo.SelectedItem = setting.Options.FirstOrDefault(option => option == currentValue) ?? setting.Options[0];
+                    combo.SelectionChanged += PluginSetting_ValueChanged;
+                    control = combo;
+                    break;
+                }
 
             default:
-            {
-                var box = new TextBox
                 {
-                    Text = currentValue,
-                    MaxLength = 200,
-                    MinWidth = 140,
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    Style = TryFindResource("ThemedTextBoxStyle") as Style,
-                    Tag = (entry.Id, action.Id, setting.Key)
-                };
-                box.LostFocus += PluginSetting_ValueChanged;
-                control = box;
-                break;
-            }
+                    var box = new TextBox
+                    {
+                        Text = currentValue,
+                        MaxLength = 200,
+                        MinWidth = 140,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        Style = TryFindResource("ThemedTextBoxStyle") as Style,
+                        Tag = (entry.Id, action.Id, setting.Key)
+                    };
+                    box.LostFocus += PluginSetting_ValueChanged;
+                    control = box;
+                    break;
+                }
         }
 
         Grid.SetColumn(control, 1);

@@ -33,6 +33,12 @@
         <ResourceDictionary Source="../Resources/MainWindowStyles.xaml" />
         <ResourceDictionary Source="../Resources/DesignTheme.Light.xaml" />
       </ResourceDictionary.MergedDictionaries>
+      <!-- 说明文字样式（与设置窗局部 NoteCaptionStyle 同族；主题键动态解析）。 -->
+      <Style x:Key="NoteCaptionStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+      </Style>
     </ResourceDictionary>
   </Window.Resources>
 

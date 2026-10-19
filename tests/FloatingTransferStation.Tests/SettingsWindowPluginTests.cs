@@ -210,6 +210,223 @@ public sealed class SettingsWindowPluginTests
         return catalog;
     }
 
+    private const string ActionPluginManifest = """
+        {
+          "id": "typography-tidy",
+          "name": "中文排版整理",
+          "version": "1.0.0",
+          "description": "测试动作插件",
+          "kind": "text-actions",
+          "actions": [
+            {
+              "id": "tidy-card",
+              "title": "整理这张卡片",
+              "accept": "text",
+              "selection": "single",
+              "output": "replace",
+              "settings": [
+                { "key": "punct-to-fullwidth", "label": "半角标点转全角", "type": "bool", "default": false },
+                { "key": "style", "label": "风格", "type": "choice", "options": ["紧凑", "宽松"], "default": "宽松" },
+                { "key": "suffix", "label": "后缀", "type": "text", "default": "" }
+              ],
+              "rules": [
+                { "pattern": "([A-Za-z])([0-9])", "replacement": "$2$1" },
+                { "pattern": ",", "replacement": "，", "when": "punct-to-fullwidth" }
+              ]
+            }
+          ]
+        }
+        """;
+
+    /// <summary>动作插件写入用户插件目录（AppPaths 口径）并载入。</summary>
+    private static PluginCatalog CreateUserActionCatalog(TestDirectory directory)
+    {
+        var pluginDirectory = Path.Combine(directory.Root, "plugins", "typography-tidy");
+        Directory.CreateDirectory(pluginDirectory);
+        File.WriteAllText(Path.Combine(pluginDirectory, PluginCatalog.ManifestFileName), ActionPluginManifest);
+        var catalog = new PluginCatalog(
+            AppPaths.FromDataDirectory(directory.Root),
+            builtInPluginsDirectory: null,
+            new AtomicTextWriter());
+        catalog.LoadAsync().GetAwaiter().GetResult();
+        return catalog;
+    }
+
+    private static IEnumerable<T> FindDescendants<T>(DependencyObject parent) where T : DependencyObject
+    {
+        var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent);
+        for (var index = 0; index < count; index++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, index);
+            if (child is T match)
+            {
+                yield return match;
+            }
+
+            foreach (var descendant in FindDescendants<T>(child))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
+    [STATestMethod]
+    public void ActionPluginRow_ShowsSourceBadgeWithDirectoryTooltip()
+    {
+        using var directory = new TestDirectory();
+        // 内置目录放一份 → 徽章「内置」；用户目录同 id 覆盖 → 徽章「用户覆盖」。
+        var builtInRoot = Path.Combine(directory.Root, "BuiltIn");
+        var builtInPluginDirectory = Path.Combine(builtInRoot, "plugins", "typography-tidy");
+        Directory.CreateDirectory(builtInPluginDirectory);
+        File.WriteAllText(Path.Combine(builtInPluginDirectory, PluginCatalog.ManifestFileName), ActionPluginManifest);
+        var userPluginDirectory = Path.Combine(directory.Root, "plugins", "typography-tidy");
+        Directory.CreateDirectory(userPluginDirectory);
+        File.WriteAllText(Path.Combine(userPluginDirectory, PluginCatalog.ManifestFileName), ActionPluginManifest);
+        var catalog = new PluginCatalog(
+            AppPaths.FromDataDirectory(directory.Root),
+            builtInPluginsDirectory: Path.Combine(builtInRoot, "plugins"),
+            new AtomicTextWriter());
+        catalog.LoadAsync().GetAwaiter().GetResult();
+
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), catalog);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var panel = (StackPanel)settings.FindName("PluginListPanel")!;
+            var badges = FindDescendants<TextBlock>(panel).Where(block => block.Text is "内置" or "用户覆盖").ToArray();
+            Assert.HasCount(1, badges);
+            Assert.AreEqual("用户覆盖", badges[0].Text);
+            Assert.AreEqual(userPluginDirectory, badges[0].ToolTip as string, "来源徽章 ToolTip 必须是插件实际目录。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void ActionPluginRow_ExpandsDeclaredSettingsAndPersistsEdits()
+    {
+        using var directory = new TestDirectory();
+        var catalog = CreateUserActionCatalog(directory);
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), catalog);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var panel = (StackPanel)settings.FindName("PluginListPanel")!;
+
+            // 展开区渲染声明式设置：bool 开关（默认 false）+ choice（默认 宽松）+ text。
+            var toggles = FindDescendants<CheckBox>(panel)
+                .Where(box => !(System.Windows.Automation.AutomationProperties.GetName(box) ?? string.Empty)
+                    .Contains("插件开关"))
+                .ToArray();
+            Assert.HasCount(1, toggles);
+            Assert.IsFalse(toggles[0].IsChecked!.Value, "bool 设置应回落清单默认 false。");
+            var combo = FindDescendants<ComboBox>(panel).Single();
+            Assert.AreEqual("宽松", combo.SelectedItem, "choice 设置应回落清单默认。");
+            var textBox = FindDescendants<TextBox>(panel).Single();
+            Assert.AreEqual(string.Empty, textBox.Text);
+
+            // 改 bool → 原子持久化 + 管线重建（when 门控的规则生效）。
+            toggles[0].IsChecked = true;
+            PumpDispatcherUntil(
+                settings.Dispatcher,
+                () => catalog.GetActionSettingOverrides("typography-tidy", "tidy-card")
+                    .TryGetValue("punct-to-fullwidth", out var value) && value == "true");
+            Assert.AreEqual(
+                "true",
+                catalog.GetActionSettingOverrides("typography-tidy", "tidy-card")["punct-to-fullwidth"]);
+            var stateFile = AppPaths.FromDataDirectory(directory.Root).PluginStateFile;
+            var persisted = File.ReadAllText(stateFile);
+            StringAssert.Contains(persisted, "punct-to-fullwidth");
+
+            // 试运行按钮存在且可点（对话框逻辑由独立用例驱动）。
+            var trialButton = FindDescendants<Button>(panel).Single(button =>
+                (System.Windows.Automation.AutomationProperties.GetName(button) ?? string.Empty).Contains("试运行"));
+            Assert.IsTrue(trialButton.IsEnabled);
+
+            SaveVisualEvidence(settings, "settings-plugin-actions-expanded.png");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void TrialRunDialog_RunsRealLoaderAndShowsOutputWithMetrics()
+    {
+        using var directory = new TestDirectory();
+        var catalog = CreateUserActionCatalog(directory);
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), catalog);
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            var trial = new PluginActionTrialWindow(window, "typography-tidy", "tidy-card");
+            trial.Show();
+            CompleteLayout(trial);
+
+            var input = (TextBox)trial.FindName("TrialInputBox")!;
+            input.Text = "a1, ok";
+            var run = (Button)trial.FindName("TrialRunButton")!;
+            run.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpDispatcherUntil(trial.Dispatcher, () =>
+            {
+                var output = (TextBox)trial.FindName("TrialOutputBox")!;
+                return output.IsVisible && output.Text.Length > 0;
+            });
+
+            var output = (TextBox)trial.FindName("TrialOutputBox")!;
+            // 默认设置下 punct-to-fullwidth=false：仅捕获组规则生效，半角逗号保留。
+            Assert.AreEqual("1a, ok", output.Text);
+            var status = (TextBlock)trial.FindName("TrialStatusText")!;
+            StringAssert.Contains(status.Text, "耗时");
+            StringAssert.Contains(status.Text, "规则命中 1 处");
+            trial.Close();
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void RescanButton_ReloadsEntriesAndRefreshesRows()
+    {
+        using var directory = new TestDirectory();
+        var catalog = CreateUserActionCatalog(directory);
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), catalog);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var panel = (StackPanel)settings.FindName("PluginListPanel")!;
+            Assert.HasCount(1, panel.Children);
+
+            // 移除插件目录后点「重新扫描」：行清空、动作快照清空（免重启生效）。
+            var rescan = (Button)settings.FindName("RescanPluginsButton")!;
+            Directory.Delete(Path.Combine(directory.Root, "plugins", "typography-tidy"), recursive: true);
+            rescan.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpDispatcherUntil(settings.Dispatcher, () => panel.Children.Count == 0);
+            Assert.IsEmpty(catalog.EnabledActions);
+
+            // 放回插件再扫：行恢复。
+            Directory.CreateDirectory(Path.Combine(directory.Root, "plugins", "typography-tidy"));
+            File.WriteAllText(
+                Path.Combine(directory.Root, "plugins", "typography-tidy", PluginCatalog.ManifestFileName),
+                ActionPluginManifest);
+            rescan.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpDispatcherUntil(settings.Dispatcher, () => panel.Children.Count == 1);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
     [STATestMethod]
     public void PluginSection_ShowsNameVersionAndToggleOffByDefault()
     {
@@ -224,8 +441,8 @@ public sealed class SettingsWindowPluginTests
             var panel = settings.FindName("PluginListPanel") as StackPanel;
             Assert.IsNotNull(panel);
             Assert.AreEqual(1, panel.Children.Count, "应当恰好渲染一个插件行。");
-            var row = (Grid)((Border)panel.Children[0]).Child;
-            var title = ((StackPanel)row.Children[0]).Children.OfType<TextBlock>().First().Text;
+            var row = (Grid)((StackPanel)((Border)panel.Children[0]).Child).Children[0];
+            var title = ((StackPanel)((StackPanel)row.Children[0]).Children[0]).Children.OfType<TextBlock>().First().Text;
             StringAssert.Contains(title, "演示整理");
             StringAssert.Contains(title, "1.2.0");
 
@@ -255,7 +472,7 @@ public sealed class SettingsWindowPluginTests
             var settings = OpenSettings(window);
             CompleteLayout(settings);
             var panel = (StackPanel)settings.FindName("PluginListPanel")!;
-            var toggle = ((Grid)((Border)panel.Children[0]).Child).Children.OfType<CheckBox>().Single();
+            var toggle = ((Grid)((StackPanel)((Border)panel.Children[0]).Child).Children[0]).Children.OfType<CheckBox>().Single();
 
             toggle.IsChecked = true;
             PumpDispatcherUntil(
@@ -314,7 +531,7 @@ public sealed class SettingsWindowPluginTests
             Assert.AreEqual(2, panel.Children.Count);
             var brokenRow = panel.Children
                 .OfType<Border>()
-                .Select(surface => (Grid)surface.Child)
+                .Select(surface => (Grid)((StackPanel)surface.Child).Children[0])
                 .Single(row => row.Children.OfType<CheckBox>().Single().Tag as string != "demo-tidy");
             var toggle = brokenRow.Children.OfType<CheckBox>().Single();
             Assert.IsFalse(toggle.IsEnabled, "清单非法的插件不能启用。");
@@ -503,13 +720,14 @@ public sealed class SettingsWindowPluginTests
         // 目录条目顺序不保证（既有 BrokenPlugin 用例同款判别）：按开关 Tag 区分两行。
         var surfaces = panel.Children.OfType<Border>().ToList();
         var validSurface = surfaces.Single(
-            surface => ((Grid)surface.Child).Children.OfType<CheckBox>().Single().Tag as string == "demo-tidy");
+            surface => ((StackPanel)surface.Child).Children.OfType<Grid>().First()
+                .Children.OfType<CheckBox>().Single().Tag as string == "demo-tidy");
         var brokenSurface = surfaces.Single(surface => surface != validSurface);
-        var validText = ((Grid)validSurface.Child).Children.OfType<StackPanel>().First();
-        var brokenText = ((Grid)brokenSurface.Child).Children.OfType<StackPanel>().First();
-        var validTitle = validText.Children.OfType<TextBlock>().First();
+        var validText = (StackPanel)((Grid)((StackPanel)validSurface.Child).Children[0]).Children[0];
+        var brokenText = (StackPanel)((Grid)((StackPanel)brokenSurface.Child).Children[0]).Children[0];
+        var validTitle = ((StackPanel)validText.Children[0]).Children.OfType<TextBlock>().First();
         var validDetail = validText.Children.OfType<TextBlock>().Last();
-        var brokenTitle = brokenText.Children.OfType<TextBlock>().First();
+        var brokenTitle = ((StackPanel)brokenText.Children[0]).Children.OfType<TextBlock>().First();
         var brokenDetail = brokenText.Children.OfType<TextBlock>().Last();
 
         var initial = CurrentThemeIsDark(settings) ? DesignTheme.Dark : DesignTheme.Light;
