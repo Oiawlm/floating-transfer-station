@@ -64,9 +64,19 @@ public partial class MainWindow
 
     /// <summary>空态可见性与文案的唯一更新点：仅内容桶表面、非搜索态且激活桶为空
     /// 时可见（搜索态的空集语义由 SearchEmptyHint 承载）；文案随激活桶
-    /// (Category, IsDefaultCapture) 派生。surface/搜索/集合三触发路径共用。</summary>
+    /// (Category, IsDefaultCapture) 派生。surface/搜索/集合三触发路径共用。
+    /// 集合变化可能来自后台导入路径（外部拖入的落板回调在线程池线程触发
+    /// CollectionChanged——CI 实证曾因此跨线程访问崩掉测试宿主），非 UI 线程
+    /// 进入时统一封送回 UI 线程再碰元素（与 MoveMany 批量路径的
+    /// Dispatcher.InvokeAsync 先例同法）。</summary>
     private void UpdateBoardEmptyState()
     {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(UpdateBoardEmptyState);
+            return;
+        }
+
         var panel = _viewModel.ActivePanel;
         var visible = panel is not null &&
             BoardCategoryCatalog.IsContentBucket(panel.Category) &&

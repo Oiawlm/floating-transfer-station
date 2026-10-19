@@ -232,6 +232,49 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void BoardEmptyState_BackgroundCollectionChangeMarshalsToUiThread()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            // 激活「图片」桶：待分类集合无绑定视图，唯一会被跨线程集合变化触碰的
+            // 监听者就是空态处理器——修复前这里直接跨线程访问 UI 元素。
+            ExpandCategory(window, BoardCategory.CustomerOriginal);
+            CompleteLayout(window);
+            Assert.AreEqual(
+                Visibility.Visible,
+                BoardEmptyStatePanel(window).Visibility,
+                "前置：空图片桶空态在场。");
+
+            // 外部拖入导入路径的线程模型：落板回调在线程池线程触发
+            // CollectionChanged（CI 实证曾崩掉测试宿主）。空态更新必须封送回
+            // UI 线程——Wait() 在修复前会把跨线程 InvalidOperationException
+            // 以 AggregateException 形式抛回本测试。
+            var background = Task.Run(() => board.AddText("后台导入内容"));
+            background.Wait();
+            CompleteLayout(window);
+
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                BoardEmptyStatePanel(window).Visibility,
+                "后台到达的内容驱动空态消失（封送后照常生效）。");
+            Assert.IsTrue(
+                board.Items(BoardCategory.Inbox).Any(item => item.Text == "后台导入内容"),
+                "前置：内容确实落进待分类桶。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void BoardEmptyState_DoesNotInterceptBoardListHitTesting()
     {
         using var directory = new TestDirectory();
