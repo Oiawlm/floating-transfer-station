@@ -656,6 +656,152 @@ public sealed class SettingsWindowInteractionTests
     }
 
     /// <summary>
+    /// 设置窗五页卡片宽度统一（契约 #23 机制扩展，Issue #200）：SettingsScrollHost
+    /// 挂 keyed OverlayScrollViewerStyle（单格叠加）后，滚动条出现/消失不再占布局宽
+    /// ——五内容页在任何窗口高度下卡片宽度逐 DIP 相等；滚动条在场时条带为 8 DIP
+    /// 瘦条、悬浮于内容之上，与卡片零相交，viewport 宽等于视口全宽（无独立布局列）。
+    /// 修复前默认模板：溢出页出现布局滚动条 → 内容列窄一个滚动条宽，与不溢出页
+    /// 卡片宽度不一致（BoardList 上的同款漂移，契约 #23 由来）。
+    /// </summary>
+    [STATestMethod]
+    public void SettingsWindow_CardWidthUnifiedAcrossPagesAndScrollBarVisibility()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+
+            var scroll = (ScrollViewer)settings.FindName("SettingsScrollHost");
+            Assert.IsNotNull(scroll, "设置内容应包在共享 ScrollViewer 视口中。");
+            var contentHost = (Grid)settings.FindName("SettingsContentHost");
+            var cardStyle = (Style)settings.FindResource("SettingsCardStyle");
+            var navNames = new[]
+            {
+                "SettingsNavAppearance", "SettingsNavPanel", "SettingsNavGeneral",
+                "SettingsNavData", "SettingsNavAi"
+            };
+            var pageNames = new[]
+            {
+                "AppearancePage", "PanelPage", "GeneralPage", "DataPage", "AiPage"
+            };
+
+            // 矮窗口（最小高 460）：面板页必溢出（既有测试实证），五页轮流度量。
+            settings.Height = 460;
+            CompleteLayout(settings);
+
+            double unifiedWidth = 0;
+            var anyOverflow = false;
+            for (var index = 0; index < navNames.Length; index++)
+            {
+                ((RadioButton)settings.FindName(navNames[index])).IsChecked = true;
+                CompleteLayout(settings);
+                var page = (StackPanel)settings.FindName(pageNames[index]);
+                var card = FindDescendants<Border>(page)
+                    .First(candidate => ReferenceEquals(candidate.Style, cardStyle));
+                Assert.IsTrue(
+                    card.ActualWidth > 0,
+                    $"第 {index + 1} 页卡片应已布局（Width={card.ActualWidth}）。");
+                if (unifiedWidth == 0)
+                {
+                    unifiedWidth = card.ActualWidth;
+                }
+                else
+                {
+                    Assert.AreEqual(
+                        unifiedWidth,
+                        card.ActualWidth,
+                        0.5,
+                        $"五页卡片宽度必须统一：第 {index + 1} 页 {card.ActualWidth} vs 首页 {unifiedWidth}。");
+                }
+
+                Assert.AreEqual(
+                    contentHost.ActualWidth,
+                    card.ActualWidth,
+                    0.5,
+                    $"第 {index + 1} 页卡片必须铺满内容列（卡片 {card.ActualWidth} vs 列 {contentHost.ActualWidth}）：内容列不得随最宽卡片收窄。");
+
+                if (scroll.ScrollableHeight > 0)
+                {
+                    anyOverflow = true;
+                    Assert.AreEqual(
+                        scroll.ActualWidth,
+                        scroll.ViewportWidth,
+                        0.5,
+                        "滚动条在场时 viewport 宽必须等于视口全宽（单格叠加，无独立布局列）。");
+                    var strip = FindDescendants<ScrollBar>(scroll).Single(candidate =>
+                        candidate.Orientation == Orientation.Vertical &&
+                        candidate.Visibility == Visibility.Visible);
+                    Assert.AreEqual(
+                        8d, strip.ActualWidth, 0.5,
+                        "overlay 条带宽应为瘦条样式的 8 DIP。");
+                    var cardRect = new Rect(
+                        card.TranslatePoint(new System.Windows.Point(), scroll),
+                        new Size(card.ActualWidth, card.ActualHeight));
+                    var stripRect = new Rect(
+                        strip.TranslatePoint(new System.Windows.Point(), scroll),
+                        new Size(strip.ActualWidth, strip.ActualHeight));
+                    Assert.IsFalse(
+                        cardRect.IntersectsWith(stripRect),
+                        $"卡片矩形 {cardRect} 与滚动条条带 {stripRect} 相交：条带必须落在内容列右边距带内。");
+                }
+            }
+
+            Assert.IsTrue(
+                anyOverflow,
+                "前置：矮窗口下至少一页溢出（否则跨页等宽断言失去滚动条维度，测试无效）。");
+
+            // 同页两态（面板页）：矮窗（滚动条在场）↔ 高窗（滚动条离场），卡宽与
+            // viewport 宽逐 DIP 不变——滚动条可见性与几何解耦的直接断言。
+            ((RadioButton)settings.FindName("SettingsNavPanel")).IsChecked = true;
+            CompleteLayout(settings);
+            var panelPage = (StackPanel)settings.FindName("PanelPage");
+            var panelCard = FindDescendants<Border>(panelPage)
+                .First(candidate => ReferenceEquals(candidate.Style, cardStyle));
+            var widthWithScrollBar = panelCard.ActualWidth;
+            var viewportWithScrollBar = scroll.ViewportWidth;
+            Assert.IsTrue(
+                scroll.ScrollableHeight > 0,
+                "前置：矮窗口下面板页溢出、滚动条在场。");
+
+            var work = SystemParameters.WorkArea;
+            settings.Height = Math.Min(880d, Math.Max(460d, work.Height - 48d));
+            CompleteLayout(settings);
+            if (scroll.ScrollableHeight > 0)
+            {
+                Assert.Inconclusive(
+                    $"本机工作区高 {work.Height} DIP 过小，880/工作区−48 下面板页仍溢出，无法构造滚动条离场态。");
+            }
+
+            var panelCardTall = FindDescendants<Border>(panelPage)
+                .First(candidate => ReferenceEquals(candidate.Style, cardStyle));
+            Assert.AreEqual(
+                widthWithScrollBar,
+                panelCardTall.ActualWidth,
+                0.5,
+                "同一页在滚动条在场/离场两种窗口高度下卡片宽度必须逐 DIP 相等。");
+            Assert.AreEqual(
+                viewportWithScrollBar,
+                scroll.ViewportWidth,
+                0.5,
+                "viewport 宽不得随滚动条出现/消失变化。");
+            SaveVisualEvidence(
+                (Border)settings.FindName("WindowShell"),
+                "settings-card-width-tall.png");
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>
     /// 设置窗固定视口与滚动回归（契约 #24，Issue #106）：SizeToContent=Manual 后
     /// 窗口高度不再跟随内容；恢复/默认高度受「工作区 − 48、矮屏抬到 MinHeight(460)」
     /// 冻结式约束（经 WM_GETMINMAXINFO 轨道尺寸与恢复路径 Normalize 双路强制）；
