@@ -193,7 +193,6 @@ public sealed class FaviconClientTests
         var result = await client.FetchPageIconAsync("https://example.com/", CancellationToken.None);
 
         Assert.IsNotNull(result.Candidate, "HTML 声明的 manifest 图标抓取成功。");
-        Assert.AreEqual(FaviconClient.MaxImageCandidates > 0 ? 2 : 2, 2);
         Assert.AreEqual(192, result.Candidate.Width);
     }
 
