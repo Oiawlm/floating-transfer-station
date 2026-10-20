@@ -12,7 +12,7 @@ namespace FloatingTransferStation.Tests;
 /// <summary>
 /// 快捷启动网页条目（#30 修订，Issue #179）：＋菜单第三项「网页地址…」与输入对话框
 /// （真实对话框逻辑驱动）、有效输入创建规范形 Url 瓦片＋持久化、无效输入内联报错、
-/// 重复添加「已在启动列表中」、瓦片字形渲染（无 Image 实例）、启动失败灰态。
+/// 重复添加「已在启动列表中」、瓦片「字形＋Image」两态渲染（#30 修订，Issue #206）、启动失败灰态。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -313,7 +313,7 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
-    // ---- Url 瓦片渲染（字形、零 Image 实例）与失败灰态 ----
+    // ---- Url 瓦片渲染（「地球字形＋Image」两态）与失败灰态 ----
 
     [STATestMethod]
     public void QuickLaunch_UrlTile_RendersGlyphWithoutImage()
@@ -337,10 +337,14 @@ public sealed partial class MainWindowInteractionTests
             var item = window.LaunchersForTests().Items.Single();
             var tile = FindLauncherTile(window, item);
             Assert.IsNotNull(tile);
-            Assert.IsNull(FindDescendant<Image>(tile), "Url 分支不实例化 Image（图标管线零触达）。");
+            // 两态模板（#30 修订，Issue #206）：字形（favicon 成功前/失败的 UI 回退态）
+            // ＋Image 实例（成功后回填）。测试数据目录无网络注入点，无 PNG 发布 ⇒
+            // Image.Source 保持 null（抓取失败显示字形的回退语义同时被锁定）。
+            Assert.IsNotNull(FindDescendant<Image>(tile), "Url 瓦片两态模板实例化 Image（favicon 成功后回填）。");
+            Assert.IsNull(FindDescendant<Image>(tile)!.Source, "抓取失败/在途时 Image.Source 为空＝字形回退态。");
             Assert.IsTrue(
                 FindDescendants<TextBlock>(tile).Any(glyph => glyph.Text == "\uE774"),
-                "Url 瓦片渲染静态地球字形（模板层按 Kind 分支）。");
+                "Url 瓦片渲染地球字形（抓取中/失败可见）。");
             Assert.AreEqual(
                 "github.com\nhttps://github.com/",
                 tile.ToolTip,
@@ -385,7 +389,7 @@ public sealed partial class MainWindowInteractionTests
             var viewModel = (MainWindowViewModel)window.DataContext;
             Assert.IsTrue(item.LaunchFailed, "失败进灰态（瓦片 Border 层 DataTrigger 承载）。");
             Assert.AreEqual("无法启动：没有找到能打开该地址的应用。", viewModel.StatusText, "无关联错误映射中文文案（D7）。");
-            Assert.IsNull(FindDescendant<Image>(tile), "失败灰态同覆盖字形分支（仍无 Image）。");
+            Assert.IsNull(FindDescendant<Image>(tile)!.Source, "失败灰态不承载位图（字形是唯一视觉）。");
             Assert.IsTrue(
                 FindDescendants<TextBlock>(tile).Any(glyph => glyph.Text == "\uE774"),
                 "失败灰态字形保留。");

@@ -86,8 +86,13 @@ public partial class MainWindow
             }
 
             // 孤儿清扫仅在装载成功后运行一次（此后新增 PNG 到下次启动才可能被清）。
-            _launcherIcons = LauncherIconService.Start(_launchers, LauncherIconsDirectory(), Dispatcher);
+            var faviconClient = FaviconClientFactoryForTests?.Invoke() ?? new FaviconClient();
+            var faviconScheduler = new FaviconFetchScheduler();
+            faviconClient.OriginPermitFactory = faviconScheduler.AcquireAsync;
+            _launcherIcons = LauncherIconService.Start(_launchers, LauncherIconsDirectory(), Dispatcher, faviconClient, faviconScheduler);
             _launcherIcons.SweepOrphansOnce();
+            // 启动重试轮：无图标 Url 条目静默重抓一轮（每条目每进程一次，2/s 节流）。
+            _launcherIcons.RunStartupRetryRoundOnce();
         });
     }
 
@@ -97,6 +102,9 @@ public partial class MainWindow
             "launcher-icons");
 
     internal LauncherCatalog LaunchersForTests() => _launchers;
+
+    /// <summary>仅供测试注入：favicon 客户端工厂（fake handler 离线验证；null=真实客户端）。</summary>
+    internal static Func<FaviconClient>? FaviconClientFactoryForTests { get; set; }
 
     private bool IsLauncherActive() =>
         _viewModel.ActivePanel?.Category == QuickLaunchMigration.LauncherCategory;

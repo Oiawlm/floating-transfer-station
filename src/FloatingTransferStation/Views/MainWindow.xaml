@@ -61,14 +61,23 @@
         </Grid>
       </DataTemplate>
       <DataTemplate x:Key="LauncherTileUrlGlyphTemplate">
-        <!-- Url 瓦片静态地球字形（#30 修订，Issue #179）：模板层按 Kind 分支，不请求
-             favicon、不触达图标管线；前景动态资源随主题，尺寸对齐既有图标槽 48。 -->
-        <TextBlock HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                   FontSize="28"
-                   Foreground="{DynamicResource SecondaryTextBrush}"
-                   Text="&#xE774;" />
+        <!-- Url 瓦片「地球字形＋Image」两态（#30 修订，Issue #206）：字形（E774）在
+             抓取中/失败可见，favicon 成功后 Image 经既有图标管线回填（同 Application
+             模板机制）；前景动态资源随主题，尺寸对齐既有图标槽 48。 -->
+        <Grid>
+          <TextBlock HorizontalAlignment="Center"
+                     VerticalAlignment="Center"
+                     FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                     FontSize="28"
+                     Foreground="{DynamicResource SecondaryTextBrush}"
+                     Text="&#xE774;" />
+          <Image Width="48"
+                 Height="48"
+                 Stretch="Uniform"
+                 RenderOptions.BitmapScalingMode="HighQuality"
+                 Loaded="LauncherTileIcon_Loaded"
+                 Source="{Binding RelativeSource={RelativeSource Self}, Path=Tag}" />
+        </Grid>
       </DataTemplate>
       <DataTemplate x:Key="CategoryTabTemplate"
                     DataType="{x:Type vm:CategoryViewModel}">
@@ -863,12 +872,11 @@
                               Tag="{x:Static views:CardGestureZones.LauncherLaunchZone}">
                           <!-- 启动区（#30 修订 2026-10-18）：单击=启动（选择非空时挂起改
                                toggle）；拖拽仅从此区发起。图标槽按 Kind 分支（#30 修订，
-                               Issue #179）：应用/打包应用走既有「占位字形 + Image 提取链」
-                               模板；Url 渲染静态地球字形——模板选择保证 Url 分支不实例化
-                               Image，图标管线零触达（URL 的 IconKey 是非空垃圾哈希，且
-                               NormalizeTarget 是 DedupKey 组成部分，两条既有陷阱由此
-                               根治）。失败灰态在瓦片 Border 层 DataTrigger 统一覆盖，
-                               两分支同受。 -->
+                               Issue #206）：应用/打包应用走「占位字形 + Image 提取链」
+                               模板；Url 走「地球字形（抓取中/失败可见）+ Image」两态
+                               模板——favicon 成功前显示字形（UI 回退态），成功后经
+                               同源抓取管线回填。失败灰态在瓦片 Border 层 DataTrigger
+                               统一覆盖，两分支同受。 -->
                           <ContentControl Focusable="False"
                                           Content="{Binding}">
                             <ContentControl.Style>
