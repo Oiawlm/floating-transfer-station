@@ -213,12 +213,98 @@ public sealed partial class MainWindowInteractionTests
 
     private static byte[] Png32() => TestPng(32, 32);
 
-    /// <summary>真实可解码 PNG（WPF 编码器合成纯色位图；声明尺寸=真实像素尺寸）。</summary>
+    /// <summary>
+    /// 发布证据（FTS_QUICKLAUNCH_EVIDENCE_DIR 设置时实拍）：Url 瓦片 favicon 成功态
+    /// 与失败回退字形态 × 浅/深主题（#30 修订，Issue #206；沿用 QuickLaunchEvidence
+    /// 管线）。fake handler 注入，零真实网络。
+    /// </summary>
+    [STATestMethod]
+    public void Favicon_Evidence_CaptureTwoStatesBothThemes()
+    {
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_QUICKLAUNCH_EVIDENCE_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_QUICKLAUNCH_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        using var handler = new FakeFaviconHandler();
+        handler.Route("https://ok.example.com/favicon.ico", FakeResponse.Image(Png96()));
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var items = new[]
+        {
+            new LauncherItem(Guid.NewGuid(), LauncherKind.Url, "https://ok.example.com/", "抓取成功站点", DateTimeOffset.UtcNow),
+            new LauncherItem(Guid.NewGuid(), LauncherKind.Url, "https://dead.example.com/", "回退站点", DateTimeOffset.UtcNow),
+        };
+        MainWindow.FaviconClientFactoryForTests = () => new FaviconClient(handler);
+
+        try
+        {
+            var window = CreateLauncherWindowSync(directory, board, store, starter, items);
+            try
+            {
+                window.Show();
+                window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+                ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+
+                // 等待成功条目 favicon 上屏（回退条目 404 保持字形）。
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+                while (DateTime.UtcNow < deadline)
+                {
+                    CompleteLayout(window);
+                    var okItem = window.LaunchersForTests().Items[0];
+                    if (FindLauncherTile(window, okItem) is { } tile &&
+                        FindDescendant<Image>(tile)?.Source is not null)
+                    {
+                        break;
+                    }
+
+                    PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(50));
+                }
+
+                CompleteLayout(window);
+                foreach (var (theme, suffix) in new[]
+                         {
+                             (DesignTheme.Light, "light"),
+                             (DesignTheme.Dark, "dark"),
+                         })
+                {
+                    DesignThemeManager.Apply(window, theme);
+                    CompleteLayout(window);
+                    SaveVisualEvidence(
+                        (Border)window.FindName("WindowShell")!,
+                        $"quicklaunch-favicon-{suffix}.png",
+                        "FTS_QUICKLAUNCH_EVIDENCE_DIR");
+                }
+            }
+            finally
+            {
+                CloseWindowWithoutSaving(window);
+            }
+        }
+        finally
+        {
+            MainWindow.FaviconClientFactoryForTests = null;
+        }
+    }
+
+    /// <summary>真实可解码 PNG（WPF 编码器合成不透明色块；声明尺寸=真实像素尺寸）。</summary>
     private static byte[] TestPng(int width, int height)
     {
         var stride = width * 4;
         var pixels = new byte[stride * height];
-        pixels[3] = 0xFF;
+        for (var offset = 0; offset < pixels.Length; offset += 4)
+        {
+            // Pbgra32 实心橙块（证据截图肉眼可辨）。
+            pixels[offset] = 0x1E;
+            pixels[offset + 1] = 0x8A;
+            pixels[offset + 2] = 0xF0;
+            pixels[offset + 3] = 0xFF;
+        }
+
         var source = BitmapSource.Create(
             width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32, null, pixels, stride);
         var encoder = new PngBitmapEncoder();
