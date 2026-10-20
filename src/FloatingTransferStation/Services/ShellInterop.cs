@@ -21,6 +21,7 @@ internal static class ShellInterop
 
     internal const uint ShgfiSysiconIndex = 0x4000;
     internal const uint ShgfiLargeIcon = 0x0;
+    internal const uint ShgfiIcon = 0x100;
 
     internal const int ShilLarge = 0;
     internal const int ShilExtraLarge = 2;
@@ -79,6 +80,15 @@ internal static class ShellInterop
 
     [DllImport("shell32.dll")]
     internal static extern int SHGetImageList(int imageListId, in Guid interfaceId, out IImageList imageList);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    internal static extern int SHDefExtractIconW(
+        string path,
+        int iconIndex,
+        uint flags,
+        out IntPtr hiconLarge,
+        out IntPtr hiconSmall,
+        uint size);
 
     [DllImport("gdi32.dll")]
     internal static extern bool DeleteObject(IntPtr hObject);

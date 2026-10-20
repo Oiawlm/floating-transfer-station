@@ -96,13 +96,20 @@ internal static class ShellLinkHelper
 /// 快捷启动图标服务（#30，Issue #162）：专用 STA WPF Dispatcher 线程承载全部 Shell COM
 /// （自带消息泵，满足 STA 重入）。主路径 SHCreateItemFromParsingName →
 /// IShellItemImageFactory.GetImage(256, ICONONLY|BIGGERSIZEOK)（网络路径加 MEMORYONLY）；
+/// Application 类直提取阶梯（实机实证 2026-10-20，Issue #206）：Shell 大尺寸图标走异步
+/// 缓存管线，缓存未热时 GetImage 返回 E_PENDING(0x8000000A)，而 SHGetImageList 在部分
+/// 机器整链 E_NOINTERFACE——两环同时失效即「添加应用永远占位」（合成可达、实机不可达）。
+/// 直提取（SHDefExtractIconW→SHGetFileInfoW(SHGFI_ICON)）不经图标缓存与 image list，
+/// 机器环境无关；「应用未注册」的 PackagedApp 终回退（IExtractIconW）同理机器无关。
 /// 回退链 SHGetFileInfo(SHGFI_SYSICONINDEX) → SHGetImageList(JUMBO→EXTRALARGE→LARGE)
-/// → IImageList.GetIcon（校验 index &lt; count）。缓存发布协议：提取 PNG 字节 → tmp →
-/// File.Move(overwrite) → 内存字典 → 最后经目录协议更新 IconStamp——stamp 只在图标
-/// 成功发布后推进，任何前置失败=旧图继续有效（陈旧可接受）。目标删除→保留最后成功
-/// PNG 进失效灰态。孤儿清扫仅在启动装载成功后运行一次（此后新增 PNG 到下次启动才
-/// 可能被清，杜绝与在途提取竞态）。排队等待方放弃（瓦片保持占位）≠ 执行超时：
-/// 卡住的 Shell COM 调用阻塞图标管线属可接受降级（启动/添加/主 UI 不受影响）。
+/// → IImageList.GetIcon（校验 index &lt; count）保留为健康系统的最后一级。缓存发布协议：
+/// 提取 PNG 字节 → tmp → File.Move(overwrite) → 内存字典 → 最后经目录协议更新
+/// IconStamp——stamp 只在图标成功发布后推进，任何前置失败=旧图继续有效（陈旧可接受）。
+/// 目标删除→保留最后成功 PNG 进失效灰态。孤儿清扫仅在启动装载成功后运行一次（此后
+/// 新增 PNG 到下次启动才可能被清，杜绝与在途提取竞态）。排队等待方放弃（瓦片保持占位）
+/// ≠ 执行超时：卡住的 Shell COM 调用阻塞图标管线属可接受降级（启动/添加/主 UI 不受影响）。
+/// 提取请求的 pending 生命周期由请求自身 finally 承载：任何异常类型都完成等待者并清理
+/// 状态（失败可观测＋状态可恢复），不依赖异常类型过滤器或派发器兜底。
 /// </summary>
 internal sealed class LauncherIconService : IDisposable
 {
@@ -222,27 +229,33 @@ internal sealed class LauncherIconService : IDisposable
             BitmapSource? icon = null;
             try
             {
-                icon = LoadOrCreate(item, iconKey);
+                icon = LoadOverrideForTests is { } attempt ? attempt(item) : LoadOrCreate(item, iconKey);
             }
-            catch (Exception exception) when (
-                exception is IOException or UnauthorizedAccessException or COMException or InvalidOperationException)
+            catch (Exception exception)
             {
-                // 提取失败＝保持占位；任何前置失败不动 stamp（旧图继续有效）。
+                // 提取失败＝保持占位（任何异常类型都不得让等待者悬挂或崩溃进程——
+                // #30 :247「未处理异常不得崩溃进程」由本 catch 前移到请求自身承载）。
+                LogFailure(iconKey, exception);
             }
+            finally
+            {
+                List<Action<BitmapSource?>> completions;
+                lock (_pending)
+                {
+                    completions = _pending.GetValueOrDefault(iconKey) ?? [];
+                    _pending.Remove(iconKey);
+                }
 
-            List<Action<BitmapSource?>> completions;
-            lock (_pending)
-            {
-                completions = _pending.GetValueOrDefault(iconKey) ?? [];
-                _pending.Remove(iconKey);
-            }
-
-            foreach (var completion in completions)
-            {
-                _uiDispatcher.BeginInvoke(() => completion(icon));
+                foreach (var completion in completions)
+                {
+                    _uiDispatcher.BeginInvoke(() => completion(icon));
+                }
             }
         });
     }
+
+    /// <summary>仅供测试注入：替换 STA 提取尝试体（异常毒化回归的注入点；null=真实提取）。</summary>
+    internal Func<LauncherItem, BitmapSource?>? LoadOverrideForTests { get; set; }
 
     /// <summary>仅供测试观察：重枚举取图请求的 IconKey 记录（#30 切片 4）。</summary>
     internal System.Collections.Concurrent.ConcurrentQueue<string> RefreshRequestsForTests { get; } = new();
@@ -268,12 +281,12 @@ internal sealed class LauncherIconService : IDisposable
             BitmapSource? icon = null;
             try
             {
-                icon = LoadOrCreate(item, iconKey);
+                icon = LoadOverrideForTests is { } attempt ? attempt(item) : LoadOrCreate(item, iconKey);
             }
-            catch (Exception exception) when (
-                exception is IOException or UnauthorizedAccessException or COMException or InvalidOperationException)
+            catch (Exception exception)
             {
-                // 提取失败＝保持现状（旧图继续有效）。
+                // 提取失败＝保持现状（旧图继续有效）；等待者照常完成，不悬挂。
+                LogFailure(iconKey, exception);
             }
 
             _uiDispatcher.BeginInvoke(() => onCompleted(icon));
@@ -488,7 +501,101 @@ internal sealed class LauncherIconService : IDisposable
             return (iconHandle, true);
         }
 
+        if (item.Kind == LauncherKind.Application)
+        {
+            // 直提取阶梯（#30 修订，Issue #206 实机实证）：GetImage(256) 在图标缓存未热时
+            // 返回 E_PENDING、SHGetImageList 在部分机器整链 E_NOINTERFACE——既有两级
+            // 同时失效即「添加应用永远占位」。SHDefExtractIconW/SHGetFileInfoW(SHGFI_ICON)
+            // 不经图标缓存与 image list，机器环境无关；均返回 HICON（alpha 由
+            // CreateBitmapSourceFromHIcon 路径正确承载）。
+            if (TryExtractFileIconDirect(item) is { } direct)
+            {
+                return (direct, true);
+            }
+
+            if (TryGetAssociatedIcon(item) is { } associated)
+            {
+                return (associated, true);
+            }
+        }
+
         return (ExtractViaSystemImageList(item), true);
+    }
+
+    /// <summary>SHDefExtractIconW 直提取（不经图标缓存与 image list）：exe 目标本体 →
+    /// .lnk 解析目标 → .lnk IconLocation（负索引按 0）。返回 HICON；未提取返回 null。</summary>
+    private static IntPtr? TryExtractFileIconDirect(LauncherItem item)
+    {
+        if (!item.TargetPath.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+        {
+            return ExtractDirectIcon(item.TargetPath, 0);
+        }
+
+        if (ShellLinkHelper.TryRead(item.TargetPath) is not { } link)
+        {
+            return null;
+        }
+
+        if (link.ResolvedTargetPath is { Length: > 0 } resolved &&
+            File.Exists(resolved) &&
+            ExtractDirectIcon(resolved, 0) is { } resolvedHandle)
+        {
+            return resolvedHandle;
+        }
+
+        if (link.IconLocation is { Length: > 0 } iconSource &&
+            File.Exists(iconSource) &&
+            ExtractDirectIcon(iconSource, Math.Max(link.IconIndex, 0)) is { } iconSourceHandle)
+        {
+            return iconSourceHandle;
+        }
+
+        return null;
+    }
+
+    private static IntPtr? ExtractDirectIcon(string path, int iconIndex)
+    {
+        try
+        {
+            var result = ShellInterop.SHDefExtractIconW(path, iconIndex, 0, out var handle, out _, ShellInterop.ShellIconSize);
+            if (result != 0)
+            {
+                // S_FALSE＝请求源没有真图标（shell 默认兜底不是目标图标），照失败降级。
+                if (handle != IntPtr.Zero)
+                {
+                    _ = ShellInterop.DestroyIcon(handle);
+                }
+
+                return null;
+            }
+
+            return handle != IntPtr.Zero ? handle : null;
+        }
+        catch (Exception exception) when (exception is ArgumentException or IOException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>SHGetFileInfoW(SHGFI_ICON) 直取关联 HICON（32px 档；.lnk 自动解析目标；
+    /// 低分辨率成功仍算成功——「有小不用大」与 BIGGERSIZEOK 同语义取向）。</summary>
+    private static IntPtr? TryGetAssociatedIcon(LauncherItem item)
+    {
+        try
+        {
+            var info = new ShellInterop.ShFileInfo();
+            var result = ShellInterop.SHGetFileInfoW(
+                item.TargetPath,
+                0,
+                ref info,
+                Marshal.SizeOf<ShellInterop.ShFileInfo>(),
+                ShellInterop.ShgfiIcon | ShellInterop.ShgfiLargeIcon);
+            return result == IntPtr.Zero || info.IconHandle == IntPtr.Zero ? null : info.IconHandle;
+        }
+        catch (Exception exception) when (exception is ArgumentException or IOException)
+        {
+            return null;
+        }
     }
 
     /// <summary>回退链：SHGetFileInfo(SHGFI_SYSICONINDEX) → SHGetImageList(JUMBO→EXTRALARGE→LARGE)
@@ -605,6 +712,19 @@ internal sealed class LauncherIconService : IDisposable
             {
                 builder.Append(path).Append("|unavailable|0\u0001");
             }
+        }
+    }
+
+    private static void LogFailure(string iconKey, Exception exception)
+    {
+        try
+        {
+            File.AppendAllText(
+                Path.Combine(Path.GetTempPath(), "fts-launcher-icon-failure.log"),
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] key={iconKey[..Math.Min(12, iconKey.Length)]}… {exception.GetType().FullName}: {exception.Message}\n{exception.StackTrace}\n---\n");
+        }
+        catch (Exception writerException) when (writerException is IOException or UnauthorizedAccessException)
+        {
         }
     }
 

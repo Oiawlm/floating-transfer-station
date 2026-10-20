@@ -206,6 +206,7 @@ $interactionTestPrefixes = @{
     'QuickLaunchEdit'        = @('QuickLaunch')
     'QuickLaunchEditTarget'  = @('QuickLaunch')
     'QuickLaunchEvidence'    = @('Evidence')
+    'QuickLaunchIconLoop'    = @('IconLoop')
     'QuickLaunchPerf'        = @('QuickLaunchPerf')
     'QuickLaunchPicker'      = @('InstalledAppsEnumerator', 'InstalledPicker', 'QuickLaunch')
     'QuickLaunchRename'      = @('QuickLaunch')
