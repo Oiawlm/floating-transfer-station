@@ -96,16 +96,33 @@ internal static class ShellLinkHelper
 /// 快捷启动图标服务（#30，Issue #162）：专用 STA WPF Dispatcher 线程承载全部 Shell COM
 /// （自带消息泵，满足 STA 重入）。主路径 SHCreateItemFromParsingName →
 /// IShellItemImageFactory.GetImage(256, ICONONLY|BIGGERSIZEOK)（网络路径加 MEMORYONLY）；
+/// Application 类直提取阶梯（实机实证 2026-10-20，Issue #206）：Shell 大尺寸图标走异步
+/// 缓存管线，缓存未热时 GetImage 返回 E_PENDING(0x8000000A)，而 SHGetImageList 在部分
+/// 机器整链 E_NOINTERFACE——两环同时失效即「添加应用永远占位」（合成可达、实机不可达）。
+/// 直提取（SHDefExtractIconW→SHGetFileInfoW(SHGFI_ICON)）不经图标缓存与 image list，
+/// 机器环境无关；「应用未注册」的 PackagedApp 终回退（IExtractIconW）同理机器无关。
 /// 回退链 SHGetFileInfo(SHGFI_SYSICONINDEX) → SHGetImageList(JUMBO→EXTRALARGE→LARGE)
-/// → IImageList.GetIcon（校验 index &lt; count）。缓存发布协议：提取 PNG 字节 → tmp →
-/// File.Move(overwrite) → 内存字典 → 最后经目录协议更新 IconStamp——stamp 只在图标
-/// 成功发布后推进，任何前置失败=旧图继续有效（陈旧可接受）。目标删除→保留最后成功
-/// PNG 进失效灰态。孤儿清扫仅在启动装载成功后运行一次（此后新增 PNG 到下次启动才
-/// 可能被清，杜绝与在途提取竞态）。排队等待方放弃（瓦片保持占位）≠ 执行超时：
-/// 卡住的 Shell COM 调用阻塞图标管线属可接受降级（启动/添加/主 UI 不受影响）。
+/// → IImageList.GetIcon（校验 index &lt; count）保留为健康系统的最后一级。缓存发布协议：
+/// 提取 PNG 字节 → tmp → File.Move(overwrite) → 内存字典 → 最后经目录协议更新
+/// IconStamp——stamp 只在图标成功发布后推进，任何前置失败=旧图继续有效（陈旧可接受）。
+/// 目标删除→保留最后成功 PNG 进失效灰态。孤儿清扫仅在启动装载成功后运行一次（此后
+/// 新增 PNG 到下次启动才可能被清，杜绝与在途提取竞态）。排队等待方放弃（瓦片保持占位）
+/// ≠ 执行超时：卡住的 Shell COM 调用阻塞图标管线属可接受降级（启动/添加/主 UI 不受影响）。
+/// 提取请求的 pending 生命周期由请求自身 finally 承载：任何异常类型都完成等待者并清理
+/// 状态（失败可观测＋状态可恢复），不依赖异常类型过滤器或派发器兜底。
 /// </summary>
 internal sealed class LauncherIconService : IDisposable
 {
+    /// <summary>Url 条目已缓存戳（常量语义：null=未取到＝启动重试轮判定面；"ok"=已缓存；
+    /// 编辑目标经 AdoptEditedTarget 置空即重抓）。</summary>
+    internal const string UrlIconStampOk = "ok";
+
+    /// <summary>启动重试轮的每条目排队上限（超时放弃并计失败，防风暴无限等待）。</summary>
+    private static readonly TimeSpan StartupQueueCap = TimeSpan.FromSeconds(30);
+
+    /// <summary>单条目 favicon 网络总预算（取得首个执行资格后启动）。</summary>
+    private static readonly TimeSpan FaviconEntryBudget = TimeSpan.FromSeconds(20);
+
     private readonly LauncherCatalog _catalog;
     private readonly string _iconsDirectory;
     private readonly Thread _iconThread;
@@ -113,22 +130,35 @@ internal sealed class LauncherIconService : IDisposable
     private readonly Dispatcher _uiDispatcher;
     private readonly Dictionary<string, BitmapSource> _memory = [];
     private readonly Dictionary<string, List<Action<BitmapSource?>>> _pending = [];
+    private readonly FaviconClient? _faviconClient;
+    private readonly FaviconFetchScheduler? _faviconScheduler;
+    private readonly FaviconNegativeCache _faviconNegativeCache = new();
+    private readonly HashSet<string> _startupRetryAttempted = [];
 
     private LauncherIconService(
         LauncherCatalog catalog,
         string iconsDirectory,
         Dispatcher uiDispatcher,
         Thread iconThread,
-        Dispatcher iconDispatcher)
+        Dispatcher iconDispatcher,
+        FaviconClient? faviconClient,
+        FaviconFetchScheduler? faviconScheduler)
     {
         _catalog = catalog;
         _iconsDirectory = iconsDirectory;
         _uiDispatcher = uiDispatcher;
         _iconThread = iconThread;
         _iconDispatcher = iconDispatcher;
+        _faviconClient = faviconClient;
+        _faviconScheduler = faviconScheduler;
     }
 
-    internal static LauncherIconService Start(LauncherCatalog catalog, string iconsDirectory, Dispatcher uiDispatcher)
+    internal static LauncherIconService Start(
+        LauncherCatalog catalog,
+        string iconsDirectory,
+        Dispatcher uiDispatcher,
+        FaviconClient? faviconClient = null,
+        FaviconFetchScheduler? faviconScheduler = null)
     {
         var dispatcherReady = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -173,7 +203,9 @@ internal sealed class LauncherIconService : IDisposable
             iconsDirectory,
             uiDispatcher,
             thread,
-            iconDispatcher ?? uiDispatcher);
+            iconDispatcher ?? uiDispatcher,
+            faviconClient,
+            faviconScheduler);
     }
 
     /// <summary>UI 线程同步读内存缓存（命中为纯内存查询，零磁盘 I/O）。</summary>
@@ -186,10 +218,15 @@ internal sealed class LauncherIconService : IDisposable
     }
 
     /// <summary>
-    /// 请求图标：内存未命中派发到 STA 线程（stamp 未变优先读缓存文件）；结果经 UI
-    /// Dispatcher 回调。等待方放弃＝瓦片保持占位（回调引用失效即 no-op）。
+    /// 请求图标：内存未命中后按 Kind 分派——Application/PackagedApp 派发到 STA 线程
+    /// （stamp 未变优先读缓存文件）；Url 走线程池 favicon 抓取（HTTP 绝不进 STA Shell
+    /// 线程）。结果经 UI Dispatcher 回调。等待方放弃＝瓦片保持占位（回调引用失效即
+    /// no-op）。
     /// </summary>
-    internal void RequestIcon(LauncherItem item, Action<BitmapSource?> onCompleted)
+    internal void RequestIcon(LauncherItem item, Action<BitmapSource?> onCompleted) =>
+        RequestIconCore(item, onCompleted, bypassNegativeCache: false);
+
+    private void RequestIconCore(LauncherItem item, Action<BitmapSource?> onCompleted, bool bypassNegativeCache)
     {
         var iconKey = item.IconKey;
         if (iconKey.Length == 0)
@@ -217,48 +254,344 @@ internal sealed class LauncherIconService : IDisposable
             _pending[iconKey] = [onCompleted];
         }
 
+        if (item.Kind == LauncherKind.Url)
+        {
+            // 目标快照：发布前复核（编辑目标后旧抓取结果不得覆盖新目标——gate 落盘与 stamp）。
+            var capturedTarget = item.TargetPath;
+            _ = Task.Run(() => FetchUrlIconAsync(item, iconKey, capturedTarget, bypassNegativeCache));
+            return;
+        }
+
         _iconDispatcher.BeginInvoke(() =>
         {
             BitmapSource? icon = null;
             try
             {
-                icon = LoadOrCreate(item, iconKey);
+                icon = LoadOverrideForTests is { } attempt ? attempt(item) : LoadOrCreate(item, iconKey);
             }
-            catch (Exception exception) when (
-                exception is IOException or UnauthorizedAccessException or COMException or InvalidOperationException)
+            catch (Exception exception)
             {
-                // 提取失败＝保持占位；任何前置失败不动 stamp（旧图继续有效）。
+                // 提取失败＝保持占位（任何异常类型都不得让等待者悬挂或崩溃进程——
+                // #30 :247「未处理异常不得崩溃进程」由本 catch 前移到请求自身承载）。
+                LogFailure(iconKey, exception);
             }
-
-            List<Action<BitmapSource?>> completions;
-            lock (_pending)
+            finally
             {
-                completions = _pending.GetValueOrDefault(iconKey) ?? [];
-                _pending.Remove(iconKey);
-            }
-
-            foreach (var completion in completions)
-            {
-                _uiDispatcher.BeginInvoke(() => completion(icon));
+                CompleteRequest(iconKey, icon);
             }
         });
     }
 
+    /// <summary>pending 生命周期单点：取出等待者并逐一经 UI 线程完成（任何结果形态）。</summary>
+    private void CompleteRequest(string iconKey, BitmapSource? icon)
+    {
+        List<Action<BitmapSource?>> completions;
+        lock (_pending)
+        {
+            completions = _pending.GetValueOrDefault(iconKey) ?? [];
+            _pending.Remove(iconKey);
+        }
+
+        foreach (var completion in completions)
+        {
+            _uiDispatcher.BeginInvoke(() => completion(icon));
+        }
+    }
+
+    /// <summary>仅供测试注入：替换 STA 提取尝试体（异常毒化回归的注入点；null=真实提取）。</summary>
+    internal Func<LauncherItem, BitmapSource?>? LoadOverrideForTests { get; set; }
+
     /// <summary>仅供测试观察：重枚举取图请求的 IconKey 记录（#30 切片 4）。</summary>
     internal System.Collections.Concurrent.ConcurrentQueue<string> RefreshRequestsForTests { get; } = new();
 
+    /// <summary>仅供测试注入：重置启动重试轮的去重集合（多轮语义验证用）。</summary>
+    internal void ResetStartupRetryRoundForTests() => _startupRetryAttempted.Clear();
+
     /// <summary>
-    /// 强制刷新（#30）：「应用未注册」激活失败触发的重枚举取图——绕过内存与
-    /// pending 去重直发提取线程；AUMID 条目 stamp=null，LoadOrCreate 对其恒走
-    /// 提取路径，失败时保留最后成功 PNG（失效灰态由 UI 层承载）。
+    /// favicon 抓取管线（线程池）：磁盘缓存读（stamp="ok"）→ 负缓存闸 → 同源阶梯抓取
+    /// （首个执行资格由本方法取得并作为持有许可交给客户端，条目预算在资格取得后启动）
+    /// → WIC 解码选帧 → PNG 重编码 → 发布（目标快照复核 gate 落盘与 stamp，复用
+    /// tmp→Move 协议）。取消/被取代不记负缓存；预算耗尽/阶梯耗尽记负缓存。
+    /// </summary>
+    private async Task FetchUrlIconAsync(LauncherItem item, string iconKey, string capturedTarget, bool bypassNegativeCache)
+    {
+        BitmapSource? icon = null;
+        try
+        {
+            var pngPath = Path.Combine(_iconsDirectory, iconKey + ".png");
+            if (File.Exists(pngPath) && item.IconStamp == UrlIconStampOk)
+            {
+                icon = DecodePng(File.ReadAllBytes(pngPath));
+                if (icon is not null)
+                {
+                    Remember(iconKey, icon);
+                    return;
+                }
+            }
+
+            if (!bypassNegativeCache && _faviconNegativeCache.IsNegative(iconKey, DateTimeOffset.UtcNow))
+            {
+                return;
+            }
+
+            if (_faviconClient is null || _faviconScheduler is null ||
+                Uri.TryCreate(item.TargetPath, UriKind.Absolute, out var pageUrl) is false ||
+                pageUrl.Scheme is not ("http" or "https"))
+            {
+                return;
+            }
+
+            // 首个执行资格（排队上限防风暴；此阶段不启动条目预算）。
+            IAsyncDisposable heldPermit;
+            try
+            {
+                heldPermit = await _faviconScheduler
+                    .AcquireAsync(OriginOf(pageUrl), new CancellationTokenSource(StartupQueueCap).Token)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                _faviconNegativeCache.Record(iconKey, DateTimeOffset.UtcNow);
+                return;
+            }
+
+            await using (heldPermit.ConfigureAwait(false))
+            {
+                using var budget = new CancellationTokenSource(FaviconEntryBudget);
+                var result = await _faviconClient
+                    .FetchPageIconAsync(item.TargetPath, budget.Token, heldPermit)
+                    .ConfigureAwait(false);
+
+                if (result.Candidate is not { } candidate)
+                {
+                    LogFaviconFailure(iconKey, pageUrl, result.Failure);
+                    if (result.Failure is not FaviconFailureKind.Network)
+                    {
+                        _faviconNegativeCache.Record(iconKey, DateTimeOffset.UtcNow);
+                    }
+
+                    return;
+                }
+
+                var pngBytes = EncodePngFromCandidate(candidate);
+                if (pngBytes is null)
+                {
+                    LogFaviconFailure(iconKey, pageUrl, FaviconFailureKind.Exhausted);
+                    _faviconNegativeCache.Record(iconKey, DateTimeOffset.UtcNow);
+                    return;
+                }
+
+                // 目标快照复核 gate 落盘与 stamp（编辑目标后旧抓取结果不得覆盖新目标）。
+                if (item.TargetPath != capturedTarget || item.IconKey != iconKey)
+                {
+                    return;
+                }
+
+                Directory.CreateDirectory(_iconsDirectory);
+                var temporaryPath = pngPath + ".tmp";
+                File.WriteAllBytes(temporaryPath, pngBytes);
+                File.Move(temporaryPath, pngPath, overwrite: true);
+                var published = DecodePng(pngBytes);
+                if (published is null)
+                {
+                    return;
+                }
+
+                Remember(iconKey, published);
+                icon = published;
+                if (item.IconStamp != UrlIconStampOk)
+                {
+                    _ = _catalog.UpdateIconStampAsync(item.Id, UrlIconStampOk);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 条目预算耗尽＝真实失败（记负缓存防抖）；被取代的取消由快照复核剔除。
+            if (item.TargetPath == capturedTarget)
+            {
+                _faviconNegativeCache.Record(iconKey, DateTimeOffset.UtcNow);
+            }
+        }
+        catch (Exception exception)
+        {
+            // favicon 管线任何异常不得波及完成语义：等待者照常完成（保持占位）。
+            LogFailure(iconKey, exception);
+        }
+        finally
+        {
+            CompleteRequest(iconKey, icon);
+        }
+    }
+
+    private static Uri OriginOf(Uri pageUrl) => new($"{pageUrl.Scheme}://{pageUrl.IdnHost}:{pageUrl.Port}/");
+
+    /// <summary>favicon 失败分类日志：只记 host＋失败类别（隐私红线：不含路径与 query）。</summary>
+    private static void LogFaviconFailure(string iconKey, Uri pageUrl, FaviconFailureKind failure) =>
+        LogFailure(iconKey, new InvalidOperationException($"favicon 阶梯未产出 kind={failure} host={pageUrl.IdnHost}"));
+
+    /// <summary>WIC 解码选帧（线程池）：逐帧读元数据（只检查前 16 帧、只解码入选帧）；
+    /// ≥96px 取最小者、无则取最大者；>256px 经 WIC 高质量缩放解码到 ≤256；坏帧跳过；
+    /// SVG/WebP 等不支持格式已在客户端按签名淘汰。产出统一 PNG 字节（缓存格式唯一）。</summary>
+    private static byte[]? EncodePngFromCandidate(FaviconCandidate candidate)
+    {
+        var stream = new MemoryStream(candidate.Bytes);
+        BitmapDecoder decoder;
+        try
+        {
+            decoder = candidate.Format == FaviconImageFormat.Ico
+                ? new IconBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad)
+                : BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
+
+        try
+        {
+            var frameCount = Math.Min(decoder.Frames.Count, FaviconClient.MaxIcoFramesInspected);
+            BitmapFrame? chosen = null;
+            for (var i = 0; i < frameCount; i++)
+            {
+                var frame = decoder.Frames[i];
+                if (frame.PixelWidth <= 0 || frame.PixelHeight <= 0 ||
+                    (long)frame.PixelWidth * frame.PixelHeight > FaviconClient.MaxFramePixels)
+                {
+                    continue;
+                }
+
+                chosen = chosen is null ? frame : PreferFrame(chosen, frame);
+            }
+
+            if (chosen is null)
+            {
+                return null;
+            }
+
+            BitmapSource source = chosen;
+            var longest = Math.Max(source.PixelWidth, source.PixelHeight);
+            if (longest > 256)
+            {
+                var scale = 256.0 / longest;
+                source = new TransformedBitmap(source, new System.Windows.Media.ScaleTransform(scale, scale));
+            }
+
+            source.Freeze();
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(source));
+            using var output = new MemoryStream();
+            encoder.Save(output);
+            return output.ToArray();
+        }
+        catch (Exception exception) when (
+            exception is IOException or InvalidOperationException or NotSupportedException or COMException)
+        {
+            // 坏帧/不支持格式＝候选失败（调用方记负缓存）。
+            return null;
+        }
+    }
+
+    /// <summary>选帧规则（#30 修订）：≥目标尺寸中取最小；不足则取最大；同档取像素积更小。</summary>
+    private static BitmapFrame PreferFrame(BitmapFrame current, BitmapFrame candidate)
+    {
+        var currentSufficient = Math.Min(current.PixelWidth, current.PixelHeight) >= FaviconClient.TargetSize;
+        var candidateSufficient = Math.Min(candidate.PixelWidth, candidate.PixelHeight) >= FaviconClient.TargetSize;
+        if (candidateSufficient != currentSufficient)
+        {
+            return candidateSufficient ? candidate : current;
+        }
+
+        var currentMetric = currentSufficient
+            ? Math.Min(current.PixelWidth, current.PixelHeight)
+            : -Math.Min(current.PixelWidth, current.PixelHeight);
+        var candidateMetric = candidateSufficient
+            ? Math.Min(candidate.PixelWidth, candidate.PixelHeight)
+            : -Math.Min(candidate.PixelWidth, candidate.PixelHeight);
+        if (candidateMetric != currentMetric)
+        {
+            return candidateMetric > currentMetric ? candidate : current;
+        }
+
+        return (long)candidate.PixelWidth * candidate.PixelHeight < (long)current.PixelWidth * current.PixelHeight
+            ? candidate
+            : current;
+    }
+
+    /// <summary>
+    /// 启动重试轮：对无图标（stamp≠"ok" 或 PNG 缺失）的 Url 条目静默重抓，每进程
+    /// 每条目至多一次（按 IconKey 去重），2/s 节流排队。全部在池上执行（UI 线程零
+    /// 磁盘/网络）；瓦片 Loaded 的常规请求经 pending 去重与本轮合并。
+    /// </summary>
+    internal void RunStartupRetryRoundOnce()
+    {
+        if (_faviconClient is null)
+        {
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            var index = 0;
+            foreach (var item in _catalog.Items.ToList())
+            {
+                if (item.Kind != LauncherKind.Url)
+                {
+                    continue;
+                }
+
+                var iconKey = item.IconKey;
+                if (iconKey.Length == 0 || !_startupRetryAttempted.Add(iconKey))
+                {
+                    continue;
+                }
+
+                var pngPath = Path.Combine(_iconsDirectory, iconKey + ".png");
+                if (item.IconStamp == UrlIconStampOk && File.Exists(pngPath))
+                {
+                    continue;
+                }
+
+                var captured = item;
+                var delay = TimeSpan.FromMilliseconds(500 * Interlocked.Increment(ref index));
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(delay).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+
+                    RequestIconCore(captured, _ => { }, bypassNegativeCache: false);
+                });
+            }
+        });
+    }
+
+    /// <summary>
+    /// 强制刷新（#30）：「应用未注册」激活失败触发的重枚举取图——Application/
+    /// PackagedApp 绕过内存与 pending 去重直发提取线程；Url 走 favicon 抓取的
+    /// 负缓存绕行通道（编辑目标/显式重取语义）。失败时保留最后成功 PNG（失效灰态
+    /// 由 UI 层承载）。
     /// </summary>
     internal void RequestRefresh(LauncherItem item, Action<BitmapSource?> onCompleted)
     {
         var iconKey = item.IconKey;
         if (iconKey.Length == 0)
         {
-            // 空 key（Url 类）无从提取：仍回调空结果，调用方不被静默悬挂。
+            // 空 key无从提取：仍回调空结果，调用方不被静默悬挂。
             onCompleted(null);
+            return;
+        }
+
+        if (item.Kind == LauncherKind.Url)
+        {
+            // 显式重取＝绕过负缓存（Added/TargetEdited 同语义）；pending 去重照常合并。
+            RequestIconCore(item, onCompleted, bypassNegativeCache: true);
             return;
         }
 
@@ -268,19 +601,19 @@ internal sealed class LauncherIconService : IDisposable
             BitmapSource? icon = null;
             try
             {
-                icon = LoadOrCreate(item, iconKey);
+                icon = LoadOverrideForTests is { } attempt ? attempt(item) : LoadOrCreate(item, iconKey);
             }
-            catch (Exception exception) when (
-                exception is IOException or UnauthorizedAccessException or COMException or InvalidOperationException)
+            catch (Exception exception)
             {
-                // 提取失败＝保持现状（旧图继续有效）。
+                // 提取失败＝保持现状（旧图继续有效）；等待者照常完成，不悬挂。
+                LogFailure(iconKey, exception);
             }
 
             _uiDispatcher.BeginInvoke(() => onCompleted(icon));
         });
     }
 
-    /// <summary>孤儿清扫：仅启动装载成功后运行一次。</summary>
+    /// <summary>孤儿清扫：仅启动装载成功后运行一次；顺带清理 >1h 的半成品 tmp。</summary>
     internal void SweepOrphansOnce()
     {
         var referenced = new HashSet<string>(
@@ -305,6 +638,20 @@ internal sealed class LauncherIconService : IDisposable
                     {
                         // 下次启动再清。
                     }
+                }
+            }
+
+            foreach (var temporary in Directory.EnumerateFiles(_iconsDirectory, "*.tmp"))
+            {
+                try
+                {
+                    if (File.GetLastWriteTimeUtc(temporary) < DateTime.UtcNow.AddHours(-1))
+                    {
+                        File.Delete(temporary);
+                    }
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
                 }
             }
         }
@@ -488,7 +835,101 @@ internal sealed class LauncherIconService : IDisposable
             return (iconHandle, true);
         }
 
+        if (item.Kind == LauncherKind.Application)
+        {
+            // 直提取阶梯（#30 修订，Issue #206 实机实证）：GetImage(256) 在图标缓存未热时
+            // 返回 E_PENDING、SHGetImageList 在部分机器整链 E_NOINTERFACE——既有两级
+            // 同时失效即「添加应用永远占位」。SHDefExtractIconW/SHGetFileInfoW(SHGFI_ICON)
+            // 不经图标缓存与 image list，机器环境无关；均返回 HICON（alpha 由
+            // CreateBitmapSourceFromHIcon 路径正确承载）。
+            if (TryExtractFileIconDirect(item) is { } direct)
+            {
+                return (direct, true);
+            }
+
+            if (TryGetAssociatedIcon(item) is { } associated)
+            {
+                return (associated, true);
+            }
+        }
+
         return (ExtractViaSystemImageList(item), true);
+    }
+
+    /// <summary>SHDefExtractIconW 直提取（不经图标缓存与 image list）：exe 目标本体 →
+    /// .lnk 解析目标 → .lnk IconLocation（负索引按 0）。返回 HICON；未提取返回 null。</summary>
+    private static IntPtr? TryExtractFileIconDirect(LauncherItem item)
+    {
+        if (!item.TargetPath.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+        {
+            return ExtractDirectIcon(item.TargetPath, 0);
+        }
+
+        if (ShellLinkHelper.TryRead(item.TargetPath) is not { } link)
+        {
+            return null;
+        }
+
+        if (link.ResolvedTargetPath is { Length: > 0 } resolved &&
+            File.Exists(resolved) &&
+            ExtractDirectIcon(resolved, 0) is { } resolvedHandle)
+        {
+            return resolvedHandle;
+        }
+
+        if (link.IconLocation is { Length: > 0 } iconSource &&
+            File.Exists(iconSource) &&
+            ExtractDirectIcon(iconSource, Math.Max(link.IconIndex, 0)) is { } iconSourceHandle)
+        {
+            return iconSourceHandle;
+        }
+
+        return null;
+    }
+
+    private static IntPtr? ExtractDirectIcon(string path, int iconIndex)
+    {
+        try
+        {
+            var result = ShellInterop.SHDefExtractIconW(path, iconIndex, 0, out var handle, out _, ShellInterop.ShellIconSize);
+            if (result != 0)
+            {
+                // S_FALSE＝请求源没有真图标（shell 默认兜底不是目标图标），照失败降级。
+                if (handle != IntPtr.Zero)
+                {
+                    _ = ShellInterop.DestroyIcon(handle);
+                }
+
+                return null;
+            }
+
+            return handle != IntPtr.Zero ? handle : null;
+        }
+        catch (Exception exception) when (exception is ArgumentException or IOException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>SHGetFileInfoW(SHGFI_ICON) 直取关联 HICON（32px 档；.lnk 自动解析目标；
+    /// 低分辨率成功仍算成功——「有小不用大」与 BIGGERSIZEOK 同语义取向）。</summary>
+    private static IntPtr? TryGetAssociatedIcon(LauncherItem item)
+    {
+        try
+        {
+            var info = new ShellInterop.ShFileInfo();
+            var result = ShellInterop.SHGetFileInfoW(
+                item.TargetPath,
+                0,
+                ref info,
+                Marshal.SizeOf<ShellInterop.ShFileInfo>(),
+                ShellInterop.ShgfiIcon | ShellInterop.ShgfiLargeIcon);
+            return result == IntPtr.Zero || info.IconHandle == IntPtr.Zero ? null : info.IconHandle;
+        }
+        catch (Exception exception) when (exception is ArgumentException or IOException)
+        {
+            return null;
+        }
     }
 
     /// <summary>回退链：SHGetFileInfo(SHGFI_SYSICONINDEX) → SHGetImageList(JUMBO→EXTRALARGE→LARGE)
@@ -552,12 +993,18 @@ internal sealed class LauncherIconService : IDisposable
         InstalledAppsEnumerator.TryGetItemByAumid(appUserModelId);
 
     /// <summary>
-    /// 图标戳（#30）：shortHash(lnk.mtime|size ‖ 解析目标.mtime|size ‖ GetIconLocation
-    /// 解析出的图标源文件.mtime|size)——.lnk 独立图标源纳入指纹；AUMID/Url 条目 null
-    /// （不自动失效；刷新触发=激活失败重枚举或重新添加覆盖）。
+    /// 图标戳（#30）：Application=shortHash(lnk.mtime|size ‖ 解析目标.mtime|size ‖
+    /// GetIconLocation 解析出的图标源文件.mtime|size)；PackagedApp 恒 null（不自动失效；
+    /// 刷新触发=激活失败重枚举或重新添加覆盖）；Url=常量 "ok"（null=未取到＝启动重试
+    /// 轮判定面；"ok"=已缓存；编辑目标置空由 AdoptEditedTarget 承载）。
     /// </summary>
     internal static string? ComputeStamp(LauncherItem item)
     {
+        if (item.Kind == LauncherKind.Url)
+        {
+            return UrlIconStampOk;
+        }
+
         if (item.Kind != LauncherKind.Application)
         {
             return null;
@@ -608,6 +1055,19 @@ internal sealed class LauncherIconService : IDisposable
         }
     }
 
+    private static void LogFailure(string iconKey, Exception exception)
+    {
+        try
+        {
+            File.AppendAllText(
+                Path.Combine(Path.GetTempPath(), "fts-launcher-icon-failure.log"),
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] key={iconKey[..Math.Min(12, iconKey.Length)]}… {exception.GetType().FullName}: {exception.Message}\n{exception.StackTrace}\n---\n");
+        }
+        catch (Exception writerException) when (writerException is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
     private static BitmapSource? DecodePng(byte[] bytes)
     {
         try
@@ -632,5 +1092,7 @@ internal sealed class LauncherIconService : IDisposable
     {
         _iconDispatcher.InvokeShutdown();
         _ = _iconThread.Join(TimeSpan.FromSeconds(2));
+        _faviconScheduler?.Dispose();
+        _faviconClient?.Dispose();
     }
 }

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FloatingTransferStation.Launcher;
 using FloatingTransferStation.ViewModels;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
@@ -161,7 +162,16 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(secondApp.Path, live.TargetPath, "目标路径更新。");
             Assert.AreEqual("/new /flag", live.Arguments, "参数更新。");
             Assert.AreEqual(@"C:\New", live.WorkingDirectory, "起始位置更新。");
-            Assert.IsNull(live.IconStamp, "目标变更→IconStamp 置空→图标自动重取。");
+            // 目标变更→IconStamp 置空→图标管线自动重取（#30 :251）。直提取阶梯
+            // （Issue #206）使重取在提取链健康/不健康环境都确定完成：等待后断言
+            // stamp 对齐「新目标指纹」（比旧的瞬态 null 断言更强且环境无关）。
+            var refetchDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+            while (live.IconStamp != LauncherIconService.ComputeStamp(live) && DateTime.UtcNow < refetchDeadline)
+            {
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+            }
+
+            Assert.AreEqual(LauncherIconService.ComputeStamp(live), live.IconStamp, "目标变更→自动重取后 stamp 应对齐新目标指纹。");
             Assert.AreEqual("应用", live.DisplayName, "用户名保留。");
         }
         finally
