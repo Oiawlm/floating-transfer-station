@@ -4,6 +4,8 @@
 
 ## 未发布
 
+- 文档：`docs/design.md` §四圆角表对齐 `DesignTokens.cs` 现值——补记 1.50.0「控件 4／表面 8」两档阶梯与识别元素例外（Issue #186 D9、契约 #34），移除零引用废弃 token 旧行（`HeaderSurfaceCornerRadius`/`ScrollThumbCornerRadius`，样式字面量另行注记）；`docs/images/README.md` 种子分类名随契约 #30 把「文本」更新为「启动」。
+
 ## 1.54.0
 
 - 修复「添加应用文件的时候无法抓取图标」（设计契约 #30 修订，记录 Issue #206）：实机取证＋镜像 STA 矩阵逐步实证双根因——①主路径 `IShellItemImageFactory.GetImage(256)` 在图标缓存未热时返回 E_PENDING（Shell 大尺寸图标走异步缓存管线；32px 同调用正常——尺寸分界），②回退链 `SHGetImageList` 在部分机器整链 E_NOINTERFACE——两级同时失效即所有应用瓦片永久占位且全程静默（PackagedApp 因 IExtractIconW 终回退机器无关幸免，「合成可达、实机不可达」家族实锤）。根因修复：Application 类新增机器环境无关直提取阶梯（`SHDefExtractIconW` 按 exe 本体→.lnk 解析目标→IconLocation 直取 256px，S_FALSE 淘汰；再落 `SHGetFileInfoW(SHGFI_ICON)` 直取 HICON），不经图标缓存与 image list，既有主路径/回退链保留为高级别；`RequestIcon` 的 pending 生命周期收进 finally 并对任何异常类型完成等待者（此前过滤器外异常逃逸会让该瓦片本会话永久占位且无逐请求日志），提取失败分类写入诊断日志。新增锁定回归：Application 类「添加→提取→瓦片显示→重启取缓存」真实窗口闭环（镜像 AUMID 闭环先例）、提取异常不再毒化 pending、编辑目标重取后 stamp 对齐新目标指纹（原瞬态 null 断言随直提取阶梯升级）。
