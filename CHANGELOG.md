@@ -4,6 +4,8 @@
 
 ## 未发布
 
+- 新增「允许短卡片添加备注」开关（设计契约 #22/#24/#29 修订，记录 Issue #211）：设置 → 面板新增「卡片备注」节——默认保持现状（备注添加入口只对正文被截断的长文字卡出现），开启后未截断的短文字卡悬停同样出现「添加备注」按钮，点击即就地编辑（与长卡同一条编辑管线：120 字上限、`Enter` 保存、`Esc` 取消、空白提交＝删除）。开关默认关闭，老用户升级零感知，旧 preferences.json 缺字段免迁移回落关闭；已写入备注的常显与随时可改（编辑入口无门槛）语义不受影响。AI 整理按钮的截断门槛不随本开关豁免（AI 整理语义是长文整理，仍只对截断卡出现）。实现为「偏好管线（ApplyPreferences 即时原子持久化）＋卡片样式两条同 Setter 组 MultiDataTrigger 并集（WPF 原生 OR，无 converter、无第二套显隐机制）」，既有七条件门槛路径逐字原样零变化。
+
 ## 1.54.0
 
 - 修复「添加应用文件的时候无法抓取图标」（设计契约 #30 修订，记录 Issue #206）：实机取证＋镜像 STA 矩阵逐步实证双根因——①主路径 `IShellItemImageFactory.GetImage(256)` 在图标缓存未热时返回 E_PENDING（Shell 大尺寸图标走异步缓存管线；32px 同调用正常——尺寸分界），②回退链 `SHGetImageList` 在部分机器整链 E_NOINTERFACE——两级同时失效即所有应用瓦片永久占位且全程静默（PackagedApp 因 IExtractIconW 终回退机器无关幸免，「合成可达、实机不可达」家族实锤）。根因修复：Application 类新增机器环境无关直提取阶梯（`SHDefExtractIconW` 按 exe 本体→.lnk 解析目标→IconLocation 直取 256px，S_FALSE 淘汰；再落 `SHGetFileInfoW(SHGFI_ICON)` 直取 HICON），不经图标缓存与 image list，既有主路径/回退链保留为高级别；`RequestIcon` 的 pending 生命周期收进 finally 并对任何异常类型完成等待者（此前过滤器外异常逃逸会让该瓦片本会话永久占位且无逐请求日志），提取失败分类写入诊断日志。新增锁定回归：Application 类「添加→提取→瓦片显示→重启取缓存」真实窗口闭环（镜像 AUMID 闭环先例）、提取异常不再毒化 pending、编辑目标重取后 stamp 对齐新目标指纹（原瞬态 null 断言随直提取阶梯升级）。
