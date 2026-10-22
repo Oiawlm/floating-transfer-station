@@ -75,6 +75,9 @@ public enum AutoCleanupRetention
 /// 1.52.0 起新增 AI 整理提示词覆盖（null = 内置默认「语音转文字整理器」，
 /// 纯空白按未配置处理；明文存储，提示词非机密，DPAPI 仅用于 API Key），
 /// 旧配置缺字段免迁移回落 null；上限与生效语义见 AiOrganizePrompt。
+/// 短卡片备注开关（#22 2026-10-22 修订，Issue #211；默认关 = 老用户升级零感知）：
+/// 开启后备注添加入口对未截断的文字卡也出现（编辑入口本就无门槛），AI 整理钮
+/// 的截断门槛不随本开关豁免（#29）；旧配置缺字段免迁移回落关闭。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -97,7 +100,8 @@ public sealed record AppPreferences(
     PinnedDividerStyle PinnedDivider = PinnedDividerStyle.Solid,
     AutoCleanupRetention AutoCleanupRetention = AutoCleanupRetention.TwentyFourHours,
     int QuickLaunchMigrationVersion = 0,
-    string? AiOrganizeSystemPromptOverride = null)
+    string? AiOrganizeSystemPromptOverride = null,
+    bool ShortCardNotesEnabled = false)
 {
     public static AppPreferences Default { get; } = new();
 }
