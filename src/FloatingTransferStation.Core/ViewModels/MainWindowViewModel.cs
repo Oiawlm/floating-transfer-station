@@ -21,6 +21,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _isSearchActive;
     private string _searchText = string.Empty;
     private SearchTypeFilter _searchType;
+    private bool _shortCardNotesEnabled;
     private string _statusText = string.Empty;
 
     public MainWindowViewModel(
@@ -117,6 +118,15 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         get => _searchType;
         set => SetProperty(ref _searchType, value);
+    }
+
+    /// <summary>短卡片备注开关（#22 2026-10-22 修订，Issue #211）：开启后备注添加
+    /// 入口对未截断的文字卡也出现。由 ApplyPreferences 唯一管线喂值（契约 #5），
+    /// 卡片模板触发器经窗口祖先 DataContext 绑定消费（照 IsSearchActive 先例）。</summary>
+    public bool ShortCardNotesEnabled
+    {
+        get => _shortCardNotesEnabled;
+        set => SetProperty(ref _shortCardNotesEnabled, value);
     }
 
     /// <summary>进入搜索态(窗口层负责应用过滤与焦点);复盘标签不参与(冻结)。</summary>
