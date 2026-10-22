@@ -90,15 +90,23 @@
 
 ## 四、圆角
 
+两档阶梯（1.50.0 起收敛进 token，Issue #186 D9／2026-10-18，契约 #34）：**控件级 4／表面级 8**；识别元素保留原值、逐个登记、不入阶梯。
+
 | Token | 值 | 用途 |
 |---|---|---|
-| DwmCornerRadius（Windows） | 8 | Windows 窗壳：DWM 四角圆角与内容层自裁剪；可见态窗口完整落在工作区内，四角圆角恒定（2026-10-08 决策删除 1.8.0 的右缘越屏裁切，1.21.0 起） |
-| HeaderSurfaceCornerRadius | 11（左上） | 头部表面 |
-| CardCornerRadius | 8 | 卡片、分类 Tab |
-| ControlCornerRadius | 7 | 头部按钮、状态弹层、活动层、徽标 |
+| ControlCornerRadiusPx | 4 | 控件级：输入框、按钮、下拉、复盘编辑框、行内编辑器（WPF 镜像资源 `ControlCornerRadius`） |
+| SurfaceCornerRadiusPx | 8 | 表面级：卡片、瓦片、弹窗壳、主壳（WPF 镜像资源 `SurfaceCornerRadius`；`CardCornerRadius` 与瓦片/卡片资源 `CardCornerRadius` 同源收敛=8） |
+| DwmCornerRadius（Windows） | 8 | Windows 窗壳：DWM 四角圆角与内容层自裁剪同值（WPF 资源 `ShellCornerRadius` 镜像，不设第二个壳圆角 token）；可见态窗口完整落在工作区内，四角圆角恒定（2026-10-08 决策删除 1.8.0 的右缘越屏裁切，1.21.0 起） |
+
+阶梯外登记的既有值（识别元素/头部钮/徽章小件，不强制收编——见 `MainWindowStyles.xaml` 资源头注释）：
+
+| Token | 值 | 用途 |
+|---|---|---|
+| ControlCornerRadius | 7 | 头部操作按钮与选中计数徽章（WPF 资源 `HeaderActionCornerRadius`／`SelectedCountBadgeCornerRadius`） |
 | PinButtonCornerRadius | 6 | 置顶按钮 |
-| CheckboxCornerRadius | 5 | 选择框 |
-| ScrollThumbCornerRadius | 2 | 滚动条滑块 |
+| CheckboxCornerRadius | 5 | 选择环 r5——卡片与瓦片勾选钮共用（WPF 资源 `SelectionRingCornerRadius` 镜像） |
+
+头部表面左上 11 与滚动条滑块 2 是 `MainWindowStyles.xaml` 里的既有样式字面量（`HeaderSurfaceStyle` 的 `11,0,0,0`、滑块模板的 `2`）；`HeaderSurfaceCornerRadius` 与 `ScrollThumbCornerRadius` 两个常量已无任何引用（废弃残留，待代码侧清理，不在此表登记）。
 
 ## 五、间距与位移
 
@@ -112,7 +120,7 @@
 | TilePressScale | 0.96 | 启动瓦片按压缩放（#30） |
 | TileHoverLiftPx | -2 | 启动瓦片悬停抬升位移（#30；区别于卡片 LiftedOffsetPx -1） |
 
-结构性尺寸（轨道宽 58、面板宽 280–640、最小窗高 360 等）不属于设计 token，权威来源是 Core 的 `WindowSettings`。
+结构性尺寸（轨道宽 58、面板宽 310–640、最小窗高 360 等）不属于设计 token，权威来源是 Core 的 `WindowSettings`。
 
 ## 五·B、层级（Elevation）
 
