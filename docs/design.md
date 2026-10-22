@@ -120,7 +120,7 @@
 | TilePressScale | 0.96 | 启动瓦片按压缩放（#30） |
 | TileHoverLiftPx | -2 | 启动瓦片悬停抬升位移（#30；区别于卡片 LiftedOffsetPx -1） |
 
-结构性尺寸（轨道宽 58、面板宽 280–640、最小窗高 360 等）不属于设计 token，权威来源是 Core 的 `WindowSettings`。
+结构性尺寸（轨道宽 58、面板宽 310–640、最小窗高 360 等）不属于设计 token，权威来源是 Core 的 `WindowSettings`。
 
 ## 五·B、层级（Elevation）
 

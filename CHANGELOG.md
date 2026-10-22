@@ -4,7 +4,7 @@
 
 ## 未发布
 
-- 文档：`docs/design.md` §四圆角表对齐 `DesignTokens.cs` 现值——补记 1.50.0「控件 4／表面 8」两档阶梯与识别元素例外（Issue #186 D9、契约 #34），移除零引用废弃 token 旧行（`HeaderSurfaceCornerRadius`/`ScrollThumbCornerRadius`，样式字面量另行注记）；`docs/images/README.md` 种子分类名随契约 #30 把「文本」更新为「启动」。
+- 文档：`docs/design.md` §四圆角表对齐 `DesignTokens.cs` 现值——补记 1.50.0「控件 4／表面 8」两档阶梯与识别元素例外（Issue #186 D9、契约 #34），移除零引用废弃 token 旧行（`HeaderSurfaceCornerRadius`/`ScrollThumbCornerRadius`，样式字面量另行注记）；§五结构性尺寸「面板宽 280–640」对齐 `WindowSettings.MinPanelWidth=310` 实值；`docs/images/README.md` 种子分类名随契约 #30 把「文本」更新为「启动」。
 
 ## 1.54.0
 
