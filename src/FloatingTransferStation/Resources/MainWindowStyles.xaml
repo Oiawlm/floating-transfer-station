@@ -1033,9 +1033,14 @@
 
   <!-- 添加备注钮（1.29.0 迁入操作条，记录 Issue #98；1.33.0 随 Issue #103 固定于
        操作网格右下格 (1,1)）：聊天气泡 16×16 Path 自 1.28.0 幽灵入口迁移复用，
-       ToolTip/AutomationName 沿用幽灵样式既有值。可见性=幽灵入口七条件原样迁移
-       （无备注 ∧ 正文截断 ∧ 卡片悬停 ∧ 无正文编辑 ∧ 无备注编辑 ∧ 文字卡 ∧ 非搜索态；
-       ElementName=CardPreviewText 与条目属性绑定同模板 namescope 原样可用）。
+       ToolTip/AutomationName 沿用幽灵样式既有值。可见性=幽灵入口七条件的
+       「正文截断 ∨ 偏好开启」豁免（2026-10-22 修订，Issue #211）：MultiDataTrigger
+       是纯 AND，豁免=两条同 Setter 组的 MultiDataTrigger 并集（WPF 原生 OR）——
+       触发器 1 为原七条件逐字原样（默认行为路径）；触发器 2 去掉 IsTruncated、
+       补窗口祖先 DataContext.ShortCardNotesEnabled=True（照 IsSearchActive 先例，
+       偏好经 ApplyPreferences 喂值）。共同六条件：无备注 ∧ 卡片悬停 ∧ 无正文
+       编辑 ∧ 无备注编辑 ∧ 文字卡 ∧ 非搜索态（ElementName=CardPreviewText 与条目
+       属性绑定同模板 namescope 原样可用）。
        隐藏必须是格子固定预留、可见性塌缩语义：基态 Visibility=Collapsed + 网格
        绝对行列——不可见时 (1,1) 格子留空、其余按钮几何逐像素不动（禁止纯 Opacity
        隐藏：opacity 不释放命中）；FadeAnimation.ManageVisibility 承载激活即
@@ -1063,6 +1068,7 @@
             Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
     <Setter Property="views:FadeAnimation.ManageVisibility" Value="True" />
     <Style.Triggers>
+      <!-- 触发器 1：默认路径（正文截断门槛，1.28.0 起原七条件逐字原样）。 -->
       <MultiDataTrigger>
         <MultiDataTrigger.Conditions>
           <Condition Binding="{Binding Note, Converter={StaticResource NonEmptyTextConverter}}" Value="False" />
@@ -1072,6 +1078,22 @@
           <Condition Binding="{Binding IsEditingNote}" Value="False" />
           <Condition Binding="{Binding Kind}" Value="{x:Static models:BoardItemKind.Text}" />
           <Condition Binding="{Binding DataContext.IsSearchActive, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False" />
+        </MultiDataTrigger.Conditions>
+        <Setter Property="views:FadeAnimation.IsActive" Value="True" />
+        <Setter Property="IsHitTestVisible" Value="True" />
+      </MultiDataTrigger>
+      <!-- 触发器 2：短卡备注开关豁免截断（2026-10-22，Issue #211）——六条件
+           （去 IsTruncated）＋ 偏好开启，Setter 组与触发器 1 逐字相同；
+           两条触发器同 Setter 组并集 = OR，接力期间属性值连续无闪烁。 -->
+      <MultiDataTrigger>
+        <MultiDataTrigger.Conditions>
+          <Condition Binding="{Binding Note, Converter={StaticResource NonEmptyTextConverter}}" Value="False" />
+          <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True" />
+          <Condition Binding="{Binding IsEditing}" Value="False" />
+          <Condition Binding="{Binding IsEditingNote}" Value="False" />
+          <Condition Binding="{Binding Kind}" Value="{x:Static models:BoardItemKind.Text}" />
+          <Condition Binding="{Binding DataContext.IsSearchActive, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False" />
+          <Condition Binding="{Binding DataContext.ShortCardNotesEnabled, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
         </MultiDataTrigger.Conditions>
         <Setter Property="views:FadeAnimation.IsActive" Value="True" />
         <Setter Property="IsHitTestVisible" Value="True" />

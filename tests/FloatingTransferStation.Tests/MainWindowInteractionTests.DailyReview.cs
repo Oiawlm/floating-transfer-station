@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -189,7 +190,7 @@ public sealed partial class MainWindowInteractionTests
             // 批跑中前置真实输入测试的残留位置可能落在同位停靠的窗口矩形内，
             // 会把「失焦→重估恢复收起」的前提偷换成「指针在内」。
             var savedCursor = SaveCursorPosition();
-            ParkCursorOutsideWorkAreaRight();
+            ParkCursorOutsideWorkAreaRight(window);
             try
             {
                 // 抑制期间指针已离开面板；失焦后不会有 MouseLeave 补发，必须靠重估恢复收起。
@@ -224,14 +225,38 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
-    /// <summary>把真实光标停到工作区左下角外缘（远离右缘停靠的面板矩形）。</summary>
-    private static void ParkCursorOutsideWorkAreaRight()
+    /// <summary>把真实光标停到工作区左下角外缘（远离右缘停靠的面板矩形）。
+    /// 用 SendInput 真实绝对移动（契约 #13 口径）而非静默 SetCursorPos：静默移动
+    /// 不产生输入消息，WPF 的 IsMouseOver 会滞留为此前状态——满载批跑中前置
+    /// 真实输入测试把光标留在同位面板矩形内时，编辑结束的表面重估会走「指针
+    /// 在内维持」分支、收起计时器不启动（本族两用例批跑偶发红的共因）；真实
+    /// 移动产生真实输入消息，TrackMouseEvent 的离开通知得以冲刷。停靠后泵
+    /// 分发让离开通知在本窗口落地，IsMouseOver 恢复确定性。</summary>
+    private static void ParkCursorOutsideWorkAreaRight(MainWindow window)
     {
         var workArea = SystemParameters.WorkArea;
+        var x = (int)workArea.Left + 4;
+        var y = (int)workArea.Bottom - 4;
+        var inputs = new INPUT[1];
+        inputs[0].Type = InputMouse;
+        inputs[0].Mi.DwFlags = MouseEventfMove | MouseEventfAbsolute;
+        inputs[0].Mi.Dx = x * 65535 / Math.Max(1, GetSystemMetrics(0) - 1);
+        inputs[0].Mi.Dy = y * 65535 / Math.Max(1, GetSystemMetrics(1) - 1);
+        Assert.AreEqual(
+            1u,
+            SendInput(1, inputs, Marshal.SizeOf<INPUT>()),
+            "真实光标移动注入必须成功。");
+        PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
         Assert.IsTrue(
-            SetCursorPos((int)workArea.Left + 4, (int)workArea.Bottom - 4),
-            "真实光标必须可停靠到面板矩形之外。");
+            GetCursorPos(out var parked) && Math.Abs(parked.X - x) <= 2 && Math.Abs(parked.Y - y) <= 2,
+            $"真实光标必须停靠到面板矩形之外（期望 ({x},{y})，实际 ({parked.X},{parked.Y})）。");
     }
+
+    private const uint MouseEventfMove = 0x0001;
+    private const uint MouseEventfAbsolute = 0x8000;
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
 
     [STATestMethod]
     public void ReviewWithoutEditorFocus_PointerLeaveStillCollapses()
@@ -386,7 +411,7 @@ public sealed partial class MainWindowInteractionTests
             // 与 EditorFocusLossRestoresCollapseWhenPointerOutside 同因：真实光标
             // 显式停靠面板矩形外，防批跑残留把「指针在外」前提偷换。
             var savedCursor = SaveCursorPosition();
-            ParkCursorOutsideWorkAreaRight();
+            ParkCursorOutsideWorkAreaRight(window);
             try
             {
                 // 抑制期间指针已离开面板。

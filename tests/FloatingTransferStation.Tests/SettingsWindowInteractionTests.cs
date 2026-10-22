@@ -977,6 +977,52 @@ public sealed class SettingsWindowInteractionTests
     }
 
     [STATestMethod]
+    public void ShortCardNotesToggle_AppliesImmediatelyPersistsAndSurvivesReopen()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var toggle = settings.FindName("ShortCardNotesToggle") as CheckBox;
+            Assert.IsNotNull(toggle);
+            Assert.IsFalse(toggle!.IsChecked!.Value, "短卡备注开关默认关闭。");
+
+            toggle.IsChecked = true;
+            CompleteLayout(window);
+
+            Assert.IsTrue(window.CurrentPreferences.ShortCardNotesEnabled, "改动必须立即生效。");
+            Assert.IsTrue(preferencesStore.LastSaved!.ShortCardNotesEnabled, "改动必须立即落偏好文件。");
+            Assert.IsTrue(
+                ((MainWindowViewModel)window.DataContext).ShortCardNotesEnabled,
+                "开关必须经 ApplyPreferences 喂值到窗口 VM（卡片触发器的消费源）。");
+
+            // 重开设置窗：开关状态必须来自已保存偏好而非控件残留。
+            CloseWindow(settings);
+            var reopened = OpenSettings(window);
+            var reopenedToggle = reopened.FindName("ShortCardNotesToggle") as CheckBox;
+            Assert.IsNotNull(reopenedToggle);
+            Assert.IsTrue(reopenedToggle!.IsChecked!.Value, "重开设置窗必须反映已保存的新值。");
+
+            reopenedToggle.IsChecked = false;
+            CompleteLayout(window);
+            Assert.IsFalse(window.CurrentPreferences.ShortCardNotesEnabled);
+            Assert.IsFalse(
+                ((MainWindowViewModel)window.DataContext).ShortCardNotesEnabled,
+                "关闭必须同样即时喂值回 VM。");
+            CloseWindow(reopened);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void TrashBehaviorComboBoxes_ApplyImmediatelyPersistAndUpdateButtonLabel()
     {
         using var directory = new TestDirectory();

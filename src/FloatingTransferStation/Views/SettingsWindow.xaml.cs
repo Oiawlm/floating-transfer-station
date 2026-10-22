@@ -60,6 +60,7 @@ public partial class SettingsWindow : Window
         AutoUpdateCheckToggle.IsChecked = host.CurrentPreferences.AutoUpdateCheckEnabled;
         RightClickCopyToggle.IsChecked = host.CurrentPreferences.RightClickCardCopyEnabled;
         CtrlCCopyToggle.IsChecked = host.CurrentPreferences.CopySelectionWithCtrlCEnabled;
+        ShortCardNotesToggle.IsChecked = host.CurrentPreferences.ShortCardNotesEnabled;
         AutoCleanupToggle.IsChecked = host.CurrentPreferences.AutoCleanupEnabled;
         // 档位显示文案由唯一映射派生（全仓小时数字面量只允许出现在映射与测试期望），
         // 枚举序≠显示序（零值是默认档 24h），选中项一律按 Tag 匹配、不依赖下标；
@@ -651,6 +652,25 @@ public partial class SettingsWindow : Window
         _host.ApplyPreferences(_host.CurrentPreferences with
         {
             CopySelectionWithCtrlCEnabled = enabled
+        });
+    }
+
+    private void ShortCardNotesToggle_Checked(object sender, RoutedEventArgs e) =>
+        ApplyShortCardNotesPreference(enabled: true);
+
+    private void ShortCardNotesToggle_Unchecked(object sender, RoutedEventArgs e) =>
+        ApplyShortCardNotesPreference(enabled: false);
+
+    private void ApplyShortCardNotesPreference(bool enabled)
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with
+        {
+            ShortCardNotesEnabled = enabled
         });
     }
 

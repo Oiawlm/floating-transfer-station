@@ -21,6 +21,9 @@ namespace FloatingTransferStation.Tests;
 /// 编辑器行0 备注行原位同格盖写（图标可见性统一规则、结构化对齐、有界长高
 /// 回落）与进入编辑光标定位到点击处（无点位回退文末）。指针路径用 Win32
 /// 消息直驱（契约 #13 口径）；持久化用 LocalStore 真实文件往返。
+/// 2026-10-22 起（Issue #211）：添加门槛=「正文截断 ∨ 偏好开启」——开关开矩阵
+/// 锁定短卡入口出现/真实点击可编辑/提交后备注行常显/AI 钮仍受截断门槛（#29）/
+/// 图片卡仍无/搜索态仍隐藏；开关关行为由既有门槛矩阵原样锁定（零回归）。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -195,6 +198,116 @@ public sealed partial class MainWindowInteractionTests
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
                 Assert.IsFalse(FadeAnimation.GetIsActive(stripOnLong), "备注编辑中必须隐藏添加备注按钮。");
                 Assert.AreEqual(Visibility.Collapsed, stripOnLong.Visibility);
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardNote_StripEntry_PreferenceOnOpensShortCardEntryAiStaysGated()
+    {
+        // 开关开（Issue #211，#22 2026-10-22 修订）：短文字卡悬停出现添加入口，
+        // 真实输入点击可进入编辑、提交后备注行常显；图片卡仍无入口、搜索态仍隐藏；
+        // AI 整理钮不随开关豁免（截断门槛独立，#29）——短卡悬停 AI 钮仍塌缩。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var shortItem = board.AddText("短卡字", BoardCategory.Inbox);
+        var imageItem = AddImageCard(directory, board, "pref-short-entry.png");
+        var window = CreateWindow(directory, board);
+        window.ApplyPreferences(AppPreferences.Default with { ShortCardNotesEnabled = true });
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            Assert.IsTrue(
+                ((MainWindowViewModel)window.DataContext).ShortCardNotesEnabled,
+                "前置条件：偏好已喂值到窗口 VM。");
+            var shortContainer = ContainerOf(window, shortItem);
+            var imageContainer = ContainerOf(window, imageItem);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var stripOnShort = CardNoteStripButtonOf(shortContainer);
+            var stripOnImage = CardNoteStripButtonOf(imageContainer);
+            var aiOnShort = CardAiButtonOf(shortContainer);
+            Assert.IsFalse(FadeAnimation.GetIsActive(stripOnShort), "未悬停不得出现入口（悬停揭示不变）。");
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                HoverRealAt(window, shortContainer, new Point(24, shortContainer.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                Assert.IsTrue(
+                    FadeAnimation.GetIsActive(stripOnShort),
+                    "偏好开启后短文字卡悬停必须出现添加备注入口。");
+                Assert.IsTrue(stripOnShort.IsHitTestVisible);
+                Assert.AreEqual(Visibility.Visible, stripOnShort.Visibility);
+                Assert.IsFalse(
+                    FadeAnimation.GetIsActive(aiOnShort),
+                    "AI 整理钮的截断门槛不随短卡备注开关豁免（#29）。");
+                Assert.AreEqual(Visibility.Collapsed, aiOnShort.Visibility);
+                SaveVisualEvidence(
+                    (Border)window.FindName("WindowShell"),
+                    "note-short-card-pref-entry.png",
+                    "FTS_NOTE_EVIDENCE_DIR");
+
+                var clickPoint = stripOnShort.TranslatePoint(
+                    new Point(stripOnShort.ActualWidth / 2, stripOnShort.ActualHeight / 2),
+                    shortContainer);
+                ClickRealAt(window, shortContainer, clickPoint, hoverSettleMilliseconds: 120);
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
+            CompleteLayout(window);
+            Assert.IsTrue(shortItem.IsEditingNote, "真实输入点击短卡添加入口必须进入备注编辑。");
+            var editor = CardNoteEditorOf(shortContainer);
+            Assert.IsTrue(editor.IsKeyboardFocused, "备注编辑器必须持有键盘焦点。");
+            editor.Text = "短卡备注";
+            RaiseCardEditorKey(window, editor, Key.Enter);
+            PumpUntil(window, () => shortItem.Note == "短卡备注", "Enter 必须提交短卡备注。");
+            Assert.IsFalse(shortItem.IsEditingNote, "提交后必须退出编辑态。");
+            CompleteLayout(window);
+            Assert.IsTrue(
+                NoteRowOf(shortContainer).IsVisible,
+                "写入的备注常显（编辑入口无门槛语义不随开关变化）。");
+
+            // 图片卡恒无备注入口（开关不改变「备注仅文字卡」边界）。
+            HoverRealAt(window, imageContainer, new Point(24, imageContainer.ActualHeight * 0.8));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            Assert.IsFalse(FadeAnimation.GetIsActive(stripOnImage), "图片卡仍不得出现备注入口。");
+            Assert.AreEqual(Visibility.Collapsed, stripOnImage.Visibility);
+
+            // 搜索态仍隐藏（短卡入口同受非搜索态条件约束）。
+            window.EnterSearchMode();
+            ((TextBox)window.FindName("SearchInput")).Text = "字";
+            CompleteLayout(window);
+            Assert.IsTrue(((MainWindowViewModel)window.DataContext).IsSearchActive, "前置条件：搜索态。");
+            shortContainer = ContainerOf(window, shortItem);
+            window.Topmost = true;
+            CompleteLayout(window);
+            stripOnShort = CardNoteStripButtonOf(shortContainer);
+            savedCursor = SaveCursorPosition();
+
+            try
+            {
+                HoverRealAt(window, shortContainer, new Point(24, shortContainer.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+                Assert.IsFalse(
+                    FadeAnimation.GetIsActive(stripOnShort),
+                    "搜索态必须隐藏短卡添加入口。");
+                Assert.AreEqual(Visibility.Collapsed, stripOnShort.Visibility);
             }
             finally
             {
