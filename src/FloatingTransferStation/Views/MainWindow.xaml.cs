@@ -165,6 +165,7 @@ public partial class MainWindow : Window
         _settings = settings.Normalize(work.Width, work.Height);
         _viewModel = new MainWindowViewModel(board, _settings, defaultCaptureCategory);
         DataContext = _viewModel;
+        _viewModel.ShortCardNotesEnabled = _preferences.ShortCardNotesEnabled;
         _expandIntentTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(60) };
         _expandIntentTimer.Tick += ExpandIntentTimer_Tick;
         _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
