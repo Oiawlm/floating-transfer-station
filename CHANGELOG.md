@@ -4,8 +4,10 @@
 
 ## 未发布
 
-- 文档：`docs/design.md` §四圆角表对齐 `DesignTokens.cs` 现值——补记 1.50.0「控件 4／表面 8」两档阶梯与识别元素例外（Issue #186 D9、契约 #34），移除零引用废弃 token 旧行（`HeaderSurfaceCornerRadius`/`ScrollThumbCornerRadius`，样式字面量另行注记）；§五结构性尺寸「面板宽 280–640」对齐 `WindowSettings.MinPanelWidth=310` 实值；`docs/images/README.md` 种子分类名随契约 #30 把「文本」更新为「启动」。
+## 1.55.0
+
 - 新增「允许短卡片添加备注」开关（设计契约 #22/#24/#29 修订，记录 Issue #211）：设置 → 面板新增「卡片备注」节——默认保持现状（备注添加入口只对正文被截断的长文字卡出现），开启后未截断的短文字卡悬停同样出现「添加备注」按钮，点击即就地编辑（与长卡同一条编辑管线：120 字上限、`Enter` 保存、`Esc` 取消、空白提交＝删除）。开关默认关闭，老用户升级零感知，旧 preferences.json 缺字段免迁移回落关闭；已写入备注的常显与随时可改（编辑入口无门槛）语义不受影响。AI 整理按钮的截断门槛不随本开关豁免（AI 整理语义是长文整理，仍只对截断卡出现）。实现为「偏好管线（ApplyPreferences 即时原子持久化）＋卡片样式两条同 Setter 组 MultiDataTrigger 并集（WPF 原生 OR，无 converter、无第二套显隐机制）」，既有七条件门槛路径逐字原样零变化。
+- 文档：`docs/design.md` §四圆角表对齐 `DesignTokens.cs` 现值——补记 1.50.0「控件 4／表面 8」两档阶梯与识别元素例外（Issue #186 D9、契约 #34），移除零引用废弃 token 旧行（`HeaderSurfaceCornerRadius`/`ScrollThumbCornerRadius`，样式字面量另行注记）；§五结构性尺寸「面板宽 280–640」对齐 `WindowSettings.MinPanelWidth=310` 实值；`docs/images/README.md` 种子分类名随契约 #30 把「文本」更新为「启动」。
 
 ## 1.54.0
 
