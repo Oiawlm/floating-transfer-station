@@ -315,6 +315,49 @@ public sealed class AppPreferencesTests
     }
 
     [TestMethod]
+    public void Default_DisablesShortCardNotes()
+    {
+        Assert.IsFalse(AppPreferences.Default.ShortCardNotesEnabled);
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesShortCardNotesPreference()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var preferences = AppPreferences.Default with { ShortCardNotesEnabled = true };
+
+        var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+        Assert.IsTrue(
+            serialized.Contains("\"shortCardNotesEnabled\":true", StringComparison.Ordinal),
+            "JSON 键必须是 shortCardNotesEnabled（camelCase）。");
+        var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+        Assert.AreEqual(preferences, restored);
+        Assert.IsTrue(restored!.ShortCardNotesEnabled);
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutShortCardNotesField_FallsBackToDisabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","rightClickCardCopyEnabled":true}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsFalse(restored.ShortCardNotesEnabled, "旧 preferences.json 缺字段时必须回落到默认关闭（升级零感知）。");
+        Assert.IsTrue(restored.RightClickCardCopyEnabled, "测试数据里的旧字段语义不受新字段影响。");
+    }
+
+    [TestMethod]
     public void Default_UsesSolidPinnedDivider()
     {
         Assert.AreEqual(PinnedDividerStyle.Solid, AppPreferences.Default.PinnedDivider);
