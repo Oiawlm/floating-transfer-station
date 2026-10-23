@@ -465,6 +465,28 @@
                              Text="默认只对正文被截断的长卡出现备注入口；开启后所有文字卡都可以添加备注（AI 整理按钮仍只对长文出现）。" />
                 </StackPanel>
               </Border>
+              <Border Style="{StaticResource SettingsCardStyle}">
+                <StackPanel>
+                  <TextBlock Text="启动·列数" Style="{StaticResource SectionTitleStyle}" />
+                  <Grid Background="Transparent">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="启动面瓦片列数"
+                               Style="{StaticResource RowCaptionStyle}"
+                               Margin="0,0,8,0" />
+                    <ComboBox x:Name="LauncherColumnStrategyComboBox"
+                              Grid.Column="1"
+                              Style="{StaticResource ThemedComboBoxStyle}"
+                              AutomationProperties.Name="启动器列数策略"
+                              SelectionChanged="LauncherColumnStrategyComboBox_SelectionChanged" />
+                  </Grid>
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="自适应＝列数随面板宽度在 3–6 列间自动增减（默认）；固定列数不随宽度变化，瓦片宽按剩余空间摊分，窄面板配大列数会压缩瓦片。改动立即生效并自动保存。" />
+                </StackPanel>
+              </Border>
               <Border Style="{StaticResource SettingsCardStyle}" Margin="0">
                 <StackPanel>
                   <TextBlock Text="启动·自动发现" Style="{StaticResource SectionTitleStyle}" />

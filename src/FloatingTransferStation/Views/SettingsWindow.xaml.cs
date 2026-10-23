@@ -104,6 +104,19 @@ public partial class SettingsWindow : Window
         };
         TrashRightClickComboBox.SelectedItem = ((ComboBoxItem[])TrashRightClickComboBox.ItemsSource)
             .Single(item => Equals(item.Tag, host.CurrentPreferences.TrashNoSelectionRightClick));
+        // 启动器列数策略（契约 #30 修订）：Tag=策略枚举按值匹配回显，不依赖下标；
+        // 档位清单与 LauncherColumnStrategy 成员同域（自适应＋固定 3–6）。
+        LauncherColumnStrategyComboBox.ItemsSource = new[]
+        {
+            new ComboBoxItem { Content = "自适应", Tag = LauncherColumnStrategy.Adaptive },
+            new ComboBoxItem { Content = "固定 3 列", Tag = LauncherColumnStrategy.Fixed3 },
+            new ComboBoxItem { Content = "固定 4 列", Tag = LauncherColumnStrategy.Fixed4 },
+            new ComboBoxItem { Content = "固定 5 列", Tag = LauncherColumnStrategy.Fixed5 },
+            new ComboBoxItem { Content = "固定 6 列", Tag = LauncherColumnStrategy.Fixed6 }
+        };
+        LauncherColumnStrategyComboBox.SelectedItem =
+            ((ComboBoxItem[])LauncherColumnStrategyComboBox.ItemsSource)
+                .Single(item => Equals(item.Tag, host.CurrentPreferences.LauncherColumnStrategy));
 
         // AI 设置（1.27.0）：仅配置 API Key；模型恒为 DeepSeekClient.DefaultModel
         // （deepseek-flash，契约 #28），无选择 UI。
@@ -898,6 +911,20 @@ public partial class SettingsWindow : Window
         }
 
         _host.ApplyPreferences(_host.CurrentPreferences with { TrashNoSelectionRightClick = action });
+    }
+
+    // ---- 启动器列数策略（契约 #30 修订）：经 ApplyPreferences 唯一管线即时生效——
+    // 主窗在管线内把策略推给瓦片面板并原子持久化。----
+
+    private void LauncherColumnStrategyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isSynchronizingControls ||
+            LauncherColumnStrategyComboBox.SelectedItem is not ComboBoxItem { Tag: LauncherColumnStrategy strategy })
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with { LauncherColumnStrategy = strategy });
     }
 
     // ---- AI 设置（1.27.0，DeepSeek 接入地基）----

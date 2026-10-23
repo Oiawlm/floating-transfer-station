@@ -63,7 +63,8 @@ public sealed partial class MainWindowInteractionTests
         IPreferencesStore? preferencesStore = null,
         ILauncherStore? launcherStore = null,
         AppLauncher? appLauncher = null,
-        string? dataDirectory = null)
+        string? dataDirectory = null,
+        AppPreferences? preferences = null)
     {
         defaultCaptureCategory ??= new DefaultCaptureCategoryState();
         var operationGate = new BoardOperationGate();
@@ -93,6 +94,7 @@ public sealed partial class MainWindowInteractionTests
                 operationGate),
             defaultCaptureCategory,
             updateService: updateService,
+            preferences: preferences,
             preferencesStore: preferencesStore,
             launcherStore: launcherStore,
             appLauncher: appLauncher,
