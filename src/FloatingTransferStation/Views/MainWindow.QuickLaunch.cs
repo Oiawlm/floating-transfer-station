@@ -45,7 +45,10 @@ public partial class MainWindow
     private static readonly TimeSpan ReexpandSuppressionPollInterval = TimeSpan.FromMilliseconds(100);
     private DispatcherTimer _reexpandSuppressionPollTimer = null!;
 
-    private void InitializeQuickLaunch(ILauncherStore? launcherStore, AppLauncher? appLauncher)
+    private void InitializeQuickLaunch(
+        ILauncherStore? launcherStore,
+        AppLauncher? appLauncher,
+        ILauncherDiscoveryStore? launcherDiscoveryStore)
     {
         _appLauncher = appLauncher ?? new AppLauncher(packagedActivator: new ShellPackagedAppActivator().Activate);
         _launchCollapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(DesignTokens.LaunchCollapseDelayMs) };
@@ -64,10 +67,12 @@ public partial class MainWindow
         AddHandler(
             System.Windows.Input.TextCompositionManager.PreviewTextInputEvent,
             new TextCompositionEventHandler((_, args) => _launcherRenameComposing = false));
-        TrackPendingOperation(LoadLaunchersAsync(launcherStore));
+        TrackPendingOperation(LoadLaunchersAsync(launcherStore, launcherDiscoveryStore));
     }
 
-    private async Task LoadLaunchersAsync(ILauncherStore? launcherStore)
+    private async Task LoadLaunchersAsync(
+        ILauncherStore? launcherStore,
+        ILauncherDiscoveryStore? launcherDiscoveryStore)
     {
         var store = launcherStore ?? new VolatileLauncherStore();
         var catalog = await LauncherCatalog.LoadAsync(
@@ -94,6 +99,11 @@ public partial class MainWindow
             // 启动重试轮：无图标 Url 条目静默重抓一轮（每条目每进程一次，2/s 节流）。
             _launcherIcons.RunStartupRetryRoundOnce();
         });
+
+        // 发现面初始化（#45）：依赖目录与图标 STA 线程就绪；未注入存储时用易失
+        // 回退（窗口直连构造/测试），生产行为不变。
+        await InitializeLauncherDiscoveryAsync(
+            launcherDiscoveryStore ?? new VolatileLauncherDiscoveryStore());
     }
 
     private string LauncherIconsDirectory() =>
@@ -285,7 +295,8 @@ public partial class MainWindow
             "添加已安装应用",
             "搜索应用",
             "未枚举到已安装应用",
-            rows) { Owner = this };
+            rows)
+        { Owner = this };
         _panelState.BeginOverlayInteraction(PanelOverlayReason.ModalDialog);
         try
         {

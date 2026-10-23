@@ -217,6 +217,7 @@ public partial class MainWindow : Window
         _autoCleanupCheckTimer.Stop();
         _updateCheckTimer.Stop();
         DisposeQuickLaunch();
+        DisposeLauncherDiscovery();
         if (_allowClose)
         {
             StopClipboardListening();

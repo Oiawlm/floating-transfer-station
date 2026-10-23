@@ -183,7 +183,8 @@ public sealed partial class MainWindowInteractionTests
             picker.RaiseEvent(NewKeyEventArgs(picker, Key.Escape));
             CompleteLayout(picker);
             Assert.IsFalse(picker.IsLoaded, "Esc 关闭选择器。");
-            Assert.AreEqual(0, picker.Selection.Count, "Esc=取消（空回传）。");        }
+            Assert.AreEqual(0, picker.Selection.Count, "Esc=取消（空回传）。");
+        }
         finally
         {
             if (picker.IsLoaded)

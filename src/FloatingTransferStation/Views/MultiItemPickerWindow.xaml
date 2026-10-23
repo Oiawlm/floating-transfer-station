@@ -149,8 +149,17 @@
                  Foreground="{DynamicResource SecondaryTextBrush}"
                  Visibility="Collapsed" />
 
-      <!-- 底部动作行（D8：按钮右对齐、间距 8、高 32；主按钮「添加 N 项」）。 -->
+      <!-- 底部动作行（D8：按钮右对齐、间距 8、高 32；主按钮「添加 N 项」；可选
+           批量动作（如发现清单「全部忽略」）左对齐，仅传入时渲染）。 -->
       <Grid Grid.Row="3" Margin="0,12,0,0">
+        <Button x:Name="PickerBulkActionButton"
+                HorizontalAlignment="Left"
+                FontSize="12"
+                Height="32"
+                Padding="14,0"
+                Style="{StaticResource ThemedActionButtonStyle}"
+                AutomationProperties.Name="批量动作"
+                Click="BulkActionButton_Click" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
           <Button Content="取消"
                   FontSize="12"

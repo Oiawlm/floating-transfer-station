@@ -158,7 +158,8 @@ internal partial class LauncherEditTargetWindow : Window
                     app.DisplayName,
                     subtitle: null,
                     string.Equals(app.Aumid, currentAumid, StringComparison.Ordinal)))
-                .ToList()) { Owner = this };
+                .ToList())
+        { Owner = this };
         if (_showPickerDialog(picker) == true &&
             picker.Selection.OfType<InstalledApp>().FirstOrDefault() is { } chosen)
         {

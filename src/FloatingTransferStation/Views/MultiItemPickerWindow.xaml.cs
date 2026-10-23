@@ -47,6 +47,11 @@ internal partial class MultiItemPickerWindow : Window
     /// <summary>确认结果（空 = 取消；勾选行的 Payload 保留原对象身份）。ShowDialog 后读取。</summary>
     public IReadOnlyList<object> Selection { get; private set; } = [];
 
+    /// <summary>批量动作结果（#45 发现清单「全部忽略」）：经批量钮关闭时为 true，
+    /// 此时 <see cref="Selection"/> 为空——批量语义由调用方解释（对整份源生效，
+    /// 不止当前过滤视图）。</summary>
+    public bool BulkActionChosen { get; private set; }
+
     /// <summary>模态标记（DialogResult 只在 ShowDialog 路径合法；测试以 Show 驱动）。</summary>
     public new bool? ShowDialog()
     {
@@ -59,7 +64,8 @@ internal partial class MultiItemPickerWindow : Window
         string title,
         string searchPlaceholder,
         string emptySourceHint,
-        IReadOnlyList<PickerRow> rows)
+        IReadOnlyList<PickerRow> rows,
+        string? bulkActionText = null)
     {
         InitializeComponent();
         _emptySourceHint = emptySourceHint;
@@ -70,6 +76,16 @@ internal partial class MultiItemPickerWindow : Window
         AutomationProperties.SetName(CloseButton, $"关闭{title}");
         AutomationProperties.SetName(PickerSearchBox, searchPlaceholder);
         AutomationProperties.SetName(PickerConfirmButton, $"确认{title}");
+        if (bulkActionText is null)
+        {
+            PickerBulkActionButton.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            PickerBulkActionButton.Content = bulkActionText;
+            AutomationProperties.SetName(PickerBulkActionButton, bulkActionText);
+        }
+
         DesignThemeManager.Apply(this, theme);
         // D8：DWM 圆角＋系统阴影唯一来源（失败由 DialogShellFallback 回退直角矩形）。
         SourceInitialized += (_, _) =>
@@ -159,9 +175,18 @@ internal partial class MultiItemPickerWindow : Window
         }
     }
 
-    private void ConfirmButton_Click(object sender, RoutedEventArgs e)
+    private void ConfirmButton_Click(object sender, RoutedEventArgs e) =>
+        CloseWithResult(_rows.Where(row => row.IsChecked).Select(row => row.Payload).ToList());
+
+    private void BulkActionButton_Click(object sender, RoutedEventArgs e)
     {
-        Selection = _rows.Where(row => row.IsChecked).Select(row => row.Payload).ToList();
+        BulkActionChosen = true;
+        CloseWithResult([]);
+    }
+
+    private void CloseWithResult(IReadOnlyList<object> selection)
+    {
+        Selection = selection;
         if (_shownAsDialog)
         {
             // DialogResult 赋值本身即关闭对话框窗口。

@@ -17,7 +17,8 @@ namespace FloatingTransferStation.Tests;
 /// 设置窗口双栏外壳（契约 #24）：左导航 5 组的冻结顺序、SelectionItem 语义、
 /// ↑/↓/Home/End 键盘切换、Tab 可达性与双主题渲染。页锚定控件按冻结表：
 /// 外观=主题/动效/置顶分隔（外观组新增节走 Issue 修订），面板=CategoryOrderHost
-/// ＋ShortCardNotesToggle（卡片备注节，2026-10-22 修订 Issue #211）、
+/// ＋ShortCardNotesToggle（卡片备注节，2026-10-22 修订 Issue #211）＋
+/// LauncherDiscoveryToggle（启动·自动发现节，#45）、
 /// 通用=StartupToggle、数据与维护=AutoCleanupToggle、AI=DeepSeekKeyBox。
 /// </summary>
 [TestClass]
@@ -26,7 +27,7 @@ public sealed class SettingsWindowNavPaneTests
     private static readonly (string AutomationName, string[] AnchorNames)[] FrozenPages =
     [
         ("外观", ["ThemeComboBox", "AnimationsToggle", "PinnedDividerComboBox"]),
-        ("面板", ["CategoryOrderHost", "ShortCardNotesToggle"]),
+        ("面板", ["CategoryOrderHost", "ShortCardNotesToggle", "LauncherDiscoveryToggle"]),
         ("通用", ["StartupToggle"]),
         ("数据与维护", ["AutoCleanupToggle"]),
         ("AI", ["DeepSeekKeyBox"])
