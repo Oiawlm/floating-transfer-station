@@ -75,8 +75,11 @@ internal static class LauncherDiscoveryScanner
         }
     }
 
-    /// <summary>递归收集一个根下的候选：.lnk 全收（显示名=描述/文件名，经
-    /// ShellLinkHelper 解析——STA 承载）；自定义文件夹追加 .exe（黑名单过滤）。</summary>
+    /// <summary>递归收集一个根下的候选：手工逐层下钻（目录级独立容错——开始菜单
+    /// 根下的遗留 junction「程序」对枚举拒绝访问，AllDirectories 一次性枚举会在
+    /// 第一个坏分支中断丢掉全部兄弟目录；逐目录递归只丢坏分支本身）。
+    /// .lnk 全收（显示名=描述/文件名，经 ShellLinkHelper 解析——STA 承载）；
+    /// 自定义文件夹追加 .exe（黑名单过滤）。</summary>
     private static void CollectShortcutFiles(
         string root,
         bool customFolder,
@@ -89,25 +92,26 @@ internal static class LauncherDiscoveryScanner
             return;
         }
 
-        CollectByExtension(root, "*.lnk", includeAll: true, nowUtc, seenTargets, candidates);
-        if (customFolder)
-        {
-            CollectByExtension(root, "*.exe", includeAll: false, nowUtc, seenTargets, candidates);
-        }
+        CollectDirectory(new DirectoryInfo(root), customFolder, nowUtc, seenTargets, candidates);
     }
 
-    private static void CollectByExtension(
-        string root,
-        string pattern,
-        bool includeAll,
+    private static void CollectDirectory(
+        DirectoryInfo directory,
+        bool customFolder,
         DateTimeOffset nowUtc,
         HashSet<string> seenTargets,
         List<LauncherDiscoveryEntry> candidates)
     {
-        IEnumerable<string> files;
+        CollectByExtension(directory, "*.lnk", includeAll: true, nowUtc, seenTargets, candidates);
+        if (customFolder)
+        {
+            CollectByExtension(directory, "*.exe", includeAll: false, nowUtc, seenTargets, candidates);
+        }
+
+        DirectoryInfo[] children;
         try
         {
-            files = Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories);
+            children = directory.GetDirectories();
         }
         catch (Exception exception) when (
             exception is IOException or UnauthorizedAccessException or NotSupportedException)
@@ -115,33 +119,55 @@ internal static class LauncherDiscoveryScanner
             return;
         }
 
-        // 枚举是延迟执行的：子目录不可访问/重解析点异常在 MoveNext 上抛——逐批
-        // 容错（已收集部分保留，剩余跳过；30 分钟兜底重扫再收敛）。
-        using var enumerator = files.GetEnumerator();
-        while (true)
+        foreach (var child in children)
         {
-            string file;
             try
             {
-                if (!enumerator.MoveNext())
+                // 跳过重解析点（junction/symlink——开始菜单「程序」即指向 Programs
+                // 的遗留 junction，实体目录由同层的真名目录覆盖；跨卷链接不去环）。
+                if (child.Attributes.HasFlag(FileAttributes.ReparsePoint))
                 {
-                    break;
+                    continue;
                 }
-
-                file = enumerator.Current;
             }
             catch (Exception exception) when (
                 exception is IOException or UnauthorizedAccessException or NotSupportedException)
             {
-                break;
+                continue;
             }
 
-            if (!includeAll && IsAuxiliaryExecutable(file))
+            CollectDirectory(child, customFolder, nowUtc, seenTargets, candidates);
+        }
+    }
+
+    private static void CollectByExtension(
+        DirectoryInfo directory,
+        string pattern,
+        bool includeAll,
+        DateTimeOffset nowUtc,
+        HashSet<string> seenTargets,
+        List<LauncherDiscoveryEntry> candidates)
+    {
+        IEnumerable<FileInfo> files;
+        try
+        {
+            files = directory.EnumerateFiles(pattern);
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return;
+        }
+
+        foreach (var file in files)
+        {
+            var path = file.FullName;
+            if (!includeAll && IsAuxiliaryExecutable(path))
             {
                 continue;
             }
 
-            if (!seenTargets.Add(file))
+            if (!seenTargets.Add(path))
             {
                 continue;
             }
@@ -149,9 +175,9 @@ internal static class LauncherDiscoveryScanner
             // 显示名与手动导入同源（.lnk 描述优先，回退文件名去扩展，≤64 截断）。
             candidates.Add(new LauncherDiscoveryEntry(
                 LauncherKind.Application,
-                file,
+                path,
                 Arguments: null,
-                ShellLinkHelper.DefaultDisplayName(file),
+                ShellLinkHelper.DefaultDisplayName(path),
                 nowUtc));
         }
     }
