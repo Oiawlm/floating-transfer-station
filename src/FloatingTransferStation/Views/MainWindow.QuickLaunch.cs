@@ -178,7 +178,7 @@ public partial class MainWindow
     private Func<IReadOnlyList<InstalledApp>> _installedAppsSource = InstalledAppsEnumerator.Enumerate;
 
     /// <summary>选择器对话框显示（测试缝：可替换为非模态驱动并自动确认）。</summary>
-    internal Func<InstalledAppPickerWindow, bool?> _showPickerDialog = static picker => picker.ShowDialog();
+    internal Func<MultiItemPickerWindow, bool?> _showPickerDialog = static picker => picker.ShowDialog();
 
     /// <summary>网页地址对话框显示（测试缝：同选择器缝）。</summary>
     internal Func<LauncherUrlInputWindow, bool?> _showUrlDialog = static dialog => dialog.ShowDialog();
@@ -272,11 +272,25 @@ public partial class MainWindow
             .Where(item => item.Kind == LauncherKind.PackagedApp)
             .Select(item => item.TargetPath)
             .ToHashSet(StringComparer.Ordinal);
-        var picker = new InstalledAppPickerWindow(CurrentTheme, installed, existingAumids) { Owner = this };
+        // 通用选择器（#45 泛化）：已安装应用映射喂入（Payload=InstalledApp）。
+        var rows = installed
+            .Select(app => new MultiItemPickerWindow.PickerRow(
+                app,
+                app.DisplayName,
+                subtitle: null,
+                existingAumids.Contains(app.Aumid)))
+            .ToList();
+        var picker = new MultiItemPickerWindow(
+            CurrentTheme,
+            "添加已安装应用",
+            "搜索应用",
+            "未枚举到已安装应用",
+            rows) { Owner = this };
         _panelState.BeginOverlayInteraction(PanelOverlayReason.ModalDialog);
         try
         {
-            if (_showPickerDialog(picker) != true || picker.Selection is not { Count: > 0 } selection)
+            if (_showPickerDialog(picker) != true ||
+                picker.Selection.OfType<InstalledApp>().ToList() is not { Count: > 0 } selection)
             {
                 return;
             }

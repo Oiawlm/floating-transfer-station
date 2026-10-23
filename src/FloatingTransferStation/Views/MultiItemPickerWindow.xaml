@@ -1,8 +1,8 @@
-<Window x:Class="FloatingTransferStation.Views.InstalledAppPickerWindow"
+<Window x:Class="FloatingTransferStation.Views.MultiItemPickerWindow"
         x:ClassModifier="internal"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="添加已安装应用"
+        Title="选择"
         Topmost="True"
         ShowInTaskbar="False"
         WindowStyle="None"
@@ -17,11 +17,13 @@
         WindowStartupLocation="CenterOwner"
         FontFamily="Segoe UI Variable, Segoe UI"
         PreviewKeyDown="PickerWindow_PreviewKeyDown">
-  <!-- 快捷启动 #30 切片 4：已安装应用选择器（AppsFolder 枚举结果的会话内挑选面）。
-       固定尺寸不可缩放；打开时枚举、关闭即弃（结果只由确认按钮回传 AUMID 清单）。
-       壳技术（#30 修订 2026-10-18，Issue #186 D8）：不透明 DialogSurfaceBrush＋1px
-       边框＋DWM 圆角/阴影唯一来源（GlassFrameThickness=0）；主按钮「添加 N 项」
-       N=0 禁用（ConfirmButton 状态由代码承载）；搜索过滤保留勾选。 -->
+  <!-- 通用多选选择器（#45 泛化自 #30 切片 4 的已安装应用选择器）：行模型＝标题/
+       副题/已添加标记/勾选态，调用方经 Payload 携带业务对象映射喂入——已安装应用
+       与启动·自动发现清单共用同一窗口（DWM 单壳等既有品质原样保留）。固定尺寸
+       不可缩放；标题/搜索提示/空源文案由构造参数给定；确认回传勾选行清单，取消/
+       关闭/Esc 回传空。壳技术（#30 修订 Issue #186 D8）：不透明 DialogSurfaceBrush
+       ＋1px 边框＋DWM 圆角/阴影唯一来源（GlassFrameThickness=0）；主按钮
+       「添加 N 项」N=0 禁用；搜索过滤保留勾选。 -->
   <WindowChrome.WindowChrome>
     <WindowChrome CaptionHeight="0"
                   GlassFrameThickness="0"
@@ -52,7 +54,7 @@
             Margin="-24,0,-24,0"
             Background="Transparent"
             MouseLeftButtonDown="Header_MouseLeftButtonDown">
-        <TextBlock Text="添加已安装应用"
+        <TextBlock x:Name="PickerTitleText"
                    Margin="24,0,0,0"
                    FontSize="14"
                    FontWeight="SemiBold"
@@ -64,7 +66,6 @@
                 HorizontalAlignment="Right"
                 Margin="0,0,8,0"
                 ToolTip="关闭"
-                AutomationProperties.Name="关闭已安装应用选择器"
                 Click="CloseButton_Click">
           <Viewbox Width="14" Height="14">
             <Path Data="M0.7071068,0 L7,6.2928932 L13.292893,0 L14,0.7071068 L7,7.7071068 L14,13.292893 L13.292893,14 L7,7.7071068 L0.7071068,14 L0,13.292893 L6.2928932,7 L0,0.7071068 Z"
@@ -81,10 +82,8 @@
                  Height="36"
                  FontSize="13"
                  Padding="10,0"
-                 AutomationProperties.Name="搜索已安装应用"
                  TextChanged="PickerSearchBox_TextChanged" />
         <TextBlock x:Name="PickerSearchHint"
-                   Text="搜索应用"
                    FontSize="13"
                    Foreground="{DynamicResource SecondaryTextBrush}"
                    VerticalAlignment="Center"
@@ -93,15 +92,16 @@
                    IsHitTestVisible="False" />
       </Grid>
 
-      <!-- 应用列表：多选复选行；已添加条目带灰字标记（重复添加走既有去重脉冲）。 -->
+      <!-- 行列表：多选复选行（标题 + 副题 + 已添加灰字标记——重复添加由调用方
+           去重路径收敛）。 -->
       <ScrollViewer Grid.Row="2"
                     Style="{StaticResource OverlayScrollViewerStyle}"
                     VerticalScrollBarVisibility="Auto"
                     HorizontalScrollBarVisibility="Disabled">
         <ItemsControl x:Name="PickerList"
                       Focusable="False"
-                     ToggleButton.Checked="PickerList_Checked"
-                     ToggleButton.Unchecked="PickerList_Checked">
+                      ToggleButton.Checked="PickerList_Checked"
+                      ToggleButton.Unchecked="PickerList_Checked">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
               <Grid Margin="8,1">
@@ -113,15 +113,20 @@
                 <CheckBox Grid.Column="0"
                           VerticalAlignment="Center"
                           IsChecked="{Binding IsChecked, Mode=TwoWay}"
-                          AutomationProperties.Name="{Binding App.DisplayName}" />
-                <TextBlock Grid.Column="1"
-                           Margin="8,0,0,0"
-                           VerticalAlignment="Center"
-                           FontSize="13"
-                           TextTrimming="CharacterEllipsis"
-                           ToolTip="{Binding App.DisplayName}"
-                           Foreground="{DynamicResource PrimaryTextBrush}"
-                           Text="{Binding App.DisplayName}" />
+                          AutomationProperties.Name="{Binding Title}" />
+                <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
+                  <TextBlock FontSize="13"
+                             TextTrimming="CharacterEllipsis"
+                             ToolTip="{Binding Title}"
+                             Foreground="{DynamicResource PrimaryTextBrush}"
+                             Text="{Binding Title}" />
+                  <TextBlock FontSize="11"
+                             TextTrimming="CharacterEllipsis"
+                             ToolTip="{Binding Subtitle}"
+                             Foreground="{DynamicResource SecondaryTextBrush}"
+                             Text="{Binding Subtitle}"
+                             Visibility="{Binding SubtitleVisibility}" />
+                </StackPanel>
                 <TextBlock Grid.Column="2"
                            Margin="8,0,4,0"
                            VerticalAlignment="Center"
@@ -135,14 +140,13 @@
         </ItemsControl>
       </ScrollViewer>
 
-      <!-- 空态提示（无匹配 / 枚举为空共用，代码切换文案）。 -->
+      <!-- 空态提示（无匹配 / 源为空共用，代码切换文案）。 -->
       <TextBlock x:Name="PickerEmptyHint"
                  Grid.Row="2"
                  HorizontalAlignment="Center"
                  VerticalAlignment="Center"
                  FontSize="12"
                  Foreground="{DynamicResource SecondaryTextBrush}"
-                 Text="没有匹配的应用"
                  Visibility="Collapsed" />
 
       <!-- 底部动作行（D8：按钮右对齐、间距 8、高 32；主按钮「添加 N 项」）。 -->
@@ -154,7 +158,7 @@
                   Padding="14,0"
                   Margin="0,0,8,0"
                   Style="{StaticResource ThemedActionButtonStyle}"
-                  AutomationProperties.Name="取消添加已安装应用"
+                  AutomationProperties.Name="取消选择"
                   Click="CancelButton_Click" />
           <Button x:Name="PickerConfirmButton"
                   Content="添加"
@@ -162,7 +166,6 @@
                   Height="32"
                   Padding="14,0"
                   Style="{StaticResource ThemedActionButtonStyle}"
-                  AutomationProperties.Name="确认添加已安装应用"
                   Click="ConfirmButton_Click" />
         </StackPanel>
       </Grid>

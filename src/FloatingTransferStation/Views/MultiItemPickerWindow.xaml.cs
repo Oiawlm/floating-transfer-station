@@ -1,24 +1,29 @@
 using System.Collections;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using FloatingTransferStation.Launcher;
 using FloatingTransferStation.Services;
 
 namespace FloatingTransferStation.Views;
 
 /// <summary>
-/// 已安装应用选择器（快捷启动 #30 切片 4）：AppsFolder 枚举结果的会话内挑选面。
-/// 多选复选 + 搜索过滤（区域文化不区分大小写包含）；确认回传选中的 AUMID 清单，
-/// 取消/关闭/Esc 回传空。已添加条目仅展示灰字标记，重复添加由目录去重路径收敛
-/// （滚动至已有瓦片 + accent 脉冲）。
+/// 通用多选选择器（#45 泛化自 #30 切片 4 的已安装应用选择器）：行模型＝标题/
+/// 副题/已添加标记/勾选态，<see cref="PickerRow.Payload"/> 由调用方携带业务对象
+/// 映射喂入——已安装应用与启动·自动发现清单共用同一窗口（多选复选 + 搜索过滤，
+/// 区域文化不区分大小写包含；确认回传勾选的行清单，取消/关闭/Esc 回传空）。
+/// 已添加条目仅展示灰字标记，重复添加由调用方目录去重路径收敛。
 /// </summary>
-internal partial class InstalledAppPickerWindow : Window
+internal partial class MultiItemPickerWindow : Window
 {
-    /// <summary>行视图态：勾选与已添加标记（UI 线程读写）。App 为不可变记录。</summary>
-    internal sealed class PickerRow(InstalledApp app, bool alreadyAdded)
+    /// <summary>行视图态：勾选与已添加标记（UI 线程读写）。Payload 为不可变业务对象。</summary>
+    internal sealed class PickerRow(object payload, string title, string? subtitle, bool alreadyAdded)
     {
-        public InstalledApp App { get; } = app;
+        public object Payload { get; } = payload;
+
+        public string Title { get; } = title;
+
+        public string? Subtitle { get; } = subtitle;
 
         public bool AlreadyAdded { get; } = alreadyAdded;
 
@@ -26,13 +31,21 @@ internal partial class InstalledAppPickerWindow : Window
 
         public System.Windows.Visibility AlreadyAddedTextVisibility =>
             AlreadyAdded ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+
+        public System.Windows.Visibility SubtitleVisibility =>
+            string.IsNullOrWhiteSpace(Subtitle)
+                ? System.Windows.Visibility.Collapsed
+                : System.Windows.Visibility.Visible;
     }
 
+    private const string NoMatchHintText = "没有匹配的应用";
+
     private readonly List<PickerRow> _rows;
+    private readonly string _emptySourceHint;
     private bool _shownAsDialog;
 
-    /// <summary>确认结果（空 = 取消）。ShowDialog 后读取。</summary>
-    public IReadOnlyList<InstalledApp> Selection { get; private set; } = [];
+    /// <summary>确认结果（空 = 取消；勾选行的 Payload 保留原对象身份）。ShowDialog 后读取。</summary>
+    public IReadOnlyList<object> Selection { get; private set; } = [];
 
     /// <summary>模态标记（DialogResult 只在 ShowDialog 路径合法；测试以 Show 驱动）。</summary>
     public new bool? ShowDialog()
@@ -41,12 +54,22 @@ internal partial class InstalledAppPickerWindow : Window
         return base.ShowDialog();
     }
 
-    public InstalledAppPickerWindow(
+    public MultiItemPickerWindow(
         DesignTheme theme,
-        IReadOnlyList<InstalledApp> installedApps,
-        IReadOnlySet<string> existingAumids)
+        string title,
+        string searchPlaceholder,
+        string emptySourceHint,
+        IReadOnlyList<PickerRow> rows)
     {
         InitializeComponent();
+        _emptySourceHint = emptySourceHint;
+        _rows = [.. rows];
+        Title = title;
+        PickerTitleText.Text = title;
+        PickerSearchHint.Text = searchPlaceholder;
+        AutomationProperties.SetName(CloseButton, $"关闭{title}");
+        AutomationProperties.SetName(PickerSearchBox, searchPlaceholder);
+        AutomationProperties.SetName(PickerConfirmButton, $"确认{title}");
         DesignThemeManager.Apply(this, theme);
         // D8：DWM 圆角＋系统阴影唯一来源（失败由 DialogShellFallback 回退直角矩形）。
         SourceInitialized += (_, _) =>
@@ -57,10 +80,6 @@ internal partial class InstalledAppPickerWindow : Window
             DialogShellFallback.Apply(this, _dialogShellApplied);
         };
 
-        var existing = existingAumids ?? throw new ArgumentNullException(nameof(existingAumids));
-        _rows = installedApps
-            .Select(app => new PickerRow(app, existing.Contains(app.Aumid)))
-            .ToList();
         RebuildVisibleRows();
     }
 
@@ -106,7 +125,7 @@ internal partial class InstalledAppPickerWindow : Window
         IEnumerable rows = _rows;
         if (keyword.Length > 0)
         {
-            rows = _rows.Where(row => row.App.DisplayName.Contains(keyword, StringComparison.CurrentCultureIgnoreCase));
+            rows = _rows.Where(row => row.Title.Contains(keyword, StringComparison.CurrentCultureIgnoreCase));
         }
 
         PickerList.Items.Clear();
@@ -116,9 +135,7 @@ internal partial class InstalledAppPickerWindow : Window
         }
 
         var visibleCount = PickerList.Items.Count;
-        PickerEmptyHint.Text = _rows.Count == 0
-            ? "未枚举到已安装应用"
-            : "没有匹配的应用";
+        PickerEmptyHint.Text = _rows.Count == 0 ? _emptySourceHint : NoMatchHintText;
         PickerEmptyHint.Visibility = visibleCount == 0
             ? System.Windows.Visibility.Visible
             : System.Windows.Visibility.Collapsed;
@@ -144,7 +161,7 @@ internal partial class InstalledAppPickerWindow : Window
 
     private void ConfirmButton_Click(object sender, RoutedEventArgs e)
     {
-        Selection = _rows.Where(row => row.IsChecked).Select(row => row.App).ToList();
+        Selection = _rows.Where(row => row.IsChecked).Select(row => row.Payload).ToList();
         if (_shownAsDialog)
         {
             // DialogResult 赋值本身即关闭对话框窗口。
