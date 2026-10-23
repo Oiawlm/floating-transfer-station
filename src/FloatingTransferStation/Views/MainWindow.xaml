@@ -43,16 +43,19 @@
         <ResourceDictionary Source="../Resources/DesignTheme.Light.xaml" />
       </ResourceDictionary.MergedDictionaries>
       <DataTemplate x:Key="LauncherTileAppIconTemplate">
-        <!-- 应用/打包应用图标槽（#30 既有链路原样迁入模板）：占位字形（提取在途/失败
-             时可见）+ Image 经 Loaded 走 STA 图标管线异步回填。 -->
+        <!-- 应用/打包应用图标槽（#30 既有链路原样迁入模板）：占位字形仅在提取
+             在途/失败（IconImage.Tag 为 null）时可见，图标回填即整层收起——透明
+             底图标不再透出字形。Image 经 Loaded 走 STA 图标管线异步回填。 -->
         <Grid>
           <TextBlock HorizontalAlignment="Center"
                      VerticalAlignment="Center"
                      FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                      FontSize="28"
                      Foreground="{DynamicResource SecondaryTextBrush}"
+                     Style="{StaticResource LauncherTileIconPlaceholderStyle}"
                      Text="&#xE8FD;" />
-          <Image Width="48"
+          <Image x:Name="IconImage"
+                 Width="48"
                  Height="48"
                  Stretch="Uniform"
                  RenderOptions.BitmapScalingMode="HighQuality"
@@ -61,17 +64,20 @@
         </Grid>
       </DataTemplate>
       <DataTemplate x:Key="LauncherTileUrlGlyphTemplate">
-        <!-- Url 瓦片「地球字形＋Image」两态（#30 修订，Issue #206）：字形（E774）在
-             抓取中/失败可见，favicon 成功后 Image 经既有图标管线回填（同 Application
-             模板机制）；前景动态资源随主题，尺寸对齐既有图标槽 48。 -->
+        <!-- Url 瓦片「地球字形＋Image」两态（#30 修订，Issue #206）：字形（E774）
+             仅在 favicon 抓取中/失败（IconImage.Tag 为 null）可见，favicon 成功
+             回填即整层收起——透明底图标不再透出字形。Image 经既有图标管线回填
+             （同 Application 模板机制）；前景动态资源随主题，尺寸对齐既有图标槽 48。 -->
         <Grid>
           <TextBlock HorizontalAlignment="Center"
                      VerticalAlignment="Center"
                      FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                      FontSize="28"
                      Foreground="{DynamicResource SecondaryTextBrush}"
+                     Style="{StaticResource LauncherTileIconPlaceholderStyle}"
                      Text="&#xE774;" />
-          <Image Width="48"
+          <Image x:Name="IconImage"
+                 Width="48"
                  Height="48"
                  Stretch="Uniform"
                  RenderOptions.BitmapScalingMode="HighQuality"
