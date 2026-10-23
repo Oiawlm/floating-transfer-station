@@ -253,6 +253,51 @@ internal static class InstalledAppsEnumerator
         return null;
     }
 
+    /// <summary>按解析名提取命名空间项图标（IExtractIconW 路线，#30 扩展系统位置共用
+    /// 机制）：桌面文件夹 ParseDisplayName 命中项经 GetUIObjectOf 取 IExtractIconW，
+    /// GetIconLocation + Extract 出 HICON；调用方按 HICON 语义释放（DestroyIcon）。
+    /// 失败返回 IntPtr.Zero。</summary>
+    internal static IntPtr TryExtractIconForParsingName(string parsingName)
+    {
+        if (ShellInterop.SHGetDesktopFolder(out var desktopPointer) != 0)
+        {
+            return IntPtr.Zero;
+        }
+
+        try
+        {
+            var desktop = (ShellInterop.IShellFolder)Marshal.GetObjectForIUnknown(desktopPointer);
+            var attributes = 0u;
+            if (desktop.ParseDisplayName(
+                    IntPtr.Zero,
+                    IntPtr.Zero,
+                    parsingName,
+                    out _,
+                    out var itemPidl,
+                    ref attributes) != 0)
+            {
+                return IntPtr.Zero;
+            }
+
+            try
+            {
+                return ExtractIconFromItem(desktop, itemPidl);
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(itemPidl);
+            }
+        }
+        catch (Exception exception) when (exception is COMException or InvalidCastException or MarshalDirectiveException)
+        {
+            return IntPtr.Zero;
+        }
+        finally
+        {
+            Marshal.Release(desktopPointer);
+        }
+    }
+
     /// <summary>按 AUMID 提取 AppsFolder 条目图标（IExtractIconW 路线）：枚举命中项经
     /// 文件夹 GetUIObjectOf 取 IExtractIconW，GetIconLocation + Extract 出 HICON；
     /// 调用方按 HICON 语义释放（DestroyIcon）。失败返回 IntPtr.Zero。</summary>
