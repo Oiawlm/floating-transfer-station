@@ -54,11 +54,11 @@
 
 ## 📦 下载与安装
 
-在 [1.55.0 发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.55.0) 下载 Windows 安装程序：
+在 [1.56.0 发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.56.0) 下载 Windows 安装程序：
 
 | 平台 | 下载 | 状态 |
 |---|---|---|
-| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.55.0/FloatingTransferStation-Setup-1.55.0.exe) | 正式版 |
+| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.56.0/FloatingTransferStation-Setup-1.56.0.exe) | 正式版 |
 
 发行页同时提供 `SHA256SUMS.txt`。Windows 无需另装 .NET。
 
@@ -133,7 +133,7 @@
 
 **整理与置顶**
 
-<img src="docs/images/multi-select-batch-pin.gif" width="580" alt="演示：Ctrl 加单击多选三张卡片，点顶部图钉批量置顶，再拖动其中一张到「文本2」分类">
+<img src="docs/images/multi-select-batch-pin.gif" width="580" alt="演示：多选三张卡片，点顶部图钉批量置顶，再拖动其中一张到「文本2」分类（选中手势见使用手册，2026-10-23 起为右键）">
 
 *多选、批量置顶、拖到另一分类*
 
