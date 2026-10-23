@@ -3,23 +3,28 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using FloatingTransferStation.Models;
+using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
 
 namespace FloatingTransferStation.Views;
 
 /// <summary>
-/// 内容桶空状态引导（契约 #33）：待分类/图片为空时以居中「图标＋标题＋副文案」
+/// 空状态引导（契约 #33）：内容桶（待分类/图片）为空时以居中「图标＋标题＋副文案」
 /// 告知内容进入方式（复用启动表面 LauncherEmptyState 先例，无 CTA——内容桶没有
 /// 显式添加动作）。可见性单点＝<see cref="UpdatePanelSurface"/> 表面切换＋激活桶
 /// 集合变化＋搜索态进出；文案按 (BoardCategory, IsDefaultCapture) 二维矩阵派生：
 /// 默认接收桶＝复制自动收集（剪贴板采集只落默认接收分类），非默认桶＝拖入收集。
 /// 元素为纯信息性（IsHitTestVisible=False），命中穿透回 BoardList，拖放语义不变。
+/// 复盘表面同语言空态（ReviewEmptyState，宿主内覆盖编辑器行）由
+/// <see cref="UpdateReviewEmptyState"/> 单点管理，文案复用同一矩阵的复盘臂。
 /// </summary>
 public partial class MainWindow
 {
     /// <summary>空态文案二维矩阵：穷尽具名值、无兜底臂——内容桶两分类×默认接收
-    /// 布尔四臂给出文案；复盘/启动具名值不可达（调用点已按 IsContentBucket 守卫），
-    /// 抛 <see cref="ArgumentOutOfRangeException"/> 属不可达防御。未具名枚举值
+    /// 布尔四臂给出文案；复盘臂给复盘空态文案（第二维与复盘无关，忽略——进入路径
+    /// 是直接输入，无默认接收语义）；启动具名值不可达（调用点已按 IsContentBucket
+    /// 守卫，启动空态归 LauncherEmptyState），抛
+    /// <see cref="ArgumentOutOfRangeException"/> 属不可达防御。未具名枚举值
     /// （CS8524）显式豁免：存储边界对分类做 IsDefined 守卫、越界按损坏条目丢弃，
     /// 与 <see cref="BoardCategoryCatalog.RoleOf"/> 同口径。</summary>
 #pragma warning disable CS8524 // switch 表达式不处理未命名枚举值（装载边界已清洗；漏映射 CS8509 仍为编译错误）
@@ -35,7 +40,9 @@ public partial class MainWindow
                 "还没有内容", "复制的图片或文字会自动收集到这里，也可以直接拖入"),
             (BoardCategory.CustomerOriginal, false) => (
                 "还没有内容", "把图片或文字拖到这里即可收集"),
-            (BoardCategory.Reference or BoardCategory.Prompt, _) =>
+            (BoardCategory.Reference, _) => (
+                "还没有复盘内容", "直接输入即可开始记录，内容会自动保存"),
+            (BoardCategory.Prompt, _) =>
                 throw new ArgumentOutOfRangeException(nameof(category), category, null),
         };
 #pragma warning restore CS8524
@@ -88,10 +95,36 @@ public partial class MainWindow
             return;
         }
 
-        // 文案派生只在可见时进行：矩阵对复盘/启动具名值抛防御异常（不可达），
+        // 文案派生只在可见时进行：矩阵对启动具名值抛防御异常（不可达），
         // 非内容桶表面不得进入；不可见期残留文案无意义，下一可见轮会重算。
         var (title, hint) = BoardEmptyStateCopy(panel.Category, panel.IsDefaultCapture);
         BoardEmptyStateTitle.SetCurrentValue(TextBlock.TextProperty, title);
         BoardEmptyStateHint.SetCurrentValue(TextBlock.TextProperty, hint);
+    }
+
+    /// <summary>复盘空态唯一更新点：复盘表面激活、编辑器可用（存储在位）且当前
+    /// 编辑内容为空时可见——「当日无内容」以编辑器文本为唯一事实（装载/外部刷新
+    /// 都经文本落位）。触发路径＝<see cref="UpdatePanelSurface"/> 表面切换、
+    /// ReviewEditor_TextChanged 输入与清空、LoadReviewDateAsync 日期装载完成、
+    /// HandleDailyReviewChangeAsync 外部变更后的文本替换；全部 UI 线程进入（外部
+    /// 文件 Changed 已由 DailyReviews_Changed 封送），无需封送分支。文案复用
+    /// <see cref="BoardEmptyStateCopy"/> 复盘臂（第二维与复盘无关，传 false）；无
+    /// CTA——复盘的进入路径是直接输入，编辑器本身就是动作面，空态
+    /// IsHitTestVisible=False 让点击穿透到编辑器取得焦点。内容桶空态（#33）与
+    /// 本空态各属专属宿主，表面互斥由 UpdatePanelSurface 三态分发结构性保证。</summary>
+    private void UpdateReviewEmptyState()
+    {
+        var visible = IsReviewActive() &&
+            ReviewEditor.IsEnabled &&
+            ReviewEditor.Text.Length == 0;
+        ReviewEmptyState.SetCurrentValue(VisibilityProperty, visible ? Visibility.Visible : Visibility.Collapsed);
+        if (!visible)
+        {
+            return;
+        }
+
+        var (title, hint) = BoardEmptyStateCopy(DailyReviewMigration.ReviewCategory, isDefaultCapture: false);
+        ReviewEmptyStateTitle.SetCurrentValue(TextBlock.TextProperty, title);
+        ReviewEmptyStateHint.SetCurrentValue(TextBlock.TextProperty, hint);
     }
 }

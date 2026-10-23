@@ -52,6 +52,9 @@ public partial class MainWindow
         // 内容桶空态随表面切换（契约 #33）：仅板面可见，复盘/启动表面隐藏
         //（两者各有专属空态/内容宿主）；集合与搜索触发另行驱动本单点。
         UpdateBoardEmptyState();
+        // 复盘空态随表面切换重评估（契约 #33 复盘扩展）：宿主刚可见/隐藏时按
+        // 当前编辑内容定可见性；日期装载与输入触发另行驱动同一单点。
+        UpdateReviewEmptyState();
         if (isReview || isLauncher)
         {
             BatchPinButton.Visibility = Visibility.Collapsed;
@@ -135,6 +138,9 @@ public partial class MainWindow
             _reviewLoading = false;
             ReviewStatus.Text = document.Exists ? "已加载" : "今天还没有复盘内容。";
             UpdateReviewDateControls();
+            // 日期装载完成即重评估空态：切到有内容的日期隐藏、切到空日期回归
+            //（装载期文本替换走 _reviewLoading 守卫，TextChanged 不触发，须显式驱动）。
+            UpdateReviewEmptyState();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -234,6 +240,8 @@ public partial class MainWindow
         ReviewStatus.Text = "未保存";
         _reviewSaveTimer.Stop();
         _reviewSaveTimer.Start();
+        // 输入/清空立即重评估空态：第一个字符即刻隐藏（不等 700ms 自动保存）。
+        UpdateReviewEmptyState();
     }
 
     private async void ReviewPreviousButton_Click(object sender, RoutedEventArgs e) =>
@@ -301,6 +309,8 @@ public partial class MainWindow
                 _reviewLoading = false;
                 _reviewBaseContent = remote.Content;
                 ReviewStatus.Text = remote.Exists ? "已从文件刷新" : "文件已删除。";
+                // 外部清空/删除文件后空态回归（文本替换不走 TextChanged 更新点）。
+                UpdateReviewEmptyState();
                 return;
             }
 
@@ -317,6 +327,7 @@ public partial class MainWindow
                 _reviewBaseContent = remote.Content;
                 _reviewDirty = false;
                 ReviewStatus.Text = "已载入文件版本";
+                UpdateReviewEmptyState();
                 return;
             }
 
@@ -329,6 +340,7 @@ public partial class MainWindow
                 _reviewBaseContent = remote.Content;
                 _reviewDirty = merged.Content != remote.Content || merged.HasConflicts;
                 ReviewStatus.Text = merged.HasConflicts ? "已合并，请整理冲突后保存" : "已合并，等待保存";
+                UpdateReviewEmptyState();
             }
             else if (choice == MessageBoxResult.No)
             {
