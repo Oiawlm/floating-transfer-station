@@ -24,6 +24,8 @@
 | `card-ai-organize-light.png` / `card-ai-organize-dark.png` | 418×640 | 35 KB | 截断文字卡悬停出现「AI 整理」钮（浅色/深色；真实光标悬停 + 真实 WPF 控件渲染，`FTS_AI_EVIDENCE_DIR`，1.41.0 Issue #146） | 成组区「AI 设置（DeepSeek）」 |
 | `card-ai-organize-before.png` / `card-ai-organize-after.png` | 418×640 | 34/46 KB | AI 整理前后对比（中性测试数据：语音转写式原文 → 整理后的干净文本；同上测试证据再生） | 成组区「AI 设置（DeepSeek）」深色/对比链接 |
 
+| `quicklaunch-system-locations-light.png` / `quicklaunch-system-locations-dark.png` | 445×614 | 16/17 KB | 启动面板「系统位置」瓦片（回收站／此电脑，真实 CLSID 图标提取；浅色/深色；真实 WPF 控件渲染，`FTS_QUICKLAUNCH_EVIDENCE_DIR`，契约 #30 扩展） | 本表登记（PR 引用，Issue #217） |
+| `quicklaunch-system-locations-contextmenu-light.png` / `quicklaunch-system-locations-contextmenu-dark.png` | 112×222 | 3.3/3.2 KB | 系统位置瓦片查看态右键菜单（打开/重命名/编辑目标…/上移/下移/删除终序，浅色/深色；同上取证） | 本表登记（PR 引用，Issue #217） |
 总量约 1.5 MB。引用宽度一律 ≤ 源宽；GIF 帧率 10–12 fps（hero 12）。
 
 ## 录制环境
