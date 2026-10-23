@@ -10,7 +10,8 @@ namespace FloatingTransferStation.Models;
 public static class LauncherIconKey
 {
     /// <summary>目标规范化：文件路径取完整限定并去尾分隔符（Windows 大小写不敏感），
-    /// AUMID/Url 去首尾空白。规范化结果同时是添加去重键的组成部分。</summary>
+    /// AUMID/Url 去首尾空白，系统位置 CLSID 解析名小写化。规范化结果同时是添加去重键
+    /// 的组成部分。</summary>
     public static string NormalizeTarget(string targetPath)
     {
         var trimmed = (targetPath ?? string.Empty).Trim();
@@ -23,6 +24,13 @@ public static class LauncherIconKey
             trimmed.StartsWith("shell:appsFolder\\", StringComparison.OrdinalIgnoreCase))
         {
             return trimmed;
+        }
+
+        if (trimmed.StartsWith("::{", StringComparison.Ordinal))
+        {
+            // 系统位置 CLSID 解析名（#30 扩展）：GUID 十六进制大小写差异收敛为小写；
+            // 不进文件路径规范化（:: 前缀非合法路径形态）。规范化结果同为去重键组成部分。
+            return trimmed.ToLowerInvariant();
         }
 
         string normalized;

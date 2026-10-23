@@ -762,13 +762,15 @@ internal sealed class LauncherIconService : IDisposable
     }
 
     /// <summary>主路径：IShellItemImageFactory（PackagedApp 解析名 shell:AppsFolder\{AUMID}，
-    /// 解析失败时枚举 AppsFolder 按 AUMID 匹配后对项 RCW 直接 QI 图标工厂）。</summary>
+    /// 解析失败时枚举 AppsFolder 按 AUMID 匹配后对项 RCW 直接 QI 图标工厂）；
+    /// 系统位置解析名（CLSID）同走共享主路径。</summary>
     private static (IntPtr Handle, bool IsIcon) ExtractIconHandle(LauncherItem item)
     {
         var parsingName = item.Kind switch
         {
             LauncherKind.Application => item.TargetPath,
             LauncherKind.PackagedApp => $"shell:AppsFolder\\{item.TargetPath}",
+            LauncherKind.ShellLocation => item.TargetPath,
             _ => null
         };
         if (parsingName is null)
@@ -835,6 +837,26 @@ internal sealed class LauncherIconService : IDisposable
             return (iconHandle, true);
         }
 
+        // 系统位置终梯（探针实证 2026-10-23）：CLSID 解析名对 SHGetFileInfo 家族整族
+        // 失败（SHGFI_ICON/SYSICONINDEX ret=0、SHDefExtractIconW E_FAIL——调研结论
+        // 「SHGetFileInfo 传 CLSID 路径」在实机不成立）；图标缓存未热时共享主路径
+        // BIGGERSIZEOK 返回 E_PENDING（Issue #206 同族）。小尺寸 ICONONLY 直取与
+        // IExtractIconW 终回退机器无关。回收站空/满态取提取时当前态（登记已知边界）。
+        if (item.Kind == LauncherKind.ShellLocation)
+        {
+            if (TryGetShellLocationSmallIcon(item.TargetPath) is { } smallHandle &&
+                smallHandle != IntPtr.Zero)
+            {
+                return (smallHandle, false);
+            }
+
+            if (InstalledAppsEnumerator.TryExtractIconForParsingName(item.TargetPath) is { } shellIconHandle &&
+                shellIconHandle != IntPtr.Zero)
+            {
+                return (shellIconHandle, true);
+            }
+        }
+
         if (item.Kind == LauncherKind.Application)
         {
             // 直提取阶梯（#30 修订，Issue #206 实机实证）：GetImage(256) 在图标缓存未热时
@@ -855,6 +877,43 @@ internal sealed class LauncherIconService : IDisposable
 
         return (ExtractViaSystemImageList(item), true);
     }
+
+    /// <summary>系统位置小尺寸直取（#30 扩展）：命名空间项实现图标工厂（与 AppsFolder
+    /// 条目相反，探针实证 2026-10-23）——ICONONLY 不带 BIGGERSIZEOK 在图标缓存未热时
+    /// 仍 S_OK（256 → 48 两档）。返回 HBITMAP；未提取返回 null。</summary>
+    private static IntPtr? TryGetShellLocationSmallIcon(string parsingName)
+    {
+        var factoryId = typeof(ShellInterop.IShellItemImageFactory).GUID;
+        if (ShellInterop.SHCreateItemFromParsingName(parsingName, IntPtr.Zero, factoryId, out var pointer) != 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            var factory = (ShellInterop.IShellItemImageFactory)Marshal.GetObjectForIUnknown(pointer);
+            foreach (var size in new[] { ShellInterop.ShellIconSize, LauncherTileIconSlot })
+            {
+                if (factory.GetImage(new ShellInterop.Size(size, size), ShellInterop.SiigbfIconOnly, out var bitmap) == 0 &&
+                    bitmap != IntPtr.Zero)
+                {
+                    return bitmap;
+                }
+            }
+        }
+        catch (InvalidCastException)
+        {
+        }
+        finally
+        {
+            Marshal.Release(pointer);
+        }
+
+        return null;
+    }
+
+    /// <summary>瓦片图标槽边长（48，DesignTokens 同源；本类常量镜像供提取档位引用）。</summary>
+    private const int LauncherTileIconSlot = 48;
 
     /// <summary>SHDefExtractIconW 直提取（不经图标缓存与 image list）：exe 目标本体 →
     /// .lnk 解析目标 → .lnk IconLocation（负索引按 0）。返回 HICON；未提取返回 null。</summary>
@@ -933,7 +992,9 @@ internal sealed class LauncherIconService : IDisposable
     }
 
     /// <summary>回退链：SHGetFileInfo(SHGFI_SYSICONINDEX) → SHGetImageList(JUMBO→EXTRALARGE→LARGE)
-    /// → IImageList.GetIcon（校验 index &lt; count；不用 SHGFI_USEFILEATTRIBUTES）。</summary>
+    /// → IImageList.GetIcon（校验 index &lt; count；不用 SHGFI_USEFILEATTRIBUTES）。
+    /// 仅 Application（CLSID 解析名对 SHGFI_SYSICONINDEX 整族失败，探针实证 2026-10-23，
+    /// 系统位置走图标工厂小尺寸直取与 IExtractIconW 终回退）。</summary>
     private static IntPtr ExtractViaSystemImageList(LauncherItem item)
     {
         if (item.Kind != LauncherKind.Application)
@@ -996,13 +1057,22 @@ internal sealed class LauncherIconService : IDisposable
     /// 图标戳（#30）：Application=shortHash(lnk.mtime|size ‖ 解析目标.mtime|size ‖
     /// GetIconLocation 解析出的图标源文件.mtime|size)；PackagedApp 恒 null（不自动失效；
     /// 刷新触发=激活失败重枚举或重新添加覆盖）；Url=常量 "ok"（null=未取到＝启动重试
-    /// 轮判定面；"ok"=已缓存；编辑目标置空由 AdoptEditedTarget 承载）。
+    /// 轮判定面；"ok"=已缓存；编辑目标置空由 AdoptEditedTarget 承载）；ShellLocation=
+    /// 静态描述符 shortHash（无文件源目标，缓存跨会话稳定——回收站空/满态取提取时
+    /// 当前态，不随切换失效）。
     /// </summary>
     internal static string? ComputeStamp(LauncherItem item)
     {
         if (item.Kind == LauncherKind.Url)
         {
             return UrlIconStampOk;
+        }
+
+        if (item.Kind == LauncherKind.ShellLocation)
+        {
+            var descriptor = $"shell-location:{item.TargetPath}";
+            var stamp = SHA256.HashData(Encoding.Unicode.GetBytes(descriptor));
+            return Convert.ToHexStringLower(stamp)[..12];
         }
 
         if (item.Kind != LauncherKind.Application)

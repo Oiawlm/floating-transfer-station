@@ -391,93 +391,14 @@ public partial class MainWindow
              cursor.Y >= rect.Top && cursor.Y < rect.Bottom);
     }
 
-    /// <summary>已安装应用导入：PackagedApp 条目（TargetPath=AUMID，永不存包名）＋
-    /// 状态条一次性汇报＋落位动画（与文件导入同路径）。</summary>
-    private async Task ImportInstalledAppsAsync(IReadOnlyList<InstalledApp> apps)
+    /// <summary>目录添加＋UI 反馈唯一汇点：落位动画、重复脉冲与状态条一次性汇报——
+    /// 文件/选择器/网址/系统位置导入全部经此收敛（skippedTotal 由入口按语义传入）。</summary>
+    private async Task AddLauncherItemsAndReportAsync(IReadOnlyList<LauncherItem> candidates, int skippedTotal)
     {
         if (_launchers is null)
         {
             return;
         }
-
-        var candidates = apps
-            .Select(app => new LauncherItem(
-                Guid.NewGuid(),
-                LauncherKind.PackagedApp,
-                app.Aumid,
-                app.DisplayName,
-                DateTimeOffset.Now))
-            .ToList();
-
-        var outcome = await _launchers.AddRangeAsync(candidates);
-        // 保存续体可能落在无同步上下文的线程（测试环境）：UI 反馈显式回投 UI 线程。
-        await Dispatcher.InvokeAsync(() =>
-        {
-            if (outcome.AddedCount > 0)
-            {
-                PlayLauncherLandingAsync(outcome.AddedItems);
-            }
-
-            foreach (var duplicate in outcome.Duplicates)
-            {
-                PulseLauncherDuplicate(duplicate);
-            }
-
-            ShowLauncherImportStatus(outcome, skippedTotal: 0);
-        });
-    }
-
-    internal void UseInstalledAppsSourceForTests(Func<IReadOnlyList<InstalledApp>> source) =>
-        _installedAppsSource = source;
-
-    /// <summary>网页地址导入：Url 条目（TargetPath=规范形，默认名=域名）＋状态条一次性
-    /// 汇报＋落位动画（与文件/选择器导入同路径）。</summary>
-    private async Task ImportLauncherUrlsAsync(string url, string defaultName)
-    {
-        if (_launchers is null)
-        {
-            return;
-        }
-
-        var outcome = await _launchers.AddRangeAsync(
-        [
-            new LauncherItem(Guid.NewGuid(), LauncherKind.Url, url, defaultName, DateTimeOffset.Now)
-        ]);
-        // 保存续体可能落在无同步上下文的线程（测试环境）：UI 反馈显式回投 UI 线程。
-        await Dispatcher.InvokeAsync(() =>
-        {
-            if (outcome.AddedCount > 0)
-            {
-                PlayLauncherLandingAsync(outcome.AddedItems);
-            }
-
-            foreach (var duplicate in outcome.Duplicates)
-            {
-                PulseLauncherDuplicate(duplicate);
-            }
-
-            ShowLauncherImportStatus(outcome, skippedTotal: 0);
-        });
-    }
-
-    /// <summary>文件导入分流（.exe/.lnk 导入，其余跳过计数）＋状态条一次性汇报＋落位动画。</summary>
-    private async Task ImportLauncherFilesAsync(IReadOnlyList<string> files, int skippedUnsupportedCount)
-    {
-        if (_launchers is null)
-        {
-            return;
-        }
-
-        var (importable, skipped) = LauncherFileImport.Split(files);
-        var skippedTotal = skippedUnsupportedCount + skipped;
-        var candidates = importable
-            .Select(path => new LauncherItem(
-                Guid.NewGuid(),
-                LauncherKind.Application,
-                path,
-                ShellLinkHelper.DefaultDisplayName(path),
-                DateTimeOffset.Now))
-            .ToList();
 
         var outcome = await _launchers.AddRangeAsync(candidates);
         // 保存续体可能落在无同步上下文的线程（测试环境）：UI 反馈显式回投 UI 线程。
@@ -495,6 +416,64 @@ public partial class MainWindow
 
             ShowLauncherImportStatus(outcome, skippedTotal);
         });
+    }
+
+    /// <summary>已安装应用导入：PackagedApp 条目（TargetPath=AUMID，永不存包名）。</summary>
+    private async Task ImportInstalledAppsAsync(IReadOnlyList<InstalledApp> apps)
+    {
+        var candidates = apps
+            .Select(app => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.PackagedApp,
+                app.Aumid,
+                app.DisplayName,
+                DateTimeOffset.Now))
+            .ToList();
+        await AddLauncherItemsAndReportAsync(candidates, skippedTotal: 0);
+    }
+
+    internal void UseInstalledAppsSourceForTests(Func<IReadOnlyList<InstalledApp>> source) =>
+        _installedAppsSource = source;
+
+    /// <summary>网页地址导入：Url 条目（TargetPath=规范形，默认名=域名）。</summary>
+    private async Task ImportLauncherUrlsAsync(string url, string defaultName)
+    {
+        await AddLauncherItemsAndReportAsync(
+            [new LauncherItem(Guid.NewGuid(), LauncherKind.Url, url, defaultName, DateTimeOffset.Now)],
+            skippedTotal: 0);
+    }
+
+    /// <summary>文件导入分流（.exe/.lnk 导入，其余跳过计数）。</summary>
+    private async Task ImportLauncherFilesAsync(IReadOnlyList<string> files, int skippedUnsupportedCount)
+    {
+        var (importable, skipped) = LauncherFileImport.Split(files);
+        var candidates = importable
+            .Select(path => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.Application,
+                path,
+                ShellLinkHelper.DefaultDisplayName(path),
+                DateTimeOffset.Now))
+            .ToList();
+        await AddLauncherItemsAndReportAsync(candidates, skippedUnsupportedCount + skipped);
+    }
+
+    /// <summary>系统位置入口（#30 扩展）：按注册表条目构造 ShellLocation 启动项走
+    /// 同一添加协议（重复添加由既有去重收敛：滚动＋脉冲，状态条「已在启动列表中」）。</summary>
+    private void LauncherAddSystemLocation_Click(object sender, RoutedEventArgs e)
+    {
+        LauncherAddMenu.IsOpen = false;
+        if (_isClosing || _launchers is null || _launchers.IsReadOnlyFromNewerVersion)
+        {
+            return;
+        }
+
+        if (sender is not FrameworkElement { DataContext: SystemLauncherLocation location })
+        {
+            return;
+        }
+
+        TrackPendingOperation(AddLauncherItemsAndReportAsync([location.CreateItem()], skippedTotal: 0));
     }
 
     private void ShowLauncherImportStatus(LauncherAddOutcome outcome, int skippedTotal)

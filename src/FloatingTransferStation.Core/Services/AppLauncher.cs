@@ -40,6 +40,8 @@ public sealed record PackagedAppActivationResult(bool Activated, int? ProcessId,
 /// MSI 广告快捷方式）；不 WaitForExit、不默认 Verb=runas；文件类目标点击前
 /// File.Exists 预检。AUMID 激活失败仅对限定错误类别回退 explorer.exe
 /// shell:AppsFolder（回退=已派发不显成功）；明确失败（未注册/拒绝/取消）不回退。
+/// 系统位置（#30 扩展）直接派发注册表 CLSID 解析名，失败限定回退 explorer shell:
+/// 别名（回收站/此电脑）；非注册表目标不回退。
 /// </summary>
 public sealed class AppLauncher
 {
@@ -77,6 +79,7 @@ public sealed class AppLauncher
                 LauncherKind.Application => LaunchApplication(item),
                 LauncherKind.PackagedApp => LaunchPackagedApp(item),
                 LauncherKind.Url => LaunchUrl(item),
+                LauncherKind.ShellLocation => LaunchShellLocation(item),
                 _ => throw new ArgumentOutOfRangeException(nameof(item), item.Kind, null)
             };
         }
@@ -147,7 +150,7 @@ public sealed class AppLauncher
         {
             // 限定回退：explorer.exe shell:AppsFolder 派发——请求已派发、结果未知，
             // 不播成功脉冲，状态条「已尝试启动」，收起按成功路径放行。
-            var dispatched = DispatchViaExplorerAppsFolder(aumid);
+            var dispatched = DispatchViaExplorer($"shell:AppsFolder\\{aumid}");
             return dispatched
                 ? LauncherLaunchResult.Dispatched
                 : new LauncherLaunchResult(
@@ -171,14 +174,36 @@ public sealed class AppLauncher
             : new LauncherLaunchResult(LauncherLaunchStatus.Failed, "无法打开。");
     }
 
-    /// <summary>打包应用绝不直接启动其 exe；回退路径唯一 = explorer.exe shell:AppsFolder。</summary>
-    internal bool DispatchViaExplorerAppsFolder(string aumid)
+    /// <summary>系统位置（#30 扩展）：UseShellExecute 直接派发 CLSID 解析名（无文件
+    /// 预检、无工作目录）；失败限定回退注册表登记的 explorer shell: 别名——回退=已
+    /// 派发不显成功（与 AUMID 回退同一语义）；非注册表目标不回退。</summary>
+    private LauncherLaunchResult LaunchShellLocation(LauncherItem item)
+    {
+        var info = new ProcessStartInfo(item.TargetPath) { UseShellExecute = true };
+        if (_processStarter(info))
+        {
+            return LauncherLaunchResult.Launched;
+        }
+
+        if (SystemLauncherLocations.TryGetExplorerFallbackArgument(item.TargetPath) is not { } fallback)
+        {
+            return new LauncherLaunchResult(LauncherLaunchStatus.Failed, "无法打开。");
+        }
+
+        return DispatchViaExplorer(fallback)
+            ? LauncherLaunchResult.Dispatched
+            : new LauncherLaunchResult(LauncherLaunchStatus.Failed, "无法打开。");
+    }
+
+    /// <summary>explorer.exe shell: 参数派发（打包应用与系统位置的限定回退唯一通道）；
+    /// 打包应用绝不直接启动其 exe。</summary>
+    internal bool DispatchViaExplorer(string shellArguments)
     {
         try
         {
             var info = new ProcessStartInfo("explorer.exe")
             {
-                Arguments = $"shell:AppsFolder\\{aumid}",
+                Arguments = shellArguments,
                 UseShellExecute = true
             };
             return _processStarter(info);

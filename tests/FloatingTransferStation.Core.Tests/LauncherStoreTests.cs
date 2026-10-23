@@ -258,4 +258,58 @@ public sealed class LauncherStoreTests
         Assert.AreEqual("example.com", persisted.DisplayName);
         Assert.IsNull(persisted.Arguments, "Url 条目无参数段。");
     }
+
+    [TestMethod]
+    public async Task RoundTrip_PreservesShellLocationKindAndTarget()
+    {
+        using var directory = new TestDirectory();
+        var store = CreateStore(directory);
+        var location = SystemLauncherLocations.RecycleBin.CreateItem();
+
+        await store.SaveAsync(new LauncherStoreData(LauncherStoreData.CurrentVersion, [location]));
+        var raw = await File.ReadAllTextAsync(AppPaths.ForTests(directory.Root).LaunchersFile);
+        StringAssert.Contains(raw, "\"kind\": \"ShellLocation\"", "ShellLocation 以枚举名持久化（Kind=3 新成员）。");
+        var loaded = await CreateStore(directory).LoadAsync();
+
+        var persisted = loaded.Items.Single();
+        Assert.AreEqual(LauncherKind.ShellLocation, persisted.Kind, "ShellLocation Kind 往返保留。");
+        Assert.AreEqual(SystemLauncherLocations.RecycleBin.TargetPath, persisted.TargetPath, "CLSID 解析名往返不变形。");
+        Assert.AreEqual("回收站", persisted.DisplayName);
+        Assert.IsNull(persisted.Arguments);
+    }
+
+    [TestMethod]
+    public async Task UnknownNumericKind_DropsItem()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        Directory.CreateDirectory(paths.DataDirectory);
+        await File.WriteAllTextAsync(paths.LaunchersFile, """
+            {
+              "version": 1,
+              "items": [
+                {
+                  "id": "0f2b7d1e111122223333444455556699",
+                  "kind": "99",
+                  "targetPath": "C:\\Apps\\Future.exe",
+                  "displayName": "未来版本类型",
+                  "createdAt": "2026-10-23T08:00:00+00:00"
+                },
+                {
+                  "id": "0f2b7d1e111122223333444455556667",
+                  "kind": "ShellLocation",
+                  "targetPath": "::{645FF040-5081-101B-9F08-00AA002F954E}",
+                  "displayName": "回收站",
+                  "createdAt": "2026-10-23T08:00:00+00:00"
+                }
+              ]
+            }
+            """);
+
+        var loaded = await CreateStore(directory).LoadAsync();
+
+        var persisted = loaded.Items.Single();
+        Assert.AreEqual(LauncherKind.ShellLocation, persisted.Kind, "数值未知 Kind（99）按既有清洗规则丢条。");
+        Assert.AreEqual("回收站", persisted.DisplayName, "其余条目不受影响。");
+    }
 }

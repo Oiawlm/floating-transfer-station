@@ -5,13 +5,15 @@ using System.Text.Json.Serialization;
 
 namespace FloatingTransferStation.Models;
 
-/// <summary>启动项类型（#30）：应用（exe / .lnk）、打包应用（AUMID）与网页目标
-/// （仅数据模型容纳，v1 UI 无入口；文件中存在时按一等条目显示与启动）。</summary>
+/// <summary>启动项类型（#30）：应用（exe / .lnk）、打包应用（AUMID）、网页目标
+/// 与系统位置（回收站/「此电脑」的 CLSID 解析名，唯一引入点见
+/// <see cref="FloatingTransferStation.Services.SystemLauncherLocations"/>）。</summary>
 public enum LauncherKind
 {
     Application = 0,
     PackagedApp = 1,
-    Url = 2
+    Url = 2,
+    ShellLocation = 3
 }
 
 /// <summary>
@@ -50,7 +52,8 @@ public sealed class LauncherItem : INotifyPropertyChanged, IEquatable<LauncherIt
 
     public LauncherKind Kind { get; private set; }
 
-    /// <summary>目标：应用类=文件路径（.lnk 存快捷方式本体路径）、打包应用=AUMID、Url=网址。</summary>
+    /// <summary>目标：应用类=文件路径（.lnk 存快捷方式本体路径）、打包应用=AUMID、
+    /// Url=网址、系统位置=CLSID 解析名（仅经 SystemLauncherLocations 注册表引入）。</summary>
     public string TargetPath { get; private set; }
 
     /// <summary>启动参数（仅 Application 类；null/空=无参数）。</summary>
