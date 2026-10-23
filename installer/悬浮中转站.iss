@@ -34,6 +34,9 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=..\src\FloatingTransferStation\Assets\AppIcon.ico
 AppMutex={#MyAppMutexName}
 
+[Languages]
+Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+
 [Files]
 Source: "..\artifacts\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
