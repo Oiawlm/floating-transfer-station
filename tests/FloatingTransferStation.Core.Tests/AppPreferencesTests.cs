@@ -46,7 +46,6 @@ public sealed class AppPreferencesTests
     {
         var preferences = AppPreferences.Default;
 
-        Assert.IsTrue(preferences.RightClickCardCopyEnabled);
         Assert.IsTrue(preferences.CopySelectionWithCtrlCEnabled);
         Assert.AreEqual(TrashNoSelectionLeftClickAction.ClearNonPinned, preferences.TrashNoSelectionLeftClick);
         Assert.AreEqual(TrashNoSelectionRightClickAction.ClearAll, preferences.TrashNoSelectionRightClick);
@@ -59,7 +58,6 @@ public sealed class AppPreferencesTests
             ThemeMode: ThemePreference.Light,
             AnimationsEnabled: true,
             GlobalHotkeyEnabled: false,
-            RightClickCardCopyEnabled: false,
             CopySelectionWithCtrlCEnabled: false,
             TrashNoSelectionLeftClick: TrashNoSelectionLeftClickAction.ClearAll,
             TrashNoSelectionRightClick: TrashNoSelectionRightClickAction.NoAction);
@@ -68,8 +66,7 @@ public sealed class AppPreferencesTests
             JsonSerializer.Serialize(preferences));
 
         Assert.AreEqual(preferences, restored);
-        Assert.IsFalse(restored!.RightClickCardCopyEnabled);
-        Assert.IsFalse(restored.CopySelectionWithCtrlCEnabled);
+        Assert.IsFalse(restored!.CopySelectionWithCtrlCEnabled);
         Assert.AreEqual(TrashNoSelectionLeftClickAction.ClearAll, restored.TrashNoSelectionLeftClick);
         Assert.AreEqual(TrashNoSelectionRightClickAction.NoAction, restored.TrashNoSelectionRightClick);
     }
@@ -91,10 +88,34 @@ public sealed class AppPreferencesTests
         Assert.IsNotNull(restored);
         Assert.AreEqual(ThemePreference.Dark, restored.ThemeMode);
         Assert.IsTrue(restored.GlobalHotkeyEnabled);
-        Assert.IsTrue(restored.RightClickCardCopyEnabled, "1.15.0 之前的 preferences.json 必须回落到复制手势默认开启。");
         Assert.IsTrue(restored.CopySelectionWithCtrlCEnabled);
         Assert.AreEqual(TrashNoSelectionLeftClickAction.ClearNonPinned, restored.TrashNoSelectionLeftClick);
         Assert.AreEqual(TrashNoSelectionRightClickAction.ClearAll, restored.TrashNoSelectionRightClick);
+    }
+
+    [TestMethod]
+    public void OlderJson_WithRemovedRightClickCopyField_StillLoads()
+    {
+        // 手势统一（Issue #216）移除了 RightClickCardCopyEnabled（1.15.0 引入）：
+        // 手势交换前的 preferences.json 仍带着该字段，加载按未知成员忽略，
+        // 不抛错、不回落任何语义——右半左键复制成为不可关闭的统一手势。
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Dark","animationsEnabled":true,"rightClickCardCopyEnabled":false,"copySelectionWithCtrlCEnabled":true}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.AreEqual(ThemePreference.Dark, restored.ThemeMode);
+        Assert.IsTrue(restored.AnimationsEnabled);
+        Assert.IsTrue(restored.CopySelectionWithCtrlCEnabled);
+        var saved = JsonSerializer.Serialize(restored, storeOptions);
+        Assert.IsFalse(
+            saved.Contains("rightClickCardCopy", StringComparison.OrdinalIgnoreCase),
+            "再落盘不得写回已移除的字段。");
     }
 
     [TestMethod]
@@ -354,7 +375,61 @@ public sealed class AppPreferencesTests
 
         Assert.IsNotNull(restored);
         Assert.IsFalse(restored.ShortCardNotesEnabled, "旧 preferences.json 缺字段时必须回落到默认关闭（升级零感知）。");
-        Assert.IsTrue(restored.RightClickCardCopyEnabled, "测试数据里的旧字段语义不受新字段影响。");
+        Assert.AreEqual(ThemePreference.Light, restored.ThemeMode, "已移除的旧字段（rightClickCardCopyEnabled）按未知成员忽略，不影响其余字段加载。");
+    }
+
+    [TestMethod]
+    public void Default_EnablesLauncherDiscoveryWithoutCustomFolders()
+    {
+        Assert.IsTrue(AppPreferences.Default.LauncherDiscoveryEnabled, "自动发现默认开启（老用户升级零感知）。");
+        Assert.IsNull(AppPreferences.Default.LauncherDiscoveryFolders, "默认无自定义监视文件夹。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesLauncherDiscoveryPreferences()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var folders = new List<string> { @"D:\Apps", @"E:\Tools" };
+        var preferences = AppPreferences.Default with
+        {
+            LauncherDiscoveryEnabled = false,
+            LauncherDiscoveryFolders = folders
+        };
+
+        var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+        Assert.IsTrue(
+            serialized.Contains("\"launcherDiscoveryEnabled\":false", StringComparison.Ordinal),
+            "JSON 键必须是 launcherDiscoveryEnabled（camelCase）。");
+        Assert.IsTrue(
+            serialized.Contains("\"launcherDiscoveryFolders\"", StringComparison.Ordinal),
+            "JSON 键必须是 launcherDiscoveryFolders（camelCase）。");
+        var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsFalse(restored.LauncherDiscoveryEnabled);
+        // 列表成员是引用相等语义：逐项比较（record 整体相等不适用于集合成员）。
+        CollectionAssert.AreEqual(folders, (System.Collections.ICollection)restored.LauncherDiscoveryFolders!);
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutLauncherDiscoveryFields_FallsBackToDefaults()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","rightClickCardCopyEnabled":true}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsTrue(restored.LauncherDiscoveryEnabled, "旧 preferences.json 缺字段时必须回落到默认开启。");
+        Assert.IsNull(restored.LauncherDiscoveryFolders, "缺字段回落无自定义文件夹（免迁移）。");
     }
 
     [TestMethod]

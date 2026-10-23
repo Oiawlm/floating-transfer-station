@@ -31,6 +31,37 @@ public sealed class VolatileLauncherStore : ILauncherStore
 }
 
 /// <summary>
+/// 易失发现清单存储（#45）：无盘内存实现——测试与无持久化注入场景的回退，
+/// 行为契约与 LocalStore 相同（整集合读写）。
+/// </summary>
+public sealed class VolatileLauncherDiscoveryStore : ILauncherDiscoveryStore
+{
+    private readonly Lock _gate = new();
+    private LauncherDiscoveryStoreData _data = LauncherDiscoveryStoreData.Empty;
+
+    public Task<LauncherDiscoveryStoreData> LoadAsync(CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            return Task.FromResult(new LauncherDiscoveryStoreData(
+                _data.Version,
+                [.. _data.Pending],
+                [.. _data.DismissedKeys]));
+        }
+    }
+
+    public Task SaveAsync(LauncherDiscoveryStoreData data, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            _data = new LauncherDiscoveryStoreData(data.Version, [.. data.Pending], [.. data.DismissedKeys]);
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
 /// 启动项文件导入助手（#30）：∈{*.exe,*.lnk} 为可导入，其余跳过并计数
 /// （状态条一次性汇报「添加了 N 项，跳过 M 个不支持的文件，K 个已存在」）。
 /// </summary>

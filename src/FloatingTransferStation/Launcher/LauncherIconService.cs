@@ -1158,6 +1158,14 @@ internal sealed class LauncherIconService : IDisposable
         }
     }
 
+    /// <summary>
+    /// 在图标管线的 STA 专线程上执行委托并等待结果（#45 启动·自动发现的扫描承载）：
+    /// 开始菜单/自定义文件夹 .lnk 解析与 AppsFolder 枚举同为 Shell COM（IPersistFile
+    /// 在 MTA 上 RPC_E_CHANGED_MODE），必须 STA；复用本线程＝不开新常驻线程，扫描
+    /// 与图标提取自然串行、互不占 UI。仅窗口生命周期内调用（Dispose 后派发器已关停）。
+    /// </summary>
+    internal Task<T> InvokeOnStaAsync<T>(Func<T> func) => _iconDispatcher.InvokeAsync(func).Task;
+
     public void Dispose()
     {
         _iconDispatcher.InvokeShutdown();

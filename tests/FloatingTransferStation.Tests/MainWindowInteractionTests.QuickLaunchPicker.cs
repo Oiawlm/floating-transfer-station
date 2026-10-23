@@ -21,7 +21,26 @@ public sealed partial class MainWindowInteractionTests
 {
     private static InstalledApp FakeInstalledApp(string aumid, string displayName) => new(aumid, displayName);
 
-    private static void CheckPickerRow(InstalledAppPickerWindow picker, int index)
+    /// <summary>泛化选择器（#45）的已安装应用装配：与生产调用点同一映射（Payload=InstalledApp）。</summary>
+    private static MultiItemPickerWindow CreateInstalledPicker(
+        DesignTheme theme,
+        IReadOnlyList<InstalledApp> apps,
+        ISet<string>? existingAumids = null)
+    {
+        existingAumids ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return new MultiItemPickerWindow(
+            theme,
+            "添加已安装应用",
+            "搜索应用",
+            "未枚举到已安装应用",
+            apps.Select(app => new MultiItemPickerWindow.PickerRow(
+                app,
+                app.DisplayName,
+                subtitle: null,
+                existingAumids.Contains(app.Aumid))).ToList());
+    }
+
+    private static void CheckPickerRow(MultiItemPickerWindow picker, int index)
     {
         var container = ((ItemsControl)picker.FindName("PickerList")!).ItemContainerGenerator.ContainerFromIndex(index);
         var checkBox = FindDescendant<CheckBox>(container);
@@ -29,7 +48,7 @@ public sealed partial class MainWindowInteractionTests
         checkBox.IsChecked = true;
     }
 
-    private static void ClickPickerConfirm(InstalledAppPickerWindow picker) =>
+    private static void ClickPickerConfirm(MultiItemPickerWindow picker) =>
         picker.PickerConfirmButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, picker.PickerConfirmButton));
 
     // ---- 真实 AppsFolder 枚举（smoke：非空、AUMID 唯一、显示名无重复、区域排序） ----
@@ -78,7 +97,7 @@ public sealed partial class MainWindowInteractionTests
             FakeInstalledApp("app.note", "记事本"),
             FakeInstalledApp("app.center", "计算中心")
         };
-        var picker = new InstalledAppPickerWindow(DesignTheme.Light, apps, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        var picker = CreateInstalledPicker(DesignTheme.Light, apps);
         picker.Show();
         picker.Resources[SystemParameters.ClientAreaAnimationKey] = false;
         try
@@ -123,8 +142,10 @@ public sealed partial class MainWindowInteractionTests
             FakeInstalledApp("app.note", "记事本"),
             FakeInstalledApp("app.old", "旧应用")
         };
-        var picker = new InstalledAppPickerWindow(
-            DesignTheme.Light, apps, new HashSet<string>(["app.old"], StringComparer.OrdinalIgnoreCase));
+        var picker = CreateInstalledPicker(
+            DesignTheme.Light,
+            apps,
+            new HashSet<string>(["app.old"], StringComparer.OrdinalIgnoreCase));
         picker.Show();
         picker.Resources[SystemParameters.ClientAreaAnimationKey] = false;
         try
@@ -137,9 +158,10 @@ public sealed partial class MainWindowInteractionTests
             ClickPickerConfirm(picker);
             CompleteLayout(picker);
 
-            Assert.AreEqual(2, picker.Selection.Count, "确认回传勾选清单（含已添加项——去重在添加路径收敛）。");
-            Assert.AreEqual("app.calc", picker.Selection[0].Aumid);
-            Assert.AreEqual("app.old", picker.Selection[1].Aumid);
+            var selection = picker.Selection.OfType<InstalledApp>().ToList();
+            Assert.AreEqual(2, selection.Count, "确认回传勾选清单（含已添加项——去重在添加路径收敛）。");
+            Assert.AreEqual("app.calc", selection[0].Aumid);
+            Assert.AreEqual("app.old", selection[1].Aumid);
         }
         finally
         {
@@ -150,8 +172,8 @@ public sealed partial class MainWindowInteractionTests
     [STATestMethod]
     public void InstalledPicker_EscapeClosesWithEmptySelection()
     {
-        var picker = new InstalledAppPickerWindow(
-            DesignTheme.Light, [FakeInstalledApp("app.calc", "计算器")], new HashSet<string>());
+        var picker = CreateInstalledPicker(
+            DesignTheme.Light, [FakeInstalledApp("app.calc", "计算器")]);
         picker.Show();
         picker.Resources[SystemParameters.ClientAreaAnimationKey] = false;
         try
@@ -175,7 +197,7 @@ public sealed partial class MainWindowInteractionTests
     [STATestMethod]
     public void InstalledPicker_EmptySourceShowsEnumerationHint()
     {
-        var picker = new InstalledAppPickerWindow(DesignTheme.Light, [], new HashSet<string>());
+        var picker = CreateInstalledPicker(DesignTheme.Light, []);
         picker.Show();
         picker.Resources[SystemParameters.ClientAreaAnimationKey] = false;
         try

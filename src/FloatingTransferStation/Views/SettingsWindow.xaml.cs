@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Controls;
@@ -58,9 +59,9 @@ public partial class SettingsWindow : Window
         StartupToggle.IsChecked = host.StartupManager.IsEnabled();
         GlobalHotkeyToggle.IsChecked = host.CurrentPreferences.GlobalHotkeyEnabled;
         AutoUpdateCheckToggle.IsChecked = host.CurrentPreferences.AutoUpdateCheckEnabled;
-        RightClickCopyToggle.IsChecked = host.CurrentPreferences.RightClickCardCopyEnabled;
         CtrlCCopyToggle.IsChecked = host.CurrentPreferences.CopySelectionWithCtrlCEnabled;
         ShortCardNotesToggle.IsChecked = host.CurrentPreferences.ShortCardNotesEnabled;
+        LauncherDiscoveryToggle.IsChecked = host.CurrentPreferences.LauncherDiscoveryEnabled;
         AutoCleanupToggle.IsChecked = host.CurrentPreferences.AutoCleanupEnabled;
         // 档位显示文案由唯一映射派生（全仓小时数字面量只允许出现在映射与测试期望），
         // 枚举序≠显示序（零值是默认档 24h），选中项一律按 Tag 匹配、不依赖下标；
@@ -127,6 +128,9 @@ public partial class SettingsWindow : Window
             host.CurrentPreferences.AiOrganizeSystemPromptOverride ?? string.Empty;
 
         _isSynchronizingControls = false;
+
+        RebuildLauncherDiscoveryFolderRows();
+        SetLauncherDiscoveryInputAvailability(host.CurrentPreferences.LauncherDiscoveryEnabled);
 
         DataDirectoryText.Text = host.DataDirectory;
         AppNameRun.Text = ProductIdentity.DisplayName;
@@ -617,25 +621,6 @@ public partial class SettingsWindow : Window
         _isSynchronizingControls = false;
     }
 
-    private void RightClickCopyToggle_Checked(object sender, RoutedEventArgs e) =>
-        ApplyCopyGesturePreference(rightClickCardCopy: true);
-
-    private void RightClickCopyToggle_Unchecked(object sender, RoutedEventArgs e) =>
-        ApplyCopyGesturePreference(rightClickCardCopy: false);
-
-    private void ApplyCopyGesturePreference(bool rightClickCardCopy)
-    {
-        if (_isSynchronizingControls)
-        {
-            return;
-        }
-
-        _host.ApplyPreferences(_host.CurrentPreferences with
-        {
-            RightClickCardCopyEnabled = rightClickCardCopy
-        });
-    }
-
     private void CtrlCCopyToggle_Checked(object sender, RoutedEventArgs e) =>
         ApplyCtrlCCopyPreference(enabled: true);
 
@@ -672,6 +657,174 @@ public partial class SettingsWindow : Window
         {
             ShortCardNotesEnabled = enabled
         });
+    }
+
+    // ---- 启动·自动发现（#45）：开关＋监视文件夹管理，全部经 ApplyPreferences
+    // 唯一管线即时生效（契约 #5）——主窗在管线内重建监视源并立即重扫。----
+
+    private void LauncherDiscoveryToggle_Checked(object sender, RoutedEventArgs e) =>
+        ApplyLauncherDiscoveryPreference(enabled: true);
+
+    private void LauncherDiscoveryToggle_Unchecked(object sender, RoutedEventArgs e) =>
+        ApplyLauncherDiscoveryPreference(enabled: false);
+
+    private void ApplyLauncherDiscoveryPreference(bool enabled)
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        SetLauncherDiscoveryInputAvailability(enabled);
+        _host.ApplyPreferences(_host.CurrentPreferences with
+        {
+            LauncherDiscoveryEnabled = enabled
+        });
+    }
+
+    /// <summary>当前监视文件夹列表快照（null 偏好＝空列表）。</summary>
+    private List<string> CurrentLauncherDiscoveryFolders() =>
+        _host.CurrentPreferences.LauncherDiscoveryFolders?.ToList() ?? [];
+
+    /// <summary>文件夹行构建（代码构建行，画刷经动态资源引用——主题活切换跟随，
+    /// 契约 #24/#28 同族）。移除钮直接提交偏好。</summary>
+    private void RebuildLauncherDiscoveryFolderRows()
+    {
+        LauncherDiscoveryFolderList.Children.Clear();
+        foreach (var folder in CurrentLauncherDiscoveryFolders())
+        {
+            if (string.IsNullOrWhiteSpace(folder))
+            {
+                continue;
+            }
+
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var path = new TextBlock
+            {
+                Text = folder,
+                FontSize = 12,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = folder
+            };
+            path.SetResourceReference(TextBlock.ForegroundProperty, "PrimaryTextBrush");
+            Grid.SetColumn(path, 0);
+            var remove = new Button
+            {
+                Content = "移除",
+                FontSize = 12,
+                Height = 28,
+                Padding = new Thickness(12, 0, 12, 0),
+                Margin = new Thickness(8, 0, 0, 0),
+                Style = (Style)FindResource("ThemedActionButtonStyle")
+            };
+            System.Windows.Automation.AutomationProperties.SetName(remove, $"移除监视文件夹 {folder}");
+            remove.Click += (_, _) => ApplyLauncherDiscoveryFolders(
+                CurrentLauncherDiscoveryFolders()
+                    .Where(entry => !string.Equals(entry, folder, StringComparison.OrdinalIgnoreCase))
+                    .ToList());
+            Grid.SetColumn(remove, 1);
+            row.Children.Add(path);
+            row.Children.Add(remove);
+            LauncherDiscoveryFolderList.Children.Add(row);
+        }
+    }
+
+    private void LauncherDiscoveryFolderBrowse_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "选择监视文件夹" };
+        if (dialog.ShowDialog(this) == true)
+        {
+            LauncherDiscoveryFolderInput.Text = dialog.FolderName;
+        }
+    }
+
+    private void LauncherDiscoveryFolderAdd_Click(object sender, RoutedEventArgs e)
+    {
+        var raw = LauncherDiscoveryFolderInput.Text.Trim();
+        string? candidate = null;
+        string? error = null;
+        if (raw.Length == 0)
+        {
+            error = "请输入或选择一个文件夹路径。";
+        }
+        else if (!Path.IsPathFullyQualified(raw))
+        {
+            error = $"不是完整路径：{raw}";
+        }
+        else if (!Directory.Exists(raw))
+        {
+            error = $"文件夹不存在：{raw}";
+        }
+        else
+        {
+            try
+            {
+                candidate = Path.GetFullPath(raw).TrimEnd(
+                    Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+            catch (Exception exception) when (
+                exception is ArgumentException or NotSupportedException)
+            {
+                error = $"路径无效：{raw}";
+            }
+        }
+
+        if (error is null && candidate is not null)
+        {
+            if (CurrentLauncherDiscoveryFolders().Contains(candidate, StringComparer.OrdinalIgnoreCase))
+            {
+                error = "该文件夹已在监视列表中。";
+            }
+        }
+
+        if (error is not null || candidate is null)
+        {
+            ShowLauncherDiscoveryFolderStatus(error ?? "路径无效。");
+            return;
+        }
+
+        ApplyLauncherDiscoveryFolders([.. CurrentLauncherDiscoveryFolders(), candidate]);
+        LauncherDiscoveryFolderInput.Text = string.Empty;
+        ClearLauncherDiscoveryFolderStatus();
+    }
+
+    private void ApplyLauncherDiscoveryFolders(List<string> folders)
+    {
+        _host.ApplyPreferences(_host.CurrentPreferences with
+        {
+            LauncherDiscoveryFolders = folders
+        });
+        RebuildLauncherDiscoveryFolderRows();
+    }
+
+    private void SetLauncherDiscoveryInputAvailability(bool enabled)
+    {
+        LauncherDiscoveryFolderInput.IsEnabled = enabled;
+        LauncherDiscoveryFolderBrowseButton.IsEnabled = enabled;
+        LauncherDiscoveryFolderAddButton.IsEnabled = enabled;
+        LauncherDiscoveryFolderList.IsEnabled = enabled;
+        foreach (var child in LauncherDiscoveryFolderList.Children.OfType<Grid>())
+        {
+            foreach (var element in child.Children.OfType<UIElement>())
+            {
+                element.IsEnabled = enabled;
+            }
+        }
+    }
+
+    private void ShowLauncherDiscoveryFolderStatus(string message)
+    {
+        LauncherDiscoveryFolderStatus.Text = message;
+        LauncherDiscoveryFolderStatus.Visibility = Visibility.Visible;
+    }
+
+    private void ClearLauncherDiscoveryFolderStatus()
+    {
+        LauncherDiscoveryFolderStatus.Text = string.Empty;
+        LauncherDiscoveryFolderStatus.Visibility = Visibility.Collapsed;
     }
 
     private void AutoCleanupToggle_Checked(object sender, RoutedEventArgs e) =>

@@ -17,7 +17,7 @@ namespace FloatingTransferStation.Tests;
 /// Handled，实机双击的系统触发链被阻断。本文件全部用真实事件序列
 /// （预览按下/抬起，timestamp 可控递增）驱动手势层，不依赖系统双击链。
 /// 左半：双击编辑、拖拽起点，无选择语义；
-/// 右半：单击 toggle 选择、Shift 范围选择、右键复制。
+/// 右半：左键复制（任意修饰键）、右键 toggle/范围选择（手势交换，Issue #216）。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -140,7 +140,7 @@ public sealed partial class MainWindowInteractionTests
                 ModifierKeys.Shift
             })
             {
-                ClickCard(window, first, modifiers, CardGestureZones.ContentZone);
+                LeftClickCard(window, first, modifiers, CardGestureZones.ContentZone);
             }
 
             CollectionAssert.AreEqual(
@@ -155,13 +155,19 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CardGestures_OperationsZoneBareClickTogglesOnlyHitItem()
+    public void CardGestures_OperationsZoneBareClickCopiesOnlyHitCard()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
         var first = board.AddText("第一张");
         var second = board.AddText("第二张");
         var window = CreateWindow(directory, board);
+        DataObject? captured = null;
+        window.ClipboardWriterOverride = data =>
+        {
+            captured = data;
+            return true;
+        };
 
         try
         {
@@ -171,26 +177,23 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
             list.SelectedItems.Add(second);
 
-            // 裸单击右半：toggle 命中条目，不影响其他已选。
-            ClickCard(window, first, ModifierKeys.None);
-            CollectionAssert.AreEquivalent(
-                new[] { first, second },
-                list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "右半单击 toggle 命中条目且不影响其他已选。");
-
-            // 再单击：取消选择，其他已选保留。
-            ClickCard(window, first, ModifierKeys.None);
+            // 裸左键单击右半：复制命中条目，不依赖、不改变其他已选。
+            LeftClickCard(window, first, ModifierKeys.None);
+            Assert.IsNotNull(captured);
+            Assert.AreEqual("第一张", captured.GetData(DataFormats.UnicodeText));
             CollectionAssert.AreEqual(
                 new[] { second },
                 list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "再次右半单击取消命中条目。");
+                "右半左键复制不得依赖或改变当前选择。");
 
-            // 取证：右半单击选中一张、其他已选保留的选中态视觉。
-            ClickCard(window, first, ModifierKeys.None);
-            SaveVisualEvidence(
-                (Border)window.FindName("WindowShell"),
-                "gesture-operations-click-selected.png",
-                "FTS_GESTURE_EVIDENCE_DIR");
+            // 再单击：再次复制（逐击独立分发，无双击窗），选择仍不变。
+            captured = null;
+            LeftClickCard(window, first, ModifierKeys.None);
+            Assert.IsNotNull(captured, "右半第二击（原地快速连点）必须再次复制。");
+            CollectionAssert.AreEqual(
+                new[] { second },
+                list.SelectedItems.Cast<BoardItem>().ToArray(),
+                "右半左键复制不得改变选择。");
         }
         finally
         {
@@ -205,6 +208,12 @@ public sealed partial class MainWindowInteractionTests
         var board = new BoardService();
         var item = board.AddText("Ctrl 单击");
         var window = CreateWindow(directory, board);
+        DataObject? captured = null;
+        window.ClipboardWriterOverride = data =>
+        {
+            captured = data;
+            return true;
+        };
 
         try
         {
@@ -213,11 +222,12 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
 
-            ClickCard(window, item, ModifierKeys.Control);
-            CollectionAssert.AreEqual(
-                new[] { item },
+            LeftClickCard(window, item, ModifierKeys.Control);
+            Assert.IsNotNull(captured, "Ctrl+右半单击与裸单击等效复制。");
+            Assert.AreEqual("Ctrl 单击", captured.GetData(DataFormats.UnicodeText));
+            Assert.IsEmpty(
                 list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "Ctrl+右半单击与裸单击等效 toggle。");
+                "右半左键复制不得改变选择。");
         }
         finally
         {
@@ -226,7 +236,52 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CardGestures_OperationsZoneRapidRepeatClicksToggleEachTime()
+    public void CardGestures_OperationsZoneClickWithAnyModifierStillCopies()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("修饰键单击", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+        var capturedCount = 0;
+        window.ClipboardWriterOverride = data =>
+        {
+            capturedCount++;
+            return true;
+        };
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+
+            // 手势交换定案（Issue #216）：复制对左键的全部修饰键组合无差别——
+            // 旧 Shift/Ctrl+左键的选择语义整体迁往右键，修饰键不再分流左键。
+            // （修饰键注入助手 WithThreadKeyboardModifiers 只支持 Shift/Ctrl。）
+            foreach (var modifiers in new[]
+            {
+                ModifierKeys.Shift,
+                ModifierKeys.Control | ModifierKeys.Shift,
+                ModifierKeys.Control
+            })
+            {
+                LeftClickCard(window, item, modifiers);
+            }
+
+            Assert.AreEqual(3, capturedCount, "每种修饰键组合的右半左键都必须复制。");
+            Assert.IsEmpty(
+                list.SelectedItems.Cast<BoardItem>().ToArray(),
+                "右半左键复制不得改变选择。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardGestures_OperationsZoneRapidRepeatRightClicksToggleEachTime()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -254,35 +309,34 @@ public sealed partial class MainWindowInteractionTests
 
             try
             {
-                // 预热一击（打在左半，无选择语义）让几何定稿，并拉开双击窗——
-                // 正式三击必须构成同位置快速连点（两击间隔落在系统双击时限内）。
+                // 预热一击（打在左半，无选择语义）让几何定稿，并把光标带到
+                // 窗口上（真实位移保证悬停事件生成）。
                 ClickRealAt(window, container, new Point(24, container.ActualHeight / 2));
                 PumpDispatcherFor(
                     window.Dispatcher,
                     TimeSpan.FromMilliseconds(GetDoubleClickTime() + 100));
 
-                // 端到端守护（1.28.0 修订，Win32 消息直驱）：右半同一位置连点，
-                // 每一击都 toggle——两击=选中→取消，三击=净选中。旧实现把第二击
-                // 当双击吞掉（双击窗分支对 Operations 无分发路径且被吞点击仍
-                // 刷新痕迹），必须挪动鼠标或等超时才能再次 toggle。
+                // 端到端守护（手势交换，Issue #216；Win32 右键消息直驱）：
+                // 右半同一位置快速右键连点，每一击都 toggle——两击=选中→取消，
+                // 三击=净选中。右键分发不看双击痕迹，第二击绝不被吞。
                 var list = (ListBox)window.FindName("BoardList");
-                ClickRealAt(window, container, clickPoint);
+                ClickRealRightAt(window, container, clickPoint);
                 CollectionAssert.AreEquivalent(
                     new[] { item },
                     list.SelectedItems.Cast<BoardItem>().ToArray(),
-                    "右半第一击选中。");
+                    "右半第一击右键选中。");
 
-                ClickRealAt(window, container, clickPoint);
+                ClickRealRightAt(window, container, clickPoint);
                 Assert.AreEqual(
                     0,
                     list.SelectedItems.Count,
-                    "右半第二击（同位置快速连点）必须取消选中，不得被双击窗吞掉。");
+                    "右半第二击右键（同位置快速连点）必须取消选中。");
 
-                ClickRealAt(window, container, clickPoint);
+                ClickRealRightAt(window, container, clickPoint);
                 CollectionAssert.AreEquivalent(
                     new[] { item },
                     list.SelectedItems.Cast<BoardItem>().ToArray(),
-                    "右半第三击重新选中（三连击=选中→取消→选中）。");
+                    "右半第三击右键重新选中（三连击=选中→取消→选中）。");
             }
             finally
             {
@@ -292,7 +346,7 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(
                 string.Empty,
                 StatusOf(window),
-                "右半连点不触发编辑或复制等其他意图。");
+                "右半右键连点不触发编辑或复制等其他意图。");
         }
         finally
         {
@@ -567,6 +621,12 @@ public sealed partial class MainWindowInteractionTests
         var item = board.AddText("拖拽后点击");
         var other = board.AddText("另一张");
         var window = CreateWindow(directory, board);
+        DataObject? captured = null;
+        window.ClipboardWriterOverride = data =>
+        {
+            captured = data;
+            return true;
+        };
 
         try
         {
@@ -577,7 +637,8 @@ public sealed partial class MainWindowInteractionTests
             list.SelectedItems.Add(other);
             var hitSource = ZoneHitSource(window, item, CardGestureZones.OperationsZone);
 
-            // 模拟超过拖拽阈值的按压会话：Up 不分发任何点击语义。
+            // 模拟超过拖拽阈值的按压会话：Up 不分发任何点击语义——右半左键
+            // 是复制手势（手势交换，Issue #216），成拖拽的按压同样不得复制。
             var down = NewMouseButtonEventArgs(
                 Mouse.PreviewMouseDownEvent,
                 hitSource,
@@ -592,10 +653,11 @@ public sealed partial class MainWindowInteractionTests
                 hitSource,
                 down.Timestamp + 5));
 
+            Assert.IsNull(captured, "拖拽发生后的右半左键 Up 不得触发复制。");
             CollectionAssert.AreEqual(
                 new[] { other },
                 list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "拖拽发生后的 Up 不得触发点击语义。");
+                "拖拽发生后的 Up 不得触发选择语义。");
         }
         finally
         {
@@ -608,10 +670,11 @@ public sealed partial class MainWindowInteractionTests
     private const int MkLbutton = 0x0001;
 
     /// <summary>
-    /// F1 交互证据（1.28.0，契约 #14 修订；环境变量 FTS_GESTURE_EVIDENCE_DIR
-    /// 设置时在目录下输出 <c>operations-rapid-repeat-clicks-N.png</c> 关键帧
-    /// 序列）：真实输入管线（Win32 消息直驱）的右半原地快速连点，逐状态捕获
-    /// 真实 UI——选中→取消→选中，每击都生效。未设置环境变量时仍作为守护运行。
+    /// F1 交互证据（手势交换，Issue #216；环境变量 FTS_GESTURE_EVIDENCE_DIR
+    /// 设置时在目录下输出 <c>operations-rapid-repeat-right-clicks-N.png</c> 关键帧
+    /// 序列）：真实输入管线（Win32 右键消息直驱）的右半原地快速右键连点，
+    /// 逐状态捕获真实 UI——选中→取消→选中，每击都生效。未设置环境变量时
+    /// 仍作为守护运行。
     /// </summary>
     [STATestMethod]
     public void CardGestures_OperationsZoneRapidRepeatClicksRecording()
@@ -647,18 +710,18 @@ public sealed partial class MainWindowInteractionTests
                     TimeSpan.FromMilliseconds(GetDoubleClickTime() + 100));
                 frames.Add(RenderFrame(container));
 
-                ClickRealAt(window, container, clickPoint);
-                Assert.AreEqual(1, list.SelectedItems.Count, "第一击选中（帧 1 前置）。");
+                ClickRealRightAt(window, container, clickPoint);
+                Assert.AreEqual(1, list.SelectedItems.Count, "第一击右键选中（帧 1 前置）。");
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
                 frames.Add(RenderFrame(container));
 
-                ClickRealAt(window, container, clickPoint);
-                Assert.AreEqual(0, list.SelectedItems.Count, "第二击取消（帧 2 前置）。");
+                ClickRealRightAt(window, container, clickPoint);
+                Assert.AreEqual(0, list.SelectedItems.Count, "第二击右键取消（帧 2 前置）。");
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
                 frames.Add(RenderFrame(container));
 
-                ClickRealAt(window, container, clickPoint);
-                Assert.AreEqual(1, list.SelectedItems.Count, "第三击净选中（帧 3 前置）。");
+                ClickRealRightAt(window, container, clickPoint);
+                Assert.AreEqual(1, list.SelectedItems.Count, "第三击右键净选中（帧 3 前置）。");
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
                 frames.Add(RenderFrame(container));
             }
@@ -667,7 +730,7 @@ public sealed partial class MainWindowInteractionTests
                 RestoreCursorPosition(savedCursor);
             }
 
-            SaveFrameSequenceRecording(container, frames, "operations-rapid-repeat-clicks");
+            SaveFrameSequenceRecording(container, frames, "operations-rapid-repeat-right-clicks");
         }
         finally
         {

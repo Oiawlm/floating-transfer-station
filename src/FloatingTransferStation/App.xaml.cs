@@ -143,6 +143,7 @@ public partial class App : Application
                 aiTextOrganizer: aiTextOrganizer,
                 updateService: updateService,
                 launcherStore: store,
+                launcherDiscoveryStore: store,
                 appLauncher: new FloatingTransferStation.Services.AppLauncher(
                     packagedActivator: new FloatingTransferStation.Launcher.ShellPackagedAppActivator().Activate));
             MainWindow = window;

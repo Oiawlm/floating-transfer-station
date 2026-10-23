@@ -33,7 +33,7 @@ internal partial class LauncherEditTargetWindow : Window
     public LauncherEditedTarget? Result { get; private set; }
 
     /// <summary>选择器对话框显示（测试缝：同创建入口 _showPickerDialog）。</summary>
-    internal Func<InstalledAppPickerWindow, bool?> _showPickerDialog = static picker => picker.ShowDialog();
+    internal Func<MultiItemPickerWindow, bool?> _showPickerDialog = static picker => picker.ShowDialog();
 
     /// <summary>模态标记（DialogResult 只在 ShowDialog 路径合法；测试以 Show 驱动）。</summary>
     public new bool? ShowDialog()
@@ -146,14 +146,24 @@ internal partial class LauncherEditTargetWindow : Window
 
     private void OpenPackagedAppPicker()
     {
-        var picker = new InstalledAppPickerWindow(
+        var currentAumid = TargetInputBox.Text;
+        var picker = new MultiItemPickerWindow(
             DesignThemeManager.DetectSystemTheme(),
-            InstalledAppsEnumerator.Enumerate(),
-            new HashSet<string>(StringComparer.Ordinal) { TargetInputBox.Text })
+            "添加已安装应用",
+            "搜索应用",
+            "未枚举到已安装应用",
+            InstalledAppsEnumerator.Enumerate()
+                .Select(app => new MultiItemPickerWindow.PickerRow(
+                    app,
+                    app.DisplayName,
+                    subtitle: null,
+                    string.Equals(app.Aumid, currentAumid, StringComparison.Ordinal)))
+                .ToList())
         { Owner = this };
-        if (_showPickerDialog(picker) == true && picker.Selection is { Count: > 0 } selection)
+        if (_showPickerDialog(picker) == true &&
+            picker.Selection.OfType<InstalledApp>().FirstOrDefault() is { } chosen)
         {
-            TargetInputBox.Text = selection[0].Aumid;
+            TargetInputBox.Text = chosen.Aumid;
         }
     }
 

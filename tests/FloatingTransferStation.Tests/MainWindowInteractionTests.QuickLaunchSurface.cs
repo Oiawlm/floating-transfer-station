@@ -1750,7 +1750,7 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
-    private static void CheckPickerRowForDocs(InstalledAppPickerWindow picker, int index)
+    private static void CheckPickerRowForDocs(MultiItemPickerWindow picker, int index)
     {
         var container = picker.PickerList.ItemContainerGenerator.ContainerFromIndex(index);
         var checkBox = FindDescendant<CheckBox>(container);
