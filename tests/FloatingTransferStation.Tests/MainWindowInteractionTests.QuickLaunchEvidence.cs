@@ -107,4 +107,70 @@ public sealed partial class MainWindowInteractionTests
         using var stream = File.Create(Path.Combine(directory, fileName));
         encoder.Save(stream);
     }
+
+    /// <summary>
+    /// 启动器列数策略发布证据（契约 #30 修订，2026-10-24）：固定 4 列瓦片网格
+    /// ×浅/深主题实拍——窗口以固定 4 列偏好构造，瓦片宽=摊分公式，主题切换即拍。
+    /// </summary>
+    [STATestMethod]
+    public void Evidence_CaptureLauncherFixedColumnsBothThemes()
+    {
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_QUICKLAUNCH_EVIDENCE_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_QUICKLAUNCH_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var items = Enumerable.Range(0, 9)
+            .Select(index => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.Application,
+                $"{app.Path}.{index}",
+                $"应用{index}",
+                DateTimeOffset.UtcNow))
+            .ToArray();
+        store.SaveAsync(new LauncherStoreData(LauncherStoreData.CurrentVersion, [.. items]))
+            .GetAwaiter().GetResult();
+        var window = CreateLauncherWindow(
+            directory,
+            board,
+            store,
+            starter,
+            AppPreferences.Default with { LauncherColumnStrategy = LauncherColumnStrategy.Fixed4 });
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+
+            foreach (var (theme, suffix) in new[]
+            {
+                (DesignTheme.Light, "light"),
+                (DesignTheme.Dark, "dark"),
+            })
+            {
+                DesignThemeManager.Apply(window, theme);
+                ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+                CompleteLayout(window);
+
+                var panel = FindDescendant<LauncherTilePanel>(window.LauncherTileGrid);
+                Assert.IsNotNull(panel);
+                Assert.AreEqual(4, panel.EffectiveColumnCount, 0, $"实拍前置：{suffix} 主题下固定 4 列生效。");
+                SaveVisualEvidence(
+                    (Border)window.FindName("WindowShell"),
+                    $"launcher-fixed4-{suffix}.png",
+                    "FTS_QUICKLAUNCH_EVIDENCE_DIR");
+            }
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
 }

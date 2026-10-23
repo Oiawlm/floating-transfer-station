@@ -580,4 +580,60 @@ public sealed class AppPreferencesTests
             restored.AiOrganizeSystemPromptOverride,
             "1.52.0 之前的 preferences.json 必须回落到内置默认提示词（null）。");
     }
+
+    [TestMethod]
+    public void Default_UsesAdaptiveLauncherColumnStrategy()
+    {
+        Assert.AreEqual(
+            LauncherColumnStrategy.Adaptive,
+            AppPreferences.Default.LauncherColumnStrategy,
+            "默认列数策略=自适应（老用户升级零感知＝现行为）。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesLauncherColumnStrategy()
+    {
+        // LocalStore 以 camelCase + 字符串枚举持久化：五档都走同一份选项验证往返，
+        // 键名一并锁定（camelCase 落盘形态）。
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        foreach (var strategy in Enum.GetValues<LauncherColumnStrategy>())
+        {
+            var preferences = AppPreferences.Default with { LauncherColumnStrategy = strategy };
+
+            var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+            if (strategy == LauncherColumnStrategy.Adaptive)
+            {
+                StringAssert.Contains(serialized, "\"launcherColumnStrategy\":\"Adaptive\"", "落盘键名必须是 launcherColumnStrategy（camelCase）且枚举按名序列化。");
+            }
+
+            var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+            Assert.AreEqual(preferences, restored);
+            Assert.AreEqual(strategy, restored!.LauncherColumnStrategy);
+        }
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutLauncherColumnStrategyField_FallsBackToAdaptive()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","shortCardNotesEnabled":true}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.AreEqual(
+            LauncherColumnStrategy.Adaptive,
+            restored.LauncherColumnStrategy,
+            "旧 preferences.json 缺字段时必须回落到自适应（升级零感知）。");
+        Assert.IsTrue(restored.ShortCardNotesEnabled, "测试数据里的旧字段语义不受新字段影响。");
+    }
 }

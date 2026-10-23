@@ -28,11 +28,13 @@ $exemptDocExtensions = @('.md', '.markdown', '.png', '.jpg', '.jpeg', '.gif', '.
 $assertedRootDocs = @('README.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'ROADMAP.md', 'LICENSE')
 
 # ---- 精确区域规则（Glob 相对仓库根、正斜杠；一文件可命中多规则＝区域并集）----
-# 快捷启动（启动器）：瓦片/URL/选择器/图标/目录/存储/Shell 互操作/网格几何（取证 2026-10-19 缩圈）。
+# 快捷启动（启动器）：瓦片/URL/选择器/图标/目录/存储/Shell 互操作/网格几何（取证 2026-10-19 缩圈）；
+# 2026-10-24 增 LauncherTilePanel 网格承载与 LauncherColumn 列数策略词根（设置窗交互旅程断言面板重排，属启动器消费面）。
 $rules = @(
-    @{ Name = 'Launcher'; Filter = 'FullyQualifiedName~QuickLaunch|FullyQualifiedName~UrlInput|FullyQualifiedName~Discovery'; Globs = @(
+    @{ Name = 'Launcher'; Filter = 'FullyQualifiedName~QuickLaunch|FullyQualifiedName~UrlInput|FullyQualifiedName~Discovery|FullyQualifiedName~LauncherColumn'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.QuickLaunch*.cs',
         'src/FloatingTransferStation/Views/MainWindow.LauncherDiscovery*.cs',
+        'src/FloatingTransferStation/Views/LauncherTilePanel.cs',
         'src/FloatingTransferStation/Views/LauncherUrlInputWindow*', 'src/FloatingTransferStation/Views/MultiItemPickerWindow*',
         'src/FloatingTransferStation/Views/LauncherEditTargetWindow*', 'src/FloatingTransferStation/Launcher/*',
         'src/FloatingTransferStation/Services/ShellInterop.cs',
