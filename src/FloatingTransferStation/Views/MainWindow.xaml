@@ -643,6 +643,37 @@
                        Margin="2,8,2,0"
                        Foreground="{DynamicResource SecondaryTextBrush}"
                        Text="今天还没有复盘内容。" />
+            <!-- 复盘空态引导（契约 #33 复盘扩展，复用 BoardEmptyState 同一设计语言：
+                 图标＋标题＋副文案，编辑器行内垂直居中，无 CTA——复盘的进入路径是
+                 直接输入，编辑器本身就是动作面）。可见性与文案由
+                 UpdateReviewEmptyState 单点管理（表面切换/输入/日期装载/外部变更四
+                 触发路径）；文案复用 BoardEmptyStateCopy 矩阵复盘臂。纯信息性：
+                 IsHitTestVisible=False 让点击穿透到编辑器取得焦点。声明在编辑器之后
+                 ＝同格渲染其上；编辑器为空时才可见，不与内容争用。 -->
+            <StackPanel x:Name="ReviewEmptyState"
+                        Grid.Row="1"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        IsHitTestVisible="False"
+                        Visibility="Collapsed">
+              <TextBlock HorizontalAlignment="Center"
+                         FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                         FontSize="36"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Text="&#xE70F;" />
+              <TextBlock x:Name="ReviewEmptyStateTitle"
+                         Margin="0,10,0,2"
+                         HorizontalAlignment="Center"
+                         FontSize="14"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource PrimaryTextBrush}"
+                         Text="还没有复盘内容" />
+              <TextBlock x:Name="ReviewEmptyStateHint"
+                         HorizontalAlignment="Center"
+                         FontSize="12"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Text="直接输入即可开始记录，内容会自动保存" />
+            </StackPanel>
           </Grid>
         </Border>
 
