@@ -947,24 +947,17 @@ public sealed class SettingsWindowInteractionTests
         try
         {
             var settings = OpenSettings(window);
-            var rightClick = settings.FindName("RightClickCopyToggle") as CheckBox;
+            // 手势统一（Issue #216）移除了右键复制开关：内容复制节只剩 Ctrl+C。
+            Assert.IsNull(settings.FindName("RightClickCopyToggle"));
             var ctrlC = settings.FindName("CtrlCCopyToggle") as CheckBox;
-            Assert.IsNotNull(rightClick);
             Assert.IsNotNull(ctrlC);
-            Assert.IsTrue(rightClick.IsChecked!.Value, "右键卡片复制默认开启。");
             Assert.IsTrue(ctrlC.IsChecked!.Value, "Ctrl+C 复制选中默认开启。");
-
-            rightClick.IsChecked = false;
-            CompleteLayout(window);
-
-            Assert.IsFalse(window.CurrentPreferences.RightClickCardCopyEnabled);
-            Assert.IsFalse(preferencesStore.LastSaved!.RightClickCardCopyEnabled, "改动必须立即落偏好文件。");
 
             ctrlC.IsChecked = false;
             CompleteLayout(window);
 
             Assert.IsFalse(window.CurrentPreferences.CopySelectionWithCtrlCEnabled);
-            Assert.IsFalse(preferencesStore.LastSaved.CopySelectionWithCtrlCEnabled);
+            Assert.IsFalse(preferencesStore.LastSaved!.CopySelectionWithCtrlCEnabled);
 
             CloseWindow(settings);
         }
