@@ -74,8 +74,9 @@ $rules = @(
         'src/FloatingTransferStation/Views/MainWindow.CardTextEditing.cs') },
     @{ Name = 'CategoryEditing'; Filter = 'FullyQualifiedName~Category'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.CategoryEditing.cs', 'src/FloatingTransferStation/Views/CategoryFeedbackAnimation.cs') },
-    # CtrlC 为取证修订：原 ClipboardDelivery 词根在测试方法名中不存在（欠选）
-    @{ Name = 'ClipboardDelivery'; Filter = 'FullyQualifiedName~RightClickCopy|FullyQualifiedName~CtrlC'; Globs = @(
+    # CtrlC 为取证修订：原 ClipboardDelivery 词根在测试方法名中不存在（欠选）；
+    # LeftClickCopy/RightClick 为手势交换（Issue #216）后的方法名前缀（原 RightClickCopy 已随右键复制移除）
+    @{ Name = 'ClipboardDelivery'; Filter = 'FullyQualifiedName~LeftClickCopy|FullyQualifiedName~RightClick|FullyQualifiedName~CtrlC'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.ClipboardDelivery.cs') },
     # Review 为取证修订：App 侧方法全为 Review* 前缀（DailyReview 词根仅存在于 Core.Tests 基线）
     @{ Name = 'DailyReview'; Filter = 'FullyQualifiedName~Review'; Globs = @(
@@ -188,7 +189,7 @@ $interactionTestPrefixes = @{
     'CategoryEditing'        = @('CategoryNameEditing', 'CategoryNameEditor', 'CategoryNameSave', 'CategoryNameSaveFailure', 'CategoryTab', 'CategoryTabLabelAndEditor', 'F2Rename')
     'CategoryOrder'          = @('ApplyCategoryOrderAsync', 'CategoryRail')
     'ClipboardCapture'       = @('ClipboardCapture')
-    'ClipboardDelivery'      = @('CtrlC', 'RightClickCopy')
+    'ClipboardDelivery'      = @('CtrlC', 'LeftClickCopy', 'RightClick')
     'DailyReview'            = @('ReviewCategory', 'ReviewEditing', 'ReviewEditor', 'ReviewToolbar', 'ReviewWithoutEditorFocus')
     'DesignTheme'            = @('ThemeEvidence', 'ThemeSwitch')
     'DesignTokens'           = @('DesignTokens', 'WindowAnimationDurations')
