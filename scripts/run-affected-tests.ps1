@@ -213,6 +213,7 @@ $interactionTestPrefixes = @{
     'QuickLaunchRename'      = @('QuickLaunch')
     'QuickLaunchSelection'   = @('QuickLaunch')
     'QuickLaunchSurface'     = @('QuickLaunch')
+    'QuickLaunchSystemLocation' = @('SystemLocation')
     'QuickLaunchUrl'         = @('QuickLaunch', 'UrlInput')
     'RangeSelection'         = @('RangeSelection')
     'ReviewEditorEscape'     = @('ReviewEditor')

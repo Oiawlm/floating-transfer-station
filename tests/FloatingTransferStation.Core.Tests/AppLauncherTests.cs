@@ -270,4 +270,66 @@ public sealed class AppLauncherTests
         Assert.AreEqual(LauncherLaunchStatus.Failed, result.Status);
         Assert.AreEqual("没有找到能打开该地址的应用。", result.FailureMessage, "无关联失败不再落十六进制兜底文案。");
     }
+
+    // ---- 系统位置（#30 扩展）：UseShellExecute 直发注册表 CLSID 解析名；失败限定
+    // 回退注册表 explorer shell: 别名（回退=已派发不显成功）；非注册表目标不回退。----
+
+    [TestMethod]
+    public void ShellLocation_LaunchesShellExecuteOnRegistryClsidPath()
+    {
+        foreach (var location in SystemLauncherLocations.All)
+        {
+            var starter = new RecordingStarter();
+            var launcher = new AppLauncher(starter.Invoke);
+
+            var result = launcher.Launch(location.CreateItem());
+
+            Assert.AreEqual(LauncherLaunchStatus.Launched, result.Status, $"{location.DisplayName}。");
+            var started = starter.Started.Single();
+            Assert.IsTrue(started.UseShellExecute, "CLSID 解析名走 UseShellExecute 直接派发。");
+            Assert.AreEqual(location.TargetPath, started.FileName, "启动目标=注册表 CLSID 解析名。");
+            Assert.AreEqual(string.Empty, started.Arguments, "系统位置条目无参数段。");
+            Assert.AreEqual(string.Empty, started.WorkingDirectory, "不设工作目录（非文件目标）。");
+        }
+    }
+
+    [TestMethod]
+    public void ShellLocation_DirectFailure_DispatchesViaRegistryExplorerAlias()
+    {
+        foreach (var location in SystemLauncherLocations.All)
+        {
+            var starter = new RecordingStarter
+            {
+                // 直发（CLSID）失败、explorer 回退成功——回退后状态=Dispatched。
+                Respond = info => info.FileName == "explorer.exe"
+            };
+            var launcher = new AppLauncher(starter.Invoke);
+
+            var result = launcher.Launch(location.CreateItem());
+
+            Assert.AreEqual(LauncherLaunchStatus.Dispatched, result.Status, $"{location.DisplayName} 回退=已派发不显成功。");
+            Assert.AreEqual(2, starter.Started.Count, "直发失败后恰一次 explorer 回退。");
+            var dispatched = starter.Started[1];
+            Assert.AreEqual("explorer.exe", dispatched.FileName);
+            Assert.AreEqual(location.ExplorerFallbackArgument, dispatched.Arguments, "回退参数=注册表别名。");
+        }
+    }
+
+    [TestMethod]
+    public void ShellLocation_UnknownTarget_FailsWithoutFallback()
+    {
+        var starter = new RecordingStarter { Respond = _ => false };
+        var launcher = new AppLauncher(starter.Invoke);
+        var item = new LauncherItem(
+            Guid.NewGuid(),
+            LauncherKind.ShellLocation,
+            "::{00000000-0000-0000-0000-000000000000}",
+            "未知位置",
+            DateTimeOffset.UtcNow);
+
+        var result = launcher.Launch(item);
+
+        Assert.AreEqual(LauncherLaunchStatus.Failed, result.Status, "非注册表目标不回退。");
+        Assert.AreEqual(1, starter.Started.Count, "绝不派发 explorer。");
+    }
 }
