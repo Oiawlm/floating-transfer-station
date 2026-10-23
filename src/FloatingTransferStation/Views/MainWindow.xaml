@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:design="clr-namespace:FloatingTransferStation.Design;assembly=FloatingTransferStation.Core"
         xmlns:models="clr-namespace:FloatingTransferStation.Models;assembly=FloatingTransferStation.Core"
+        xmlns:services="clr-namespace:FloatingTransferStation.Services;assembly=FloatingTransferStation.Core"
         xmlns:vm="clr-namespace:FloatingTransferStation.ViewModels;assembly=FloatingTransferStation.Core"
         xmlns:views="clr-namespace:FloatingTransferStation.Views"
         mc:Ignorable="d"
@@ -674,10 +675,11 @@
                       Click="LauncherAddButton_Click" />
             </Grid>
 
-            <!-- ＋ 添加两入口菜单（#30 切片 4）：应用文件… / 已安装应用…；定位锚点在
-                 打开时按发起按钮（工具行＋或空态 CTA）指定，右对齐经 HorizontalOffset 校正。
-                 Opened/Closed 接状态机覆盖交互 hold：菜单是独立 HWND，指针移入即假
-                 MouseLeave，打开期间收起链被抑制、关闭后按指针几何位置重估。 -->
+            <!-- ＋ 添加菜单（#30 切片 4 起三入口；#30 扩展增「系统位置」子菜单）；
+                 定位锚点在打开时按发起按钮（工具行＋或空态 CTA）指定，右对齐经
+                 HorizontalOffset 校正。Opened/Closed 接状态机覆盖交互 hold：菜单是
+                 独立 HWND，指针移入即假 MouseLeave，打开期间收起链被抑制、关闭后按
+                 指针几何位置重估。 -->
             <Popup x:Name="LauncherAddMenu"
                    Grid.Row="0"
                    PlacementTarget="{Binding ElementName=LauncherAddButton}"
@@ -689,15 +691,7 @@
                    Focusable="False"
                    Opened="LauncherAddMenu_Opened"
                    Closed="LauncherAddMenu_Closed">
-              <Border Background="{DynamicResource HeaderBrush}"
-                      BorderBrush="{DynamicResource BorderBrush}"
-                      BorderThickness="1"
-                      CornerRadius="7"
-                      Padding="4"
-                      Margin="12">
-                <Border.Effect>
-                  <DropShadowEffect BlurRadius="8" ShadowDepth="2" Direction="270" Opacity="0.25" />
-                </Border.Effect>
+              <Border Style="{StaticResource LauncherAddMenuSurfaceStyle}">
                 <StackPanel>
                   <Button x:Name="LauncherAddFileMenuButton"
                           Content="应用文件…"
@@ -714,6 +708,26 @@
                           Style="{StaticResource LauncherAddMenuButtonStyle}"
                           AutomationProperties.Name="添加网页地址"
                           Click="LauncherAddUrlMenu_Click" />
+                  <!-- 系统位置（#30 扩展）：WPF 原生 MenuItem 子菜单两项；条目数据
+                       （显示名/CLSID 目标）经 x:Static 直引注册表单一来源，XAML 零
+                       CLSID 字面量；点击经注册表构造条目走目录添加协议（去重收敛）。 -->
+                  <MenuItem x:Name="LauncherAddSystemLocationMenuItem"
+                            Header="系统位置"
+                            Style="{StaticResource LauncherAddMenuGroupItemStyle}"
+                            AutomationProperties.Name="系统位置">
+                    <MenuItem x:Name="LauncherAddSystemLocationRecycleBinItem"
+                              DataContext="{x:Static services:SystemLauncherLocations.RecycleBin}"
+                              Header="{Binding DisplayName}"
+                              Style="{StaticResource LauncherAddMenuSubmenuItemStyle}"
+                              AutomationProperties.Name="添加回收站"
+                              Click="LauncherAddSystemLocation_Click" />
+                    <MenuItem x:Name="LauncherAddSystemLocationThisComputerItem"
+                              DataContext="{x:Static services:SystemLauncherLocations.ThisComputer}"
+                              Header="{Binding DisplayName}"
+                              Style="{StaticResource LauncherAddMenuSubmenuItemStyle}"
+                              AutomationProperties.Name="添加此电脑"
+                              Click="LauncherAddSystemLocation_Click" />
+                  </MenuItem>
                 </StackPanel>
               </Border>
             </Popup>
@@ -872,11 +886,12 @@
                               Tag="{x:Static views:CardGestureZones.LauncherLaunchZone}">
                           <!-- 启动区（#30 修订 2026-10-18）：单击=启动（选择非空时挂起改
                                toggle）；拖拽仅从此区发起。图标槽按 Kind 分支（#30 修订，
-                               Issue #206）：应用/打包应用走「占位字形 + Image 提取链」
-                               模板；Url 走「地球字形（抓取中/失败可见）+ Image」两态
-                               模板——favicon 成功前显示字形（UI 回退态），成功后经
-                               同源抓取管线回填。失败灰态在瓦片 Border 层 DataTrigger
-                               统一覆盖，两分支同受。 -->
+                               Issue #206）：应用/打包应用/系统位置（回收站与「此电脑」，
+                               #30 扩展）走「占位字形 + Image 提取链」模板（默认模板即
+                               应用模板，ShellLocation 无需特判）；Url 走「地球字形
+                               （抓取中/失败可见）+ Image」两态模板——favicon 成功前
+                               显示字形（UI 回退态），成功后经同源抓取管线回填。失败
+                               灰态在瓦片 Border 层 DataTrigger 统一覆盖，两分支同受。 -->
                           <ContentControl Focusable="False"
                                           Content="{Binding}">
                             <ContentControl.Style>

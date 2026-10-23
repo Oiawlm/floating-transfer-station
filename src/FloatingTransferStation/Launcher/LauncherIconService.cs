@@ -762,9 +762,25 @@ internal sealed class LauncherIconService : IDisposable
     }
 
     /// <summary>主路径：IShellItemImageFactory（PackagedApp 解析名 shell:AppsFolder\{AUMID}，
-    /// 解析失败时枚举 AppsFolder 按 AUMID 匹配后对项 RCW 直接 QI 图标工厂）。</summary>
+    /// 解析失败时枚举 AppsFolder 按 AUMID 匹配后对项 RCW 直接 QI 图标工厂）；
+    /// 系统位置（ShellLocation）不走该工厂（调研定案选型），在入口直接分流。</summary>
     private static (IntPtr Handle, bool IsIcon) ExtractIconHandle(LauncherItem item)
     {
+        if (item.Kind == LauncherKind.ShellLocation)
+        {
+            // 系统位置（回收站/「此电脑」）：SHGetFileInfo 对 CLSID 解析名取图标索引 →
+            // 系统图像列表大档（JUMBO/EXTRALARGE ≥48px）取 HICON；图像列表链不可用时
+            // 回退 SHGetFileInfo 直取 HICON（与 Application 直提取同族、机器无关）。
+            // 回收站空/满态取提取时当前态，不追会话内切换（登记已知边界）。
+            var listHandle = ExtractViaSystemImageList(item);
+            if (listHandle != IntPtr.Zero)
+            {
+                return (listHandle, true);
+            }
+
+            return (TryGetAssociatedIcon(item) ?? IntPtr.Zero, true);
+        }
+
         var parsingName = item.Kind switch
         {
             LauncherKind.Application => item.TargetPath,
@@ -933,10 +949,11 @@ internal sealed class LauncherIconService : IDisposable
     }
 
     /// <summary>回退链：SHGetFileInfo(SHGFI_SYSICONINDEX) → SHGetImageList(JUMBO→EXTRALARGE→LARGE)
-    /// → IImageList.GetIcon（校验 index &lt; count；不用 SHGFI_USEFILEATTRIBUTES）。</summary>
+    /// → IImageList.GetIcon（校验 index &lt; count；不用 SHGFI_USEFILEATTRIBUTES）。
+    /// 系统位置（ShellLocation）以此为大图标主路径（对 CLSID 解析名同样有效）。</summary>
     private static IntPtr ExtractViaSystemImageList(LauncherItem item)
     {
-        if (item.Kind != LauncherKind.Application)
+        if (item.Kind is not (LauncherKind.Application or LauncherKind.ShellLocation))
         {
             return IntPtr.Zero;
         }
@@ -996,13 +1013,22 @@ internal sealed class LauncherIconService : IDisposable
     /// 图标戳（#30）：Application=shortHash(lnk.mtime|size ‖ 解析目标.mtime|size ‖
     /// GetIconLocation 解析出的图标源文件.mtime|size)；PackagedApp 恒 null（不自动失效；
     /// 刷新触发=激活失败重枚举或重新添加覆盖）；Url=常量 "ok"（null=未取到＝启动重试
-    /// 轮判定面；"ok"=已缓存；编辑目标置空由 AdoptEditedTarget 承载）。
+    /// 轮判定面；"ok"=已缓存；编辑目标置空由 AdoptEditedTarget 承载）；ShellLocation=
+    /// 静态描述符 shortHash（无文件源目标，缓存跨会话稳定——回收站空/满态取提取时
+    /// 当前态，不随切换失效）。
     /// </summary>
     internal static string? ComputeStamp(LauncherItem item)
     {
         if (item.Kind == LauncherKind.Url)
         {
             return UrlIconStampOk;
+        }
+
+        if (item.Kind == LauncherKind.ShellLocation)
+        {
+            var descriptor = $"shell-location:{item.TargetPath}";
+            var stamp = SHA256.HashData(Encoding.Unicode.GetBytes(descriptor));
+            return Convert.ToHexStringLower(stamp)[..12];
         }
 
         if (item.Kind != LauncherKind.Application)

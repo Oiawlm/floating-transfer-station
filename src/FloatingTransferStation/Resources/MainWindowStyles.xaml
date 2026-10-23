@@ -266,6 +266,106 @@
     </Setter>
   </Style>
 
+  <!-- ＋ 添加菜单弹层表面（三个入口与「系统位置」子菜单共用单一来源，#30 扩展）：
+       HeaderBrush 弹层＋1px 边框＋表面级圆角 7＋内边距 4；Margin 12 让出阴影透明区，
+       阴影为样式内共享单一实例（Effect 不逐元素实例化）。 -->
+  <Style x:Key="LauncherAddMenuSurfaceStyle" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource HeaderBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="4" />
+    <Setter Property="Margin" Value="12" />
+    <Setter Property="Effect">
+      <Setter.Value>
+        <DropShadowEffect BlurRadius="8" ShadowDepth="2" Direction="270" Opacity="0.25" />
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ＋ 添加菜单「系统位置」子项（#30 扩展）：行形态与 LauncherAddMenuButtonStyle
+       同族（透明底、左对齐、悬停 HoverSurfaceBrush、圆角 5、12,6 内边距），承载于
+       MenuItem（原生命中/Click 语义）。 -->
+  <Style x:Key="LauncherAddMenuSubmenuItemStyle" TargetType="MenuItem">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="MenuItem">
+          <Border x:Name="MenuItemSurface"
+                  Background="Transparent"
+                  CornerRadius="5"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter ContentSource="Header"
+                              HorizontalAlignment="Left"
+                              VerticalAlignment="Center"
+                              RecognizesAccessKey="True" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+              <Setter TargetName="MenuItemSurface" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ＋ 添加菜单「系统位置」分组项（#30 扩展）：WPF 原生 MenuItem 子菜单（定案不
+       改平铺）——行形态与菜单入口同族，右侧 chevron 字形提示下级；子菜单弹层复用
+       LauncherAddMenuSurfaceStyle 同一弹层语言。悬停/键盘右箭头展开、Esc/左箭头/选
+       项点击收起均为 MenuItem 原生语义；PART_Popup 由 IsSubmenuOpen 驱动。 -->
+  <Style x:Key="LauncherAddMenuGroupItemStyle" TargetType="MenuItem">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="ItemContainerStyle" Value="{StaticResource LauncherAddMenuSubmenuItemStyle}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="MenuItem">
+          <Border x:Name="MenuItemSurface"
+                  Background="Transparent"
+                  CornerRadius="5"
+                  Padding="{TemplateBinding Padding}">
+            <Grid>
+              <ContentPresenter ContentSource="Header"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                RecognizesAccessKey="True" />
+              <TextBlock HorizontalAlignment="Right"
+                         VerticalAlignment="Center"
+                         FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                         FontSize="12"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Text="&#xE76C;" />
+              <Popup x:Name="PART_Popup"
+                     AllowsTransparency="True"
+                     Focusable="False"
+                     PopupAnimation="Fade"
+                     Placement="Right"
+                     IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}">
+                <Border Style="{StaticResource LauncherAddMenuSurfaceStyle}">
+                  <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" />
+                </Border>
+              </Popup>
+            </Grid>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+              <Setter TargetName="MenuItemSurface" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
+            </Trigger>
+            <Trigger Property="IsSubmenuOpen" Value="True">
+              <Setter TargetName="MenuItemSurface" Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- 搜索类型 chip（ToggleButton）：Aero2 默认模板用系统画刷渲染 chrome、
        忽略主题 Background，必须自绘模板；选中态进入主题强调体系。 -->
   <Style x:Key="ThemedFilterChipStyle" TargetType="ToggleButton">
