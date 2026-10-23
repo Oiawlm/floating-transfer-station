@@ -9,21 +9,24 @@ namespace FloatingTransferStation.Views;
 
 /// <summary>
 /// 卡片指针手势状态机（1.17.0 左右分区重构，1.18.0 对半修正，1.24.0 删除钮）。
-/// 卡片指针输入收敛为单一模型：Down 记录按压会话（命中条目、命中区域、修饰键、
+/// 卡片指针输入收敛为单一模型：Down 记录按压会话（命中条目、命中区域、
 /// 起点与按下时刻）→ Move 判拖拽 → Up 按「区域 × 双击窗 × 修饰键」分发意图
 /// （编辑 / 选择 / 置顶 / 删除 / 复制），意图实现（BeginCardTextEditing、
 /// ToggleSelection、SelectRange、ToggleCardPinAsync、DeleteSingleCardAsync、
 /// CopyBoardItemsToClipboard）保持与手势判定解耦。
 /// 分区契约（对半）：卡片内容左右两半——左半（命中层左列）承载双击编辑与
-/// 拖拽起点，无选择语义；右半（命中层右列，置顶/选择按钮所在半区）承载单击
-/// 选择与右键复制，置顶按钮为右半内的独立置顶意图；卡片 12px 边缘环带不经
-/// 命中层，按默认归左半（贴边点击承载拖拽，不误触选择/复制）。
+/// 拖拽起点，无选择语义；右半（命中层右列，置顶/选择按钮所在半区）承载左键
+/// 复制与右键选择（手势交换，Issue #216：任意修饰键的左键单击复制该卡，
+/// 裸/Ctrl 右键 toggle、Shift/Ctrl+Shift 右键范围选择在右键 Up 分发——见
+/// MainWindow.ClipboardDelivery.cs），置顶按钮为右半内的独立置顶意图；
+/// 卡片 12px 边缘环带不经命中层，按默认归左半（贴边点击承载拖拽，
+/// 不误触选择/复制）。
 /// 双击判定由手势层自维护（上次点击的按下时刻、按下位置与命中区域），
 /// 与系统语义一致按 Down 判定，不依赖 Control.MouseDoubleClick——其系统触发
 /// 链会被预览层为压制 ListBox 默认选择而设置的 Handled 阻断
 /// （docs/observations.md B-007 的实机根因）。双击窗只对左半文字卡的
-/// 就地编辑生效（1.28.0 修订）：右半无双击窗，单击逐击 toggle 选择，
-/// 原地快速连点每击都生效。
+/// 就地编辑生效（1.28.0 修订）：右半无双击窗（左键复制逐击独立分发），
+/// 右半单击（现在是复制）逐击生效。
 /// 右半操作按钮同样由手势层接管：真实输入下原生按钮 Click 会先被 ListBox
 /// 默认单击选择吞掉（合成/UIA 可达、实机不可达，1.16.0 起的隐性缺陷，
 /// 1.17.1 修复）。按钮按压是独立会话：不参与拖拽起点，释放点滑离按钮即
@@ -37,8 +40,13 @@ public partial class MainWindow
         /// <summary>左半：承载双击编辑与拖拽起点。</summary>
         Content,
 
-        /// <summary>右半：承载单击选择与右键复制（置顶/选择/删除按钮所在半区）。</summary>
+        /// <summary>右半：承载左键复制与右键选择（置顶/选择/删除按钮所在半区）。</summary>
         Operations,
+
+        /// <summary>右半·选择按钮：单击 toggle 该卡选中，与右半手势不同的独立
+        /// 意图（手势交换后右半区域左键是复制，选择按钮必须保留自己的选择意图，
+        /// 与合成/UIA 路径 BoardList_ButtonClick 共用 ToggleSelection）。</summary>
+        OperationsToggleSelection,
 
         /// <summary>右半·置顶按钮：单击置顶/取消置顶，与右半选择手势不同的独立意图。</summary>
         OperationsPin,
@@ -73,7 +81,6 @@ public partial class MainWindow
     private int _pressTimestamp;
     private BoardItem? _pressItem;
     private CardHitZone _pressZone;
-    private ModifierKeys _pressModifiers;
     private bool _dragThresholdCrossed;
     private CardClickTrace? _lastCardClick;
     private Button? _pressButton;
@@ -135,18 +142,19 @@ public partial class MainWindow
             _pressStartPosition = e.GetPosition(this);
             _pressTimestamp = e.Timestamp;
             _pressItem = buttonContainer.DataContext as BoardItem;
-            _pressZone = Equals(hitButton.CommandParameter, CardGestureZones.TogglePinCommand)
-                ? CardHitZone.OperationsPin
-                : Equals(hitButton.CommandParameter, CardGestureZones.DeleteCardCommand)
-                    ? CardHitZone.OperationsDelete
-                    : Equals(hitButton.CommandParameter, CardGestureZones.NoteStripCommand)
-                        ? CardHitZone.OperationsNote
-                        : Equals(hitButton.CommandParameter, CardGestureZones.AiOrganizeCommand)
-                            ? CardHitZone.OperationsAiOrganize
-                            : CardHitZone.Operations;
+            _pressZone = Equals(hitButton.CommandParameter, CardGestureZones.ToggleSelectionCommand)
+                ? CardHitZone.OperationsToggleSelection
+                : Equals(hitButton.CommandParameter, CardGestureZones.TogglePinCommand)
+                    ? CardHitZone.OperationsPin
+                    : Equals(hitButton.CommandParameter, CardGestureZones.DeleteCardCommand)
+                        ? CardHitZone.OperationsDelete
+                        : Equals(hitButton.CommandParameter, CardGestureZones.NoteStripCommand)
+                            ? CardHitZone.OperationsNote
+                            : Equals(hitButton.CommandParameter, CardGestureZones.AiOrganizeCommand)
+                                ? CardHitZone.OperationsAiOrganize
+                                : CardHitZone.Operations;
             _pressButton = hitButton;
             _dragThresholdCrossed = false;
-            _pressModifiers = Keyboard.Modifiers;
             e.Handled = true;
             return;
         }
@@ -171,7 +179,6 @@ public partial class MainWindow
         _pressZone = ResolveCardHitZone(source, container);
         _pressButton = null;
         _dragThresholdCrossed = false;
-        _pressModifiers = Keyboard.Modifiers;
         e.Handled = true;
     }
 
@@ -203,12 +210,10 @@ public partial class MainWindow
         // 系统双击语义按两击的按下时刻与按下位置判定（长按后快速单击不得
         // 拼成伪双击）；痕迹与判定均取 Down 值，Up 不参与。
         // 双击窗只属于有双击语义的区域（1.28.0 修订，Issue #93）：只有左半
-        // 文字卡的双击进入就地编辑；右半不再有双击窗——裸单击与 Ctrl+单击
-        // 逐击 toggle，原地快速连点每击都生效（点一下选中、再点一下取消，
-        // 双击=两次 toggle=净零），Shift 逐击重算区间。双击要求两击同区：
-        // 跨半两击各自独立分发。右半点击痕迹（本方法末尾统一记录）在这里
-        // 的职责是重置左半双击窗——快速 左→右→左 同位点击不得被拼成伪双击
-        // 误开编辑。
+        // 文字卡的双击进入就地编辑；右半无双击窗——左键复制逐击独立分发，
+        // 原地快速连点每击都生效。双击要求两击同区：跨半两击各自独立分发。
+        // 右半点击痕迹（本方法末尾统一记录）在这里的职责是重置左半双击窗
+        // ——快速 左→右→左 同位点击不得被拼成伪双击误开编辑。
         if (_pressZone == CardHitZone.Content && IsWithinDoubleClickWindow(item))
         {
             // 左半双击：文字卡进入就地编辑（守卫沿用 BeginCardTextEditing：
@@ -220,6 +225,14 @@ public partial class MainWindow
             {
                 BeginCardTextEditing(item, container, _pressStartPosition);
             }
+        }
+        else if (_pressZone == CardHitZone.OperationsToggleSelection)
+        {
+            // 选择按钮是右半内的独立意图：单击 toggle 该卡选中（矩阵：选中卡片
+            // 常显可点）；语义与 BoardList_ButtonClick 的 ToggleSelection 分支共用
+            // 同一实现，也与右键选择手势共用 ToggleSelection——手势交换后右半
+            // 区域左键是复制，按钮意图不随区域手势改变。
+            ToggleSelection(item);
         }
         else if (_pressZone == CardHitZone.OperationsPin)
         {
@@ -254,21 +267,17 @@ public partial class MainWindow
         }
         else if (_pressZone == CardHitZone.Operations)
         {
-            // 选择手势只属于右半：Shift 走锚点范围选择，裸单击与 Ctrl+单击
-            // 等效 toggle（保留既有 Ctrl 习惯），均不清理其他已选条目。
-            if (_pressModifiers.HasFlag(ModifierKeys.Shift))
-            {
-                SelectRange(item, _pressModifiers.HasFlag(ModifierKeys.Control));
-            }
-            else
-            {
-                ToggleSelection(item);
-            }
+            // 复制手势只属于右半（手势交换，Issue #216）：任意修饰键的左键
+            // 单击复制该卡（修饰键不区分），语义逐项继承旧右键复制——不改
+            // 选择、不进撤销栈、搜索过滤态可用、负载携带内部条目标记。
+            // 仅「未成拖拽的 Up」到达这里：按下后移动超系统拖拽阈值即转入
+            // 既有拖拽路径（BoardList_PreviewMouseMove），Up 不复制。
+            CopyBoardItemsToClipboard([item]);
         }
 
         // 痕迹只记左半与右半点击（1.28.0）：右半痕迹的职责是重置左半双击窗
         // ——快速 左→右→左 同位点击不得被拼成伪双击误开编辑（右半自身已无
-        // 双击窗，每击都 toggle）。置顶/删除/备注交互条是独立意图不参与双击窗，
+        // 双击窗，左键复制逐击独立分发）。置顶/删除/备注交互条是独立意图不参与双击窗，
         // 不记痕迹——连点每击都生效（否则第二击被双击窗吞掉，按钮像坏的）；
         // 连点删除的意图分发同样逐击发生，删除保存期间的重入由
         // DeleteContentAsync 的 _isDeletePending 保护丢弃（与顶部垃圾桶一致）。
@@ -313,7 +322,6 @@ public partial class MainWindow
         _pressZone = CardHitZone.Content;
         _pressButton = null;
         _dragThresholdCrossed = false;
-        _pressModifiers = ModifierKeys.None;
     }
 
     /// <summary>

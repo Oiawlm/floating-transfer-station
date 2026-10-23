@@ -302,6 +302,80 @@ public sealed class PluginActionMenuTests
         CollectionAssert.AreEquivalent(new[] { clicked.Id }, harness.BoardList.SelectedItems.OfType<BoardItem>().Select(item => item.Id).ToArray());
     }
 
+    [STATestMethod]
+    public void PluginActionsMenu_ReachableOnlyFromContentZoneRightClick()
+    {
+        // 手势交换（Issue #216）：插件动作菜单入口收窄为左半右键——右半右键
+        // 是选择手势，不再弹菜单。
+        using var harness = new Harness(ActionPluginManifest());
+        var item = harness.AddCard("a1 菜单入口");
+        Pump(harness.Window);
+        var list = harness.BoardList;
+        list.ScrollIntoView(item);
+        Pump(harness.Window);
+        var container = (ListBoxItem)list.ItemContainerGenerator.ContainerFromItem(item)!;
+        Assert.IsNotNull(container);
+
+        // 右半右键：toggle 选择，不弹菜单。
+        list.RaiseEvent(NewZoneRightClickArgs(container, CardGestureZones.OperationsZone));
+        Pump(harness.Window);
+        CollectionAssert.AreEquivalent(new[] { item.Id }, list.SelectedItems.OfType<BoardItem>().Select(card => card.Id).ToArray());
+        Assert.IsNull(harness.Window.LastPluginActionsMenuForEvidence, "右半右键不得打开插件动作菜单。");
+
+        // 左半右键：打开插件动作菜单（命中卡先单选）。
+        list.SelectedItems.Clear();
+        list.RaiseEvent(NewZoneRightClickArgs(container, CardGestureZones.ContentZone));
+        Pump(harness.Window);
+        var menu = harness.Window.LastPluginActionsMenuForEvidence;
+        Assert.IsNotNull(menu, "左半右键必须打开插件动作菜单。");
+        Assert.IsTrue(menu.IsOpen);
+        menu.IsOpen = false;
+    }
+
+    /// <summary>构造命中卡片某分区（模板 Tag 标记）的右键抬起事件（合成路径）。
+    /// 右键专用隧道事件须在 BoardList 上 Raise（Source=分区命中元素）——在
+    /// 后代元素上直接 Raise 不触达 BoardList 的处理器。</summary>
+    private static System.Windows.Input.MouseButtonEventArgs NewZoneRightClickArgs(
+        ListBoxItem container,
+        string zoneTag)
+    {
+        var hitSource = FindZoneSource(container, zoneTag)
+            ?? throw new InvalidOperationException($"卡片模板必须存在分区标记 {zoneTag} 的命中元素。");
+        return new System.Windows.Input.MouseButtonEventArgs(
+            System.Windows.Input.Mouse.PrimaryDevice,
+            0,
+            System.Windows.Input.MouseButton.Right)
+        {
+            RoutedEvent = UIElement.PreviewMouseRightButtonUpEvent,
+            Source = hitSource
+        };
+    }
+
+    /// <summary>深度优先搜索卡片容器可视化子树中带分区标记的命中元素
+    ///（未命中返回 null——中途抛会截断兄弟子树的搜索）。</summary>
+    private static FrameworkElement? FindZoneSource(FrameworkElement element, string zoneTag)
+    {
+        if (Equals(element.Tag, zoneTag))
+        {
+            return element;
+        }
+
+        var children = System.Windows.Media.VisualTreeHelper.GetChildrenCount(element);
+        for (var index = 0; index < children; index++)
+        {
+            if (System.Windows.Media.VisualTreeHelper.GetChild(element, index) is FrameworkElement child)
+            {
+                var found = FindZoneSource(child, zoneTag);
+                if (found is not null)
+                {
+                    return found;
+                }
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>插件动作右键菜单证据（环境变量门控，本地留档用）：打开菜单并截图。</summary>
     [STATestMethod]
     public void MenuEvidence_CapturePluginActionsContextMenu()

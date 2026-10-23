@@ -712,8 +712,9 @@ public sealed partial class MainWindowInteractionTests
 
             try
             {
-                // 右键备注行左半（点击面所在处）：左半右键无操作——既不复制、
-                // 也绝不进入备注编辑（备注带判定只作用于左键）。
+                // 右键备注行左半（点击面所在处）：左半右键无插件时无操作——
+                // 既不复制、也不进任何选择、更绝不进入备注编辑（备注带判定
+                // 只作用于左键）。
                 ClickRealRightAt(
                     window,
                     container,
@@ -721,9 +722,13 @@ public sealed partial class MainWindowInteractionTests
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
                 Assert.IsEmpty(copied, "左半右键不得复制。");
                 Assert.IsFalse(item.IsEditingNote, "右键不得进入备注编辑。");
+                Assert.IsFalse(
+                    ((ListBox)window.FindName("BoardList"))!.SelectedItems.Cast<BoardItem>().Any(),
+                    "左半右键不得产生选择语义。");
 
-                // 右键右半（命中层右列）：复制这一张（语义零改动）。选点沿用
-                // CardHalves 约定（右半区内、避开按钮条与 12px 底部环带）。
+                // 右键右半（命中层右列）：toggle 选择这一张（手势交换，Issue
+                // #216——备注功能不得改变分区手势）。选点沿 CardHalves 约定
+                //（右半区内、避开按钮条与 12px 底部环带）。
                 var operationsZone = HalvesZoneOf(container, CardGestureZones.OperationsZone);
                 var zoneOrigin = operationsZone.TranslatePoint(new Point(), container);
                 ClickRealRightAt(
@@ -733,8 +738,12 @@ public sealed partial class MainWindowInteractionTests
                         zoneOrigin.X + operationsZone.ActualWidth / 2,
                         zoneOrigin.Y + operationsZone.ActualHeight * 0.6));
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
-                Assert.HasCount(1, copied, "右半右键复制语义不得被备注功能改变。");
+                Assert.IsEmpty(copied, "右半右键不得复制（复制已迁往左键）。");
                 Assert.IsFalse(item.IsEditingNote);
+                CollectionAssert.AreEquivalent(
+                    new[] { item },
+                    ((ListBox)window.FindName("BoardList"))!.SelectedItems.Cast<BoardItem>().ToArray(),
+                    "右半右键必须 toggle 选中该卡。");
             }
             finally
             {

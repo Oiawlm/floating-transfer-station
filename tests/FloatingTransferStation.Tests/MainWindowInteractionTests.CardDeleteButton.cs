@@ -519,18 +519,18 @@ public sealed partial class MainWindowInteractionTests
                     board.Items(BoardCategory.Inbox).Any(candidate => candidate.Id == item.Id),
                     "按住删除钮滑离释放必须取消删除意图。");
 
-                // 操作条内（删除钮正上方）右键复制不受三列扩展影响：仍复制本卡、
-                // 不改选择、不删除。
+                // 操作条内（删除钮正上方）右键＝toggle 选择（手势交换，Issue #216）：
+                // 不复制、不删除、不改既有选择之外的状态。
                 ClickRealRightAt(window, container, deletePoint);
-                Assert.IsNotNull(delivered, "操作条内右键必须复制该卡。");
-                Assert.IsTrue(delivered!.GetDataPresent(DataFormats.UnicodeText), "复制的负载必须携带文字内容。");
+                Assert.IsNull(delivered, "操作条内右键不得复制。");
                 Assert.IsTrue(
                     board.Items(BoardCategory.Inbox).Any(candidate => candidate.Id == item.Id),
-                    "右键复制不得删除卡片。");
+                    "右键选择不得删除卡片。");
                 var list = (ListBox)window.FindName("BoardList");
-                Assert.IsFalse(
-                    list.SelectedItems.Cast<BoardItem>().Any(),
-                    "右键复制不得改变选择。");
+                CollectionAssert.AreEquivalent(
+                    new[] { item },
+                    list.SelectedItems.Cast<BoardItem>().ToArray(),
+                    "操作条内右键必须 toggle 选中该卡。");
             }
             finally
             {

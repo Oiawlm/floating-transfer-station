@@ -16,7 +16,7 @@ public sealed partial class MainWindowInteractionTests
     [STATestMethod]
     [DataRow(0, 3)]
     [DataRow(3, 0)]
-    public void RangeSelection_ShiftClickSelectsDisplayedIntervalWithoutSaving(int anchorIndex, int targetIndex)
+    public void RangeSelection_ShiftRightClickSelectsDisplayedIntervalWithoutSaving(int anchorIndex, int targetIndex)
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -47,7 +47,7 @@ public sealed partial class MainWindowInteractionTests
                     "before-shift-click.png", "FTS_RANGE_SELECTION_EVIDENCE_DIR");
             }
 
-            ClickCard(window, items[targetIndex], ModifierKeys.Shift);
+            RightClickCard(window, items[targetIndex], ModifierKeys.Shift);
             CompleteLayout(window);
             if (anchorIndex == 0)
             {
@@ -81,15 +81,15 @@ public sealed partial class MainWindowInteractionTests
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             var list = (ListBox)window.FindName("BoardList");
-            ClickCard(window, items[4], ModifierKeys.Control);
-            ClickCard(window, items[1], ModifierKeys.Control);
-            ClickCard(window, items[2], ModifierKeys.Control | ModifierKeys.Shift);
+            RightClickCard(window, items[4], ModifierKeys.Control);
+            RightClickCard(window, items[1], ModifierKeys.Control);
+            RightClickCard(window, items[2], ModifierKeys.Control | ModifierKeys.Shift);
             CollectionAssert.AreEquivalent(new[] { items[1], items[2], items[4] },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
 
-            ClickCard(window, items[3], ModifierKeys.Shift);
+            RightClickCard(window, items[3], ModifierKeys.Shift);
             CollectionAssert.AreEquivalent(items[1..4], list.SelectedItems.Cast<BoardItem>().ToArray());
-            ClickCard(window, items[2], ModifierKeys.Shift);
+            RightClickCard(window, items[2], ModifierKeys.Shift);
             CollectionAssert.AreEquivalent(items[1..3], list.SelectedItems.Cast<BoardItem>().ToArray());
         }
         finally
@@ -149,7 +149,7 @@ public sealed partial class MainWindowInteractionTests
                     break;
             }
 
-            ClickCard(window, items[3], ModifierKeys.Shift);
+            RightClickCard(window, items[3], ModifierKeys.Shift);
             CollectionAssert.AreEqual(new[] { items[3] }, list.SelectedItems.Cast<BoardItem>().ToArray());
         }
         finally
@@ -176,11 +176,12 @@ public sealed partial class MainWindowInteractionTests
             CollapseForSetup(window);
             var list = (ListBox)window.FindName("BoardList");
             Assert.IsFalse(((MainWindowViewModel)window.DataContext).IsPanelExpanded);
-            WithThreadKeyboardModifiers(ModifierKeys.Shift, () => RaiseCardClick(hitSource));
+            // 面板收起后的隐藏卡不得响应右键范围选择（手势交换后选择走右键）。
+            WithThreadKeyboardModifiers(ModifierKeys.Shift, () => RaiseRightCardClick(window, hitSource));
             CollectionAssert.AreEqual(new[] { items[1] }, list.SelectedItems.Cast<BoardItem>().ToArray());
 
             ExpandCategory(window, BoardCategory.Inbox);
-            ClickCard(window, items[3], ModifierKeys.Shift);
+            RightClickCard(window, items[3], ModifierKeys.Shift);
             CollectionAssert.AreEquivalent(items[1..4], list.SelectedItems.Cast<BoardItem>().ToArray());
         }
         finally
@@ -190,12 +191,18 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void RangeSelection_ClickUsesPressModifiersAndDragPreservesOriginalPayload()
+    public void RangeSelection_RightClickUsesUpModifiersAndDragPreservesOriginalPayload()
     {
         using var directory = new TestDirectory();
         var board = CreateRangeSelectionBoard();
         var items = board.Items(BoardCategory.Inbox).ToArray();
         var window = CreateWindow(directory, board);
+        DataObject? captured = null;
+        window.ClipboardWriterOverride = data =>
+        {
+            captured = data;
+            return true;
+        };
 
         try
         {
@@ -206,6 +213,8 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
             var target = RealizeCard(window, items[0]);
             var hitSource = ZoneSourceOf(target, CardGestureZones.OperationsZone);
+            // 手势交换（Issue #216）：左键修饰键不再分流选择——Shift 按下的
+            // 左键会话照常起拖，拖拽负载仍按既有选择构建。
             WithThreadKeyboardModifiers(ModifierKeys.Shift, () =>
                 hitSource.RaiseEvent(NewMouseButtonEventArgs(
                     Mouse.PreviewMouseDownEvent,
@@ -223,18 +232,23 @@ public sealed partial class MainWindowInteractionTests
                 Mouse.PreviewMouseUpEvent,
                 target,
                 NextIsolatedClickTimestamp()));
+            Assert.IsNull(captured, "成拖拽的右半左键 Up 不得触发复制。");
             CollectionAssert.AreEquivalent(new[] { items[0], items[2] },
                 list.SelectedItems.Cast<BoardItem>().ToArray());
 
+            // 右键分发在 Up、无按压会话：修饰键取 Up 时键盘态——裸按下后
+            // Shift 抬起同样按 Shift 分发锚点范围选择。右键专用隧道事件在
+            // BoardList 上 Raise（Source=分区命中元素）。
             hitSource = ZoneSourceOf(RealizeCard(window, items[4]), CardGestureZones.OperationsZone);
-            WithThreadKeyboardModifiers(ModifierKeys.Shift, () =>
-                hitSource.RaiseEvent(NewMouseButtonEventArgs(
-                    Mouse.PreviewMouseDownEvent,
+            var rightList = (ListBox)window.FindName("BoardList")!;
+            WithThreadKeyboardModifiers(ModifierKeys.None, () =>
+                rightList.RaiseEvent(NewRightButtonArgs(
+                    UIElement.PreviewMouseRightButtonDownEvent,
                     hitSource,
                     NextIsolatedClickTimestamp())));
-            WithThreadKeyboardModifiers(ModifierKeys.None, () =>
-                hitSource.RaiseEvent(NewMouseButtonEventArgs(
-                    Mouse.PreviewMouseUpEvent,
+            WithThreadKeyboardModifiers(ModifierKeys.Shift, () =>
+                rightList.RaiseEvent(NewRightButtonArgs(
+                    UIElement.PreviewMouseRightButtonUpEvent,
                     hitSource,
                     NextIsolatedClickTimestamp())));
             CollectionAssert.AreEquivalent(items[2..5], list.SelectedItems.Cast<BoardItem>().ToArray());
@@ -263,7 +277,7 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
             Assert.IsNull(list.ItemContainerGenerator.ContainerFromItem(items[20]),
                 "The range must include a card without a realized container.");
-            ClickCard(window, items[^1], ModifierKeys.Shift);
+            RightClickCard(window, items[^1], ModifierKeys.Shift);
 
             CollectionAssert.AreEquivalent(items, list.SelectedItems.Cast<BoardItem>().ToArray());
             CollectionAssert.AreEqual(items, board.Items(BoardCategory.Inbox).ToArray());
@@ -301,7 +315,7 @@ public sealed partial class MainWindowInteractionTests
                     .Single(button => Equals(button.CommandParameter, CardGestureZones.TogglePinCommand));
             pin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, pin));
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
-            ClickCard(window, items[3], ModifierKeys.Shift);
+            RightClickCard(window, items[3], ModifierKeys.Shift);
             var list = (ListBox)window.FindName("BoardList");
             CollectionAssert.AreEquivalent(items[..4], list.SelectedItems.Cast<BoardItem>().ToArray());
 
@@ -351,7 +365,7 @@ public sealed partial class MainWindowInteractionTests
                     .Single(button => Equals(button.CommandParameter, CardGestureZones.TogglePinCommand));
             pin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, pin));
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
-            ClickCard(window, items[3], ModifierKeys.Shift);
+            RightClickCard(window, items[3], ModifierKeys.Shift);
 
             store.FailFirstSave();
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(100));
@@ -401,7 +415,7 @@ public sealed partial class MainWindowInteractionTests
             window.RaiseEvent(NewKeyEventArgs(window, Key.Delete));
             PumpDispatcherUntil(window.Dispatcher, saveStarted);
             ClickSelectionButton(window, items[2]);
-            ClickCard(window, items[3], ModifierKeys.Shift);
+            RightClickCard(window, items[3], ModifierKeys.Shift);
 
             var delete = (Button)window.FindName("DeleteContentButton");
             var completed = new TaskCompletionSource();
@@ -455,7 +469,7 @@ public sealed partial class MainWindowInteractionTests
             var pin = (Button)window.FindName("BatchPinButton");
             pin.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, pin));
             PumpDispatcherUntil(window.Dispatcher, store.FirstSaveStarted.Task);
-            ClickCard(window, items[3], ModifierKeys.Shift);
+            RightClickCard(window, items[3], ModifierKeys.Shift);
             if (clearAction == "category-switch")
             {
                 EnterCategory(window, BoardCategory.Reference);
@@ -524,11 +538,11 @@ public sealed partial class MainWindowInteractionTests
     }
 
     /// <summary>
-    /// 单击卡片指定分区（默认右半——选择手势只属于右半；左半单击
+    /// 左键单击卡片指定分区（手势交换，Issue #216：右半左键＝复制；左半单击
     /// 无选择语义，由 CardGestures 契约测试单独覆盖）。时间戳与此前点击
     /// 拉开超过系统双击时限，保证各次单击互相独立。
     /// </summary>
-    private static void ClickCard(
+    private static void LeftClickCard(
         MainWindow window,
         BoardItem item,
         ModifierKeys modifiers,
@@ -536,6 +550,42 @@ public sealed partial class MainWindowInteractionTests
     {
         var hitSource = ZoneHitSource(window, item, zoneTag ?? CardGestureZones.OperationsZone);
         WithThreadKeyboardModifiers(modifiers, () => RaiseCardClick(hitSource));
+    }
+
+    /// <summary>
+    /// 右键单击卡片指定分区（手势交换，Issue #216：选择手势只属于右键——
+    /// 裸/Ctrl toggle、Shift 锚点范围、Ctrl+Shift 追加范围；左半右键无选择
+    /// 语义）。右键分发在 Up 且无按压会话，修饰键取 Up 时键盘态。
+    /// 右键专用隧道事件须在 BoardList 上 Raise（Source=分区命中元素）——在
+    /// 后代元素上直接 Raise 不触达 BoardList 的处理器（与通用左键事件不同）。
+    /// </summary>
+    private static void RightClickCard(
+        MainWindow window,
+        BoardItem item,
+        ModifierKeys modifiers,
+        string? zoneTag = null)
+    {
+        var hitSource = ZoneHitSource(window, item, zoneTag ?? CardGestureZones.OperationsZone);
+        WithThreadKeyboardModifiers(
+            modifiers,
+            () => RaiseRightCardClick(window, hitSource));
+    }
+
+    /// <summary>右键真实形态单击：预览按下 + 预览抬起（timestamp 可控递增）。</summary>
+    private static void RaiseRightCardClick(MainWindow window, UIElement hitSource) =>
+        RaiseRightCardPressAndRelease(window, hitSource, NextIsolatedClickTimestamp());
+
+    private static void RaiseRightCardPressAndRelease(MainWindow window, UIElement hitSource, int timestamp)
+    {
+        var list = (ListBox)window.FindName("BoardList")!;
+        list.RaiseEvent(NewRightButtonArgs(
+            UIElement.PreviewMouseRightButtonDownEvent,
+            hitSource,
+            timestamp));
+        list.RaiseEvent(NewRightButtonArgs(
+            UIElement.PreviewMouseRightButtonUpEvent,
+            hitSource,
+            timestamp + 5));
     }
 
     private static void WithThreadKeyboardModifiers(ModifierKeys modifiers, Action action)

@@ -11,7 +11,7 @@ public static class CardGestureZones
     /// <summary>左半：承载双击编辑与拖拽起点，无选择语义。</summary>
     public const string ContentZone = "CardContentZone";
 
-    /// <summary>右半（置顶/选择/删除按钮所在半区）：承载单击选择与右键复制。</summary>
+    /// <summary>右半（置顶/选择/删除按钮所在半区）：承载左键复制与右键选择。</summary>
     public const string OperationsZone = "CardOperationsZone";
 
     /// <summary>

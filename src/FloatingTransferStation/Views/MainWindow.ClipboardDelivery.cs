@@ -9,8 +9,10 @@ namespace FloatingTransferStation.Views;
 
 /// <summary>
 /// 卡片复制到剪贴板（交付第二通道，解决游戏聊天窗等无法拖入的目标）：
-/// 右键任意卡片复制那一张（不依赖、不改变当前选择，搜索过滤态同样可用）；
-/// 面板持有键盘焦点、存在选择且不在文字编辑态时 Ctrl+C 复制选中项。
+/// 左键单击卡片右半复制那一张（手势交换，Issue #216；不依赖、不改变当前
+/// 选择，搜索过滤态同样可用）；右键卡片右半承载选择手势（裸/Ctrl 右键
+/// toggle、Shift/Ctrl+Shift 右键锚点范围选择）；左半右键打开「插件动作」
+/// 菜单；面板持有键盘焦点、存在选择且不在文字编辑态时 Ctrl+C 复制选中项。
 /// 复制不删除源卡片、不进撤销栈；负载与拖出同构并携带内部条目标记，
 /// 自动采集据此跳过，复制旧卡片不会凭空生成重复条目。
 /// </summary>
@@ -23,10 +25,12 @@ public partial class MainWindow
     internal Func<DataObject, bool>? ClipboardWriterOverride { get; set; }
 
     /// <summary>
-    /// 压制 ListBox 对卡片右键按下的默认选中：右键的契约是只复制（分发在
-    /// Up），不得改变选择。真实输入的右键 Down 若放行，ListBox 默认处理会
-    /// 先选中命中项——合成测试只驱动 Up 事件，掩盖过这一实机偏差（B-007
-    /// 同族）。列表空白与滚动条不经过本压制，原生行为不变。
+    /// 压制 ListBox 对卡片右键按下的默认选中：右键是选择手势（分发在 Up，
+    /// 手势交换 Issue #216），不得让默认处理先行改写选择——否则 Up 的
+    /// toggle 会在默认选中之上二次翻转、锚点语义也会被默认单选冲掉。
+    /// 真实输入的右键 Down 若放行，ListBox 默认处理会先选中命中项——合成
+    /// 测试只驱动 Up 事件，掩盖过这一实机偏差（B-007 同族）。列表空白与
+    /// 滚动条不经过本压制，原生行为不变。
     /// </summary>
     private void BoardList_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -41,9 +45,10 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 右键卡片复制（1.15.0 起，设置可关闭；1.17.0 起限于右半）：不进入选择。
-    /// 1.51.0 起非复制路径打开「插件动作」右键菜单（命中卡不在选集内时先单选；
-    /// 复制手势仍只复制、不改选择）。
+    /// 右键卡片分发（手势交换，Issue #216）：右半承载选择手势——Shift 走
+    /// 锚点范围选择（Ctrl+Shift 保留既有选择并追加范围），裸右键与 Ctrl+右键
+    /// 等效 toggle，均不清理其他已选条目；修饰键取 Up 时线程键盘态。左半
+    /// （非复制路径）右键打开「插件动作」菜单（命中卡不在选集内时先单选）。
     /// </summary>
     private void BoardList_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
@@ -55,16 +60,25 @@ public partial class MainWindow
             return;
         }
 
-        if (ResolveCardHitZone(source, container) == CardHitZone.Operations &&
-            _preferences.RightClickCardCopyEnabled)
+        if (ResolveCardHitZone(source, container) == CardHitZone.Operations)
         {
             e.Handled = true;
-            CopyBoardItemsToClipboard([item]);
+            var modifiers = Keyboard.Modifiers;
+            if (modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                SelectRange(item, modifiers.HasFlag(ModifierKeys.Control));
+            }
+            else
+            {
+                ToggleSelection(item);
+            }
+
             return;
         }
 
-        // 仅当动作菜单真正打开时才拦截右键；无插件/无可执行项维持既有语义
-        //（偏好关闭时右键不拦截，ContentZone 左半无操作）。
+        // 插件动作菜单入口＝左半右键（交换后右半右键不再出现菜单）。仅当
+        // 动作菜单真正打开时才拦截右键；无插件/无可执行项维持既有语义
+        //（ContentZone 左半无操作）。
         if (TryOpenPluginActionsMenu(item))
         {
             e.Handled = true;
