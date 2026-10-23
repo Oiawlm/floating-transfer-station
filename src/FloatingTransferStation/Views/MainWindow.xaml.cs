@@ -127,7 +127,8 @@ public partial class MainWindow : Window
         AiTextOrganizer? aiTextOrganizer = null,
         IUpdateService? updateService = null,
         ILauncherStore? launcherStore = null,
-        AppLauncher? appLauncher = null)
+        AppLauncher? appLauncher = null,
+        ILauncherDiscoveryStore? launcherDiscoveryStore = null)
     {
         InitializeComponent();
         _preferences = preferences ?? AppPreferences.Default;
@@ -183,7 +184,7 @@ public partial class MainWindow : Window
         InitializePanelTextEditing();
         InitializeCardEditSessionTracking();
         InitializeBoardEmptyState();
-        InitializeQuickLaunch(launcherStore, appLauncher);
+        InitializeQuickLaunch(launcherStore, appLauncher, launcherDiscoveryStore);
         SourceInitialized += MainWindow_SourceInitialized;
 
         ApplyPlacement(WindowController.Collapsed(

@@ -465,6 +465,73 @@
                              Text="默认只对正文被截断的长卡出现备注入口；开启后所有文字卡都可以添加备注（AI 整理按钮仍只对长文出现）。" />
                 </StackPanel>
               </Border>
+              <Border Style="{StaticResource SettingsCardStyle}" Margin="0">
+                <StackPanel>
+                  <TextBlock Text="启动·自动发现" Style="{StaticResource SectionTitleStyle}" />
+                  <Grid Background="Transparent">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="自动发现新安装的应用"
+                               Style="{StaticResource RowCaptionStyle}" />
+                    <CheckBox x:Name="LauncherDiscoveryToggle"
+                              Grid.Column="1"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              AutomationProperties.Name="自动发现新安装的应用"
+                              Checked="LauncherDiscoveryToggle_Checked"
+                              Unchecked="LauncherDiscoveryToggle_Unchecked" />
+                  </Grid>
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="监视开始菜单（用户＋公共）与下方文件夹，新装应用进入启动面「发现 N」待确认清单——多选添加或忽略，绝不自动上屏；忽略会被持久记住。" />
+                  <TextBlock Text="监视文件夹"
+                             Style="{StaticResource RowCaptionStyle}"
+                             Margin="0,10,0,0" />
+                  <StackPanel x:Name="LauncherDiscoveryFolderList" MinHeight="4" />
+                  <Grid Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="LauncherDiscoveryFolderInput"
+                             Style="{StaticResource ThemedTextBoxStyle}"
+                             Height="32"
+                             FontSize="12"
+                             Padding="8,0"
+                             VerticalContentAlignment="Center"
+                             AutomationProperties.Name="监视文件夹路径" />
+                    <Button x:Name="LauncherDiscoveryFolderBrowseButton"
+                            Grid.Column="1"
+                            Content="浏览…"
+                            FontSize="12"
+                            Height="32"
+                            Padding="12,0"
+                            Margin="8,0,0,0"
+                            Style="{StaticResource ThemedActionButtonStyle}"
+                            AutomationProperties.Name="浏览监视文件夹"
+                            Click="LauncherDiscoveryFolderBrowse_Click" />
+                    <Button x:Name="LauncherDiscoveryFolderAddButton"
+                            Grid.Column="2"
+                            Content="添加"
+                            FontSize="12"
+                            Height="32"
+                            Padding="12,0"
+                            Margin="8,0,0,0"
+                            Style="{StaticResource ThemedActionButtonStyle}"
+                            AutomationProperties.Name="添加监视文件夹"
+                            Click="LauncherDiscoveryFolderAdd_Click" />
+                  </Grid>
+                  <TextBlock x:Name="LauncherDiscoveryFolderStatus"
+                             Style="{StaticResource NoteCaptionStyle}"
+                             Foreground="{DynamicResource DangerBrush}"
+                             Text=""
+                             Visibility="Collapsed" />
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="文件夹需存在且为完整路径；.lnk 全收，.exe 自动过滤卸载器/更新器等辅助程序；开关与文件夹改动立即生效并自动保存。" />
+                </StackPanel>
+              </Border>
             </StackPanel>
 
             <StackPanel x:Name="GeneralPage" Visibility="Collapsed">

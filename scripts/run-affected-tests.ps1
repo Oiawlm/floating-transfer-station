@@ -30,13 +30,16 @@ $assertedRootDocs = @('README.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'ROADMAP.m
 # ---- 精确区域规则（Glob 相对仓库根、正斜杠；一文件可命中多规则＝区域并集）----
 # 快捷启动（启动器）：瓦片/URL/选择器/图标/目录/存储/Shell 互操作/网格几何（取证 2026-10-19 缩圈）。
 $rules = @(
-    @{ Name = 'Launcher'; Filter = 'FullyQualifiedName~QuickLaunch|FullyQualifiedName~UrlInput'; Globs = @(
+    @{ Name = 'Launcher'; Filter = 'FullyQualifiedName~QuickLaunch|FullyQualifiedName~UrlInput|FullyQualifiedName~Discovery'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.QuickLaunch*.cs',
-        'src/FloatingTransferStation/Views/LauncherUrlInputWindow*', 'src/FloatingTransferStation/Views/InstalledAppPickerWindow*',
+        'src/FloatingTransferStation/Views/MainWindow.LauncherDiscovery*.cs',
+        'src/FloatingTransferStation/Views/LauncherUrlInputWindow*', 'src/FloatingTransferStation/Views/MultiItemPickerWindow*',
         'src/FloatingTransferStation/Views/LauncherEditTargetWindow*', 'src/FloatingTransferStation/Launcher/*',
         'src/FloatingTransferStation/Services/ShellInterop.cs',
-        'src/FloatingTransferStation.Core/Services/Launcher*.cs', 'src/FloatingTransferStation.Core/Services/VolatileLauncherStore.cs',
-        'src/FloatingTransferStation.Core/Services/ILauncherStore.cs', 'src/FloatingTransferStation.Core/Design/LauncherGridMath.cs',
+        'src/FloatingTransferStation.Core/Services/Launcher*.cs', 'src/FloatingTransferStation.Core/Services/VolatileLauncher*.cs',
+        'src/FloatingTransferStation.Core/Services/ILauncherStore.cs', 'src/FloatingTransferStation.Core/Services/ILauncherDiscoveryStore.cs',
+        'src/FloatingTransferStation.Core/Services/LocalStore.LauncherDiscoveries.cs',
+        'src/FloatingTransferStation.Core/Design/LauncherGridMath.cs',
         'src/FloatingTransferStation.Core/Models/LauncherItem.cs', 'src/FloatingTransferStation.Core/Models/LauncherIconKey.cs') },
     # 设置窗口（双栏/各节/几何/插件/AI/标签顺序；Metrics 为取证缩圈：消费者仅设置窗族）
     @{ Name = 'SettingsWindow'; Filter = 'FullyQualifiedName~SettingsWindow'; Globs = @(
@@ -197,6 +200,7 @@ $interactionTestPrefixes = @{
     'EdgeGeometry'           = @('CollapsedGeometry', 'DisplayChange', 'ExpandedGeometry', 'ResetAction', 'SettingChange', 'WidthResize')
     'EdgeHide'               = @('EdgeHide')
     'ExpandPipeline'         = @('ColdExpandImageCategory', 'ExpandImageCategory', 'ExpandWithSavedDeepOffset')
+    'LauncherDiscovery'      = @('Discovery')
     'HeaderIconMetrics'      = @('HeaderActionIcons')
     'MotionTransitions'      = @('CardLift', 'CardMotionLayers', 'Cards', 'DeleteCardFade', 'FadeAnimation', 'Icons', 'NewItems', 'PinnedCard', 'PinnedMove', 'ScrollThumb', 'StatusOverlay')
     'PanelExpandPerf'        = @('PanelExpandPerf')

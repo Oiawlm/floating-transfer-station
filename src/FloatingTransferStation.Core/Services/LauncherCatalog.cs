@@ -473,9 +473,13 @@ public sealed class LauncherCatalog
         }
     }
 
-    internal static string DedupKey(LauncherItem item) =>
+    internal static string DedupKey(LauncherItem item) => DedupKeyFor(item.TargetPath, item.Arguments);
+
+    /// <summary>规范化去重键（internal 规范化入口，#45）：与条目侧 DedupKey 同一语义，
+    /// 供启动·自动发现服务在构造 LauncherItem 之前对候选计算等价键。</summary>
+    internal static string DedupKeyFor(string targetPath, string? arguments) =>
         string.Join(
             '\u0001',
-            LauncherIconKey.NormalizeTarget(item.TargetPath),
-            item.Arguments ?? string.Empty);
+            LauncherIconKey.NormalizeTarget(targetPath),
+            arguments ?? string.Empty);
 }

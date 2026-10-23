@@ -379,6 +379,60 @@ public sealed class AppPreferencesTests
     }
 
     [TestMethod]
+    public void Default_EnablesLauncherDiscoveryWithoutCustomFolders()
+    {
+        Assert.IsTrue(AppPreferences.Default.LauncherDiscoveryEnabled, "自动发现默认开启（老用户升级零感知）。");
+        Assert.IsNull(AppPreferences.Default.LauncherDiscoveryFolders, "默认无自定义监视文件夹。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesLauncherDiscoveryPreferences()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var folders = new List<string> { @"D:\Apps", @"E:\Tools" };
+        var preferences = AppPreferences.Default with
+        {
+            LauncherDiscoveryEnabled = false,
+            LauncherDiscoveryFolders = folders
+        };
+
+        var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+        Assert.IsTrue(
+            serialized.Contains("\"launcherDiscoveryEnabled\":false", StringComparison.Ordinal),
+            "JSON 键必须是 launcherDiscoveryEnabled（camelCase）。");
+        Assert.IsTrue(
+            serialized.Contains("\"launcherDiscoveryFolders\"", StringComparison.Ordinal),
+            "JSON 键必须是 launcherDiscoveryFolders（camelCase）。");
+        var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsFalse(restored.LauncherDiscoveryEnabled);
+        // 列表成员是引用相等语义：逐项比较（record 整体相等不适用于集合成员）。
+        CollectionAssert.AreEqual(folders, (System.Collections.ICollection)restored.LauncherDiscoveryFolders!);
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutLauncherDiscoveryFields_FallsBackToDefaults()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","rightClickCardCopyEnabled":true}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsTrue(restored.LauncherDiscoveryEnabled, "旧 preferences.json 缺字段时必须回落到默认开启。");
+        Assert.IsNull(restored.LauncherDiscoveryFolders, "缺字段回落无自定义文件夹（免迁移）。");
+    }
+
+    [TestMethod]
     public void Default_UsesSolidPinnedDivider()
     {
         Assert.AreEqual(PinnedDividerStyle.Solid, AppPreferences.Default.PinnedDivider);

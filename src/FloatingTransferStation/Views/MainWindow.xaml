@@ -667,17 +667,31 @@
               <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <!-- 工具行：仅保留＋添加（编辑模式已移除，#30 修订 2026-10-18，Issue #186）。 -->
+            <!-- 工具行：＋添加（编辑模式已移除，#30 修订 2026-10-18，Issue #186）＋
+                 「发现 N」（#45 启动·自动发现，仅 pending>0 可见）。恒定几何：发现
+                 按钮占固定宽预留格（隐藏时格子留空、＋添加零漂移——可见性塌缩，
+                 与卡片操作格同语义）。 -->
             <Grid x:Name="LauncherToolbar" Grid.Row="0" Height="40" Margin="0,0,0,4">
-              <Button x:Name="LauncherAddButton"
-                      HorizontalAlignment="Right"
-                      VerticalAlignment="Center"
-                      Content="＋ 添加"
-                      FontSize="12"
-                      Padding="10,3"
-                      Style="{StaticResource ThemedActionButtonStyle}"
-                      AutomationProperties.Name="添加启动项"
-                      Click="LauncherAddButton_Click" />
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Grid Width="88" Margin="0,0,8,0">
+                  <Button x:Name="LauncherDiscoveryButton"
+                          HorizontalAlignment="Stretch"
+                          FontSize="12"
+                          Padding="0,3"
+                          Style="{StaticResource ThemedActionButtonStyle}"
+                          AutomationProperties.Name="查看发现的新应用"
+                          Visibility="Collapsed"
+                          Click="LauncherDiscoveryButton_Click" />
+                </Grid>
+                <Button x:Name="LauncherAddButton"
+                        VerticalAlignment="Center"
+                        Content="＋ 添加"
+                        FontSize="12"
+                        Padding="10,3"
+                        Style="{StaticResource ThemedActionButtonStyle}"
+                        AutomationProperties.Name="添加启动项"
+                        Click="LauncherAddButton_Click" />
+              </StackPanel>
             </Grid>
 
             <!-- ＋ 添加两入口菜单（#30 切片 4）：应用文件… / 已安装应用…；定位锚点在
