@@ -1254,6 +1254,18 @@
     <Setter Property="Padding" Value="24" />
   </Style>
 
+  <!-- 启动瓦片图标槽占位字形（#30）：仅在图标未到达（IconImage.Tag 为 null＝
+       提取/favicon 抓取在途或失败）时可见，图标回填即整层收起——透明底图标
+       不再透出底层字形轮廓。两个图标模板（应用/网页）共用；显隐用布局塌缩。 -->
+  <Style x:Key="LauncherTileIconPlaceholderStyle" TargetType="TextBlock">
+    <Setter Property="Visibility" Value="Collapsed" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding Tag, ElementName=IconImage}" Value="{x:Null}">
+        <Setter Property="Visibility" Value="Visible" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+
   <!-- 启动瓦片右上勾选钮（#30 修订 2026-10-18，Issue #186）：多选入口，视觉复用
        SelectionButtonStyle（30×30 命中、16×16 环 r5、悬停环/选中填充/对勾），
        绑定面按瓦片改写——瓦片非 ListBoxItem，可见性=悬停(瓦片)∨IsSelected∨

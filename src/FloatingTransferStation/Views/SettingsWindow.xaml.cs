@@ -59,7 +59,6 @@ public partial class SettingsWindow : Window
         StartupToggle.IsChecked = host.StartupManager.IsEnabled();
         GlobalHotkeyToggle.IsChecked = host.CurrentPreferences.GlobalHotkeyEnabled;
         AutoUpdateCheckToggle.IsChecked = host.CurrentPreferences.AutoUpdateCheckEnabled;
-        RightClickCopyToggle.IsChecked = host.CurrentPreferences.RightClickCardCopyEnabled;
         CtrlCCopyToggle.IsChecked = host.CurrentPreferences.CopySelectionWithCtrlCEnabled;
         ShortCardNotesToggle.IsChecked = host.CurrentPreferences.ShortCardNotesEnabled;
         LauncherDiscoveryToggle.IsChecked = host.CurrentPreferences.LauncherDiscoveryEnabled;
@@ -620,25 +619,6 @@ public partial class SettingsWindow : Window
         _isSynchronizingControls = true;
         GlobalHotkeyToggle.IsChecked = _host.CurrentPreferences.GlobalHotkeyEnabled;
         _isSynchronizingControls = false;
-    }
-
-    private void RightClickCopyToggle_Checked(object sender, RoutedEventArgs e) =>
-        ApplyCopyGesturePreference(rightClickCardCopy: true);
-
-    private void RightClickCopyToggle_Unchecked(object sender, RoutedEventArgs e) =>
-        ApplyCopyGesturePreference(rightClickCardCopy: false);
-
-    private void ApplyCopyGesturePreference(bool rightClickCardCopy)
-    {
-        if (_isSynchronizingControls)
-        {
-            return;
-        }
-
-        _host.ApplyPreferences(_host.CurrentPreferences with
-        {
-            RightClickCardCopyEnabled = rightClickCardCopy
-        });
     }
 
     private void CtrlCCopyToggle_Checked(object sender, RoutedEventArgs e) =>

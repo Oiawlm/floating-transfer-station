@@ -9,11 +9,11 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 卡片左右对半分区（用户契约：左半双击编辑、右半单击选中/右键复制）与
-/// 编辑会话锚点生命周期（1.18.0 重构）的契约测试。历史背景：1.17.0 用
-/// 「内容列 + 最右 60px 操作列」表达分区，用户感知的右半边落在内容列，
-/// 单击/右键无反应（Bug B）；编辑会话终结托付给被手势层自己禁用的焦点
-/// 迁移，切类目后编辑框悬挂在页面上（Bug A）。
+/// 卡片左右对半分区（用户契约：左半双击编辑、右半左键复制/右键选择——
+/// 手势交换 Issue #216）与编辑会话锚点生命周期（1.18.0 重构）的契约测试。
+/// 历史背景：1.17.0 用「内容列 + 最右 60px 操作列」表达分区，用户感知的
+/// 右半边落在内容列，单击/右键无反应（Bug B）；编辑会话终结托付给被手势层
+/// 自己禁用的焦点迁移，切类目后编辑框悬挂在页面上（Bug A）。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -129,7 +129,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CardHalves_RealInputRightHalfBareClickTogglesSelection()
+    public void CardHalves_RealInputRightHalfRightClickTogglesSelection()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -147,8 +147,8 @@ public sealed partial class MainWindowInteractionTests
 
             // 右半左缘内侧（远离右上角按钮条）：旧实现落在内容列，单击无反应
             // （Bug B）。1.24.0 起按钮条扩为三列（右对齐 90px），右半中央已可
-            // 落进图钉列——裸单击语义的取样点固定在右半左缘 +12，任何面板宽度
-            // 下都几何远离按钮条。
+            // 落进图钉列——右键 toggle 语义的取样点固定在右半左缘 +12，任何
+            // 面板宽度下都几何远离按钮条。
             var operationsZone = HalvesZoneOf(container, CardGestureZones.OperationsZone);
             var zoneOrigin = operationsZone.TranslatePoint(new Point(), container);
             var clickPoint = new Point(
@@ -158,27 +158,27 @@ public sealed partial class MainWindowInteractionTests
 
             try
             {
-                ClickRealAt(window, container, clickPoint);
+                // 手势交换（Issue #216）：右半右键＝toggle 选择，Down→Up 完整
+                // 真实序列（Win32 右键消息直驱，走完整 WPF 输入管线）。
+                ClickRealRightAt(window, container, clickPoint);
 
                 var list = (ListBox)window.FindName("BoardList");
                 CollectionAssert.AreEquivalent(
                     new[] { item },
                     list.SelectedItems.Cast<BoardItem>().ToArray(),
-                    "卡片右半（远离按钮）的真实输入单击必须 toggle 选中。");
+                    "卡片右半（远离按钮）的真实输入右键必须 toggle 选中。");
 
-                // 再击取消。两击间拉开双击时限（同区快速两击是「净一次
-                // toggle」的既有双击语义，独立两击才各自 toggle）；期间光标
-                // 停留在点击点——中途移回原位会让 WPF 的光标位置同步滞后，
-                // 第二击被 Spurious mouse event 防护丢弃。
+                // 再击取消。右键分发不看双击痕迹，快速连点每击独立 toggle；
+                // 期间拉开间隔保证两次投递的光标同步稳定。
                 PumpDispatcherFor(
                     window.Dispatcher,
                     TimeSpan.FromMilliseconds(GetDoubleClickTime() + 100));
-                ClickRealAt(window, container, clickPoint);
+                ClickRealRightAt(window, container, clickPoint);
 
                 CollectionAssert.AreEquivalent(
                     Array.Empty<BoardItem>(),
                     list.SelectedItems.Cast<BoardItem>().ToArray(),
-                    "卡片右半再次单击必须取消选中。");
+                    "卡片右半再次右键必须取消选中。");
             }
             finally
             {
@@ -407,6 +407,12 @@ public sealed partial class MainWindowInteractionTests
         var edited = board.AddText("正在编辑的卡", BoardCategory.Inbox);
         var other = board.AddText("被单击的另一张", BoardCategory.Inbox);
         var window = CreateWindow(board, store, WindowSettings.Default);
+        DataObject? delivered = null;
+        window.ClipboardWriterOverride = data =>
+        {
+            delivered = data;
+            return true;
+        };
 
         try
         {
@@ -417,18 +423,20 @@ public sealed partial class MainWindowInteractionTests
             EnterCardEditingWithDoubleClick(window, edited);
             EditorInput(window, edited).Text = "单击他卡冲刷的编辑";
 
-            // 编辑中单击另一张卡的右半：先冲刷悬挂会话，再分发本次手势。
-            ClickCard(window, other, ModifierKeys.None);
+            // 编辑中左键单击另一张卡的右半：先冲刷悬挂会话，再分发本次手势
+            //（手势交换后右半左键＝复制）。
+            LeftClickCard(window, other, ModifierKeys.None);
             CompleteLayout(window);
 
             Assert.AreEqual(
                 "单击他卡冲刷的编辑",
                 board.FindItem(edited.Id)!.Text,
                 "单击他卡必须先提交悬挂编辑。");
-            CollectionAssert.AreEquivalent(
-                new[] { other },
+            Assert.IsNotNull(delivered, "冲刷后本次左键手势照常分发复制。");
+            Assert.AreEqual("被单击的另一张", delivered!.GetData(DataFormats.UnicodeText));
+            Assert.IsEmpty(
                 list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "冲刷后本次单击手势照常分发。");
+                "复制手势不得改变选择。");
         }
         finally
         {
@@ -481,6 +489,12 @@ public sealed partial class MainWindowInteractionTests
         var board = new BoardService();
         var item = board.AddText("跨区两击", BoardCategory.Inbox);
         var window = CreateWindow(directory, board);
+        DataObject? captured = null;
+        window.ClipboardWriterOverride = data =>
+        {
+            captured = data;
+            return true;
+        };
 
         try
         {
@@ -491,24 +505,22 @@ public sealed partial class MainWindowInteractionTests
             var contentSource = ZoneHitSource(window, item, CardGestureZones.ContentZone);
             var operationsSource = ZoneHitSource(window, item, CardGestureZones.OperationsZone);
 
-            // 右半单击 toggle，双击时限内的左半第二击是独立单击（无语义）：
+            // 右半左键复制，双击时限内的左半第二击是独立单击（无语义）：
             // 跨半两击不得串味成双击（旧实现左半第二击被吞、右→左会意外进编辑）。
             RaiseCardPressAndRelease(operationsSource, NextIsolatedClickTimestamp());
+            Assert.IsNotNull(captured, "右半第一击左键必须复制。");
+            captured = null;
             RaiseCardPressAndRelease(contentSource, NextPairedClickTimestamp());
-            CollectionAssert.AreEquivalent(
-                new[] { item },
-                list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "右半第一击的 toggle 必须保留。");
             AssertNoVisibleCardEditor(window);
+            Assert.IsNull(captured, "时限内的左半第二击是独立单击，无复制语义。");
             // 跨半两击不得判为双击进入编辑。
 
-            // 反向：左半单击（痕迹）+ 双击时限内右半第二击 → 独立 toggle。
+            // 反向：左半单击（痕迹）+ 双击时限内右半第二击 → 独立分发（再复制）。
             RaiseCardPressAndRelease(contentSource, NextIsolatedClickTimestamp());
             RaiseCardPressAndRelease(operationsSource, NextPairedClickTimestamp());
-            CollectionAssert.AreEquivalent(
-                Array.Empty<BoardItem>(),
-                list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "时限内的右半第二击必须独立分发（取消选择）。");
+            Assert.IsNotNull(
+                captured,
+                "时限内的右半第二击必须独立分发（不被双击窗吞掉）。");
         }
         finally
         {
@@ -757,11 +769,11 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CardHalves_RealInputRightHalfRightClickCopiesToClipboard()
+    public void CardHalves_RealInputRightHalfBareClickCopiesToClipboard()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
-        var item = board.AddText("右半右键复制", BoardCategory.Inbox);
+        var item = board.AddText("右半左键复制", BoardCategory.Inbox);
         var window = CreateWindow(directory, board);
         DataObject? delivered = null;
         window.ClipboardWriterOverride = data =>
@@ -780,28 +792,29 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var operationsZone = HalvesZoneOf(container, CardGestureZones.OperationsZone);
             var zoneOrigin = operationsZone.TranslatePoint(new Point(), container);
+            // 右半中央偏左（远离右上角按钮条）：左键＝复制的真实输入取样点。
             var clickPoint = new Point(
-                zoneOrigin.X + operationsZone.ActualWidth / 2,
+                zoneOrigin.X + operationsZone.ActualWidth * 0.25,
                 zoneOrigin.Y + operationsZone.ActualHeight * 0.6);
             var savedCursor = SaveCursorPosition();
 
             try
             {
-                ClickRealRightAt(window, container, clickPoint);
+                ClickRealAt(window, container, clickPoint);
             }
             finally
             {
                 RestoreCursorPosition(savedCursor);
             }
 
-            Assert.IsNotNull(delivered, "卡片右半的真实输入右键必须复制该卡。");
+            Assert.IsNotNull(delivered, "卡片右半的真实输入左键单击必须复制该卡。");
             Assert.IsTrue(
                 delivered!.GetDataPresent(DataFormats.UnicodeText),
                 "复制的负载必须携带文字内容。");
             var list = (ListBox)window.FindName("BoardList");
             Assert.IsFalse(
                 list.SelectedItems.Cast<BoardItem>().Any(),
-                "右键复制不得改变选择。");
+                "左键复制不得改变选择。");
         }
         finally
         {
@@ -863,10 +876,27 @@ public sealed partial class MainWindowInteractionTests
     private const int WmRightButtonUp = 0x0205;
 
     /// <summary>
-    /// 真实输入管线右键点击：与 ClickRealAt 同构，投递 Win32 右键消息
-    /// （走完整 WPF 输入管线），等待右键预览抬起路由完成。
+    /// 真实输入管线右键点击：与 ClickRealAt 同构（强制位移预热＋一次完整重试
+    /// 吸收瞬时未命中），投递 Win32 右键消息（走完整 WPF 输入管线），等待右键
+    /// 预览抬起路由完成。
     /// </summary>
     private static void ClickRealRightAt(
+        MainWindow window,
+        FrameworkElement container,
+        Point positionInContainer)
+    {
+        // 与 ClickRealAt 同因：批跑中光标位置重合/悬停抖动会让投递被
+        // Spurious mouse event 防护丢弃，重试一轮；连续两轮都无 Up 才判失败。
+        MouseButtonEventArgs? upArgs = null;
+        for (var attempt = 0; attempt < 2 && upArgs is null; attempt++)
+        {
+            upArgs = ClickRealRightAtOnce(window, container, positionInContainer);
+        }
+
+        Assert.IsNotNull(upArgs, "真实右键必须到达右键预览抬起处理器。");
+    }
+
+    private static MouseButtonEventArgs? ClickRealRightAtOnce(
         MainWindow window,
         FrameworkElement container,
         Point positionInContainer)
@@ -875,6 +905,11 @@ public sealed partial class MainWindowInteractionTests
         var screen = container.PointToScreen(positionInContainer);
         var client = new NativePoint((int)Math.Round(screen.X), (int)Math.Round(screen.Y));
         Assert.IsTrue(ScreenToClient(hwnd, ref client), "屏幕点到客户区换算必须成功。");
+        // 先强制一次位移再落到精确点击点，保证移动事件必然生成（与
+        // ClickRealAtOnce 同因：SetCursorPos 到原位不产生 WM_MOUSEMOVE）。
+        Assert.IsTrue(
+            SetCursorPos((int)Math.Round(screen.X) + 7, (int)Math.Round(screen.Y) + 5),
+            "真实光标必须可移动（强制位移预热）。");
         Assert.IsTrue(SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y)), "真实光标必须可移入窗口。");
         PumpUntilMouseOver(window);
         MouseButtonEventArgs? upArgs = null;
@@ -897,6 +932,6 @@ public sealed partial class MainWindowInteractionTests
             window.RemoveHandler(UIElement.PreviewMouseRightButtonUpEvent, onUp);
         }
 
-        Assert.IsNotNull(upArgs);
+        return upArgs;
     }
 }

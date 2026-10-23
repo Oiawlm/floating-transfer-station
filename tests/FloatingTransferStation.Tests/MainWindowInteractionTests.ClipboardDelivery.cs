@@ -9,8 +9,9 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 卡片复制到剪贴板（交付第二通道）回归：右键复制单卡（不改选择、不删源、
-/// 搜索过滤态可用）、Ctrl+C 复制选中（板内顺序合并、无选择不拦截、编辑态让路）、
+/// 卡片复制到剪贴板（交付第二通道）回归：右半左键复制单卡（手势交换
+/// Issue #216；不改选择、不删源、搜索过滤态可用）、右半右键 toggle 选择
+/// （裸/Ctrl）、Ctrl+C 复制选中（板内顺序合并、无选择不拦截、编辑态让路）、
 /// 复制负载携带内部条目标记且自动采集跳过（不产生重复卡）。
 /// 测试经 ClipboardWriterOverride 捕获负载，不读写系统剪贴板。
 /// </summary>
@@ -23,14 +24,17 @@ public sealed partial class MainWindowInteractionTests
             Source = source
         };
 
-    /// <summary>右键卡片右半：复制手势只属于右半。</summary>
-    private static MouseButtonEventArgs NewRightClickArgsOnCard(
-        MainWindow window,
-        BoardItem item)
-    {
-        var hitSource = ZoneHitSource(window, item, CardGestureZones.OperationsZone);
-        return NewRightClickArgs(hitSource);
-    }
+    /// <summary>带 timestamp 的右键事件构造（合成路径）：右键选择分发读
+    /// Up 时 Keyboard.Modifiers，修饰键语义经 WithThreadKeyboardModifiers 注入。</summary>
+    private static MouseButtonEventArgs NewRightButtonArgs(
+        RoutedEvent routedEvent,
+        DependencyObject source,
+        int timestamp) =>
+        new(Mouse.PrimaryDevice, timestamp, MouseButton.Right)
+        {
+            RoutedEvent = routedEvent,
+            Source = source
+        };
 
     private static string StatusOf(MainWindow window) =>
         ((MainWindowViewModel)window.DataContext).StatusText;
@@ -43,7 +47,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void RightClickCopy_CopiesTextCardWithoutTouchingSelectionOrBoard()
+    public void LeftClickCopy_CopiesTextCardWithoutTouchingSelectionOrBoard()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -66,7 +70,7 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
             list.SelectedItems.Add(second);
 
-            list.RaiseEvent(NewRightClickArgsOnCard(window, first));
+            LeftClickCard(window, first, ModifierKeys.None);
             CompleteLayout(window);
 
             Assert.IsNotNull(captured);
@@ -75,7 +79,7 @@ public sealed partial class MainWindowInteractionTests
             CollectionAssert.AreEqual(
                 new[] { second },
                 list.SelectedItems.Cast<BoardItem>().ToArray(),
-                "右键复制不得依赖或改变当前选择。");
+                "右半左键复制不得依赖或改变当前选择。");
             CollectionAssert.AreEqual(
                 new[] { second, first },
                 board.Items(BoardCategory.Inbox).ToArray(),
@@ -86,7 +90,7 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             SaveVisualEvidence(
                 (Border)window.FindName("WindowShell"),
-                "right-click-copy-status.png",
+                "left-click-copy-status.png",
                 "FTS_DELIVERY_EVIDENCE_DIR");
         }
         finally
@@ -96,11 +100,11 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void RightClickCopy_ImageCardDeliversFileDropAndBitmap()
+    public void LeftClickCopy_ImageCardDeliversFileDropAndBitmap()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
-        var image = AddImageCard(directory, board, "right-click.png");
+        var image = AddImageCard(directory, board, "left-click.png");
         var window = CreateWindow(directory, board);
         DataObject? captured = null;
         window.ClipboardWriterOverride = data =>
@@ -116,7 +120,7 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
 
-            list.RaiseEvent(NewRightClickArgsOnCard(window, image));
+            LeftClickCard(window, image, ModifierKeys.None);
             CompleteLayout(window);
 
             Assert.IsNotNull(captured);
@@ -135,13 +139,13 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void RightClickCopy_DisabledPreferenceKeepsGestureIdle()
+    public void RightClick_OperationsZoneTogglesSelectionWithoutCopying()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
-        var item = board.AddText("不可复制");
+        var first = board.AddText("右键选中");
+        var second = board.AddText("已选的另一张");
         var window = CreateWindow(directory, board);
-        window.ApplyPreferences(AppPreferences.Default with { RightClickCardCopyEnabled = false });
         DataObject? captured = null;
         window.ClipboardWriterOverride = data =>
         {
@@ -155,14 +159,29 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
-            var args = NewRightClickArgsOnCard(window, item);
+            list.SelectedItems.Add(second);
 
-            list.RaiseEvent(args);
-            CompleteLayout(window);
+            // 手势交换（Issue #216）：右半右键＝toggle 选择（裸与 Ctrl 等效），
+            // 不复制、不进任何编辑意图。逐击 toggle：开→关→开。
+            RightClickCard(window, first, ModifierKeys.None);
+            CollectionAssert.AreEquivalent(
+                new[] { first, second },
+                list.SelectedItems.Cast<BoardItem>().ToArray(),
+                "右半右键 toggle 命中条目且不影响其他已选。");
 
-            Assert.IsFalse(args.Handled, "偏好关闭时右键不拦截。");
-            Assert.IsNull(captured);
-            Assert.IsEmpty(StatusOf(window));
+            RightClickCard(window, first, ModifierKeys.Control);
+            CollectionAssert.AreEqual(
+                new[] { second },
+                list.SelectedItems.Cast<BoardItem>().ToArray(),
+                "Ctrl+右键与裸右键等效 toggle（再次击打取消命中条目）。");
+
+            RightClickCard(window, first, ModifierKeys.Control);
+            CollectionAssert.AreEquivalent(
+                new[] { first, second },
+                list.SelectedItems.Cast<BoardItem>().ToArray(),
+                "右半右键第三击重新选中。");
+            Assert.IsNull(captured, "右键选择手势不得触发复制。");
+            Assert.AreEqual(string.Empty, StatusOf(window));
         }
         finally
         {
@@ -171,7 +190,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void RightClickCopy_ContentZoneIsNotIntercepted()
+    public void RightClick_ContentZoneIsNotIntercepted()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -196,9 +215,12 @@ public sealed partial class MainWindowInteractionTests
             list.RaiseEvent(args);
             CompleteLayout(window);
 
-            Assert.IsFalse(args.Handled, "左半右键无操作、不拦截（内容区不承载复制手势）。");
+            Assert.IsFalse(args.Handled, "左半右键无插件时无操作、不拦截（选择手势只属于右半）。");
             Assert.IsNull(captured);
             Assert.IsEmpty(StatusOf(window));
+            Assert.IsFalse(
+                list.SelectedItems.Cast<BoardItem>().Any(),
+                "左半右键不得产生选择语义。");
         }
         finally
         {
@@ -207,7 +229,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void RightClickCopy_RemainsAvailableInSearchFilterMode()
+    public void LeftClickCopy_RemainsAvailableInSearchFilterMode()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -232,9 +254,9 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
             var container = (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(match);
-            Assert.IsNotNull(container, "过滤后匹配卡片必须仍可右键复制。");
+            Assert.IsNotNull(container, "过滤后匹配卡片必须仍可左键复制。");
 
-            list.RaiseEvent(NewRightClickArgsOnCard(window, match));
+            LeftClickCard(window, match, ModifierKeys.None);
             CompleteLayout(window);
 
             Assert.IsNotNull(captured);
@@ -454,7 +476,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void RightClickCopy_DoesNotTriggerAutomaticRecapture()
+    public void LeftClickCopy_DoesNotTriggerAutomaticRecapture()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -484,7 +506,7 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
 
-            list.RaiseEvent(NewRightClickArgsOnCard(window, item));
+            LeftClickCard(window, item, ModifierKeys.None);
             CompleteLayout(window);
             Assert.IsNotNull(captured);
             Assert.AreEqual("已复制 1 条文字到剪贴板", StatusOf(window));
