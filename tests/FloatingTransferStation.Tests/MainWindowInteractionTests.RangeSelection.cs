@@ -51,6 +51,10 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             if (anchorIndex == 0)
             {
+                // 等选中徽章淡入定稿再取证（与 before 捕获同一节奏），否则
+                // RenderTargetBitmap 会把淡入中程渲染成未选中。
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(250));
+                CompleteLayout(window);
                 SaveVisualEvidence((Border)window.FindName("WindowShell"),
                     "after-shift-click.png", "FTS_RANGE_SELECTION_EVIDENCE_DIR");
             }
