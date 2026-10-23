@@ -10,6 +10,7 @@ TestResults/
 *.user
 *.suo
 .zcode/
+.wbx/
 .preview-data/
 /AGENTS.md
 /PROJECT_GUIDE.md
