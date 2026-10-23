@@ -9,11 +9,12 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 内容桶空状态引导契约（#33，Issue #200）：待分类/图片为空时居中「图标＋标题＋
-/// 副文案」引导，可见性单点＝UpdatePanelSurface 表面切换＋激活桶集合变化＋搜索
-/// 进出让位；文案按 (BoardCategory, IsDefaultCapture) 二维矩阵派生（默认接收桶＝
-/// 复制自动收集，非默认桶＝拖入收集）。空态元素为纯信息性：命中穿透回 BoardList，
-/// 拖放/点击语义不变。
+/// 空状态引导契约（#33，Issue #200；2026-10-24 复盘扩展）：待分类/图片为空时居中
+/// 「图标＋标题＋副文案」引导，可见性单点＝UpdatePanelSurface 表面切换＋激活桶
+/// 集合变化＋搜索进出让位；文案按 (BoardCategory, IsDefaultCapture) 二维矩阵派生
+/// （默认接收桶＝复制自动收集，非默认桶＝拖入收集；复盘臂供复盘表面空态）。空态
+/// 元素为纯信息性：命中穿透回 BoardList/编辑器，拖放/点击/输入语义不变。复盘空态
+/// 生命周期：当日无内容→可见；输入第一个字符→立即隐藏；切换日期→按装载内容重评估。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -25,6 +26,10 @@ public sealed partial class MainWindowInteractionTests
         "复制的图片或文字会自动收集到这里，也可以直接拖入";
     private const string CustomerOriginalNonDefaultCaptureHint =
         "把图片或文字拖到这里即可收集";
+    private const string ReviewEmptyStateTitleCopy =
+        "还没有复盘内容";
+    private const string ReviewEmptyStateHintCopy =
+        "直接输入即可开始记录，内容会自动保存";
 
     private static StackPanel BoardEmptyStatePanel(MainWindow window) =>
         (StackPanel)window.FindName("BoardEmptyState");
@@ -34,6 +39,31 @@ public sealed partial class MainWindowInteractionTests
 
     private static TextBlock BoardEmptyStateHintText(MainWindow window) =>
         (TextBlock)window.FindName("BoardEmptyStateHint");
+
+    private static StackPanel ReviewEmptyStatePanel(MainWindow window) =>
+        (StackPanel)window.FindName("ReviewEmptyState");
+
+    private static TextBlock ReviewEmptyStateTitleText(MainWindow window) =>
+        (TextBlock)window.FindName("ReviewEmptyStateTitle");
+
+    private static TextBlock ReviewEmptyStateHintText(MainWindow window) =>
+        (TextBlock)window.FindName("ReviewEmptyStateHint");
+
+    /// <summary>复盘异步方法须经 Dispatcher.InvokeAsync 调用（既有 ReviewCategory_*
+    /// flush 用例同法）：裸测试线程无 SynchronizationContext，await 续体会跳线程池，
+    /// 碰 ReviewEditor 即 VerifyAccess 崩溃；dispatcher 回调内调用则续体回贴 UI 线程。</summary>
+    private static void InvokeReviewTaskOnDispatcher(
+        MainWindow window,
+        string methodName,
+        params object?[] arguments)
+    {
+        var method = typeof(MainWindow).GetMethod(
+            methodName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.IsNotNull(method);
+        var task = window.Dispatcher.InvokeAsync(() => (Task)method.Invoke(window, arguments)!).Task.Unwrap();
+        PumpDispatcherUntil(window.Dispatcher, task);
+    }
 
     [TestMethod]
     public void BoardEmptyState_CopyMatrixDerivesByCategoryAndDefaultCapture()
@@ -57,12 +87,26 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [TestMethod]
-    public void BoardEmptyState_CopyMatrixRejectsNonContentBucketCategories()
+    public void BoardEmptyState_CopyMatrixDerivesReviewSurfaceEntry()
     {
-        // 穷尽 switch、无兜底臂：非内容桶具名值进入矩阵属编程错误，必须立即失败
+        // 复盘臂：第二维（默认接收布尔）与复盘无关，两个取值必须给出同一文案——
+        // 复盘的进入路径是直接输入，无自动收集/拖入之分。
+        Assert.AreEqual(
+            (ReviewEmptyStateTitleCopy, ReviewEmptyStateHintCopy),
+            MainWindow.BoardEmptyStateCopy(DailyReviewMigration.ReviewCategory, true),
+            "复盘空态标题应指出无内容，副文案应指出直接输入与自动保存（true 臂）。");
+        Assert.AreEqual(
+            (ReviewEmptyStateTitleCopy, ReviewEmptyStateHintCopy),
+            MainWindow.BoardEmptyStateCopy(DailyReviewMigration.ReviewCategory, false),
+            "复盘空态两臂文案一致（第二维与复盘无关）。");
+    }
+
+    [TestMethod]
+    public void BoardEmptyState_CopyMatrixRejectsLauncherCategory()
+    {
+        // 穷尽 switch、无兜底臂：启动具名值（唯一无空态文案语义的分类——启动表面
+        // 空态归 LauncherEmptyState 专属承载）进入矩阵属编程错误，必须立即失败
         // 而不是给出误导性空态文案（与 BoardCategoryCatalog.RoleOf 同口径）。
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => MainWindow.BoardEmptyStateCopy(DailyReviewMigration.ReviewCategory, true));
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(
             () => MainWindow.BoardEmptyStateCopy(QuickLaunchMigration.LauncherCategory, false));
     }
@@ -319,6 +363,113 @@ public sealed partial class MainWindowInteractionTests
         finally
         {
             CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void BoardEmptyState_ReviewEmptyStateLifecycleAcrossTypingAndDateSwitch()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateReviewWindow(directory);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, DailyReviewMigration.ReviewCategory);
+            CompleteLayout(window);
+            // 装载今天（TestDirectory 内无复盘文件 → 当日无内容）。
+            LoadReview(window);
+            CompleteLayout(window);
+
+            Assert.AreEqual(
+                Visibility.Visible,
+                ReviewEmptyStatePanel(window).Visibility,
+                "复盘当日无内容应显示空态引导。");
+            Assert.AreEqual(ReviewEmptyStateTitleCopy, ReviewEmptyStateTitleText(window).Text);
+            Assert.AreEqual(ReviewEmptyStateHintCopy, ReviewEmptyStateHintText(window).Text);
+            Assert.IsFalse(
+                ReviewEmptyStatePanel(window).IsHitTestVisible,
+                "复盘空态是纯信息性元素，必须整体退出命中测试（点击穿透到编辑器）。");
+
+            // 输入第一个字符：TextChanged 同步驱动更新点，不做任何布局等待——
+            // 断言紧随赋值，证明确即隐藏。
+            var editor = (TextBox)window.FindName("ReviewEditor");
+            editor.Text = "今";
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                ReviewEmptyStatePanel(window).Visibility,
+                "输入第一个字符应立即隐藏空态（不等自动保存）。");
+
+            // 切换日期 → 重评估：昨天有内容 → 隐藏（可见性跟随装载内容，不是静态门闩）。
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            var reviews = GetPrivateField<IDailyReviewStore>(window, "_dailyReviews");
+            reviews.SaveAsync(today.AddDays(-1), "昨天的复盘内容").GetAwaiter().GetResult();
+            InvokeReviewTaskOnDispatcher(window, "SwitchReviewDateAsync", today.AddDays(-1));
+            CompleteLayout(window);
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                ReviewEmptyStatePanel(window).Visibility,
+                "切换到有内容的日期应保持隐藏（按装载内容重评估）。");
+
+            // 再切到前天（无内容）→ 空态回归。
+            InvokeReviewTaskOnDispatcher(window, "SwitchReviewDateAsync", today.AddDays(-2));
+            CompleteLayout(window);
+            Assert.AreEqual(
+                Visibility.Visible,
+                ReviewEmptyStatePanel(window).Visibility,
+                "切换到无内容的日期空态应回归。");
+        }
+        finally
+        {
+            CloseReviewWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void BoardEmptyState_ReviewEmptyStateEvidenceBothThemes()
+    {
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_REVIEW_EMPTY_STATE_EVIDENCE_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_REVIEW_EMPTY_STATE_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        using var directory = new TestDirectory();
+        var window = CreateReviewWindow(directory);
+
+        try
+        {
+            window.Show();
+            window.Topmost = true;
+            ExpandCategory(window, DailyReviewMigration.ReviewCategory);
+            CompleteLayout(window);
+            LoadReview(window);
+
+            DesignThemeManager.Apply(window, DesignTheme.Light);
+            CompleteLayout(window);
+            Assert.AreEqual(
+                Visibility.Visible,
+                ReviewEmptyStatePanel(window).Visibility,
+                "前置：浅色主题空态在场。");
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "review-empty-state-light.png",
+                "FTS_REVIEW_EMPTY_STATE_EVIDENCE_DIR");
+
+            DesignThemeManager.Apply(window, DesignTheme.Dark);
+            CompleteLayout(window);
+            Assert.AreEqual(
+                Visibility.Visible,
+                ReviewEmptyStatePanel(window).Visibility,
+                "前置：深色主题空态在场（同键位换装，可见性不随主题变化）。");
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "review-empty-state-dark.png",
+                "FTS_REVIEW_EMPTY_STATE_EVIDENCE_DIR");
+        }
+        finally
+        {
+            CloseReviewWindow(window);
         }
     }
 }
