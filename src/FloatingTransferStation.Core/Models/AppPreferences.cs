@@ -31,6 +31,23 @@ public enum TrashNoSelectionRightClickAction
     NoAction = 2
 }
 
+/// <summary>
+/// 启动器列数策略（默认自适应 = 既有拉伸填充行为）：Adaptive 走
+/// LauncherGridMath.ColumnCount(A) 随视口宽自动增减（clamp 3–6）；Fixed3–Fixed6
+/// 固定列数不随宽度变化，瓦片宽仍由 LauncherGridMath.TileWidth 摊分（行满排
+/// 无死区不变；窄视口下大列数会把瓦片压到 84 下限以下——用户显式选择的语义）。
+/// JSON 沿字符串枚举惯例按名落盘、数值无持久化含义（不写显式值）；列数档位
+/// 与 DesignTokens LauncherTileMin/MaxColumns 同域（3–6），不引入档外列数。
+/// </summary>
+public enum LauncherColumnStrategy
+{
+    Adaptive,
+    Fixed3,
+    Fixed4,
+    Fixed5,
+    Fixed6
+}
+
 /// <summary>自动清理保留时长档位（默认 24 小时；零值=默认档，其余成员按档位
 /// 升序——不写显式值，JSON 沿字符串枚举惯例按名落盘，数值无持久化含义）。</summary>
 public enum AutoCleanupRetention
@@ -85,6 +102,8 @@ public enum AutoCleanupRetention
 /// 与 LauncherDiscoveryFolders 指定文件夹＋AppsFolder 差分，新装应用进「发现 N」
 /// 待确认清单（确认制，绝不自动上屏）；关闭 = 停监听、发现入口永不出现。
 /// 文件夹为 null/空 = 无自定义监视文件夹（旧配置缺字段免迁移回落）。
+/// 启动器列数策略（默认自适应 = 现行为）：Adaptive 列数随面板宽自动增减，
+/// Fixed3–Fixed6 固定列数；旧配置缺字段免迁移回落自适应，老用户升级零感知。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -109,7 +128,8 @@ public sealed record AppPreferences(
     string? AiOrganizeSystemPromptOverride = null,
     bool ShortCardNotesEnabled = false,
     bool LauncherDiscoveryEnabled = true,
-    IReadOnlyList<string>? LauncherDiscoveryFolders = null)
+    IReadOnlyList<string>? LauncherDiscoveryFolders = null,
+    LauncherColumnStrategy LauncherColumnStrategy = LauncherColumnStrategy.Adaptive)
 {
     public static AppPreferences Default { get; } = new();
 }

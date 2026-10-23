@@ -2055,6 +2055,166 @@ public sealed partial class MainWindowInteractionTests
             "瓦片宽=LauncherGridMath 摊分（余宽入瓦片、无死区）。");
     }
 
+    /// <summary>启动器窗口构造的偏好注入口（列数策略等面板级偏好测试用）。</summary>
+    private static MainWindow CreateLauncherWindow(
+        TestDirectory directory,
+        BoardService board,
+        LocalStore store,
+        RecordingLauncherStarter starter,
+        AppPreferences preferences)
+    {
+        return CreateWindow(
+            board,
+            store,
+            WindowSettings.Default,
+            null,
+            new ImageNormalizer(store.ImagesDirectory),
+            launcherStore: store,
+            appLauncher: new AppLauncher(starter.Invoke),
+            preferences: preferences);
+    }
+
+    /// <summary>
+    /// 列数策略·启动装载路径（契约 #30 修订）：偏好=固定 4 列的窗口首次展开启动器
+    /// 表面即 4 列（惰性解析回放当前偏好），瓦片宽=固定档摊分公式——与视口宽无关
+    /// （自适应档在 286 视口是 3 列，固定档仍 4 列）。
+    /// </summary>
+    [STATestMethod]
+    public void QuickLaunch_LauncherColumnStrategy_StartupFixed4_LaysOutFourColumns()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var items = Enumerable.Range(0, 6)
+            .Select(index => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.Application,
+                $"{app.Path}.{index}",
+                $"应用{index}",
+                DateTimeOffset.UtcNow))
+            .ToArray();
+        store.SaveAsync(new LauncherStoreData(LauncherStoreData.CurrentVersion, [.. items]))
+            .GetAwaiter().GetResult();
+        var window = CreateLauncherWindow(
+            directory,
+            board,
+            store,
+            starter,
+            AppPreferences.Default with { LauncherColumnStrategy = LauncherColumnStrategy.Fixed4 });
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+
+            var viewport = window.LauncherScroll.ViewportWidth;
+            Assert.IsTrue(
+                double.IsFinite(viewport) && viewport > 0,
+                $"前置：展开态视口宽有效（实际 {viewport}）。");
+            var panel = FindDescendant<LauncherTilePanel>(window.LauncherTileGrid);
+            Assert.IsNotNull(panel, "ItemsPanel=LauncherTilePanel。");
+            Assert.AreEqual(
+                LauncherColumnStrategy.Fixed4,
+                panel.ColumnStrategy,
+                "启动装载路径：惰性解析回放当前偏好（策略 DP=固定 4 列）。");
+            Assert.AreEqual(4, panel.EffectiveColumnCount, 0, "固定 4 列策略：生效列数恒=4（与视口无关）。");
+            var firstTile = FindLauncherTile(window, window.LaunchersForTests().Items[0]);
+            Assert.IsNotNull(firstTile, "前置：瓦片容器已生成。");
+            Assert.AreEqual(
+                LauncherGridMath.TileWidth(viewport, 4),
+                firstTile.ActualWidth,
+                0.05,
+                "瓦片宽=固定 4 列摊分公式。");
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    /// <summary>
+    /// 列数策略·运行时切换（契约 #30 修订）：自适应展开（列数=公式值）→
+    /// ApplyPreferences 切固定 4 列 → 面板依赖属性失效重测即时重排 4 列（无重启）；
+    /// 再切回自适应恢复公式值。
+    /// </summary>
+    [STATestMethod]
+    public void QuickLaunch_LauncherColumnStrategy_RuntimeSwitch_ReflowsImmediately()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var items = Enumerable.Range(0, 6)
+            .Select(index => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.Application,
+                $"{app.Path}.{index}",
+                $"应用{index}",
+                DateTimeOffset.UtcNow))
+            .ToArray();
+        store.SaveAsync(new LauncherStoreData(LauncherStoreData.CurrentVersion, [.. items]))
+            .GetAwaiter().GetResult();
+        var window = CreateLauncherWindow(
+            directory,
+            board,
+            store,
+            starter,
+            AppPreferences.Default);
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+
+            var viewport = window.LauncherScroll.ViewportWidth;
+            Assert.IsTrue(
+                double.IsFinite(viewport) && viewport > 0,
+                $"前置：展开态视口宽有效（实际 {viewport}）。");
+            var panel = FindDescendant<LauncherTilePanel>(window.LauncherTileGrid);
+            Assert.IsNotNull(panel, "ItemsPanel=LauncherTilePanel。");
+            Assert.AreEqual(
+                LauncherGridMath.ColumnCount(viewport),
+                panel.EffectiveColumnCount,
+                0,
+                "基线：自适应列数=公式值。");
+
+            window.ApplyPreferences(AppPreferences.Default with
+            {
+                LauncherColumnStrategy = LauncherColumnStrategy.Fixed4
+            });
+            CompleteLayout(window);
+            Assert.AreEqual(4, panel.EffectiveColumnCount, 0, "运行时切固定 4 列必须即时重排（无重启）。");
+            var firstTile = FindLauncherTile(window, window.LaunchersForTests().Items[0]);
+            Assert.IsNotNull(firstTile, "前置：瓦片容器已生成。");
+            Assert.AreEqual(
+                LauncherGridMath.TileWidth(viewport, 4),
+                firstTile.ActualWidth,
+                0.05,
+                "重排后瓦片宽=固定 4 列摊分公式。");
+
+            window.ApplyPreferences(AppPreferences.Default);
+            CompleteLayout(window);
+            Assert.AreEqual(
+                LauncherGridMath.ColumnCount(viewport),
+                panel.EffectiveColumnCount,
+                0,
+                "切回自适应恢复公式值（双向切换可逆）。");
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
     [STATestMethod]
     public void QuickLaunch_OverlaySuppression_HoldReleasedBeforeOldDeadlineRestartsCountdown()
     {

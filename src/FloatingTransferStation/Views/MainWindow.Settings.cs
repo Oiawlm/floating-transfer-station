@@ -193,7 +193,7 @@ public partial class MainWindow : Window, ISettingsHost
         settings.Show();
     }
 
-    /// <summary>立即应用偏好（主题/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/启动·自动发现）并异步原子持久化；持久化失败经状态条提示。</summary>
+    /// <summary>立即应用偏好（主题/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/启动·自动发现/启动器列数策略）并异步原子持久化；持久化失败经状态条提示。</summary>
     public void ApplyPreferences(AppPreferences preferences)
     {
         _preferences = preferences;
@@ -204,9 +204,18 @@ public partial class MainWindow : Window, ISettingsHost
         ApplyPinnedDividerPreference(preferences.PinnedDivider);
         _viewModel.ShortCardNotesEnabled = preferences.ShortCardNotesEnabled;
         ApplyLauncherDiscoveryPreference(preferences);
+        ApplyLauncherColumnStrategy();
         UpdateDeleteButtonLabel();
         TrackPendingOperation(PersistPreferencesAsync(preferences));
     }
+
+    /// <summary>
+    /// 启动器列数策略下发（契约 #30 修订）：策略权威源＝CurrentPreferences（
+    /// ApplyPreferences 已先整体换基）。面板已实现（启动器表面激活过）则推给面板
+    /// 依赖属性即时重排；未实现（ItemsHost 不存在）由 UpdateLauncherSurfaceState
+    /// 的 Loaded 优先级延迟回放兜底——启动期/表面未激活期的赋值不丢。
+    /// </summary>
+    private void ApplyLauncherColumnStrategy() => ReplayLauncherColumnStrategy();
 
     /// <summary>
     /// 置顶分区分隔样式换装（契约 #27）：把当前偏好的候选样式装进窗口级槽位资源，

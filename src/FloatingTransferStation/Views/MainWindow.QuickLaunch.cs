@@ -170,6 +170,11 @@ public partial class MainWindow
         var isEmpty = _launchers.Count == 0;
         LauncherEmptyState.SetCurrentValue(VisibilityProperty, isEmpty ? Visibility.Visible : Visibility.Collapsed);
         LauncherScroll.SetCurrentValue(VisibilityProperty, isEmpty ? Visibility.Collapsed : Visibility.Visible);
+        // 列数策略回放（契约 #30 修订）：瓦片面板由 ItemsControl 在本方法触发的可见性
+        // 切换之后的下一轮布局里才生成（ItemsHost），Loaded 优先级恰在布局之后、下一
+        // 次输入之前——此刻惰性解析回放当前偏好，启动装载路径的固定档不丢（否则首帧
+        // 按面板 DP 默认自适应排版）；ApplyPreferences 即时路径不经过此处、直接推面板。
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, ReplayLauncherColumnStrategy);
         if (isEmpty)
         {
             ClearLauncherSelection();
@@ -1011,11 +1016,46 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>瓦片网格面板（ItemsPanel）；焦点导航与拖拽槽共用的几何探针。</summary>
-    private LauncherTilePanel? LauncherTilePanelRoot =>
-        _launcherTilePanelRoot ??= Descendants<LauncherTilePanel>(LauncherTileGrid).FirstOrDefault();
+    /// <summary>
+    /// 瓦片网格面板（ItemsPanel）；焦点导航与拖拽槽共用的几何探针。启动器表面
+    /// 未激活前 ItemsControl 不产生 ItemsHost，惰性解析；首次解析即回放当前列数
+    /// 策略（权威源＝CurrentPreferences——启动早于面板实现的任何偏好赋值不丢，
+    /// 无需额外记忆点）。
+    /// </summary>
+    private LauncherTilePanel? LauncherTilePanelRoot
+    {
+        get
+        {
+            if (_launcherTilePanelRoot is null &&
+                Descendants<LauncherTilePanel>(LauncherTileGrid).FirstOrDefault() is { } panel)
+            {
+                panel.SetCurrentValue(
+                    LauncherTilePanel.ColumnStrategyProperty,
+                    CurrentPreferences.LauncherColumnStrategy);
+                _launcherTilePanelRoot = panel;
+            }
+
+            return _launcherTilePanelRoot;
+        }
+    }
 
     private LauncherTilePanel? _launcherTilePanelRoot;
+
+    /// <summary>
+    /// 把当前列数策略回放到已实现的瓦片面板（未实现则跳过，幂等）。权威源恒=
+    /// CurrentPreferences；即时路径（ApplyPreferences）与装载路径（Loaded 优先级
+    /// 延迟回放）共用本单点。
+    /// </summary>
+    private void ReplayLauncherColumnStrategy()
+    {
+        if (LauncherTilePanelRoot is { } panel &&
+            !Equals(panel.ColumnStrategy, CurrentPreferences.LauncherColumnStrategy))
+        {
+            panel.SetCurrentValue(
+                LauncherTilePanel.ColumnStrategyProperty,
+                CurrentPreferences.LauncherColumnStrategy);
+        }
+    }
 
     // ---- 动效（§五）：悬停/按压走变换，入场/落位/确认/失败为场景动画，全部减动效降级 ----
 

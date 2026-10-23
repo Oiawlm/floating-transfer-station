@@ -3,8 +3,10 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -20,7 +22,8 @@ public sealed class SettingsWindowInteractionTests
         RecordingPreferencesStore preferencesStore,
         FakeStartupManager startupManager,
         AppPreferences? preferences = null,
-        RecordingSettingsBoardStore? store = null)
+        RecordingSettingsBoardStore? store = null,
+        ILauncherStore? launcherStore = null)
     {
         store ??= new RecordingSettingsBoardStore(directory.Root);
         var board = new BoardService();
@@ -52,7 +55,8 @@ public sealed class SettingsWindowInteractionTests
             preferences: preferences,
             preferencesStore: preferencesStore,
             startupManager: startupManager,
-            dataDirectory: directory.Root);
+            dataDirectory: directory.Root,
+            launcherStore: launcherStore);
         return window;
     }
 
@@ -482,6 +486,228 @@ public sealed class SettingsWindowInteractionTests
             DesignThemeManager.Apply(settings, DesignTheme.Dark);
             settings.UpdateLayout();
             SaveVisualEvidence((Border)settings.FindName("WindowShell"), "settings-dark.png");
+
+            CloseWindow(settings);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>泵到条件成立或超时（主窗后台装载与异步偏好落盘的确定性等待）。</summary>
+    private static void PumpUntilCondition(Dispatcher dispatcher, Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            var frame = new DispatcherFrame();
+            dispatcher.BeginInvoke(
+                DispatcherPriority.ApplicationIdle,
+                new Action(() => frame.Continue = false));
+            Dispatcher.PushFrame(frame);
+        }
+
+        Assert.IsTrue(condition(), "5 秒内等待的条件未成立。");
+    }
+
+    /// <summary>展开启动器表面（合成悬停意图＋展开 tick，与 QuickLaunchSurface 同法）。</summary>
+    private static void ExpandLauncherSurface(MainWindow window)
+    {
+        var viewModel = (MainWindowViewModel)window.DataContext;
+        var panel = viewModel.Categories.Single(candidate =>
+            candidate.Category == QuickLaunchMigration.LauncherCategory);
+        InvokePrivate(
+            window,
+            "CategoryTab_MouseEnter",
+            new Border { DataContext = panel },
+            new MouseEventArgs(Mouse.PrimaryDevice, 0));
+        InvokePrivate(window, "ExpandIntentTimer_Tick", null, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// 启动器列数策略设置旅程（契约 #30 修订）：设置 → 面板 →「启动·列数」选固定 4 列
+    /// → 即时生效（主窗偏好状态＋瓦片面板重排为 4 列、瓦片宽=摊分公式）并持久化
+    /// （RecordingPreferencesStore.LastSaved）；关闭后重开设置回显正确。
+    /// 前置＝启动器表面已激活（面板已实现），证明「无重启即时重排」而非启动装载路径。
+    /// </summary>
+    [STATestMethod]
+    public void LauncherColumn_Fixed4_AppliesImmediatelyPersistsAndEchoesOnReopen()
+    {
+        using var directory = new TestDirectory();
+        var launcherStore = new VolatileLauncherStore();
+        var stubPaths = Enumerable.Range(0, 6)
+            .Select(index => Path.Combine(directory.Root, $"stub-{index}.exe"))
+            .ToArray();
+        foreach (var stubPath in stubPaths)
+        {
+            File.WriteAllText(stubPath, "stub");
+        }
+
+        var items = stubPaths.Select((stubPath, index) => new LauncherItem(
+            Guid.NewGuid(),
+            LauncherKind.Application,
+            stubPath,
+            $"应用{index}",
+            DateTimeOffset.UtcNow)).ToList();
+        launcherStore.SaveAsync(new LauncherStoreData(LauncherStoreData.CurrentVersion, items))
+            .GetAwaiter().GetResult();
+
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            new FakeStartupManager(),
+            launcherStore: launcherStore);
+
+        try
+        {
+            window.Show();
+            // 入场交错动画是 async void＋Task.Delay：测试宿主无同步上下文会让续体落
+            // 线程池，关闭以短路（QuickLaunchSurface 同法）。
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            PumpUntilCondition(
+                window.Dispatcher,
+                () => window.LaunchersForTests() is { } catalog && catalog.Items.Count == items.Count);
+            ExpandLauncherSurface(window);
+            CompleteLayout(window);
+
+            // 基线：默认自适应＝现行为，生效列数=原始公式值。
+            var panel = FindDescendants<LauncherTilePanel>(window.LauncherTileGrid).Single();
+            var viewport = window.LauncherScroll.ViewportWidth;
+            Assert.IsTrue(double.IsFinite(viewport) && viewport > 0, $"前置：展开态视口宽有效（实际 {viewport}）。");
+            Assert.AreEqual(
+                LauncherGridMath.ColumnCount(viewport),
+                panel.EffectiveColumnCount,
+                0,
+                "基线：自适应策略下列数=原始公式值。");
+
+            var settings = OpenSettings(window);
+            var navPanel = settings.FindName("SettingsNavPanel") as RadioButton;
+            Assert.IsNotNull(navPanel);
+            navPanel.IsChecked = true;
+            var combo = settings.FindName("LauncherColumnStrategyComboBox") as ComboBox;
+            Assert.IsNotNull(combo, "面板页应有「启动·列数」下拉。");
+            var strategyItems = (ComboBoxItem[])combo.ItemsSource;
+            Assert.AreEqual(
+                LauncherColumnStrategy.Adaptive,
+                (LauncherColumnStrategy)((ComboBoxItem)combo.SelectedItem).Tag,
+                "初始回显=当前偏好（自适应）。");
+
+            // 选固定 4 列（与真实用户选择同路：改 SelectedItem 触发 SelectionChanged）。
+            combo.SelectedItem = strategyItems.Single(item => Equals(item.Tag, LauncherColumnStrategy.Fixed4));
+            PumpUntilCondition(
+                window.Dispatcher,
+                () => preferencesStore.LastSaved is not null);
+            CompleteLayout(window);
+
+            Assert.AreEqual(
+                LauncherColumnStrategy.Fixed4,
+                window.CurrentPreferences.LauncherColumnStrategy,
+                "选固定 4 列必须立即生效（主窗偏好状态）。");
+            Assert.AreEqual(
+                LauncherColumnStrategy.Fixed4,
+                preferencesStore.LastSaved!.LauncherColumnStrategy,
+                "选固定 4 列必须经 ApplyPreferences 原子持久化管线落盘。");
+            Assert.AreEqual(4, panel.EffectiveColumnCount, 0, "瓦片面板即时重排为 4 列（无重启）。");
+            var firstTile = FindFirstLauncherTile(window);
+            Assert.IsNotNull(firstTile, "瓦片容器已生成。");
+            Assert.AreEqual(
+                LauncherGridMath.TileWidth(window.LauncherScroll.ViewportWidth, 4),
+                firstTile.ActualWidth,
+                0.05,
+                "瓦片宽=固定 4 列摊分公式（拉伸填充无死区）。");
+
+            CloseWindow(settings);
+            Assert.IsFalse(settings.IsVisible);
+
+            // 重开设置：面板页回显=固定 4 列（几何持久化回显机制之外的新字段回显）。
+            var reopened = OpenSettings(window);
+            var reopenedNavPanel = reopened.FindName("SettingsNavPanel") as RadioButton;
+            Assert.IsNotNull(reopenedNavPanel);
+            reopenedNavPanel.IsChecked = true;
+            var reopenedCombo = reopened.FindName("LauncherColumnStrategyComboBox") as ComboBox;
+            Assert.IsNotNull(reopenedCombo);
+            Assert.AreEqual(
+                LauncherColumnStrategy.Fixed4,
+                (LauncherColumnStrategy)((ComboBoxItem)reopenedCombo.SelectedItem).Tag,
+                "重开设置必须回显固定 4 列。");
+
+            CloseWindow(reopened);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>启动器首个瓦片容器（纯 ItemsControl 的容器是 ContentPresenter，瓦片根是模板子 Border）。</summary>
+    private static Border? FindFirstLauncherTile(MainWindow window)
+    {
+        var catalog = window.LaunchersForTests();
+        if (catalog is null || catalog.Items.Count == 0)
+        {
+            return null;
+        }
+
+        var container = ((ItemsControl)window.FindName("LauncherTileGrid")!)
+            .ItemContainerGenerator.ContainerFromIndex(0);
+        return (container as Border) ?? FindDescendants<Border>(container!).FirstOrDefault();
+    }
+
+    /// <summary>
+    /// 启动器列数策略设置节发布证据（契约 #30 修订，2026-10-24）：设置 → 面板 →
+    /// 「启动·列数」卡 ×浅/深主题实拍（FTS_SETTINGS_EVIDENCE_DIR 设置时产出）。
+    /// </summary>
+    [STATestMethod]
+    public void LauncherColumn_Evidence_CapturePanelSectionBothThemes()
+    {
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_SETTINGS_EVIDENCE_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_SETTINGS_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        using var directory = new TestDirectory();
+        var window = CreateWindow(
+            directory,
+            new RecordingPreferencesStore(),
+            new FakeStartupManager(),
+            preferences: AppPreferences.Default with { LauncherColumnStrategy = LauncherColumnStrategy.Fixed4 });
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var navPanel = settings.FindName("SettingsNavPanel") as RadioButton;
+            Assert.IsNotNull(navPanel);
+            navPanel.IsChecked = true;
+            var combo = settings.FindName("LauncherColumnStrategyComboBox") as ComboBox;
+            Assert.IsNotNull(combo);
+            Assert.AreEqual(
+                LauncherColumnStrategy.Fixed4,
+                (LauncherColumnStrategy)((ComboBoxItem)combo.SelectedItem).Tag,
+                "实拍前置：回显固定 4 列。");
+
+            // 新节卡在面板页折叠线下方：滚入视野再实拍（共享滚动视口语义）。
+            ((Border)((StackPanel)((Grid)combo.Parent).Parent).Parent).BringIntoView();
+            settings.UpdateLayout();
+
+            foreach (var (theme, suffix) in new[]
+            {
+                (DesignTheme.Light, "light"),
+                (DesignTheme.Dark, "dark"),
+            })
+            {
+                DesignThemeManager.Apply(settings, theme);
+                settings.UpdateLayout();
+                SaveVisualEvidence(
+                    (Border)settings.FindName("WindowShell"),
+                    $"launcher-column-settings-{suffix}.png");
+            }
 
             CloseWindow(settings);
         }
