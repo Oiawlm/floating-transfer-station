@@ -4,6 +4,8 @@
 
 ## 未发布
 
+## 1.60.0
+
 - 新增「界面字体」（设计契约 #48 新增、#25 修订）：全仓 `FontFamily` 字面量收敛为单一资源键——默认字体串唯一来源 `DesignTokens.InterfaceFontFamily`（`"Segoe UI Variable, Segoe UI"`），XAML 资源镜像并由锁定测试互锁；六个窗口根与全部样式统一 `DynamicResource` 引用（图标字体 Segoe Fluent Icons 不随用户字体变化）。设置 → 外观新增「界面字体」节：下拉列出本机已安装字体（图标/符号字体排除），首项「默认」恢复默认——改动经 ApplyPreferences 唯一管线对全部存活窗口（Owner 链递归）即时生效并原子持久化，后建窗口构造期自应用；不随应用分发字体文件；字体名不在系统清单（含被卸载）按未配置回落默认，旧 preferences.json 缺字段免迁移。卡片正文行高改为按当前字体度量推导（`ceil(14×LineSpacing＋1)`）——默认字体推导值＝既有 20（现状零变化），更高 em 字体得到更大行高且恒不小于自然行高（不裁切字形），正文/备注可见上限随行高等比（默认 100/40 不变）；两态行距同源与光标锚点逐像素对齐契约（#25）语义不变。锁定测试：`MainWindowInteractionTests.DesignTokens` 默认字体串镜像锁定＋行高互锁、`InterfaceFontManagerTests` 推导公式矩阵（默认→20、更高 em→21/22/25/29、1.0–2.5 em 单调不裁切扫描、全机字体公式等价）与解析/槽位/Owner 链覆盖、`AppPreferencesTests` 三件套、`SettingsWindowInteractionTests` 设置交互旅程（选字体→全部存活窗口即时生效＋持久化＋恢复默认）、`MainWindowInteractionTests.InterfaceFont` 渲染证据（默认/微软雅黑/Gabriola × 浅/深主题，4 行正文高度=4×推导行高）；既有 CardCaretAnchor 锚点测试零回退。
 
 ## 1.59.0
