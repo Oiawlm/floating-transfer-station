@@ -449,6 +449,107 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
+    [STATestMethod]
+    public void CardAi_ToggleOffHidesButtonAndAppendRow()
+    {
+        // 总开关关（契约 #29 修订）：截断文字卡悬停 AI 钮不再出现、追加行整行
+        // 塌缩（回到无 AI 行的旧布局，不留 34 DIP 空带）。Key 已配置——唯一
+        // 门控变量是开关本身。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var longItem = board.AddText(LongCardText, BoardCategory.Inbox);
+        var handler = new FakeOrganizerHandler("""{"choices":[]}""");
+        var window = CreateCardAiWindow(directory, board, handler, aiOrganizeEnabled: false);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, longItem);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var button = CardAiButtonOf(container);
+            var appendRow = (Grid)button.Parent;
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                appendRow.Visibility,
+                "关＝AI 追加行整行塌缩（截断卡回到无 AI 行布局）。");
+            Assert.AreEqual(Visibility.Collapsed, button.Visibility, "关＝AI 钮塌缩。");
+            var savedCursor = SaveCursorPosition();
+            try
+            {
+                HoverRealAt(window, container, new Point(24, container.ActualHeight * 0.8));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+                Assert.IsFalse(
+                    FadeAnimation.GetIsActive(button),
+                    "关＝悬停不得激活 AI 钮淡入。");
+                Assert.AreEqual(
+                    Visibility.Collapsed,
+                    button.Visibility,
+                    "关＝悬停时 AI 按钮不再出现。");
+                Assert.IsFalse(button.IsHitTestVisible, "关＝AI 钮不可命中。");
+                Assert.AreEqual(
+                    64d,
+                    ((StackPanel)appendRow.Parent).DesiredSize.Height,
+                    0.5,
+                    "关＝截断卡操作列期望高度回落基座 64（追加行零布局占地）。");
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardAi_ToggleOffClickPathsInitiateNothingEvenWithoutKey()
+    {
+        // 入口守卫（契约 #29 修订）：总开关关＝手势合成与合成点击（UIA 同路）
+        // 两个入口一律零动作——不发起任何请求、不进在途态，无 Key 时的状态条
+        // 提示也不弹（守卫先于取 Key）。Key 故意不配置，守卫一旦失守就会先
+        // 撞上「尚未配置 DeepSeek API Key」提示，断言必失败。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText(LongCardText, BoardCategory.Inbox);
+        var handler = new FakeOrganizerHandler("""{"choices":[]}""");
+        var window = CreateCardAiWindow(
+            directory,
+            board,
+            handler,
+            plaintextKey: null,
+            aiOrganizeEnabled: false);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            RaiseAiButtonClick(window, item);
+            var button = CardAiButtonOf(ContainerOf(window, item));
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(250));
+
+            Assert.AreEqual(string.Empty, viewModel.StatusText, "关＝点击路径零反馈（无 Key 提示也不弹）。");
+            Assert.AreEqual(0, handler.CallCount, "关＝任何点击路径都必须零请求。");
+            Assert.IsFalse(item.IsAiOrganizing, "关＝不得进入整理在途态。");
+            Assert.AreEqual(
+                LongCardText,
+                board.FindItem(item.Id)!.Text,
+                "关＝正文不得被改写。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
     /// <summary>手势层合成入口：在 AI 钮上发出一对预览按下/抬起（照备注钮同法）。</summary>
     private static void RaiseAiButtonClick(MainWindow window, BoardItem item)
     {
@@ -464,9 +565,10 @@ public sealed partial class MainWindowInteractionTests
     private static MainWindow CreateCardAiWindow(
         TestDirectory directory,
         BoardService board,
-        FakeOrganizerHandler handler,
+        HttpMessageHandler handler,
         string? plaintextKey = "sk-test-fake-key",
-        string? aiOrganizeSystemPromptOverride = null)
+        string? aiOrganizeSystemPromptOverride = null,
+        bool aiOrganizeEnabled = true)
     {
         var paths = AppPaths.ForTests(directory.Root);
         var store = new LocalStore(paths, new AtomicTextWriter());
@@ -484,7 +586,11 @@ public sealed partial class MainWindowInteractionTests
         var preferences = plaintextKey is null
             ? AppPreferences.Default
             : AppPreferences.Default with { DeepSeekApiKeyProtected = "fake-cipher" };
-        preferences = preferences with { AiOrganizeSystemPromptOverride = aiOrganizeSystemPromptOverride };
+        preferences = preferences with
+        {
+            AiOrganizeEnabled = aiOrganizeEnabled,
+            AiOrganizeSystemPromptOverride = aiOrganizeSystemPromptOverride
+        };
         window = new MainWindow(
             board,
             store,

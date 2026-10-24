@@ -193,7 +193,7 @@ public partial class MainWindow : Window, ISettingsHost
         settings.Show();
     }
 
-    /// <summary>立即应用偏好（主题/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/启动·自动发现/启动器列数策略）并异步原子持久化；持久化失败经状态条提示。</summary>
+    /// <summary>立即应用偏好（主题/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/AI 整理开关/启动·自动发现/启动器列数策略）并异步原子持久化；持久化失败经状态条提示。</summary>
     public void ApplyPreferences(AppPreferences preferences)
     {
         _preferences = preferences;
@@ -203,6 +203,7 @@ public partial class MainWindow : Window, ISettingsHost
         ApplyUpdateCheckPreference(preferences.AutoUpdateCheckEnabled);
         ApplyPinnedDividerPreference(preferences.PinnedDivider);
         _viewModel.ShortCardNotesEnabled = preferences.ShortCardNotesEnabled;
+        _viewModel.AiOrganizeEnabled = preferences.AiOrganizeEnabled;
         ApplyLauncherDiscoveryPreference(preferences);
         ApplyLauncherColumnStrategy();
         UpdateDeleteButtonLabel();

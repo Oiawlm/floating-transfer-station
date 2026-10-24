@@ -63,8 +63,9 @@ foreach ($name in @('ManagedDataParentLeaf', 'ManagedDataLeaf')) {
 
 $functionSource = foreach ($name in @(
     'IsExtendedDevicePath', 'IsFullyQualifiedPath', 'NormalizeDirectory',
-    'IsRootDirectory', 'BuildDataDirectory', 'GetManagedDataParent',
-    'GetDataParentDirectory', 'IsManagedDataDirectory', 'DeleteManagedDataDirectory',
+    'IsRootDirectory', 'BuildDataDirectory', 'BuildLegacyDataDirectory',
+    'GetManagedDataParent', 'IsLegacyManagedDataDirectory', 'GetDataParentDirectory',
+    'IsManagedDataDirectory', 'DeleteManagedDataDirectory',
     'IsMissingManagedDataDirectory'
 )) {
     $matches = [regex]::Matches($source, "(?ms)^function[ \t]+$name\b.*?^end;[ \t]*(?=\r?$)")
@@ -117,12 +118,14 @@ try {
     $parentLeaf = $managedLeaves.ManagedDataParentLeaf
     $dataLeaf = $managedLeaves.ManagedDataLeaf
     $managedSuffix = "$parentLeaf\$dataLeaf"
+    $directSuffix = "myparent\$dataLeaf"
     $cases = @(
         @{ Name = 'siblings'; RelativePath = "cases\siblings\$managedSuffix"; Expected = 'True' }
         @{ Name = 'empty-parent'; RelativePath = "cases\empty-parent\$managedSuffix"; Expected = 'True' }
         @{ Name = 'normalized'; RelativePath = "cases\normalized\$managedSuffix\..\$dataLeaf\"; Expected = 'True' }
+        # 契约 #47 新形状（直下）：只删 Data，用户所选父目录（myparent）与同级内容必留。
+        @{ Name = 'direct-shape'; RelativePath = "cases\direct-shape\$directSuffix"; Expected = 'True' }
         @{ Name = 'unmanaged-leaf'; RelativePath = "cases\unmanaged-leaf\$parentLeaf\Other"; Expected = 'False' }
-        @{ Name = 'unmanaged-parent'; RelativePath = "cases\unmanaged-parent\Other\$dataLeaf"; Expected = 'False' }
         # DelTree reports False for a missing target; do not add a new success
         # contract for absence. The sibling still must survive this call.
         @{ Name = 'missing-data'; RelativePath = "cases\missing-data\$managedSuffix"; Expected = 'False' }
@@ -135,21 +138,25 @@ try {
         'cases\siblings\outer-sentinel.txt'
         'cases\empty-parent\outer-sentinel.txt'
         "cases\normalized\$parentLeaf\keep.txt"
+        'cases\direct-shape\myparent\keep.txt'
+        'cases\direct-shape\outer-sentinel.txt'
         "cases\unmanaged-leaf\$parentLeaf\Other\keep.txt"
         "cases\unmanaged-leaf\$managedSuffix\board.json"
-        "cases\unmanaged-parent\Other\$dataLeaf\keep.txt"
-        "cases\unmanaged-parent\Other\app.exe"
         "cases\missing-data\$parentLeaf\keep.txt"
         "cases\uninstall-locked\$managedSuffix\locked.txt"
         "cases\uninstall-stale\$managedSuffix\board.json"
         "cases\uninstall-not-directory\$managedSuffix"
+        'cases\uninstall-new\myparent\keep.txt'
     )
     $managedFiles = @(
         "cases\siblings\$managedSuffix\board.json"
         "cases\siblings\$managedSuffix\Images\image.bin"
         "cases\empty-parent\$managedSuffix\Images\image.bin"
         "cases\normalized\$managedSuffix\board.json"
+        "cases\direct-shape\$directSuffix\board.json"
+        "cases\direct-shape\$directSuffix\Images\image.bin"
         "cases\uninstall-current\$managedSuffix\board.json"
+        "cases\uninstall-new\$directSuffix\board.json"
     )
     foreach ($relativePath in ($preservedFiles + $managedFiles)) {
         $path = Assert-ChildPath (Join-Path $fixtureRoot $relativePath) $fixtureRoot
@@ -303,12 +310,17 @@ begin
     BoolText(IsInstallDirectorySelectionSafe(ExistingDirectory, OwnerDirectory, SelectedDirectory)) + #13#10, True);
 end;
 
-procedure RunUninstallCase(const Name: String; const IsCurrent: Boolean);
+procedure RunUninstallCase(const Name: String; const IsCurrent: Boolean;
+  const UseDirectShape: Boolean);
 var
   Initialized: Boolean;
 begin
-  RegisteredDataDirectory := AddBackslash(FixtureRoot) + 'cases\' + Name + '\' +
-    ManagedDataParentLeaf + '\' + ManagedDataLeaf;
+  if UseDirectShape then
+    RegisteredDataDirectory := AddBackslash(FixtureRoot) + 'cases\' + Name + '\myparent\' +
+      ManagedDataLeaf
+  else
+    RegisteredDataDirectory := AddBackslash(FixtureRoot) + 'cases\' + Name + '\' +
+      ManagedDataParentLeaf + '\' + ManagedDataLeaf;
   RequireFixtureTarget(RegisteredDataDirectory);
   RegisteredInstallDirectory := AddBackslash(FixtureRoot) + 'current-app';
   FixtureAppDirectory := RegisteredInstallDirectory;
@@ -331,11 +343,12 @@ begin
     if not FileExists(AddBackslash(FixtureRoot) + 'fixture.marker') then
       RaiseException('The synthetic fixture marker is missing.');
 $($caseCalls -join "`n")
-    RunUninstallCase('uninstall-locked', True);
-    RunUninstallCase('uninstall-stale', False);
-    RunUninstallCase('uninstall-current', True);
-    RunUninstallCase('uninstall-missing', True);
-    RunUninstallCase('uninstall-not-directory', True);
+    RunUninstallCase('uninstall-locked', True, False);
+    RunUninstallCase('uninstall-stale', False, False);
+    RunUninstallCase('uninstall-current', True, False);
+    RunUninstallCase('uninstall-missing', True, False);
+    RunUninstallCase('uninstall-not-directory', True, False);
+    RunUninstallCase('uninstall-new', True, True);
 $($selectionCalls -join "`n")
     SaveStringToFile(ReceiptPath, 'COMPLETED' + #13#10, True);
   except
@@ -420,7 +433,7 @@ end;
             $failures.Add($Description)
         }
     }
-    Record-Assertion ($receipt.Count -eq ($cases.Count + $selectionCases.Count + 6) -and $receipt[-1] -eq 'COMPLETED') `
+    Record-Assertion ($receipt.Count -eq ($cases.Count + $selectionCases.Count + 7) -and $receipt[-1] -eq 'COMPLETED') `
         'all native cleanup cases completed'
     foreach ($case in $selectionCases) {
         Record-Assertion ($receipt -contains "$($case.Name)=$($case.Expected)") "$($case.Name): directory selection is $($case.Expected)"
@@ -430,7 +443,8 @@ end;
         'uninstall-stale=Initialized:False;DataExists:True;RegistryDeletes:0;Messages:1',
         'uninstall-current=Initialized:True;DataExists:False;RegistryDeletes:2;Messages:0',
         'uninstall-missing=Initialized:True;DataExists:False;RegistryDeletes:2;Messages:0',
-        'uninstall-not-directory=Initialized:True;DataExists:False;RegistryDeletes:0;Messages:1'
+        'uninstall-not-directory=Initialized:True;DataExists:False;RegistryDeletes:0;Messages:1',
+        'uninstall-new=Initialized:True;DataExists:False;RegistryDeletes:2;Messages:0'
     )) {
         Record-Assertion ($receipt -contains $expected) $expected
     }
@@ -447,17 +461,22 @@ end;
     foreach ($relativePath in @(
         "cases\siblings\$managedSuffix", "cases\empty-parent\$parentLeaf",
         "cases\normalized\$managedSuffix", "cases\missing-data\$managedSuffix",
-        "cases\uninstall-current\$managedSuffix"
+        "cases\direct-shape\$directSuffix", "cases\uninstall-current\$managedSuffix",
+        "cases\uninstall-new\$directSuffix"
     )) {
         Record-Assertion (-not (Test-Path -LiteralPath (Join-Path $fixtureRoot $relativePath))) `
             "removed or absent: $relativePath"
+    }
+    foreach ($relativePath in @('cases\direct-shape\myparent', 'cases\uninstall-new\myparent')) {
+        Record-Assertion (Test-Path -LiteralPath (Join-Path $fixtureRoot $relativePath) -PathType Container) `
+            "user-selected parent must survive (contract 47): $relativePath"
     }
     $assertions | Set-Content -LiteralPath (Join-Path $fixtureRoot 'assertions.txt') -Encoding UTF8
     if ($failures.Count -ne 0) {
         throw "Installer cleanup regression failed ($($failures.Count) assertions):`n$($failures -join "`n")"
     }
     $passed = $true
-    Write-Host "Installer cleanup behavior passed: $($cases.Count + $selectionCases.Count + 5) native cases, $($assertions.Count) assertions."
+    Write-Host "Installer cleanup behavior passed: $($cases.Count + $selectionCases.Count + 6) native cases, $($assertions.Count) assertions."
 }
 finally {
     if ($null -ne $lockedStream) { $lockedStream.Dispose() }

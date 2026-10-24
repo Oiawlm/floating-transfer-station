@@ -1201,10 +1201,11 @@
     </Style.Triggers>
   </Style>
 
-  <!-- AI 整理钮（1.41.0，契约 #29）：可见性六条件＝备注钮七条件减「无备注」
-       （备注与 AI 正交）：正文截断 ∧ 卡片悬停 ∧ 无正文编辑 ∧ 无备注编辑 ∧
-       文字卡 ∧ 非搜索态（ElementName=CardPreviewText 与条目绑定同模板
-       namescope 原样可用）。隐藏同备注钮家族语义：基态 Collapsed +
+  <!-- AI 整理钮（1.41.0，契约 #29）：可见性七条件＝备注钮七条件减「无备注」
+       （备注与 AI 正交）：AI 整理总开关 ∧ 正文截断 ∧ 卡片悬停 ∧ 无正文编辑 ∧
+       无备注编辑 ∧ 文字卡 ∧ 非搜索态（ElementName=CardPreviewText 与条目绑定同模板
+       namescope 原样可用；偏好经窗口祖先 DataContext 绑定消费，ApplyPreferences
+       唯一管线喂值，关＝AI 钮不再出现）。隐藏同备注钮家族语义：基态 Collapsed +
        FadeAnimation.ManageVisibility（禁纯 Opacity 隐藏），所在追加网格行随之
        塌缩（短卡高度不变、其余按钮零漂移，#16/#19）。忙态（IsAiOrganizing）
        图标换旋转弧；按钮保持 IsEnabled=true——禁用元素在 WPF 下不可命中，点击
@@ -1234,6 +1235,7 @@
     <Style.Triggers>
       <MultiDataTrigger>
         <MultiDataTrigger.Conditions>
+          <Condition Binding="{Binding DataContext.AiOrganizeEnabled, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
           <Condition Binding="{Binding IsTruncated, ElementName=CardPreviewText}" Value="True" />
           <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True" />
           <Condition Binding="{Binding IsEditing}" Value="False" />
@@ -1480,12 +1482,14 @@
        MaxHeight=100 ≥ 追加后网格总高 98，任何卡高度零跳变；短卡/图片卡整行
        塌缩（短卡下限 64 不变、其余按钮零漂移）。显隐由截断布局事实驱动
        （IsTruncated 唯一权威，TrimAwareTextBlock），不随悬停派生——悬停只
-       控制行内按钮的淡入淡出，追加行自身常在，高度稳定。 -->
+       控制行内按钮的淡入淡出，追加行自身常在，高度稳定；AI 整理总开关关闭时
+       追加行整行塌缩（截断卡回到无 AI 行的旧布局，不留 34 DIP 空带）。 -->
   <Style x:Key="CardAiAppendRowStyle" TargetType="Grid">
     <Setter Property="Visibility" Value="Collapsed" />
     <Style.Triggers>
       <MultiDataTrigger>
         <MultiDataTrigger.Conditions>
+          <Condition Binding="{Binding DataContext.AiOrganizeEnabled, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
           <Condition Binding="{Binding IsTruncated, ElementName=CardPreviewText}" Value="True" />
           <Condition Binding="{Binding Kind}" Value="{x:Static models:BoardItemKind.Text}" />
         </MultiDataTrigger.Conditions>

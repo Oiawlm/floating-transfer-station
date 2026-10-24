@@ -325,6 +325,116 @@ public sealed class SettingsWindowAiTests
         }
     }
 
+    // ---- AI 整理总开关（设置页交互）----
+
+    [STATestMethod]
+    public void AiOrganizeToggle_OffGraysAreasAndPersists_RestoreOnReopensReflect()
+    {
+        // 契约 #29 修订：关＝Key 卡（输入框/显示切换/测试连接/门户链接）与整理
+        // 提示词卡整卡置灰＋持久化；重开设置窗回显关闭态；开＝两卡恢复可用。
+        // 已存 Key 与自定义提示词只停用不删除（不触碰存储逻辑）。
+        using var directory = new TestDirectory();
+        var protector = new FakeSecretProtector();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with
+            {
+                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey),
+                AiOrganizeSystemPromptOverride = "自定义提示词保持原样。"
+            }
+        };
+        var window = CreateWindow(directory, preferencesStore, protector);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var toggle = (CheckBox)settings.FindName("AiOrganizeEnabledToggle")!;
+            var keyCard = (Border)settings.FindName("AiKeyCard")!;
+            var promptCard = (Border)settings.FindName("AiPromptCard")!;
+            Assert.IsTrue(toggle.IsChecked == true, "前置：总开关默认开。");
+            Assert.IsTrue(keyCard.IsEnabled && promptCard.IsEnabled, "前置：两卡默认可用。");
+
+            toggle.IsChecked = false;
+            PumpUntil(settings.Dispatcher, () => preferencesStore.LastSaved is not null);
+            Assert.IsFalse(keyCard.IsEnabled, "关＝Key 卡整卡置灰。");
+            Assert.IsFalse(KeyBox(settings).IsEnabled, "关＝Key 输入框置灰。");
+            Assert.IsFalse(TestButton(settings).IsEnabled, "关＝测试连接置灰。");
+            Assert.IsFalse(promptCard.IsEnabled, "关＝整理提示词卡整卡置灰。");
+            Assert.IsFalse(PromptBox(settings).IsEnabled, "关＝提示词编辑框置灰。");
+            Assert.IsFalse(preferencesStore.LastSaved!.AiOrganizeEnabled, "关＝必须持久化。");
+            Assert.IsNotNull(
+                preferencesStore.LastSaved.DeepSeekApiKeyProtected,
+                "关＝已存 Key 原样保留（只停用不删除）。");
+            Assert.AreEqual(
+                "自定义提示词保持原样。",
+                preferencesStore.LastSaved.AiOrganizeSystemPromptOverride,
+                "关＝自定义提示词原样保留。");
+
+            settings.Close();
+            var reopened = OpenSettings(window);
+            CompleteLayout(reopened);
+            var reopenedToggle = (CheckBox)reopened.FindName("AiOrganizeEnabledToggle")!;
+            Assert.IsTrue(reopenedToggle.IsChecked == false, "重开设置窗必须回显关闭态。");
+            Assert.IsFalse(
+                ((Border)reopened.FindName("AiKeyCard")!).IsEnabled,
+                "重开必须回显 Key 卡置灰。");
+            Assert.IsFalse(
+                ((Border)reopened.FindName("AiPromptCard")!).IsEnabled,
+                "重开必须回显提示词卡置灰。");
+
+            reopenedToggle.IsChecked = true;
+            PumpUntil(
+                reopened.Dispatcher,
+                () => preferencesStore.LastSaved is not null &&
+                    preferencesStore.LastSaved.AiOrganizeEnabled);
+            Assert.IsTrue(
+                ((Border)reopened.FindName("AiKeyCard")!).IsEnabled,
+                "开＝Key 卡恢复可用。");
+            Assert.IsTrue(
+                ((Border)reopened.FindName("AiPromptCard")!).IsEnabled,
+                "开＝提示词卡恢复可用。");
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    /// <summary>AI 整理总开关关闭态证据（FTS_AI_EVIDENCE_DIR 设置时产出真实 WPF
+    /// 渲染截图）：AI 设置页总开关关＝Key 卡与整理提示词卡整卡置灰。</summary>
+    [STATestMethod]
+    public void Evidence_CaptureAiOrganizeToggleOffScreens()
+    {
+        var evidenceDirectory = Environment.GetEnvironmentVariable("FTS_AI_EVIDENCE_DIR");
+        if (string.IsNullOrWhiteSpace(evidenceDirectory))
+        {
+            Assert.Inconclusive("未设置 FTS_AI_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        var protector = new FakeSecretProtector();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with
+            {
+                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey),
+                AiOrganizeEnabled = false
+            }
+        };
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, preferencesStore, protector);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            RevealAiSection(settings);
+            SaveWindowShell(settings, evidenceDirectory!, "settings-ai-toggle-off.png");
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
     // ---- 整理提示词编辑卡（1.52.0，契约 #29 修订）----
 
     private static TextBox PromptBox(Window settings) =>

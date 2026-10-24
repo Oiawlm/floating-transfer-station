@@ -63,6 +63,8 @@ public partial class SettingsWindow : Window
         ShortCardNotesToggle.IsChecked = host.CurrentPreferences.ShortCardNotesEnabled;
         LauncherDiscoveryToggle.IsChecked = host.CurrentPreferences.LauncherDiscoveryEnabled;
         AutoCleanupToggle.IsChecked = host.CurrentPreferences.AutoCleanupEnabled;
+        AiOrganizeEnabledToggle.IsChecked = host.CurrentPreferences.AiOrganizeEnabled;
+        SetAiOrganizeAreasAvailability(host.CurrentPreferences.AiOrganizeEnabled);
         // 档位显示文案由唯一映射派生（全仓小时数字面量只允许出现在映射与测试期望），
         // 枚举序≠显示序（零值是默认档 24h），选中项一律按 Tag 匹配、不依赖下标；
         // 总开关关闭时下拉置灰（档位仍照常持久化）。
@@ -933,6 +935,35 @@ public partial class SettingsWindow : Window
 
     private void DeepSeekKeyPlainBox_LostFocus(object sender, RoutedEventArgs e) => CommitDeepSeekKey();
 
+    // ---- AI 整理总开关：关＝Key 卡与整理提示词卡整卡置灰（IsEnabled 链式作用于
+    // 输入框、显示/隐藏、测试连接、门户链接与提示词编辑），已存 Key 与自定义提示词
+    // 原样保留（只停用不删除）；持久化经 ApplyPreferences 唯一管线即时生效
+    // （契约 #5），主窗在管线内同步喂 VM——卡片 AI 钮与整理入口随之消失/恢复。
+    // 开关状态在构造同步段回显（重开窗口即见上次选择）。----
+
+    private void AiOrganizeEnabledToggle_Checked(object sender, RoutedEventArgs e) =>
+        ApplyAiOrganizeEnabledPreference(enabled: true);
+
+    private void AiOrganizeEnabledToggle_Unchecked(object sender, RoutedEventArgs e) =>
+        ApplyAiOrganizeEnabledPreference(enabled: false);
+
+    private void ApplyAiOrganizeEnabledPreference(bool enabled)
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        SetAiOrganizeAreasAvailability(enabled);
+        _host.ApplyPreferences(_host.CurrentPreferences with { AiOrganizeEnabled = enabled });
+    }
+
+    private void SetAiOrganizeAreasAvailability(bool enabled)
+    {
+        AiKeyCard.IsEnabled = enabled;
+        AiPromptCard.IsEnabled = enabled;
+    }
+
     /// <summary>
     /// Key 的生效点是失焦（对齐卡片就地编辑失焦提交先例）：非空提交密文，空输入清除（存 null）；
     /// 明文只在内存中出现，存储侧只落密文。加密失败（DPAPI 异常）就地提示且不落任何值。
@@ -1120,7 +1151,7 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// 更改数据目录：选父文件夹 → 预检（形状/可写/卷空间/目标不存在）→ 确认对话框
+    /// 更改数据目录：选文件夹 → 预检（形状/可写/卷空间/目标不存在）→ 确认对话框
     /// （源→目标、数据体积、自动重启、旧目录处置）→ 迁移并自动重启。迁移期间
     /// 锁定设置内容并显示进度，失败恢复原状并提示。
     /// </summary>
@@ -1134,7 +1165,7 @@ public partial class SettingsWindow : Window
 
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = "选择内容存储父文件夹（将在其中创建 悬浮中转站\\Data）"
+            Title = "选择内容存储文件夹（将在其中直接创建 Data）"
         };
         if (dialog.ShowDialog(this) != true || string.IsNullOrWhiteSpace(dialog.FolderName))
         {

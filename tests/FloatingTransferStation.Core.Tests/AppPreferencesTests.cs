@@ -636,4 +636,53 @@ public sealed class AppPreferencesTests
             "旧 preferences.json 缺字段时必须回落到自适应（升级零感知）。");
         Assert.IsTrue(restored.ShortCardNotesEnabled, "测试数据里的旧字段语义不受新字段影响。");
     }
+
+    [TestMethod]
+    public void Default_EnablesAiOrganize()
+    {
+        Assert.IsTrue(
+            AppPreferences.Default.AiOrganizeEnabled,
+            "AI 整理总开关默认开启（老用户升级零感知＝现行为）。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesAiOrganizeEnabled()
+    {
+        // LocalStore 以 camelCase + 字符串枚举持久化：往返与键名一起验证
+        // （关与开两态都走一遍，锁 camelCase 落盘形态）。
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        foreach (var enabled in new[] { false, true })
+        {
+            var preferences = AppPreferences.Default with { AiOrganizeEnabled = enabled };
+
+            var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+            StringAssert.Contains(serialized, "\"aiOrganizeEnabled\"", "落盘键名必须是 camelCase。");
+            var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+            Assert.AreEqual(preferences, restored);
+            Assert.AreEqual(enabled, restored!.AiOrganizeEnabled);
+        }
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutAiOrganizeEnabledField_FallsBackToEnabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","shortCardNotesEnabled":true}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsTrue(
+            restored.AiOrganizeEnabled,
+            "旧 preferences.json 缺字段时必须回落到默认开启（升级零感知＝现行为）。");
+    }
 }
