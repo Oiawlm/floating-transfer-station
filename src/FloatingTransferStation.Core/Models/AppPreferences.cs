@@ -108,6 +108,10 @@ public enum AutoCleanupRetention
 /// 整理入口零动作（连无 Key 状态条提示也不弹）、设置页 Key/提示词/测试连接区
 /// 置灰（已存 Key 与自定义提示词原样保留，只停用不删除）；只门控入口与设置面，
 /// 不改 AI 服务、提示词与密钥存储逻辑。旧配置缺字段免迁移回落开启。
+/// 界面字体（2026-10-25 自定义字体全链路；null = 默认 Segoe UI Variable 回退链）：
+/// 字体族名（Fonts.SystemFontFamilies 的 Source 串），不随应用分发字体文件；
+/// 解析时名字不在系统字体清单（含被卸载）按未配置回落默认；旧配置缺字段
+/// 免迁移回落 null，老用户升级零感知。图标字体（Segoe Fluent Icons）不随本偏好变化。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -134,7 +138,8 @@ public sealed record AppPreferences(
     bool LauncherDiscoveryEnabled = true,
     IReadOnlyList<string>? LauncherDiscoveryFolders = null,
     LauncherColumnStrategy LauncherColumnStrategy = LauncherColumnStrategy.Adaptive,
-    bool AiOrganizeEnabled = true)
+    bool AiOrganizeEnabled = true,
+    string? InterfaceFont = null)
 {
     public static AppPreferences Default { get; } = new();
 }

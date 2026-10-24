@@ -15,7 +15,7 @@
         MinHeight="{x:Static design:SettingsWindowMetrics.MinHeight}"
         SizeToContent="Manual"
         WindowStartupLocation="Manual"
-        FontFamily="Segoe UI Variable, Segoe UI"
+        FontFamily="{DynamicResource InterfaceFontFamily}"
         PreviewKeyDown="SettingsWindow_PreviewKeyDown">
   <!-- 复用主窗 Mica 壳技术：整窗玻璃帧承载 DWM 材质，圆角由 DWM 裁剪。
        几何契约（#24，Issue #106）：SizeToContent=Manual + CanResize + 系统级
@@ -331,6 +331,17 @@
                             Style="{StaticResource ThemedComboBoxStyle}"
                             AutomationProperties.Name="主题"
                             SelectionChanged="ThemeComboBox_SelectionChanged" />
+                </StackPanel>
+              </Border>
+              <Border Style="{StaticResource SettingsCardStyle}">
+                <StackPanel>
+                  <TextBlock Text="界面字体" Style="{StaticResource SectionTitleStyle}" />
+                  <ComboBox x:Name="InterfaceFontComboBox"
+                            Style="{StaticResource ThemedComboBoxStyle}"
+                            AutomationProperties.Name="界面字体"
+                            SelectionChanged="InterfaceFontComboBox_SelectionChanged" />
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="选择界面使用的字体，改动立即生效并自动保存；「默认」回到随 Windows 的 Segoe UI。可选列表只含本机已安装字体（应用不随包分发字体文件）。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}">

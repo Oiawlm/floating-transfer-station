@@ -8,6 +8,10 @@
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
   <!-- 颜色画刷与卡片阴影定义在 Resources/DesignTheme.Light.xaml 与 DesignTheme.Dark.xaml，
        由 DesignThemeManager 在运行时整体替换；本字典内一律以 DynamicResource 引用。 -->
+  <!-- 默认界面字体（数值唯一来源=DesignTokens.InterfaceFontFamily，锁定测试镜像）：
+       全部消费者（六个窗口根 + 本字典样式）一律 DynamicResource 引用本键——
+       用户自定义字体（偏好 InterfaceFont）经 InterfaceFontManager 以窗口级槽位
+       覆盖本值，即时生效；图标字体（Segoe Fluent Icons）是独立字面量，不随本键变化。 -->
   <FontFamily x:Key="InterfaceFontFamily">Segoe UI Variable, Segoe UI</FontFamily>
   <GridLength x:Key="CardOperationColumnWidth">30</GridLength>
   <!-- 文字卡正文右侧排他内缩（派生资源，唯一数值来源）：两列 CardOperationColumnWidth
@@ -18,11 +22,21 @@
        被利用）；命中层与图片卡不受影响。静态值（不随悬停派生）：按钮显隐若牵动
        正文回流会造成布局抖动，已否决按卡动态内缩。 -->
   <Thickness x:Key="CardTextReservedRightInset" Left="0" Top="0" Right="64" Bottom="0" />
-  <!-- 卡片正文行距唯一数值来源：显示态两处（正文预览/备注显示行）与编辑态
-       （CardTextEditorStyle 经 TextBlock.LineHeight 附加属性）共同引用——双击
-       光标锚点要求两态行距同源，行带才能逐像素对齐（就近行映射的确定性前提，
-       见 CardTextEditorStyle 注释）。 -->
+  <!-- 卡片正文行距唯一数值来源（契约 #25）：显示态两处（正文预览/备注显示行）与
+       编辑态（CardTextEditorStyle 经 TextBlock.LineHeight 附加属性）共同引用——
+       双击光标锚点要求两态行距同源，行带才能逐像素对齐（就近行映射的确定性前提，
+       见 CardTextEditorStyle 注释）。默认值 20=InterfaceFontManager 对默认字体
+       （LineSpacing 1.330078）的推导值（ceil(14×1.330078+1)，公式常数=
+       DesignTokens.CardTextFontSize/CardTextExtraLeadingPx，锁定测试互锁）；
+       用户自定义字体时 InterfaceFontManager 以窗口级槽位注入按该字体度量推导
+       的行高与行数上限（更高 em 字体→更大行高，恒≥自然行高不裁切），
+       消费者一律 DynamicResource 引用。 -->
   <sys:Double x:Key="CardTextLineHeight">20</sys:Double>
+  <!-- 正文/备注可见行数上限（行高倍率资源，默认字体=100(5×20)/40(2×20) 与
+       既有几何一致；自定义字体随推导行高等比放大，倍率=DesignTokens
+       .CardTextMaxVisibleLines/CardNoteMaxVisibleLines）。 -->
+  <sys:Double x:Key="CardTextPreviewMaxHeight">100</sys:Double>
+  <sys:Double x:Key="CardNoteMaxHeight">40</sys:Double>
   <CornerRadius x:Key="ShellCornerRadius">8</CornerRadius>
   <!-- 圆角两档阶梯（#30 修订 2026-10-18，Issue #186 D9）：控件 4 / 表面 8，
        数值唯一来源=DesignTokens.ControlCornerRadiusPx / SurfaceCornerRadiusPx
@@ -68,7 +82,7 @@
 
   <Style x:Key="HeaderTitleStyle" TargetType="TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
-    <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
+    <Setter Property="FontFamily" Value="{DynamicResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="16" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="VerticalAlignment" Value="Center" />
@@ -578,7 +592,7 @@
 
   <Style x:Key="CategoryDefaultMarkerStyle" TargetType="TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
-    <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
+    <Setter Property="FontFamily" Value="{DynamicResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="11" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="HorizontalAlignment" Value="Right" />
@@ -596,7 +610,7 @@
 
   <Style x:Key="CategoryLabelTextStyle" TargetType="TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
-    <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
+    <Setter Property="FontFamily" Value="{DynamicResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
     <Setter Property="FontWeight" Value="Normal" />
     <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
@@ -627,7 +641,7 @@
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
-    <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
+    <Setter Property="FontFamily" Value="{DynamicResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
     <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
     <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
@@ -665,16 +679,16 @@
     <Setter Property="Background" Value="{DynamicResource CardBrush}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0" />
-    <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
-    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontFamily" Value="{DynamicResource InterfaceFontFamily}" />
+    <Setter Property="FontSize" Value="{x:Static design:DesignTokens.CardTextFontSize}" />
     <Setter Property="FontWeight" Value="Normal" />
     <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
     <Setter Property="TextWrapping" Value="Wrap" />
-    <Setter Property="TextBlock.LineHeight" Value="{StaticResource CardTextLineHeight}" />
+    <Setter Property="TextBlock.LineHeight" Value="{DynamicResource CardTextLineHeight}" />
     <Setter Property="TextBlock.LineStackingStrategy" Value="BlockLineHeight" />
     <Setter Property="AcceptsReturn" Value="False" />
     <Setter Property="VerticalScrollBarVisibility" Value="Hidden" />
-    <Setter Property="MaxHeight" Value="100" />
+    <Setter Property="MaxHeight" Value="{DynamicResource CardTextPreviewMaxHeight}" />
     <Setter Property="Visibility" Value="Collapsed" />
     <Style.Triggers>
       <DataTrigger Binding="{Binding IsEditing}" Value="True">
@@ -701,18 +715,18 @@
     <Setter Property="Background" Value="{DynamicResource CardBrush}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0" />
-    <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
+    <Setter Property="FontFamily" Value="{DynamicResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
     <Setter Property="FontWeight" Value="Normal" />
     <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
-    <Setter Property="TextBlock.LineHeight" Value="{StaticResource CardTextLineHeight}" />
+    <Setter Property="TextBlock.LineHeight" Value="{DynamicResource CardTextLineHeight}" />
     <Setter Property="TextBlock.LineStackingStrategy" Value="BlockLineHeight" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="AcceptsReturn" Value="False" />
     <Setter Property="MaxLength" Value="120" />
     <Setter Property="VerticalScrollBarVisibility" Value="Hidden" />
     <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="MaxHeight" Value="40" />
+    <Setter Property="MaxHeight" Value="{DynamicResource CardNoteMaxHeight}" />
     <Setter Property="Visibility" Value="Collapsed" />
     <Setter Property="AutomationProperties.Name" Value="备注" />
     <Style.Triggers>
@@ -1519,7 +1533,7 @@
 
   <Style x:Key="StatusTextStyle" TargetType="TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
-    <Setter Property="FontFamily" Value="{StaticResource InterfaceFontFamily}" />
+    <Setter Property="FontFamily" Value="{DynamicResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
     <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
     <Setter Property="TextWrapping" Value="Wrap" />
@@ -1773,7 +1787,8 @@
                    「添加备注」入口的唯一判据（1.29.0 起入口在右上操作条）；MaxHeight=100
                    只声明在承载元素上（限高唯一来源，子元素不得重复声明）。文字卡可见性
                    与右让位触发器上移到承载元素（布局属性），子 TextBlock 只承载文字排版。 -->
-              <controls:TrimAwareTextBlock x:Name="CardPreviewText" MaxHeight="100">
+              <controls:TrimAwareTextBlock x:Name="CardPreviewText"
+                                            MaxHeight="{DynamicResource CardTextPreviewMaxHeight}">
                 <controls:TrimAwareTextBlock.Style>
                   <Style TargetType="controls:TrimAwareTextBlock">
                     <Setter Property="Visibility" Value="Collapsed" />
@@ -1792,14 +1807,14 @@
                   </Style>
                 </controls:TrimAwareTextBlock.Style>
                 <TextBlock Text="{Binding PreviewText}"
-                           FontFamily="{StaticResource InterfaceFontFamily}"
-                           FontSize="14"
+                           FontFamily="{DynamicResource InterfaceFontFamily}"
+                           FontSize="{x:Static design:DesignTokens.CardTextFontSize}"
                            FontWeight="Normal"
                            Foreground="{DynamicResource PrimaryTextBrush}"
                            TextOptions.TextFormattingMode="Display"
                            TextWrapping="Wrap"
                            TextTrimming="CharacterEllipsis"
-                           LineHeight="{StaticResource CardTextLineHeight}"
+                           LineHeight="{DynamicResource CardTextLineHeight}"
                            LineStackingStrategy="BlockLineHeight" />
               </controls:TrimAwareTextBlock>
             </Grid>
@@ -2038,16 +2053,16 @@
               </Viewbox>
               <TextBlock Grid.Column="1"
                          Text="{Binding Note}"
-                         FontFamily="{StaticResource InterfaceFontFamily}"
+                         FontFamily="{DynamicResource InterfaceFontFamily}"
                          FontSize="12"
                          FontWeight="Normal"
                          Foreground="{DynamicResource SecondaryTextBrush}"
                          TextOptions.TextFormattingMode="Display"
                          TextWrapping="Wrap"
                          TextTrimming="CharacterEllipsis"
-                         LineHeight="{StaticResource CardTextLineHeight}"
+                         LineHeight="{DynamicResource CardTextLineHeight}"
                          LineStackingStrategy="BlockLineHeight"
-                         MaxHeight="40"
+                         MaxHeight="{DynamicResource CardNoteMaxHeight}"
                          IsHitTestVisible="False">
                 <TextBlock.Style>
                   <Style TargetType="TextBlock">

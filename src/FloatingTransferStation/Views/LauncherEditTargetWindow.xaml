@@ -13,7 +13,7 @@
         SizeToContent="Height"
         MinWidth="340"
         WindowStartupLocation="CenterOwner"
-        FontFamily="Segoe UI Variable, Segoe UI"
+        FontFamily="{DynamicResource InterfaceFontFamily}"
         PreviewKeyDown="EditTargetWindow_PreviewKeyDown">
   <!-- 编辑目标对话框（#30 修订 2026-10-18，Issue #186 D7）：目标创建后可改。
        Url=地址字段（归一化唯一经 Core LauncherUrlInput，确认回传规范形）；

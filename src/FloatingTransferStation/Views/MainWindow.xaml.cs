@@ -151,6 +151,10 @@ public partial class MainWindow : Window
         _dataDirectory = dataDirectory ?? string.Empty;
         _activeDesignTheme = ResolveTheme(_preferences.ThemeMode);
         DesignThemeManager.Apply(this, _activeDesignTheme);
+        // 自定义字体全链路：构造期按偏好设定进程级当前字体并应用到本窗；
+        // 后续偏好变化走 ApplyPreferences → InterfaceFontManager.ApplyToWindowTree。
+        InterfaceFontManager.SetOverride(_preferences.InterfaceFont);
+        InterfaceFontManager.Apply(this);
         ApplyAnimationsPreference(_preferences.AnimationsEnabled);
         ApplyPinnedDividerPreference(_preferences.PinnedDivider);
         SetResourceReference(

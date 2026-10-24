@@ -193,11 +193,12 @@ public partial class MainWindow : Window, ISettingsHost
         settings.Show();
     }
 
-    /// <summary>立即应用偏好（主题/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/AI 整理开关/启动·自动发现/启动器列数策略）并异步原子持久化；持久化失败经状态条提示。</summary>
+    /// <summary>立即应用偏好（主题/界面字体/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/AI 整理开关/启动·自动发现/启动器列数策略）并异步原子持久化；持久化失败经状态条提示。</summary>
     public void ApplyPreferences(AppPreferences preferences)
     {
         _preferences = preferences;
         ApplyThemePreference(preferences.ThemeMode);
+        ApplyInterfaceFontPreference(preferences.InterfaceFont);
         ApplyAnimationsPreference(preferences.AnimationsEnabled);
         TrySetGlobalHotkey(preferences.GlobalHotkeyEnabled);
         ApplyUpdateCheckPreference(preferences.AutoUpdateCheckEnabled);
@@ -272,6 +273,18 @@ public partial class MainWindow : Window, ISettingsHost
             _windowSource?.Handle ?? 0,
             theme == DesignTheme.Dark);
         _settingsWindow?.ApplyTheme(theme);
+    }
+
+    /// <summary>
+    /// 界面字体换装（自定义字体全链路）：设定进程级当前字体（null=默认），
+    /// 并应用到本窗及全部存活后代窗口（Owner 链递归）——DynamicResource
+    /// 引用即时跟随，无需重启；后建窗口由各自构造期的
+    /// InterfaceFontManager.Apply 读当前值自应用。
+    /// </summary>
+    private void ApplyInterfaceFontPreference(string? interfaceFont)
+    {
+        InterfaceFontManager.SetOverride(interfaceFont);
+        InterfaceFontManager.ApplyToWindowTree(this);
     }
 
     // false = 本地覆盖系统 ClientAreaAnimation 键（复用减弱动效降级路径）；

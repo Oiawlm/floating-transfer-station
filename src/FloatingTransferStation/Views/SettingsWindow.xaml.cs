@@ -1,11 +1,14 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
+using System.Windows.Markup;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Navigation;
 using FloatingTransferStation;
 using FloatingTransferStation.Models;
@@ -32,6 +35,8 @@ public partial class SettingsWindow : Window
         _host = host;
         InitializeComponent();
         DesignThemeManager.Apply(this, host.CurrentTheme);
+        // 构造期应用进程级当前界面字体（偏好 InterfaceFont；null=默认），与主题应用同点。
+        InterfaceFontManager.Apply(this);
 
         // 固定视口（契约 #24，Issue #106）：窗口高度不再跟随内容（SizeToContent=Manual），
         // 溢出由 SettingsScrollHost 滚动。窗口不声明 MaxWidth/MaxHeight（1.50.0 教训：
@@ -55,6 +60,7 @@ public partial class SettingsWindow : Window
             new ComboBoxItem { Content = "强调条", Tag = PinnedDividerStyle.AccentBar }
         };
         PinnedDividerComboBox.SelectedIndex = (int)host.CurrentPreferences.PinnedDivider;
+        PopulateInterfaceFontOptions(host.CurrentPreferences.InterfaceFont);
         AnimationsToggle.IsChecked = host.CurrentPreferences.AnimationsEnabled;
         StartupToggle.IsChecked = host.StartupManager.IsEnabled();
         GlobalHotkeyToggle.IsChecked = host.CurrentPreferences.GlobalHotkeyEnabled;
@@ -533,6 +539,60 @@ public partial class SettingsWindow : Window
         }
 
         _host.ApplyPreferences(_host.CurrentPreferences with { ThemeMode = mode });
+    }
+
+    private void InterfaceFontComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isSynchronizingControls ||
+            InterfaceFontComboBox.SelectedItem is not ComboBoxItem item)
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with
+        {
+            InterfaceFont = (string?)item.Tag
+        });
+    }
+
+    /// <summary>
+    /// 界面字体选项：首项「默认」（Tag=null → 偏好 InterfaceFont=null），其余为
+    /// 本机已安装字体族（Source 串即偏好存储值，解析按同一清单校验），按当前
+    /// UI 文化的显示名排序；图标/符号字体排除（选作界面字体无意义）。存疑名字
+    /// （字体已卸载）不在清单，选中回落「默认」——偏好原值保留，待用户下次选择覆盖。
+    /// </summary>
+    private void PopulateInterfaceFontOptions(string? interfaceFont)
+    {
+        var families = Fonts.SystemFontFamilies
+            .Where(family => !IsSymbolFont(family.Source))
+            .OrderBy(FontDisplayName, StringComparer.CurrentCulture)
+            .ToArray();
+        var items = new List<ComboBoxItem>(families.Length + 1)
+        {
+            new() { Content = "默认", Tag = null }
+        };
+        items.AddRange(families.Select(family => new ComboBoxItem
+        {
+            Content = FontDisplayName(family),
+            Tag = family.Source
+        }));
+        InterfaceFontComboBox.ItemsSource = items;
+        InterfaceFontComboBox.SelectedItem =
+            items.FirstOrDefault(item => (string?)item.Tag == interfaceFont)
+            ?? items[0];
+    }
+
+    private static bool IsSymbolFont(string source) =>
+        source is "Segoe Fluent Icons" or "Segoe MDL2 Assets" or "Webdings"
+            or "Wingdings" or "Wingdings 2" or "Wingdings 3";
+
+    private static string FontDisplayName(FontFamily family)
+    {
+        // FamilyNames 键是 XmlLanguage：按当前 UI 文化取本地化名（无则回落源名）。
+        var language = XmlLanguage.GetLanguage(CultureInfo.CurrentCulture.IetfLanguageTag);
+        return family.FamilyNames.TryGetValue(language, out var localized)
+            ? localized
+            : family.Source;
     }
 
     private void PinnedDividerComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
