@@ -23,6 +23,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private SearchTypeFilter _searchType;
     private bool _shortCardNotesEnabled;
     private string _statusText = string.Empty;
+    private bool _aiOrganizeEnabled = true;
 
     public MainWindowViewModel(
         BoardService board,
@@ -127,6 +128,16 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         get => _shortCardNotesEnabled;
         set => SetProperty(ref _shortCardNotesEnabled, value);
+    }
+
+    /// <summary>AI 整理总开关（默认开 = 老用户升级零感知）：关闭＝卡片 AI 整理钮
+    /// 不再出现、整理入口零动作（含无 Key 提示也不弹）。由 ApplyPreferences 唯一
+    /// 管线喂值（契约 #5），卡片模板触发器与入口守卫经窗口祖先 DataContext 绑定
+    /// 消费（照 ShortCardNotesEnabled 先例）。</summary>
+    public bool AiOrganizeEnabled
+    {
+        get => _aiOrganizeEnabled;
+        set => SetProperty(ref _aiOrganizeEnabled, value);
     }
 
     /// <summary>进入搜索态(窗口层负责应用过滤与焦点);复盘标签不参与(冻结)。</summary>
