@@ -104,6 +104,10 @@ public enum AutoCleanupRetention
 /// 文件夹为 null/空 = 无自定义监视文件夹（旧配置缺字段免迁移回落）。
 /// 启动器列数策略（默认自适应 = 现行为）：Adaptive 列数随面板宽自动增减，
 /// Fixed3–Fixed6 固定列数；旧配置缺字段免迁移回落自适应，老用户升级零感知。
+/// AI 整理总开关（默认开 = 老用户升级零感知）：关闭＝卡片 AI 整理钮不再出现、
+/// 整理入口零动作（连无 Key 状态条提示也不弹）、设置页 Key/提示词/测试连接区
+/// 置灰（已存 Key 与自定义提示词原样保留，只停用不删除）；只门控入口与设置面，
+/// 不改 AI 服务、提示词与密钥存储逻辑。旧配置缺字段免迁移回落开启。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -129,7 +133,8 @@ public sealed record AppPreferences(
     bool ShortCardNotesEnabled = false,
     bool LauncherDiscoveryEnabled = true,
     IReadOnlyList<string>? LauncherDiscoveryFolders = null,
-    LauncherColumnStrategy LauncherColumnStrategy = LauncherColumnStrategy.Adaptive)
+    LauncherColumnStrategy LauncherColumnStrategy = LauncherColumnStrategy.Adaptive,
+    bool AiOrganizeEnabled = true)
 {
     public static AppPreferences Default { get; } = new();
 }

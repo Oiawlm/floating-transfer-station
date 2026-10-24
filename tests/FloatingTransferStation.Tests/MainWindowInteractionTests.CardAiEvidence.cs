@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using FloatingTransferStation.Design;
@@ -105,6 +106,67 @@ public sealed partial class MainWindowInteractionTests
         {
             RestoreCursorPosition(savedCursor);
             CloseWindow(window);
+        }
+    }
+
+    /// <summary>AI 整理总开关关闭态证据（同一 FTS_AI_EVIDENCE_DIR）：截断文字卡
+    /// 悬停也不出现 AI 整理钮、追加行塌缩（与 card-ai-organize-light.png 的
+    /// 开启态同构图对照）。</summary>
+    [STATestMethod]
+    public void Evidence_CaptureCardAiOrganizeToggleOff()
+    {
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_AI_EVIDENCE_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_AI_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText(AiEvidenceTranscript, BoardCategory.Inbox);
+        var handler = new CardAiOrganizeToggleOffHandler();
+        var window = CreateCardAiWindow(directory, board, handler, aiOrganizeEnabled: false);
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Topmost = true;
+            DesignThemeManager.Apply(window, DesignTheme.Light);
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var container = FindDescendants<ListBoxItem>(list)
+                .Single(item => Equals(item.DataContext, board.Items(BoardCategory.Inbox)[0]));
+
+            HoverRealAt(window, container, new Point(24, container.ActualHeight * 0.8));
+            PumpDispatcherFor(
+                window.Dispatcher,
+                TimeSpan.FromMilliseconds(DesignTokens.FadeVisibilityMs + 120));
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "card-ai-organize-toggle-off.png",
+                "FTS_AI_EVIDENCE_DIR");
+            Assert.AreEqual(0, handler.CallCount, "关＝证据链路本身也必须零请求。");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>拒绝一切请求的假 handler（开关关闭态证据专用）。</summary>
+    private sealed class CardAiOrganizeToggleOffHandler : HttpMessageHandler
+    {
+        public int CallCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            CallCount++;
+            throw new AssertFailedException("总开关关闭时不得发起任何请求。");
         }
     }
 }

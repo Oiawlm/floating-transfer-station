@@ -782,6 +782,28 @@
             <StackPanel x:Name="AiPage" Visibility="Collapsed">
               <Border Style="{StaticResource SettingsCardStyle}">
                 <StackPanel>
+                  <TextBlock Text="AI 整理" Style="{StaticResource SectionTitleStyle}" />
+                  <Grid Background="Transparent">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="启用 AI 整理功能"
+                               Style="{StaticResource RowCaptionStyle}" />
+                    <CheckBox x:Name="AiOrganizeEnabledToggle"
+                              Grid.Column="1"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              AutomationProperties.Name="启用 AI 整理功能"
+                              Checked="AiOrganizeEnabledToggle_Checked"
+                              Unchecked="AiOrganizeEnabledToggle_Unchecked" />
+                  </Grid>
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="关闭后卡片上的 AI 整理按钮不再出现，整理入口不再发起任何请求；已保存的 API Key 与自定义提示词原样保留，仅停用不删除。改动立即生效并自动保存。" />
+                </StackPanel>
+              </Border>
+              <Border x:Name="AiKeyCard" Style="{StaticResource SettingsCardStyle}">
+                <StackPanel>
                   <TextBlock Text="AI 设置" Style="{StaticResource SectionTitleStyle}" />
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
                              Margin="0,0,0,2"
@@ -835,7 +857,7 @@
                              Visibility="Collapsed" />
                 </StackPanel>
               </Border>
-              <Border Style="{StaticResource SettingsCardStyle}" Margin="0">
+              <Border x:Name="AiPromptCard" Style="{StaticResource SettingsCardStyle}" Margin="0">
                 <StackPanel>
                   <TextBlock Text="整理提示词" Style="{StaticResource SectionTitleStyle}" />
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
