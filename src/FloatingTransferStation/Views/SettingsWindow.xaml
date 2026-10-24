@@ -708,7 +708,7 @@
                             Click="OpenDataDirectoryButton_Click" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="更改时选择一个父文件夹，将在其中创建并管理「悬浮中转站\Data」；内容完整迁移并登记后应用自动重启，旧目录在下次启动确认安全后清理。" />
+                             Text="更改时选择一个文件夹，将在其中直接创建并管理「Data」子文件夹（既有位置不受影响，可继续使用或随时迁往新位置）；内容完整迁移并登记后应用自动重启，旧目录在下次启动确认安全后清理。" />
                   <TextBlock x:Name="DataDirectoryStatusText"
                              Style="{StaticResource NoteCaptionStyle}"
                              Foreground="{DynamicResource DangerBrush}"

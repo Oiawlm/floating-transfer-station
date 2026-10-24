@@ -94,7 +94,6 @@ const
   ErrorPathNotFound = 3;
   ErrorNoMoreFiles = 18;
   InvalidFindHandle = -1;
-
 var
   DataDirectoryPage: TInputDirWizardPage;
   ExistingDataDirectory: String;
@@ -232,6 +231,13 @@ end;
 
 function BuildDataDirectory(const ParentDirectory: String): String;
 begin
+  // 新形状（直下形状，契约 #46）：Data 直下于用户所选目录。
+  Result := AddBackslash(NormalizeDirectory(ParentDirectory)) + ManagedDataLeaf;
+end;
+
+function BuildLegacyDataDirectory(const ParentDirectory: String): String;
+begin
+  // 旧形状（嵌套形状，仅存量登记继续有效）：<所选>/悬浮中转站/Data。
   Result := AddBackslash(NormalizeDirectory(ParentDirectory)) +
     ManagedDataParentLeaf + '\' + ManagedDataLeaf;
 end;
@@ -242,10 +248,31 @@ begin
     RemoveBackslashUnlessRoot(DataDirectory)));
 end;
 
-function GetDataParentDirectory(const DataDirectory: String): String;
+function IsLegacyManagedDataDirectory(const DataDirectory: String): Boolean;
+var
+  Normalized: String;
 begin
-  Result := RemoveBackslashUnlessRoot(ExtractFilePath(
-    GetManagedDataParent(DataDirectory)));
+  Result := False;
+  if not IsFullyQualifiedPath(DataDirectory) then
+    Exit;
+  Normalized := NormalizeDirectory(DataDirectory);
+  if CompareText(ExtractFileName(Normalized), ManagedDataLeaf) <> 0 then
+    Exit;
+  Result := CompareText(ExtractFileName(GetManagedDataParent(Normalized)),
+    ManagedDataParentLeaf) = 0;
+end;
+
+function GetDataParentDirectory(const DataDirectory: String): String;
+var
+  DataParent: String;
+begin
+  // 用户所选目录（登记 DataParentDirectory 的语义，两形状同义）：
+  // 新形状剥掉 Data 即得；旧形状还要再剥掉「悬浮中转站」中间层。
+  DataParent := GetManagedDataParent(DataDirectory);
+  if CompareText(ExtractFileName(DataParent), ManagedDataParentLeaf) = 0 then
+    Result := RemoveBackslashUnlessRoot(ExtractFilePath(DataParent))
+  else
+    Result := DataParent;
 end;
 
 function IsPathWithinDirectory(const CandidatePath, ParentDirectory: String): Boolean;
@@ -270,23 +297,37 @@ end;
 function IsManagedDataDirectory(const Value: String): Boolean;
 var
   Normalized: String;
-  ManagedParent: String;
+  DataParent: String;
   ParentDirectory: String;
 begin
+  // 双形状判定（契约 #46），与应用侧 DataDirectorySettings.NormalizeManagedDataDirectory
+  // 同构：叶子恰为 Data；判别符＝Data 直接父目录叶子名恰为「悬浮中转站」。
   Result := False;
   if not IsFullyQualifiedPath(Value) then
     Exit;
 
   Normalized := NormalizeDirectory(Value);
-  ManagedParent := GetManagedDataParent(Normalized);
-  ParentDirectory := GetDataParentDirectory(Normalized);
-  if IsRootDirectory(ParentDirectory) then
+  if CompareText(ExtractFileName(Normalized), ManagedDataLeaf) <> 0 then
     Exit;
 
-  Result := (CompareText(ExtractFileName(Normalized), ManagedDataLeaf) = 0) and
-    (CompareText(ExtractFileName(ManagedParent), ManagedDataParentLeaf) = 0) and
-    (ParentDirectory <> '') and
-    (CompareText(Normalized, BuildDataDirectory(ParentDirectory)) = 0);
+  DataParent := GetManagedDataParent(Normalized);
+  if CompareText(ExtractFileName(DataParent), ManagedDataParentLeaf) = 0 then
+  begin
+    // 旧形状（嵌套形状）：中间层的上级不能是盘符/共享根。
+    ParentDirectory := GetDataParentDirectory(Normalized);
+    if IsRootDirectory(ParentDirectory) then
+      Exit;
+    Result := (ParentDirectory <> '') and
+      (CompareText(Normalized, BuildLegacyDataDirectory(ParentDirectory)) = 0);
+  end
+  else
+  begin
+    // 新形状（直下形状）：Data 直下于用户所选目录，所选目录不能是根。
+    if IsRootDirectory(DataParent) then
+      Exit;
+    Result := (DataParent <> '') and
+      (CompareText(Normalized, BuildDataDirectory(DataParent)) = 0);
+  end;
 end;
 
 function GetLegacyDataDirectory: String;
@@ -311,26 +352,22 @@ begin
 end;
 
 function ReadExistingDataParentDirectory: String;
-var
-  RegisteredParent: String;
 begin
-  if RegQueryStringValue(HKCU, DataRegistryKey,
-    DataParentDirectoryRegistryValue, RegisteredParent) and
-    IsFullyQualifiedPath(RegisteredParent) and
-    not IsRootDirectory(RegisteredParent) and
-    (CompareText(BuildDataDirectory(RegisteredParent), ExistingDataDirectory) = 0) then
-  begin
-    Result := NormalizeDirectory(RegisteredParent);
-  end
-  else
-  begin
-    Result := GetDataParentDirectory(ExistingDataDirectory);
-  end;
+  // ExistingDataDirectory 已过双形状校验，按形状反推用户所选目录即为权威值。
+  Result := GetDataParentDirectory(ExistingDataDirectory);
 end;
 
 function GetSelectedDataDirectory: String;
+var
+  ParentDirectory: String;
 begin
-  Result := BuildDataDirectory(DataDirectoryPage.Values[0]);
+  ParentDirectory := NormalizeDirectory(DataDirectoryPage.Values[0]);
+  // 旧形状存量登记＋用户保持原父目录：沿用旧形状路径，绝不自动搬迁（契约 #46）。
+  if IsLegacyManagedDataDirectory(ExistingDataDirectory) and
+    (CompareText(ParentDirectory, NormalizeDirectory(ExistingDataParentDirectory)) = 0) then
+    Result := ExistingDataDirectory
+  else
+    Result := BuildDataDirectory(ParentDirectory);
 end;
 
 function GetUniqueProbeFileName(const ParentDirectory: String): String;
@@ -356,39 +393,39 @@ begin
   Result := False;
   if Trim(DataDirectoryPage.Values[0]) = '' then
   begin
-    MsgBox('请选择内容存储父目录。', mbError, MB_OK);
+    MsgBox('请选择内容存储文件夹。', mbError, MB_OK);
     Exit;
   end;
 
   if not IsFullyQualifiedPath(DataDirectoryPage.Values[0]) then
   begin
-    MsgBox('内容存储父目录必须是完整的 Windows 路径。', mbError, MB_OK);
+    MsgBox('内容存储文件夹必须是完整的 Windows 路径。', mbError, MB_OK);
     Exit;
   end;
 
   ParentDirectory := NormalizeDirectory(DataDirectoryPage.Values[0]);
   if IsRootDirectory(ParentDirectory) then
   begin
-    MsgBox('内容存储父目录不能是磁盘或网络共享根目录。', mbError, MB_OK);
+    MsgBox('内容存储文件夹不能是磁盘或网络共享根目录。', mbError, MB_OK);
     Exit;
   end;
 
   if not ForceDirectories(ParentDirectory) then
   begin
-    MsgBox('无法创建内容存储父目录。请选择其他位置。', mbError, MB_OK);
+    MsgBox('无法创建内容存储文件夹。请选择其他位置。', mbError, MB_OK);
     Exit;
   end;
 
   ProbeFileName := GetUniqueProbeFileName(ParentDirectory);
   if ProbeFileName = '' then
   begin
-    MsgBox('无法为内容存储父目录创建验证文件。请选择其他位置。', mbError, MB_OK);
+    MsgBox('无法为内容存储文件夹创建验证文件。请选择其他位置。', mbError, MB_OK);
     Exit;
   end;
   try
     if not SaveStringToFile(ProbeFileName, '悬浮中转站', False) then
     begin
-      MsgBox('内容存储父目录不可写。请选择其他位置。', mbError, MB_OK);
+      MsgBox('内容存储文件夹不可写。请选择其他位置。', mbError, MB_OK);
       Exit;
     end;
   finally
@@ -530,7 +567,9 @@ begin
 
   Normalized := NormalizeDirectory(DataDirectory);
   Result := DelTree(Normalized, True, True, True);
-  if Result then
+  // 仅旧形状删除后尝试移除空的「悬浮中转站」中间层；新形状（契约 #46）绝不
+  // 触碰用户所选父目录——哪怕已空。
+  if Result and IsLegacyManagedDataDirectory(Normalized) then
     RemoveDir(GetManagedDataParent(Normalized));
 end;
 
@@ -571,8 +610,8 @@ end;
 
 function PrepareDataDirectoryMigration: Boolean;
 var
-  ManagedParent: String;
-  ExistingManagedParent: String;
+  SelectedParent: String;
+  ExistingParentOfData: String;
   MigrationDirectory: String;
 begin
   Result := False;
@@ -591,8 +630,8 @@ begin
   end
   else
   begin
-    ExistingManagedParent := GetManagedDataParent(ExistingDataDirectory);
-    if IsPathWithinDirectory(SelectedDataDirectory, ExistingManagedParent) then
+    ExistingParentOfData := GetManagedDataParent(ExistingDataDirectory);
+    if IsPathWithinDirectory(SelectedDataDirectory, ExistingParentOfData) then
     begin
       Log('Refusing to migrate data into its existing managed parent: ' +
         SelectedDataDirectory);
@@ -605,18 +644,15 @@ begin
     end;
   end;
 
-  ManagedParent := GetManagedDataParent(SelectedDataDirectory);
-  if DirExists(ManagedParent) then
-  begin
-    Log('Refusing to use a pre-existing managed data parent: ' + ManagedParent);
-    Exit;
-  end;
-  if not ForceDirectories(ManagedParent) then
+  // 新形状（契约 #46）：所选目录可预先存在且含其他内容（ValidateDataParentDirectory
+  // 已确保可写），暂存目录建于所选目录内；绝不移除所选目录本身。
+  SelectedParent := GetManagedDataParent(SelectedDataDirectory);
+  if not ForceDirectories(SelectedParent) then
     Exit;
 
   if DirExists(ExistingDataDirectory) then
   begin
-    MigrationDirectory := GetMigrationDirectory(ManagedParent);
+    MigrationDirectory := GetMigrationDirectory(SelectedParent);
     if (MigrationDirectory = '') or
       not CopyDirectory(ExistingDataDirectory, MigrationDirectory) or
       not DirectoryContentsMatch(ExistingDataDirectory, MigrationDirectory) or
@@ -624,14 +660,12 @@ begin
     begin
       if (MigrationDirectory <> '') and DirExists(MigrationDirectory) then
         DelTree(MigrationDirectory, True, True, True);
-      RemoveDir(ManagedParent);
       Exit;
     end;
     MigrationPerformed := True;
   end
   else if not ForceDirectories(SelectedDataDirectory) then
   begin
-    RemoveDir(ManagedParent);
     Exit;
   end;
 
@@ -682,11 +716,11 @@ begin
   ExistingDataParentDirectory := ReadExistingDataParentDirectory;
   DataDirectoryPage := CreateInputDirPage(wpSelectDir,
     '内容存储位置',
-    '选择图片、文字和设置的存储父目录',
-    '悬浮中转站会在所选文件夹中创建并管理“悬浮中转站\Data”。点击“下一步”继续。',
+    '选择图片、文字和设置的存储文件夹',
+    '悬浮中转站会在所选文件夹中直接创建并管理“Data”子文件夹；保持原有位置不变则不会搬迁数据。点击“下一步”继续。',
     False,
     SetupMessage(msgNewFolderName));
-  DataDirectoryPage.Add('存储父目录：');
+  DataDirectoryPage.Add('存储文件夹：');
   DataDirectoryPage.Values[0] := ExistingDataParentDirectory;
 end;
 
