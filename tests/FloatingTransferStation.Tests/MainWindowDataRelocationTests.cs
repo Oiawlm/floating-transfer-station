@@ -161,10 +161,8 @@ public sealed class MainWindowDataRelocationTests
         Assert.IsTrue(result.ExitApplication);
         Assert.IsNull(result.Error);
         Assert.AreEqual(1, registration.Commits.Count);
-        Assert.AreEqual(
-            (Path.Combine(targetParent, "悬浮中转站", "Data"), targetParent),
-            registration.Commits[0]);
-        var target = Path.Combine(targetParent, "悬浮中转站", "Data");
+        Assert.AreEqual((Path.Combine(targetParent, "Data"), targetParent), registration.Commits[0]);
+        var target = Path.Combine(targetParent, "Data");
         Assert.AreEqual(
             File.ReadAllText(Path.Combine(source, "board.json")),
             File.ReadAllText(Path.Combine(target, "board.json")),
@@ -196,7 +194,7 @@ public sealed class MainWindowDataRelocationTests
         var cancellation = GetPrivateField<CancellationTokenSource>(window, "_windowOperationCancellation");
         Assert.IsFalse(cancellation.IsCancellationRequested, "失败后恢复新的取消令牌。");
         Assert.IsTrue(File.Exists(Path.Combine(source, "board.json")));
-        Assert.IsFalse(Directory.Exists(Path.Combine(_root, "next", "悬浮中转站")), "发布目录回滚删除。");
+        Assert.IsFalse(Directory.Exists(Path.Combine(_root, "next", "Data")), "发布目录回滚删除。");
         Assert.IsNotNull(GetPrivateField<System.Windows.Interop.HwndSource>(window, "_windowSource"), "剪贴板钩子恢复。");
 
         // 恢复后的窗口仍可正常走既有退出序列。
@@ -227,7 +225,7 @@ public sealed class MainWindowDataRelocationTests
         Assert.IsTrue(result.ExitApplication);
         StringAssert.Contains(result.Error, "自动重启失败");
         Assert.AreEqual(1, registration.Commits.Count, "登记不回滚。");
-        Assert.IsTrue(File.Exists(Path.Combine(targetParent, "悬浮中转站", "Data", "board.json")));
+        Assert.IsTrue(File.Exists(Path.Combine(targetParent, "Data", "board.json")));
         Assert.IsTrue(GetPrivateField<bool>(window, "_allowClose"));
         Assert.IsTrue(closed.Task.IsCompleted, "重启失败同样直接退出本实例。");
     }

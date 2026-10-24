@@ -1151,7 +1151,7 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// 更改数据目录：选父文件夹 → 预检（形状/可写/卷空间/目标不存在）→ 确认对话框
+    /// 更改数据目录：选文件夹 → 预检（形状/可写/卷空间/目标不存在）→ 确认对话框
     /// （源→目标、数据体积、自动重启、旧目录处置）→ 迁移并自动重启。迁移期间
     /// 锁定设置内容并显示进度，失败恢复原状并提示。
     /// </summary>
@@ -1165,7 +1165,7 @@ public partial class SettingsWindow : Window
 
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = "选择内容存储父文件夹（将在其中创建 悬浮中转站\\Data）"
+            Title = "选择内容存储文件夹（将在其中直接创建 Data）"
         };
         if (dialog.ShowDialog(this) != true || string.IsNullOrWhiteSpace(dialog.FolderName))
         {

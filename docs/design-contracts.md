@@ -22,9 +22,9 @@
 - **锁定**：`tests/FloatingTransferStation.Tests/BoardServiceTests.cs`、`tests/FloatingTransferStation.Tests/BatchDragPlannerTests.cs`、`tests/FloatingTransferStation.Tests/BoardServiceBatchNotificationTests.cs`（单 Reset 契约）。
 - **关联**：批量置顶设计：`docs/superpowers/specs/2026-08-28-batch-pin-design.md`。
 
-### 3. 卸载只删受管数据目录
+### 3. 卸载只删受管数据目录（2026-10-24 修订：双形状删除范围，见 #47）
 
-- **断言**：卸载只删除应用登记并管理的 `Data` 目录，不扩大到用户选择的父目录；数据清理递归目标仅为已验证的 `Data`，上层目录仅在空目录时移除，同级文件必须保留。
+- **断言**：卸载只删除应用登记并管理的 `Data` 目录，不扩大到用户选择的父目录；数据清理递归目标仅为已验证的 `Data`，上层目录仅在空目录时移除，同级文件必须保留。**2026-10-24 修订（#47）**：受管形状双轨后，「上层目录仅在空目录时移除」仅适用于旧形状（嵌套「悬浮中转站」中间层）；新形状（`<所选>/Data`）删除范围＝仅 `Data` 目录本身，用户所选父目录即使已空也绝不移除。
 - **由来**：1.4.2 仓库维护与卸载边界硬化（防「卸载器删掉用户整个下载目录」级事故）。
 - **锁定**：`tests/FloatingTransferStation.Tests/LifecycleTests.Installer.cs`。
 - **关联**：仓库维护计划：`docs/superpowers/plans/2026-09-03-repository-maintenance.md`。
@@ -59,7 +59,7 @@
 
 ### 8. 单实例、登记目录与版本来源
 
-- **断言**：单实例锁；安装/数据目录只认安装器登记；`version.txt` 是唯一版本来源（程序集、产品标识、安装器与打包脚本共同读取）。
+- **断言**：单实例锁；安装/数据目录只认安装器登记；`version.txt` 是唯一版本来源（程序集、产品标识、安装器与打包脚本共同读取）。2026-10-24 修订（#47）：数据目录登记读取按双形状校验（新 `<所选>/Data`／旧 `<所选>/悬浮中转站/Data`），校验不过回退默认位置的语义不变。
 - **由来**：1.4.x 安装器数据目录治理与多实例互踩报障。
 - **锁定**：`tests/FloatingTransferStation.Tests/LifecycleTests.Installer.cs`、`tests/FloatingTransferStation.Tests/LifecycleTests.ReleaseMetadata.cs`。
 - **关联**：[架构说明](architecture.md)、[发布指南](releasing.md)。
@@ -313,9 +313,9 @@
 - **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.Search.cs`（`Search_FiltersCurrentCategoryAndExitRestoresAllItems`、`Search_TypeChipsFilterByKindAndBothChipsMeanAll`、`Search_EmptyResultsShowHintAndClearFilterRestores`、`Search_ActiveSuppressesAutoCollapseUntilExit`、`Search_ExitsOnCategorySwitchAndIgnoresReviewTab`、`Search_ClearsSelectionOnEnterAndKeepsPinnedOrderInResults`、`Search_RealKeyboardCtrlFEntersAndWindowEscExits`——2026-10-19 补登轮新增键盘直达守护）、`tests/FloatingTransferStation.Core.Tests/MainWindowViewModelSearchTests.cs`（`EnterExitSearch_TogglesStateAndClearsConditions`、`ExitSearch_WithoutActiveSearch_IsNoOp`、`SearchProperties_RaiseChangeNotification`）。
 - **关联**：ROADMAP/CHANGELOG 1.13.0（无独立 spec，如实标注）；#33（搜索态空态让位）。
 
-### 38. 数据目录迁移原子性（应用内搬迁协议）
+### 38. 数据目录迁移原子性（应用内搬迁协议；2026-10-24 修订：形状语义，见 #47）
 
-- **断言**：应用内数据目录搬迁复用与卸载器同源的受管形状守卫，由 Core `DataDirectoryRelocation` 执行：非法目标形状校验拒绝（根/受管祖先/已存在目标等）→ 暂存复制 → 逐项校验 → 同卷原子发布与登记更新；**发布提交前**的登记或标记写入失败回滚已发布目录与登记、恢复操作门与窗口交互，不留半迁移状态；**提交完成后**的重启进程创建失败不回滚——保留已提交登记并退出应用。成功创建重启进程时以 `--relocated` 启动并限时等待旧实例释放单实例锁；旧目录仅在新实例成功启动且形状守卫通过后延迟清理，校验不过保留；迁移期间经静默作用域暂停采集等写入者（预检拒绝不进入静默期）；插件目录为用户偏好且落在数据目录之内时拒绝。
+- **断言**：应用内数据目录搬迁复用与卸载器同源的受管形状守卫，由 Core `DataDirectoryRelocation` 执行：非法目标形状校验拒绝（根/受管祖先/已存在目标等）→ 暂存复制 → 逐项校验 → 同卷原子发布与登记更新；**发布提交前**的登记或标记写入失败回滚已发布目录与登记、恢复操作门与窗口交互，不留半迁移状态；**提交完成后**的重启进程创建失败不回滚——保留已提交登记并退出应用。成功创建重启进程时以 `--relocated` 启动并限时等待旧实例释放单实例锁；旧目录仅在新实例成功启动且形状守卫通过后延迟清理，校验不过保留；迁移期间经静默作用域暂停采集等写入者（预检拒绝不进入静默期）；插件目录为用户偏好且落在数据目录之内时拒绝。**2026-10-24 修订（#47）**：迁移目标恒为新形状 `<所选>/Data`（源可为双形状任一）；「受管父已存在」拒绝废除（新选目录可预先存在含其他内容，`Data` 已存在仍拒绝）；暂存目录建于新选目录内；登记 `DataParentDirectory`＝用户所选目录。
 - **由来**：1.16.0 用户定稿方向「设置内更改数据目录与插件目录」——数据目录搬迁必须与安装器同一迁移协议（用户数据是唯一不可再生资产）；「先验证后发布＋延迟清理」来自卸载边界硬化（#3）的同族教训。2026-10-19 补登轮机械审计核实锁定实存。
 - **锁定**：`tests/FloatingTransferStation.Core.Tests/DataDirectoryRelocationTests.cs`（形状校验/暂存/校验/发布/丢弃全链 18 测试，含 `Plan_RejectsUnchangedPath`、`Plan_RejectsExistingTargetDataDirectory`、`Plan_RejectsExistingTargetManagedParent`）、`tests/FloatingTransferStation.Core.Tests/RelocationCleanupTests.cs`（标记往返与延迟清理）、`tests/FloatingTransferStation.Tests/DataDirectoryChangeServiceTests.cs`（`ChangeAsync_CommitFailureRollsBackPublishedDirectoryAndResumes`、`ChangeAsync_MarkerFailureRollsBackDirectoryAndRestoresRegistration`、`ChangeAsync_SpawnFailureKeepsRegistrationAndExits`、`ChangeAsync_HappyPathCommitsRegistrationWritesMarkerAndSpawns`、`ChangeAsync_PlanRefusalFailsWithoutQuiesce`）、`tests/FloatingTransferStation.Tests/MainWindowDataRelocationTests.cs`（`ChangeDataDirectory_SuccessPublishesCommitsMarkerAndClosesWindow`、`ChangeDataDirectory_CommitFailureResumesWindowAndReopensGate`、`ChangeDataDirectory_SpawnFailureExitsWithoutRollback` 及插件目录拒绝）。
 - **关联**：ROADMAP/CHANGELOG 1.16.0（无独立 spec，如实标注）；#1（原子写）、#3（卸载边界同族形状守卫）、#8（登记目录）、#12（名称相近语义不同——#12 是窗口矩形迁移原子性，「一次提交不留半态」原则同源）。
@@ -381,6 +381,14 @@
 - **由来**：用户报障「主窗遮挡 IME 候选窗」——2 秒置顶重申周期在打字期间反复把主窗插回置顶带顶端，中文输入的候选窗被压在主窗下面。1.7.x 编辑期收起抑制（#7）已确立「编辑器持焦是比指针更强的使用意图信号」的判定传统，本契约把同一信号扩展到 z 序域：打字期间主窗不做任何层级变更。
 - **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.TopmostImeSuppression.cs`（`TopmostReassert_SuppressedWhileFocusInReviewEditor`（含非编辑态基线：降级→重申→恢复置顶）、`TopmostReassert_SuppressedWhileFocusInCardEditor`（Esc 退出编辑后恢复）、`TopmostReassert_SuppressedDuringImeComposition`（组合标记置位→抑制；组合完成标记复位、焦点仍在编辑器→抑制由焦点原因继续持有）、`TopmostReassert_CompositionFlagClearedWhenEditorFocusLeaves`（防滞留清算）。观察口径＝契约 #13 的 Win32 直驱：先手动降级（`HWND_NOTOPMOST`）再调 `ReassertTopmost`，仍非置顶即证明未发生 z 序变更调用）；既有 `Topmost_ReassertedAfterBeingDemoted`（`MainWindowInteractionTests.VisualLifecycle.cs`，非编辑态原样）与 `ReviewEditor_EscapeDuringCompositionKeepsEditingUntilCompositionEnds`（#20 复盘 Esc 组合语义零回归）同套零回退。
 - **关联**：#7（编辑期不收起——同一意图信号的收起抑制）、#13（Win32 直驱观察口径）、#20（复盘编辑器 Esc 与组合标记既有语义）、#32（选择器词根表登记 `TopmostImeSuppression→TopmostReassert`，新增 TopmostImeSuppression 区域规则覆盖 `MainWindow.Lifecycle.cs`/`MainWindow.PanelTextEditing.cs`）；CHANGELOG 未发布区。
+## 二十三、本次新增（47，受管数据目录形状策略：双形状并存＋存量零搬迁；2026-10-24）
+
+### 47. 受管数据目录形状策略（直下形状、旧形状只读兼容、卸载安全三重守卫）
+
+- **断言**：受管数据目录存在两种形状，判定单一来源 Core `DataDirectorySettings`（安装器 `IsManagedDataDirectory` 同构镜像），**形状判别符＝`Data` 直接父目录的叶子名恰为「悬浮中转站」**。**形状策略**：①新形状（直下形状）`<所选>/Data`——本版本起所有**新选择**（安装器向导与设置窗「更改存储位置」）都在所选目录直下创建并管理 `Data`；②旧形状（嵌套形状）`<所选>/悬浮中转站/Data`——仅存量登记继续有效：完全可读（启动解析、设置显示）、可搬迁（作为迁移源全协议支持）、可卸载（延迟清理与卸载器同守卫），**绝不自动强制搬迁**；③默认位置（无登记）恒为 `%LocalAppData%\悬浮中转站\Data`，不随形状策略变化。**存量迁移矩阵**：无登记（全新安装）→ 默认位置；旧形状登记 → 原样读写，安装器升级保持原父目录＝不迁移（选择语义：所选父目录与现存父目录相同且现存为旧形状时沿用旧形状路径），用户换目录（安装器或设置）→ 迁往新形状 `<新选>/Data`；新形状登记 → 直接读写；登记读取一律过双形状校验，校验不过回退默认（#8 语义不变）。**卸载安全论证（#3 延伸）**：删除目标唯一来源＝登记值（无登记＝固定默认路径），绝无扫描式发现；形状守卫＝叶子恰为 `Data` ×（新形状：`Data` 父目录非盘符/共享根，`D:\Data` 拒绝／旧形状：叠加「悬浮中转站」中间层且中间层父目录非根）× 相对/设备路径拒绝；删除范围＝递归仅限登记的 `Data` 目录本身，**仅旧形状**删除后尝试移除空的「悬浮中转站」中间层，**新形状绝不触碰用户所选父目录（哪怕已空）与任何同级内容**；非 `Data` 叶子一律拒绝删除。**迁移协议随形状更新（#38 修订）**：目标恒为新形状；暂存目录 `.migration-*` 直接建于新选目录内；「受管父已存在」拒绝废除——新选目录可预先存在且含其他内容（同级内容必须原样保留，`Data` 已存在仍拒绝）；「目标在当前受管目录之内」拒绝保留（旧形状源＝「悬浮中转站」子树、新形状源＝所选目录子树）；登记 `DataParentDirectory` 两形状同义＝用户所选目录。插件目录覆盖语义不变（精确路径，见 `AppPaths.ResolvePluginsDirectoryOverride`）。
+- **由来**：用户 2026-10-24 定案「新选目录→`<所选>/Data` 直下创建」——旧嵌套形状在用户自选目录里再造一层「悬浮中转站」是冗余目录税（用户已显式选定专用文件夹，中间层不承载额外信息）；存量用户数据是不可再生资产，只改「新选择的形状」不改「已存在的形状」，新形状下的卸载安全从「中间层目录名信号」转为「登记来源 × 叶子精确性 × 根拒绝」三重守卫，旧形状保留更强的中间层信号（删后移除空中间层）。
+- **锁定**：`tests/FloatingTransferStation.Core.Tests/DataDirectoryRelocationTests.cs`（形状矩阵：`NormalizeManagedDataDirectory` 双形状接受/根直下与相对与错误叶子拒绝、`BuildDataDirectory`＝直下、旧形状源→新形状目标全链、新形状源拒绝不变路径与所在子树、目标 `Data` 已存在拒绝、新选目录预先存在含同级内容成功且原样保留、删除矩阵：新形状只删 `Data` 且父目录必留、旧形状删 `Data`＋空中间层、错误叶子拒绝）、`tests/FloatingTransferStation.Core.Tests/RelocationCleanupTests.cs`（旧形状旧目录延迟清理含空中间层移除；新形状旧目录清理后父目录保留）、`tests/FloatingTransferStation.Tests/DataDirectoryChangeServiceTests.cs`（登记 `DataParentDirectory`＝新选目录）、`tests/FloatingTransferStation.Tests/MainWindowDataRelocationTests.cs`（设置窗旅程目标＝`<所选>/Data`）、`tests/FloatingTransferStation.Tests/LifecycleTests.Installer.cs`（安装器双形状判定与选择语义静态断言、新形状删除不触碰父目录断言）、`scripts/test-installer-cleanup.ps1`（原生编译矩阵：新形状删除＋父目录与同级内容保留、旧形状用例全保留、非 `Data` 叶子拒绝删除）。
+- **关联**：#3（卸载边界——本条延伸其删除范围语义）、#8（登记目录唯一来源）、#38（迁移原子性——本条修订其形状语义：目标恒新形状、「受管父已存在」拒绝废除）、#12（一次提交不留半态原则同源）；CHANGELOG 未发布区；[docs/usage.md](usage.md)「更改存储位置」。
 
 ## 维护规则
 

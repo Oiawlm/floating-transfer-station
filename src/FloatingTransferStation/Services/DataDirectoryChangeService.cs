@@ -119,8 +119,7 @@ public sealed class DataDirectoryChangeService
             return DataDirectoryChangeResult.Failed($"{exception.Message}原目录未做任何改动。");
         }
 
-        var targetParent = Path.GetDirectoryName(Path.GetDirectoryName(plan.TargetDataDirectory))!;
-        if (!_registration.TryCommit(plan.TargetDataDirectory, targetParent))
+        if (!_registration.TryCommit(plan.TargetDataDirectory, plan.TargetParentDirectory))
         {
             RollbackPublishedTarget(plan);
             _relocator.Discard(plan);
@@ -133,7 +132,8 @@ public sealed class DataDirectoryChangeService
         {
             RollbackPublishedTarget(plan);
             _relocator.Discard(plan);
-            _registration.TryCommit(plan.SourceDataDirectory, Path.GetDirectoryName(Path.GetDirectoryName(plan.SourceDataDirectory))!);
+            _registration.TryCommit(
+                plan.SourceDataDirectory, DataDirectorySettings.GetDataParentDirectory(plan.SourceDataDirectory));
             quiesce.Resume();
             return DataDirectoryChangeResult.Failed("无法在新的内容位置写入迁移标记，本次迁移已撤销，原目录未做改动。");
         }
@@ -151,7 +151,7 @@ public sealed class DataDirectoryChangeService
         return new DataDirectoryChangeResult(true, null, plan);
     }
 
-    /// <summary>登记失败/标记失败的撤销：按形状守卫删除刚发布的目录，受管父空则一并移除。</summary>
+    /// <summary>登记失败/标记失败的撤销：按形状守卫删除刚发布的目录（仅旧形状会连带移除空的「悬浮中转站」中间层）。</summary>
     private void RollbackPublishedTarget(DataDirectoryRelocationPlan plan) =>
         DataDirectoryRelocator.TryDeleteManagedDataDirectory(plan.TargetDataDirectory, out _);
 

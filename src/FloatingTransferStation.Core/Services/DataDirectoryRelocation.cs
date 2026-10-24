@@ -9,8 +9,7 @@ public enum DataDirectoryRelocationRefusal
     TargetParentNotWritable,
     UnchangedPath,
     TargetExists,
-    TargetManagedParentExists,
-    TargetInsideCurrentManagedParent,
+    TargetInsideCurrentParent,
     TargetInsideSourceData,
     InsufficientFreeSpace,
     StageFailed,
@@ -36,9 +35,9 @@ public sealed class DataDirectoryRelocationException : Exception
 /// <summary>一次受管数据目录搬迁的既定方案（Plan 的输出，后续步骤的输入）。</summary>
 public sealed record DataDirectoryRelocationPlan(
     string SourceDataDirectory,
-    string SourceManagedParent,
+    string SourceParentDirectory,
     string TargetDataDirectory,
-    string TargetManagedParent,
+    string TargetParentDirectory,
     string StagingDirectory,
     long SourceSizeBytes);
 
@@ -51,11 +50,12 @@ public sealed record DataDirectoryCopyProgress(
 
 /// <summary>
 /// 应用内受管数据目录搬迁原语：与安装器 PrepareDataDirectoryMigration 同一协议——
-/// 校验（形状/可写探针/目标卷空间/目标与受管父均不存在）→ 复制到受管父内的
+/// 校验（形状/可写探针/目标卷空间/目标不存在）→ 复制到所选目录内的
 /// <c>.migration-时间戳-序号</c> 暂存目录 → 校验（存在 + 文件长度一致）→
-/// 同卷 <see cref="Directory.Move"/> 原子发布。发布前任一步失败：递归删除暂存目录、
-/// 受管父空则移除；源目录与注册表不动。纯托管实现（可单测、保留最后写入时间、
-/// 空目录也创建、发布前可取消、发布后不可取消）。
+/// 同卷 <see cref="Directory.Move"/> 原子发布。发布前任一步失败：递归删除暂存目录；
+/// 源目录与注册表不动。目标恒为新形状 <c>&lt;所选&gt;/Data</c>（契约 #47），源可为
+/// 双形状任一；所选目录可预先存在且含其他内容（同级内容原样保留）。纯托管实现
+/// （可单测、保留最后写入时间、空目录也创建、发布前可取消、发布后不可取消）。
 /// </summary>
 public sealed class DataDirectoryRelocator
 {
@@ -78,7 +78,7 @@ public sealed class DataDirectoryRelocator
             ?? throw new DataDirectoryRelocationException(
                 DataDirectoryRelocationRefusal.SourceShapeInvalid,
                 "当前内容目录未通过受管形状校验，无法迁移。");
-        var sourceManagedParent = Directory.GetParent(source)!.FullName;
+        var sourceParent = Directory.GetParent(source)!.FullName;
         if (!Directory.Exists(source))
         {
             throw new DataDirectoryRelocationException(
@@ -94,7 +94,6 @@ public sealed class DataDirectoryRelocator
         }
 
         var target = DataDirectorySettings.BuildDataDirectory(targetParentDirectory);
-        var targetManagedParent = Directory.GetParent(target)!.FullName;
         var comparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
@@ -105,8 +104,8 @@ public sealed class DataDirectoryRelocator
                 "所选位置就是当前内容目录，无需迁移。");
         }
 
-        // 先判“目标父在源 Data 内”（自包含，复制进自己子树）：源 Data 必然也在现受管
-        // 父之内，先判更精确的自包含原因。
+        // 先判“目标父在源 Data 内”（自包含，复制进自己子树）：源 Data 必然也在
+        // 其所在目录之内，先判更精确的自包含原因。
         if (DataDirectorySettings.IsPathWithin(targetParentDirectory, source, comparison))
         {
             throw new DataDirectoryRelocationException(
@@ -114,11 +113,11 @@ public sealed class DataDirectoryRelocator
                 "不能把内容目录迁移到它自己的内部。");
         }
 
-        if (DataDirectorySettings.IsPathWithin(target, sourceManagedParent, comparison))
+        if (DataDirectorySettings.IsPathWithin(target, sourceParent, comparison))
         {
             throw new DataDirectoryRelocationException(
-                DataDirectoryRelocationRefusal.TargetInsideCurrentManagedParent,
-                "不能把内容目录迁移到它当前所在的受管目录之内。");
+                DataDirectoryRelocationRefusal.TargetInsideCurrentParent,
+                "不能把内容目录迁移到它当前所在的目录之内。");
         }
 
         if (Directory.Exists(target))
@@ -126,13 +125,6 @@ public sealed class DataDirectoryRelocator
             throw new DataDirectoryRelocationException(
                 DataDirectoryRelocationRefusal.TargetExists,
                 $"目标位置已存在同名目录：{target}");
-        }
-
-        if (Directory.Exists(targetManagedParent))
-        {
-            throw new DataDirectoryRelocationException(
-                DataDirectoryRelocationRefusal.TargetManagedParentExists,
-                $"目标位置已存在受管文件夹：{targetManagedParent}");
         }
 
         if (!DataDirectorySettings.TryProbeWritable(targetParentDirectory, out var probeFailure))
@@ -150,15 +142,18 @@ public sealed class DataDirectoryRelocator
                 "目标磁盘的可用空间不足。");
         }
 
-        var staging = BuildStagingPath(targetManagedParent);
+        var staging = BuildStagingPath(targetParentDirectory);
         return new DataDirectoryRelocationPlan(
             source,
-            sourceManagedParent,
+            sourceParent,
             target,
-            targetManagedParent,
+            NormalizeTargetParent(targetParentDirectory),
             staging,
             sourceSize);
     }
+
+    private static string NormalizeTargetParent(string targetParentDirectory) =>
+        Path.GetFullPath(targetParentDirectory).TrimEnd(Path.DirectorySeparatorChar);
 
     /// <summary>
     /// 复制源目录到暂存目录（保留最后写入时间、空目录也创建、发布前可取消）。
@@ -179,7 +174,7 @@ public sealed class DataDirectoryRelocator
         var (totalFiles, totalBytes) = CountEntries(plan.SourceDataDirectory);
         try
         {
-            Directory.CreateDirectory(plan.TargetManagedParent);
+            Directory.CreateDirectory(plan.TargetParentDirectory);
             await CopyDirectoryAsync(
                 plan.SourceDataDirectory,
                 plan.StagingDirectory,
@@ -219,7 +214,7 @@ public sealed class DataDirectoryRelocator
     }
 
     /// <summary>
-    /// 原子发布：暂存目录与目标同卷（暂存建在目标受管父内），Directory.Move 一次
+    /// 原子发布：暂存目录与目标同卷（暂存建在所选目录内），Directory.Move 一次
     /// 改名到位。目标意外已存在或改名失败抛异常，暂存目录保留供重试或 Discard。
     /// </summary>
     public void Publish(DataDirectoryRelocationPlan plan)
@@ -252,27 +247,20 @@ public sealed class DataDirectoryRelocator
         }
     }
 
-    /// <summary>失败清理（幂等、尽力而为）：删暂存目录；受管父空则一并移除。</summary>
+    /// <summary>
+    /// 失败清理（幂等、尽力而为）：删暂存目录。所选目录是用户目录（契约 #47 新形状
+    /// 下不再是应用创建的受管父），即使已空也绝不移除。
+    /// </summary>
     public void Discard(DataDirectoryRelocationPlan plan)
     {
         TryDeleteTree(plan.StagingDirectory);
-        try
-        {
-            if (Directory.Exists(plan.TargetManagedParent))
-            {
-                Directory.Delete(plan.TargetManagedParent, recursive: false);
-            }
-        }
-        catch (Exception exception) when (
-            exception is IOException or UnauthorizedAccessException)
-        {
-            // 受管父非空或被占用：保留无害（下次迁移会按“受管父已存在”拒绝）。
-        }
     }
 
     /// <summary>
     /// 按形状守卫删除受管数据目录（与卸载器 DeleteManagedDataDirectory 同构的安全
-    /// 边界）：形状不符永不删除；成功后受管父为空时一并移除。目录不存在视为成功。
+    /// 边界，契约 #47）：形状不符永不删除；递归删除仅限 <c>Data</c> 目录本身，
+    /// 仅旧形状（嵌套「悬浮中转站」中间层）删除后尝试移除空的中间层；新形状
+    /// 绝不触碰用户所选父目录。目录不存在视为成功。
     /// </summary>
     public static bool TryDeleteManagedDataDirectory(string dataDirectory, out string? failureReason)
     {
@@ -292,10 +280,10 @@ public sealed class DataDirectoryRelocator
         try
         {
             Directory.Delete(normalized, recursive: true);
-            var managedParent = Directory.GetParent(normalized);
-            if (managedParent is not null)
+            if (DataDirectorySettings.IsLegacyManagedDataDirectory(normalized))
             {
-                managedParent.Delete();
+                var legacyParent = Directory.GetParent(normalized);
+                legacyParent?.Delete();
             }
 
             return true;
@@ -511,8 +499,8 @@ public sealed class DataDirectoryRelocator
         catch (Exception exception) when (
             exception is IOException or UnauthorizedAccessException)
         {
-            // 清理失败保留暂存目录：它位于受管父内，不会阻塞源目录的任何后续迁移，
-            // 下一次向同父目录迁移会因“受管父已存在”被拒绝，需要用户换目录或手动清理。
+            // 清理失败保留暂存目录：它位于所选目录内、名字唯一，不会阻塞源目录的
+            // 任何后续迁移；需要时用户可手动清理。
         }
     }
 }

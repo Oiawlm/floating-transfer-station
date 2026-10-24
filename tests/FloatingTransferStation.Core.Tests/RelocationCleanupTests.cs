@@ -29,12 +29,32 @@ public sealed class RelocationCleanupTests
 
     private (string Current, string Old) CreateDirectories()
     {
-        var current = Path.Combine(_root, "new", "悬浮中转站", "Data");
+        var current = Path.Combine(_root, "new", "Data");
         var old = Path.Combine(_root, "old", "悬浮中转站", "Data");
         Directory.CreateDirectory(current);
         Directory.CreateDirectory(old);
         File.WriteAllText(Path.Combine(old, "board.json"), "{}");
         return (current, old);
+    }
+
+    [TestMethod]
+    public void CleanupProcessor_DirectShapeOldDirectoryKeepsUserParent()
+    {
+        // 契约 #47：新形状旧目录延迟清理只删 Data，用户所选父目录绝不移除。
+        var parent = Path.Combine(_root, "old-parent");
+        var old = Path.Combine(parent, "Data");
+        Directory.CreateDirectory(old);
+        File.WriteAllText(Path.Combine(old, "board.json"), "{}");
+        var current = Path.Combine(_root, "new", "Data");
+        Directory.CreateDirectory(current);
+        Assert.IsTrue(RelocationCleanupMarker.TryWriteAsync(current, old, new AtomicTextWriter()).Result);
+
+        var notice = DataDirectoryCleanupProcessor.Run(current);
+
+        Assert.IsNull(notice);
+        Assert.IsFalse(Directory.Exists(old), "旧 Data 目录必须删除。");
+        Assert.IsTrue(Directory.Exists(parent), "新形状旧目录的用户父目录必须保留。");
+        Assert.IsFalse(RelocationCleanupMarker.TryRead(current, out _), "清理后标记必须删除。");
     }
 
     [TestMethod]
@@ -61,7 +81,7 @@ public sealed class RelocationCleanupTests
 
         Assert.IsNull(notice);
         Assert.IsFalse(Directory.Exists(old), "旧受管目录必须删除。");
-        Assert.IsFalse(Directory.Exists(Directory.GetParent(old)!.FullName), "空受管父一并移除。");
+        Assert.IsFalse(Directory.Exists(Directory.GetParent(old)!.FullName), "旧形状：空「悬浮中转站」中间层一并移除。");
         Assert.IsFalse(RelocationCleanupMarker.TryRead(current, out _), "清理后标记必须删除。");
     }
 
