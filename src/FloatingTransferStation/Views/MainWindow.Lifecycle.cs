@@ -91,12 +91,20 @@ public partial class MainWindow : Window
     /// 重申置顶：Topmost 只在 HWND 创建时写入一次，之后出现的其他置顶窗口
     /// （截图贴图、同类悬浮工具等）会排到面板上方。周期性把窗口抬回置顶带
     /// 最高层，不移动、不改大小、不抢焦点；自有设置窗作为 owned 窗口仍在其上。
+    /// IME 输入敏感期（编辑器持焦或组合中，见 IsImeInputSensitive）整体抑制——
+    /// 不发起任何 z 序变更调用，防候选窗被压到面板下面；编辑结束后下一轮
+    /// 周期重申（≤2 秒）恢复层级。
     /// </summary>
     private void ReassertTopmost()
     {
         if (_isClosing ||
             _windowSource?.Handle is not { } handle || handle == 0 ||
             !IsVisible)
+        {
+            return;
+        }
+
+        if (IsImeInputSensitive)
         {
             return;
         }

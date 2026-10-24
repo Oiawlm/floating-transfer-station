@@ -92,6 +92,10 @@ $rules = @(
         'src/FloatingTransferStation/Views/MainWindow.EdgeHide.cs', 'src/FloatingTransferStation/Services/MonitorBounds.cs') },
     @{ Name = 'PanelHold'; Filter = 'FullyQualifiedName~PanelHold|FullyQualifiedName~PanelStateMachine'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.PanelHold.cs', 'src/FloatingTransferStation/Views/MainWindow.PanelTextEditing.cs') },
+    # 置顶重申与 IME 抑制（2026-10-24）：置顶 z 序行为（Lifecycle.ReassertTopmost）与
+    # 编辑/组合态判定（PanelTextEditing）的锁定测试族；PanelTextEditing 同时命中 PanelHold（并集）。
+    @{ Name = 'TopmostImeSuppression'; Filter = 'FullyQualifiedName~Topmost'; Globs = @(
+        'src/FloatingTransferStation/Views/MainWindow.Lifecycle.cs', 'src/FloatingTransferStation/Views/MainWindow.PanelTextEditing.cs') },
     @{ Name = 'Search'; Filter = 'FullyQualifiedName~Search'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.Search.cs') },
     @{ Name = 'Selection'; Filter = 'FullyQualifiedName~Selection|FullyQualifiedName~Undo'; Globs = @(
@@ -229,6 +233,7 @@ $interactionTestPrefixes = @{
     'ScrollViewport'         = @('ScrollViewport')
     'Search'                 = @('Search')
     'SelectionAndDeletion'   = @('BatchPinButton', 'BatchPinCommand', 'BatchPinExecutionGuard', 'DeletePending', 'DeleteShortcut', 'EmptyListBackgroundClearsSelectionWithoutChangingPanelOrScroll', 'Escape', 'HeaderClear', 'HeaderDeleteFailureRestoresMixedSelectionAndSuccessDeletesOnlySelection', 'HeaderDeleteWithoutSelection', 'HeaderDeleteWithoutSelectionFailureRestoresCategoryAndNewItemStaysUnselected', 'PinButton', 'SelectAllCommand', 'SelectedCountBadge', 'SelectionButtonTogglesPersistentTwoSignalFeedback', 'SelectionSurvivesAutoCollapseButClearsOnUserCategorySwitch', 'Shortcut', 'TrashButton')
+    'TopmostImeSuppression'  = @('TopmostReassert')
     'Undo'                   = @('DeleteThenUndoFromPanel', 'Undo')
     'Updates'                = @('AutoUpdateCheckToggle', 'Evidence', 'UpdateButton', 'UpdateCheck')
     'VisualLifecycle'        = @('ActiveCategoryFeedback', 'BeginPanelDrag', 'BoardList', 'CardOperationColumns', 'CategoryFeedback', 'CategoryHover', 'CategorySwitch', 'CategoryTab', 'Close', 'Collapse', 'CollapsedCategoryHover', 'CollapsedHandle', 'CollapsedPlacement', 'CollapsedWindow', 'DisablingClientAreaAnimations', 'ExpandedCategoryHover', 'ExpandedPlacement', 'ExpandedRailReveal', 'ExternalRailPlacement', 'FailedFinalSave', 'Header', 'ImageCard', 'PanelContentAnimation', 'PinnedBoundary', 'RapidCollapsedCategoryHover', 'ResetAction', 'RootMouseEnter', 'StatusOverlay', 'TextCard', 'Topmost', 'WindowResources', 'WindowShell')
