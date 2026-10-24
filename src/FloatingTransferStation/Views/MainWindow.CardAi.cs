@@ -11,8 +11,9 @@ namespace FloatingTransferStation.Views;
 /// <summary>
 /// 「文字卡 AI 整理」的窗口编排（1.41.0，契约 #29）：截断文字卡悬停出现 AI 整理
 /// 钮 → 一键调 DeepSeek flash 按内置提示词整理全文 → 直接替换正文 → Ctrl+Z
-/// 恢复原文。入口守卫（忙态防抖/编辑/搜索态）→取 Key（空则状态条提示零请求）→
-/// 在途状态与排空（TrackPendingOperation）→失败/成功/并发放弃三分支；成功经
+/// 恢复原文。入口守卫（AI 整理总开关/忙态防抖/编辑/搜索态）→取 Key（空则状态条
+/// 提示零请求）→在途状态与排空（TrackPendingOperation）→失败/成功/并发放弃
+/// 三分支；成功经
 /// <see cref="BoardMutationService.ReplaceItemTextUndoableAsync"/> 落板（撤销栈
 /// 泛化的文本替换批）。变更全部在 UI 线程落板（快照构建状态所属线程契约）；
 /// 无自动重试（用户重点即重发）、无取消面（退出排空由 TrackPendingOperation 承接）。
@@ -40,9 +41,12 @@ public partial class MainWindow
 
     private async Task BeginCardAiOrganizeCoreAsync(BoardItem item)
     {
-        // 入口守卫：忙态防抖（按钮保持启用防点击穿透，重入在此丢弃）与
-        // 编辑/搜索态（与按钮可见性条件同族，守卫兜底合成/UIA 路径）。
-        if (item.IsAiOrganizing ||
+        // 入口守卫：AI 整理总开关（关＝三个入口——手势/合成/UIA——一律零动作，
+        // 先于无 Key 提示，连状态条也不弹；与按钮可见性条件同源，守卫兜底偏好
+        // 关闭后残留的触发路径）、忙态防抖（按钮保持启用防点击穿透，重入在此
+        // 丢弃）与编辑/搜索态（与按钮可见性条件同族，守卫兜底合成/UIA 路径）。
+        if (!_preferences.AiOrganizeEnabled ||
+            item.IsAiOrganizing ||
             item.IsEditing ||
             item.IsEditingNote ||
             _viewModel.IsSearchActive)
