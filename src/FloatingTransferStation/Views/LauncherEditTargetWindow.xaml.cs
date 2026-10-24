@@ -47,6 +47,8 @@ internal partial class LauncherEditTargetWindow : Window
         InitializeComponent();
         _kind = item.Kind;
         DesignThemeManager.Apply(this, theme);
+        // 构造期应用进程级当前界面字体（偏好 InterfaceFont；null=默认），与主题应用同点。
+        InterfaceFontManager.Apply(this);
         // D8：DWM 圆角＋系统阴影唯一来源（失败由 DialogShellFallback 回退直角矩形）。
         SourceInitialized += (_, _) =>
         {

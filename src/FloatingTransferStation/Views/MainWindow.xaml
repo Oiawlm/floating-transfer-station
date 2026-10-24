@@ -16,7 +16,7 @@
         ResizeMode="NoResize"
         AllowsTransparency="False"
         Background="Transparent"
-        FontFamily="Segoe UI Variable, Segoe UI"
+        FontFamily="{DynamicResource InterfaceFontFamily}"
         SizeToContent="Manual"
         PreviewKeyDown="MainWindow_PreviewKeyDown"
         MouseEnter="Root_MouseEnter"

@@ -13,7 +13,7 @@
         SizeToContent="Height"
         MinWidth="300"
         WindowStartupLocation="CenterOwner"
-        FontFamily="Segoe UI Variable, Segoe UI"
+        FontFamily="{DynamicResource InterfaceFontFamily}"
         PreviewKeyDown="UrlInputWindow_PreviewKeyDown">
   <!-- 快捷启动网页条目（#30 修订，Issue #179；壳统一 2026-10-18，Issue #186 D8）：
        网页地址输入对话框。单行输入＋内联错误＋「添加」/取消（Enter=添加、Esc=取消、

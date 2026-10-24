@@ -27,6 +27,8 @@ internal partial class PluginActionTrialWindow : Window
         InitializeComponent();
         var theme = host.CurrentTheme;
         DesignThemeManager.Apply(this, theme);
+        // 构造期应用进程级当前界面字体（偏好 InterfaceFont；null=默认），与主题应用同点。
+        InterfaceFontManager.Apply(this);
         if (host.PluginCatalog is { } catalog)
         {
             var handle = catalog.EnabledActions.FirstOrDefault(candidate =>

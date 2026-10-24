@@ -14,7 +14,7 @@
         MinWidth="400"
         MinHeight="360"
         WindowStartupLocation="CenterOwner"
-        FontFamily="Segoe UI Variable, Segoe UI"
+        FontFamily="{DynamicResource InterfaceFontFamily}"
         PreviewKeyDown="TrialWindow_PreviewKeyDown">
   <!-- 插件动作试运行（1.51.0，契约「插件动作协议」诊断口径）：输入 ≤10k 字符 →
        运行 → 输出＋总耗时＋规则命中计数；校验与执行复用正式加载器（每次运行

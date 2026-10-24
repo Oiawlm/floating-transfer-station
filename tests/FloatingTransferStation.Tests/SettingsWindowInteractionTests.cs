@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using FloatingTransferStation.Design;
@@ -114,6 +115,113 @@ public sealed class SettingsWindowInteractionTests
             2.5,
             "主窗 Top 应保持在低位：设置窗初始放置以此为 Owner.Top。");
         return ownerTop;
+    }
+
+    [STATestMethod]
+    public void InterfaceFontPreference_AppliesToLiveWindowsPersistsAndRestoresDefault()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, new FakeStartupManager());
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            AssertDefaultFontResources(window, "初始");
+
+            var settings = OpenSettings(window);
+            var combo = settings.FindName("InterfaceFontComboBox") as ComboBox;
+            Assert.IsNotNull(combo, "设置外观页必须提供界面字体选择。");
+            var customItem = combo.Items.OfType<ComboBoxItem>().First(item => item.Tag is string);
+            var customFont = (string)customItem.Tag!;
+
+            // 选字体：主窗与设置窗（存活窗口）即时生效并持久化。
+            combo.SelectedItem = customItem;
+            CompleteLayout(window);
+            var family = InterfaceFontManager.ResolveFamily(customFont);
+            Assert.IsNotNull(family, "前置：下拉项的字体名必须可解析（来自系统清单）。");
+            AssertCustomFontResources(window, family, "主窗");
+            AssertCustomFontResources(settings, family, "设置窗");
+            Assert.AreEqual(
+                customFont,
+                preferencesStore.LastSaved?.InterfaceFont,
+                "选择必须持久化到偏好。");
+
+            // 偏好换基后新建的窗口（构造路径）同样应用当前字体。
+            var dialog = new LauncherUrlInputWindow(window.CurrentTheme) { Owner = window };
+            try
+            {
+                AssertCustomFontResources(dialog, family, "新建对话框");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+
+            // 恢复默认：全部存活窗口即时回落、偏好清空。
+            var defaultItem = combo.Items.OfType<ComboBoxItem>().Single(item => item.Tag is null);
+            combo.SelectedItem = defaultItem;
+            CompleteLayout(window);
+            AssertDefaultFontResources(window, "恢复默认后的主窗");
+            AssertDefaultFontResources(settings, "恢复默认后的设置窗");
+            Assert.IsNull(preferencesStore.LastSaved?.InterfaceFont, "恢复默认必须清空偏好。");
+        }
+        finally
+        {
+            CloseLeftoverSettingsWindow(window);
+            InterfaceFontManager.SetOverride(null);
+            CloseWindow(window);
+        }
+    }
+
+    private static void AssertDefaultFontResources(Window window, string stage)
+    {
+        // 值口径断言（Contains 会穿透合并字典——窗口合并的 MainWindowStyles.xaml
+        // 本就定义默认键，机制不可判；行为契约=有效资源回到默认值）。
+        Assert.AreEqual(
+            DesignTokens.InterfaceFontFamily,
+            ((FontFamily)window.FindResource("InterfaceFontFamily")).Source,
+            $"{stage}：有效字体必须回到默认（窗口级覆盖被移除）。");
+        Assert.AreEqual(
+            20d,
+            (double)window.FindResource("CardTextLineHeight"),
+            $"{stage}：默认行高必须保持 20。");
+        Assert.AreEqual(
+            100d,
+            (double)window.FindResource("CardTextPreviewMaxHeight"),
+            $"{stage}：正文可见上限必须回到 100（5×20）。");
+        Assert.AreEqual(
+            40d,
+            (double)window.FindResource("CardNoteMaxHeight"),
+            $"{stage}：备注可见上限必须回到 40（2×20）。");
+    }
+
+    private static void AssertCustomFontResources(Window window, FontFamily family, string stage)
+    {
+        Assert.AreEqual(
+            family.Source,
+            ((FontFamily)window.Resources[InterfaceFontManager.InterfaceFontFamilyKey]).Source,
+            true,
+            $"{stage}：窗口级槽位必须是所选字体。");
+        Assert.AreEqual(
+            family.Source,
+            ((FontFamily)window.FindResource("InterfaceFontFamily")).Source,
+            true,
+            $"{stage}：有效字体必须是所选字体（DynamicResource 生效）。");
+        var lineHeight = InterfaceFontManager.DeriveCardTextLineHeight(family);
+        Assert.AreEqual(
+            lineHeight,
+            (double)window.Resources[InterfaceFontManager.CardTextLineHeightKey],
+            $"{stage}：行高必须按所选字体度量推导。");
+        Assert.AreEqual(
+            lineHeight * DesignTokens.CardTextMaxVisibleLines,
+            (double)window.Resources[InterfaceFontManager.CardTextPreviewMaxHeightKey],
+            $"{stage}：正文可见上限＝行高×5。");
+        Assert.AreEqual(
+            lineHeight * DesignTokens.CardNoteMaxVisibleLines,
+            (double)window.Resources[InterfaceFontManager.CardNoteMaxHeightKey],
+            $"{stage}：备注可见上限＝行高×2。");
     }
 
     private static void CloseWindow(Window window)

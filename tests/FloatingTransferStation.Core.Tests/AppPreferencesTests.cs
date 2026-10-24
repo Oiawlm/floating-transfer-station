@@ -685,4 +685,49 @@ public sealed class AppPreferencesTests
             restored.AiOrganizeEnabled,
             "旧 preferences.json 缺字段时必须回落到默认开启（升级零感知＝现行为）。");
     }
+
+    [TestMethod]
+    public void Default_UsesDefaultInterfaceFont()
+    {
+        Assert.IsNull(
+            AppPreferences.Default.InterfaceFont,
+            "默认界面字体必须为 null（=默认 Segoe UI Variable 回退链，升级零感知）。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesInterfaceFont()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var preferences = AppPreferences.Default with { InterfaceFont = "Microsoft YaHei UI" };
+
+        var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+        StringAssert.Contains(serialized, "\"interfaceFont\":\"Microsoft YaHei UI\"", "落盘键名必须是 interfaceFont（camelCase）。");
+        var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+        Assert.AreEqual(preferences, restored);
+        Assert.AreEqual("Microsoft YaHei UI", restored!.InterfaceFont);
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutInterfaceFontField_FallsBackToNull()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","aiOrganizeEnabled":false}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsNull(
+            restored.InterfaceFont,
+            "旧 preferences.json 缺字段时必须回落到默认界面字体（null）。");
+        Assert.IsFalse(restored.AiOrganizeEnabled, "测试数据里的旧字段语义不受新字段影响。");
+    }
 }

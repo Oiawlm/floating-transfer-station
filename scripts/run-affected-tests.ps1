@@ -208,6 +208,7 @@ $interactionTestPrefixes = @{
     'ExpandPipeline'         = @('ColdExpandImageCategory', 'ExpandImageCategory', 'ExpandWithSavedDeepOffset')
     'LauncherDiscovery'      = @('Discovery')
     'HeaderIconMetrics'      = @('HeaderActionIcons')
+    'InterfaceFont'          = @('FontEvidence')
     'MotionTransitions'      = @('CardLift', 'CardMotionLayers', 'Cards', 'DeleteCardFade', 'FadeAnimation', 'Icons', 'NewItems', 'PinnedCard', 'PinnedMove', 'ScrollThumb', 'StatusOverlay')
     'PanelExpandPerf'        = @('PanelExpandPerf')
     'PanelHold'              = @('PanelHold')

@@ -149,6 +149,12 @@
 - **冻结几何**：`SizeToContent="Manual"` + `ResizeMode="CanResize"` + `WindowChrome.ResizeBorderThickness=6`（无边框窗口系统级 8 向缩放的正解；`NoResize` 会移除 WS_THICKFRAME 使缩放命中失效；`CaptionHeight=0` 恰好避免顶边命中冲突；DWM 圆角缩放时自动重算，禁止 `SetWindowRgn`）。默认 680×600 DIP、最小 560×460、最大宽 900、最大高 = 所在工作区高 − 48（`MaxHeightMargin=48`，矮屏抬到最小高——`MaxHeight<MinHeight` 在 WPF 是未定义行为）。窗口独立四边描边、标题栏双上角圆。内容溢出由共享视口滚动，页脚在滚动区外常驻可见。
 - **几何持久化**：`AppPreferences` 可空 DIP 字段（`SettingsWindowLeft/Top/Width/Height`，null=默认定位），只走 `ISettingsHost.ApplyPreferences` 原子管线（契约 #5 同路）；落盘时机=操作结束（头部 Thumb `DragCompleted` 与系统缩放 `WM_EXITSIZEMOVE`，`WindowState==Normal` 才写，拖拽进行中零写盘）。恢复在 `SourceInitialized`：整组非法（NaN/±∞/非正尺寸）或完全落在所有显示器之外 → 回落 owner 相对默认定位；否则按矩形中心解析目标显示器（`MonitorFromPoint`+`GetMonitorInfo`+`GetDpiForMonitor`，内部一律 DIP、仅 Win32 边界按显示器有效 DPI 换算；无句柄/失败退主屏工作区），按其重算 MaxHeight 并把矩形归一——部分越界钳到最近工作区边界，负坐标在目标屏工作区内原样合法（左侧副屏不钳非负）。系统交互缩放期间（`WM_SIZEMOVE`）挂起位置钳制，`WM_EXITSIZEMOVE` 收口一次；`WM_GETMINMAXINFO` 按所在显示器工作区修正无边框最大化几何。标题栏拖拽 DragDelta 钳制维持主屏工作区语义（历史冻结）。行为契约全文见[设计契约清单](design-contracts.md) 第 23 条（记录 Issue #106）。
 
+## 五·F、界面字体（token 化与自定义字体全链路，2026-10-25）
+
+- **默认字体唯一来源**：`DesignTokens.InterfaceFontFamily`（`"Segoe UI Variable, Segoe UI"`，Win11 优先、缺失回退 Segoe UI——两族 WPF `LineSpacing` 同为 1.330078，度量行为一致）。XAML 资源键 `InterfaceFontFamily`（`MainWindowStyles.xaml`）逐字镜像它并由锁定测试互锁；六个窗口根（主窗/设置/多选选择器/编辑目标/网址输入/插件试运行）与全部样式一律 `DynamicResource InterfaceFontFamily` 引用，全仓不得出现第二份界面字体字面量。**图标字体独立**：`Segoe Fluent Icons, Segoe MDL2 Assets` 是图标字形来源，不随用户字体变化。
+- **自定义字体**：偏好 `InterfaceFont`（`preferences.json` 键 `interfaceFont`，null=默认）经 `InterfaceFontManager` 以**窗口级槽位资源**覆盖默认键（应用面区别于主题整本替换）：进程级当前字体由 `MainWindow.ApplyPreferences` 唯一管线喂值并应用到主窗＋全部存活后代窗口（Owner 链递归，`DynamicResource` 即时生效）；后建窗口在构造期（与 `DesignThemeManager.Apply` 同点）自应用。解析按系统字体清单校验：空白/未安装名字一律回落默认（WPF 对未知名字不抛错而给回退度量，靠清单校验保住「所见即所选」）。**不随应用分发字体文件**（§六第 6 条同源边界）；设置 → 外观「界面字体」下拉只列本机已安装字体（图标/符号字体排除），首项「默认」即恢复默认。
+- **行高由当前字体度量推导**：`CardTextLineHeight` 默认字面量 20 ＝ 默认字体推导值 `ceil(CardTextFontSize 14 × LineSpacing 1.330078 ＋ CardTextExtraLeadingPx 1)`，公式常数唯一来源 `DesignTokens`；自定义字体时同名窗口级槽位注入按该字体度量的推导值（更高 em 字体→更大行高，恒 ≥ 自然行高的整数上界——`BlockLineHeight` 语义下不裁切字形）。行数上限随行高等比：正文可见上限 `CardTextPreviewMaxHeight`＝行高×5（默认 100）、备注可见上限 `CardNoteMaxHeight`＝行高×2（默认 40），默认字体下与既有几何逐值一致。两态行距同源契约（#25）不变：四态消费者同引单一资源键，键值随字体推导。行为契约全文见[设计契约清单](design-contracts.md) 第 25（修订）、48 条。
+
 ## 六、动效原则（评审基准）
 
 1. 进入减速、出场加速，退出比进入快；面板展开 167ms / 收起 200ms 不对称。

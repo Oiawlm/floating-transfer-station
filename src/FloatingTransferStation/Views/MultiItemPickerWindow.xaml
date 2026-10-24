@@ -15,7 +15,7 @@
         MinHeight="360"
         SizeToContent="Manual"
         WindowStartupLocation="CenterOwner"
-        FontFamily="Segoe UI Variable, Segoe UI"
+        FontFamily="{DynamicResource InterfaceFontFamily}"
         PreviewKeyDown="PickerWindow_PreviewKeyDown">
   <!-- 通用多选选择器（#45 泛化自 #30 切片 4 的已安装应用选择器）：行模型＝标题/
        副题/已添加标记/勾选态，调用方经 Payload 携带业务对象映射喂入——已安装应用
