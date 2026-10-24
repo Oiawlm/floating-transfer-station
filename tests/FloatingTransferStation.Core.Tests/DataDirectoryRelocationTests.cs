@@ -3,7 +3,7 @@ using FloatingTransferStation.Services;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 受管数据目录搬迁原语的契约测试（契约 #46 双形状矩阵）：形状规则（新
+/// 受管数据目录搬迁原语的契约测试（契约 #47 双形状矩阵）：形状规则（新
 /// <c>&lt;所选&gt;/Data</c>＋旧嵌套形状只读兼容）、拒绝矩阵、暂存复制/校验/发布/
 /// 清理与失败模式（源始终完好）、删除安全矩阵。与安装器
 /// PrepareDataDirectoryMigration 同协议。
@@ -147,7 +147,7 @@ public sealed class DataDirectoryRelocationTests
     [TestMethod]
     public void Plan_LegacySourceSameParentMigratesToDirectShape()
     {
-        // 契约 #46 存量迁移矩阵：设置内重选同父目录＝显式迁移到新形状 <同父>/Data。
+        // 契约 #47 存量迁移矩阵：设置内重选同父目录＝显式迁移到新形状 <同父>/Data。
         var source = CreateLegacySource(("board.json", "{}"));
         var userParent = DataDirectorySettings.GetDataParentDirectory(source);
         var plan = _relocator.Plan(source, userParent);
@@ -251,7 +251,7 @@ public sealed class DataDirectoryRelocationTests
     [TestMethod]
     public async Task StageVerifyPublish_DirectSourceMovesIntoDirectShapeTarget()
     {
-        // 契约 #46：新形状登记（本版本起产生）作为迁移源同样全协议可用。
+        // 契约 #47：新形状登记（本版本起产生）作为迁移源同样全协议可用。
         var source = CreateDirectSource(("board.json", "{}"));
         var parent = NewTargetParent();
         var plan = _relocator.Plan(source, parent);
@@ -266,7 +266,7 @@ public sealed class DataDirectoryRelocationTests
     [TestMethod]
     public async Task StagePublish_AllowsPreExistingNonEmptyTargetParentAndKeepsSiblings()
     {
-        // 契约 #46：新选目录可预先存在且含其他内容，同级内容必须原样保留。
+        // 契约 #47：新选目录可预先存在且含其他内容，同级内容必须原样保留。
         var source = CreateLegacySource(("board.json", "{}"));
         var parent = NewTargetParent();
         Directory.CreateDirectory(parent);
@@ -360,7 +360,7 @@ public sealed class DataDirectoryRelocationTests
 
         Assert.IsTrue(DataDirectoryRelocator.TryDeleteManagedDataDirectory(source, out _));
         Assert.IsFalse(Directory.Exists(source));
-        Assert.IsTrue(Directory.Exists(parent), "新形状：用户所选父目录即使已空也绝不移除（契约 #46）。");
+        Assert.IsTrue(Directory.Exists(parent), "新形状：用户所选父目录即使已空也绝不移除（契约 #47）。");
         Assert.IsTrue(File.Exists(siblingFile), "同级文件必须保留。");
     }
 

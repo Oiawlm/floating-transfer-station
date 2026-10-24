@@ -53,7 +53,7 @@ public sealed record DataDirectoryCopyProgress(
 /// 校验（形状/可写探针/目标卷空间/目标不存在）→ 复制到所选目录内的
 /// <c>.migration-时间戳-序号</c> 暂存目录 → 校验（存在 + 文件长度一致）→
 /// 同卷 <see cref="Directory.Move"/> 原子发布。发布前任一步失败：递归删除暂存目录；
-/// 源目录与注册表不动。目标恒为新形状 <c>&lt;所选&gt;/Data</c>（契约 #46），源可为
+/// 源目录与注册表不动。目标恒为新形状 <c>&lt;所选&gt;/Data</c>（契约 #47），源可为
 /// 双形状任一；所选目录可预先存在且含其他内容（同级内容原样保留）。纯托管实现
 /// （可单测、保留最后写入时间、空目录也创建、发布前可取消、发布后不可取消）。
 /// </summary>
@@ -248,7 +248,7 @@ public sealed class DataDirectoryRelocator
     }
 
     /// <summary>
-    /// 失败清理（幂等、尽力而为）：删暂存目录。所选目录是用户目录（契约 #46 新形状
+    /// 失败清理（幂等、尽力而为）：删暂存目录。所选目录是用户目录（契约 #47 新形状
     /// 下不再是应用创建的受管父），即使已空也绝不移除。
     /// </summary>
     public void Discard(DataDirectoryRelocationPlan plan)
@@ -258,7 +258,7 @@ public sealed class DataDirectoryRelocator
 
     /// <summary>
     /// 按形状守卫删除受管数据目录（与卸载器 DeleteManagedDataDirectory 同构的安全
-    /// 边界，契约 #46）：形状不符永不删除；递归删除仅限 <c>Data</c> 目录本身，
+    /// 边界，契约 #47）：形状不符永不删除；递归删除仅限 <c>Data</c> 目录本身，
     /// 仅旧形状（嵌套「悬浮中转站」中间层）删除后尝试移除空的中间层；新形状
     /// 绝不触碰用户所选父目录。目录不存在视为成功。
     /// </summary>

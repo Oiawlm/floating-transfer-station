@@ -386,7 +386,7 @@ public sealed partial class LifecycleTests
     [TestCategory("Adversarial")]
     public void Installer_ManagedDataDirectoryFollowsDualShapeContract()
     {
-        // 契约 #46：双形状并存（新 <所选>/Data＋旧嵌套只读兼容）、存量不自动搬迁、
+        // 契约 #47：双形状并存（新 <所选>/Data＋旧嵌套只读兼容）、存量不自动搬迁、
         // 新形状卸载绝不触碰用户所选父目录。
         var installer = File.ReadAllText(Directory.GetFiles(Path.Combine(FindRepositoryRoot(), "installer"), "*.iss").Single());
 
@@ -435,6 +435,6 @@ public sealed partial class LifecycleTests
             prepareStart..installer.IndexOf("function PrepareToInstall", prepareStart, StringComparison.Ordinal)];
         Assert.IsFalse(
             prepare.Contains("Refusing to use a pre-existing managed data parent", StringComparison.Ordinal),
-            "新选目录可预先存在且含其他内容（契约 #46），不得以「受管父已存在」拒绝。");
+            "新选目录可预先存在且含其他内容（契约 #47），不得以「受管父已存在」拒绝。");
     }
 }

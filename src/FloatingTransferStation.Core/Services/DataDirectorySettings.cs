@@ -6,7 +6,7 @@ public interface IDataDirectorySettings
 }
 
 /// <summary>
-/// 受管数据目录的形状规则（单一事实来源，Core 层，契约 #46）：双形状并存，
+/// 受管数据目录的形状规则（单一事实来源，Core 层，契约 #47）：双形状并存，
 /// 判别符＝<c>Data</c> 直接父目录的叶子名恰为产品名。
 /// <list type="bullet">
 /// <item>新形状（直下形状）<c>&lt;所选&gt;/Data</c>：本版本起所有新选择（安装器向导
@@ -23,7 +23,7 @@ public static class DataDirectorySettings
     private const string ProbeFilePrefix = ".write-probe-";
 
     /// <summary>
-    /// 规范化并校验受管数据目录路径（双形状，契约 #46）。形状不符（相对路径、
+    /// 规范化并校验受管数据目录路径（双形状，契约 #47）。形状不符（相对路径、
     /// 非 <c>Data</c> 叶子、父目录为文件系统根——盘符根/UNC 根；旧形状另要求
     /// 「悬浮中转站」中间层的父目录非根）返回 null。与安装器 IsManagedDataDirectory
     /// 的判定保持一致。
@@ -76,7 +76,7 @@ public static class DataDirectorySettings
     }
 
     /// <summary>
-    /// 由用户所选目录构造受管数据目录 <c>&lt;所选&gt;/Data</c>（新形状，契约 #46）。
+    /// 由用户所选目录构造受管数据目录 <c>&lt;所选&gt;/Data</c>（新形状，契约 #47）。
     /// 先校验后构造：所选目录形状非法属于调用方编程错误，直接抛
     /// <see cref="ArgumentException"/>，不返回 null 掩盖。
     /// </summary>

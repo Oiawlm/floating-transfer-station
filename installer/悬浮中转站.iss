@@ -231,7 +231,7 @@ end;
 
 function BuildDataDirectory(const ParentDirectory: String): String;
 begin
-  // 新形状（直下形状，契约 #46）：Data 直下于用户所选目录。
+  // 新形状（直下形状，契约 #47）：Data 直下于用户所选目录。
   Result := AddBackslash(NormalizeDirectory(ParentDirectory)) + ManagedDataLeaf;
 end;
 
@@ -300,7 +300,7 @@ var
   DataParent: String;
   ParentDirectory: String;
 begin
-  // 双形状判定（契约 #46），与应用侧 DataDirectorySettings.NormalizeManagedDataDirectory
+  // 双形状判定（契约 #47），与应用侧 DataDirectorySettings.NormalizeManagedDataDirectory
   // 同构：叶子恰为 Data；判别符＝Data 直接父目录叶子名恰为「悬浮中转站」。
   Result := False;
   if not IsFullyQualifiedPath(Value) then
@@ -362,7 +362,7 @@ var
   ParentDirectory: String;
 begin
   ParentDirectory := NormalizeDirectory(DataDirectoryPage.Values[0]);
-  // 旧形状存量登记＋用户保持原父目录：沿用旧形状路径，绝不自动搬迁（契约 #46）。
+  // 旧形状存量登记＋用户保持原父目录：沿用旧形状路径，绝不自动搬迁（契约 #47）。
   if IsLegacyManagedDataDirectory(ExistingDataDirectory) and
     (CompareText(ParentDirectory, NormalizeDirectory(ExistingDataParentDirectory)) = 0) then
     Result := ExistingDataDirectory
@@ -567,7 +567,7 @@ begin
 
   Normalized := NormalizeDirectory(DataDirectory);
   Result := DelTree(Normalized, True, True, True);
-  // 仅旧形状删除后尝试移除空的「悬浮中转站」中间层；新形状（契约 #46）绝不
+  // 仅旧形状删除后尝试移除空的「悬浮中转站」中间层；新形状（契约 #47）绝不
   // 触碰用户所选父目录——哪怕已空。
   if Result and IsLegacyManagedDataDirectory(Normalized) then
     RemoveDir(GetManagedDataParent(Normalized));
@@ -644,7 +644,7 @@ begin
     end;
   end;
 
-  // 新形状（契约 #46）：所选目录可预先存在且含其他内容（ValidateDataParentDirectory
+  // 新形状（契约 #47）：所选目录可预先存在且含其他内容（ValidateDataParentDirectory
   // 已确保可写），暂存目录建于所选目录内；绝不移除所选目录本身。
   SelectedParent := GetManagedDataParent(SelectedDataDirectory);
   if not ForceDirectories(SelectedParent) then

@@ -188,7 +188,7 @@ public sealed class DataDirectoryChangeServiceTests
     [TestMethod]
     public async Task ChangeAsync_PlanRefusalFailsWithoutQuiesce()
     {
-        // 新形状源重选同父目录＝不变路径拒绝；旧形状源同父目录是显式迁移（契约 #46）。
+        // 新形状源重选同父目录＝不变路径拒绝；旧形状源同父目录是显式迁移（契约 #47）。
         var source = Path.Combine(_root, "cur", "Data");
         Directory.CreateDirectory(source);
         File.WriteAllText(Path.Combine(source, "board.json"), "{}");

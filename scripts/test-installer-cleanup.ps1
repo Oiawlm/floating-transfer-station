@@ -123,7 +123,7 @@ try {
         @{ Name = 'siblings'; RelativePath = "cases\siblings\$managedSuffix"; Expected = 'True' }
         @{ Name = 'empty-parent'; RelativePath = "cases\empty-parent\$managedSuffix"; Expected = 'True' }
         @{ Name = 'normalized'; RelativePath = "cases\normalized\$managedSuffix\..\$dataLeaf\"; Expected = 'True' }
-        # 契约 #46 新形状（直下）：只删 Data，用户所选父目录（myparent）与同级内容必留。
+        # 契约 #47 新形状（直下）：只删 Data，用户所选父目录（myparent）与同级内容必留。
         @{ Name = 'direct-shape'; RelativePath = "cases\direct-shape\$directSuffix"; Expected = 'True' }
         @{ Name = 'unmanaged-leaf'; RelativePath = "cases\unmanaged-leaf\$parentLeaf\Other"; Expected = 'False' }
         # DelTree reports False for a missing target; do not add a new success
@@ -469,7 +469,7 @@ end;
     }
     foreach ($relativePath in @('cases\direct-shape\myparent', 'cases\uninstall-new\myparent')) {
         Record-Assertion (Test-Path -LiteralPath (Join-Path $fixtureRoot $relativePath) -PathType Container) `
-            "user-selected parent must survive (contract 46): $relativePath"
+            "user-selected parent must survive (contract 47): $relativePath"
     }
     $assertions | Set-Content -LiteralPath (Join-Path $fixtureRoot 'assertions.txt') -Encoding UTF8
     if ($failures.Count -ne 0) {

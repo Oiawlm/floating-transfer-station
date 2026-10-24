@@ -40,7 +40,7 @@ public sealed class RelocationCleanupTests
     [TestMethod]
     public void CleanupProcessor_DirectShapeOldDirectoryKeepsUserParent()
     {
-        // 契约 #46：新形状旧目录延迟清理只删 Data，用户所选父目录绝不移除。
+        // 契约 #47：新形状旧目录延迟清理只删 Data，用户所选父目录绝不移除。
         var parent = Path.Combine(_root, "old-parent");
         var old = Path.Combine(parent, "Data");
         Directory.CreateDirectory(old);
