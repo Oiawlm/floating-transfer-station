@@ -35,6 +35,8 @@ public partial class MainWindow : Window
     private static readonly TimeSpan PanelCollapseExitAnimationDuration =
         TimeSpan.FromMilliseconds(DesignTokens.PanelCollapseExitMs);
     // 置顶重申周期：足够短以在其他置顶窗口出现后很快恢复层级，足够长可忽略开销。
+    // IME 输入敏感期（编辑器持焦/组合中）Tick 内的重申被抑制，编辑结束后至多
+    // 一个周期（≤2 秒）自动恢复层级，定时器接线本身不感知编辑态。
     private static readonly TimeSpan TopmostReassertInterval = TimeSpan.FromSeconds(2);
     private const double CategoryRevealOffset = DesignTokens.ContentEntranceOffsetPx;
     private const double PanelCollapseExitOffset = DesignTokens.CollapseExitOffsetPx;

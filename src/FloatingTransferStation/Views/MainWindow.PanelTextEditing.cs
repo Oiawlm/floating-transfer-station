@@ -11,6 +11,11 @@ public partial class MainWindow : Window
     // 复盘编辑器的 IME 组合标记：组合期的 Esc 属输入法操作（取消候选），不触发退出编辑。
     private bool _isReviewEditorComposing;
 
+    // 面板内任一文本编辑器的 IME 组合标记：组合窗/候选窗是独立 HWND，主窗的
+    // 任何 z 序变更（置顶重申）都会把自己插回置顶带顶端、把候选窗压到面板下面。
+    // 组合结束或焦点离开面板编辑器时清除，防标记滞留导致重申永久抑制。
+    private bool _isPanelEditorComposing;
+
     private void InitializePanelTextEditing()
     {
         AddHandler(
@@ -21,15 +26,15 @@ public partial class MainWindow : Window
             new KeyboardFocusChangedEventHandler(Root_PreviewLostKeyboardFocus));
         AddHandler(
             TextCompositionManager.PreviewTextInputStartEvent,
-            new TextCompositionEventHandler(ReviewEditor_CompositionStartedOrUpdated),
+            new TextCompositionEventHandler(PanelEditor_CompositionStartedOrUpdated),
             true);
         AddHandler(
             TextCompositionManager.PreviewTextInputUpdateEvent,
-            new TextCompositionEventHandler(ReviewEditor_CompositionStartedOrUpdated),
+            new TextCompositionEventHandler(PanelEditor_CompositionStartedOrUpdated),
             true);
         AddHandler(
             TextCompositionManager.PreviewTextInputEvent,
-            new TextCompositionEventHandler(ReviewEditor_CompositionCompleted),
+            new TextCompositionEventHandler(PanelEditor_CompositionCompleted),
             true);
         Deactivated += MainWindow_Deactivated;
         Activated += MainWindow_Activated;
@@ -59,19 +64,31 @@ public partial class MainWindow : Window
         Focus();
     }
 
-    private void ReviewEditor_CompositionStartedOrUpdated(object sender, TextCompositionEventArgs e)
+    // 组合事件对复盘编辑器额外维护 Esc 语义标记（契约 #20），对面板内所有文本
+    // 编辑器维护置顶抑制标记；两条标记同源不同职责，互不替代。
+    private void PanelEditor_CompositionStartedOrUpdated(object sender, TextCompositionEventArgs e)
     {
         if (e.OriginalSource == ReviewEditor)
         {
             _isReviewEditorComposing = true;
         }
+
+        if (e.OriginalSource is TextBoxBase editor && IsAncestorOf(editor))
+        {
+            _isPanelEditorComposing = true;
+        }
     }
 
-    private void ReviewEditor_CompositionCompleted(object sender, TextCompositionEventArgs e)
+    private void PanelEditor_CompositionCompleted(object sender, TextCompositionEventArgs e)
     {
         if (e.OriginalSource == ReviewEditor)
         {
             _isReviewEditorComposing = false;
+        }
+
+        if (e.OriginalSource is TextBoxBase editor && IsAncestorOf(editor))
+        {
+            _isPanelEditorComposing = false;
         }
     }
 
@@ -96,6 +113,9 @@ public partial class MainWindow : Window
             return;
         }
 
+        // IME 取消组合不一定补发 TextInput 完成事件；焦点整体离开面板编辑器时
+        // 清组合标记，防重申抑制滞留（滞留会让主窗失去置顶恢复能力）。
+        _isPanelEditorComposing = false;
         _panelState.EndTextEditing();
         if (!_isClosing)
         {
@@ -112,6 +132,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        _isPanelEditorComposing = false;
         _panelState.EndTextEditing();
         if (!_isClosing)
         {
@@ -145,6 +166,16 @@ public partial class MainWindow : Window
     // 出现在指针下方时系统会补发假的 MouseLeave，判定因此基于焦点而非指针位置。
     private bool IsPanelTextEditor(IInputElement? focus) =>
         focus is TextBoxBase editor && IsAncestorOf(editor);
+
+    /// <summary>
+    /// IME 输入敏感期：键盘焦点在面板内任一文本编辑器上，或任一编辑器的 IME
+    /// 组合正在进行。此期间主窗不得发起任何 z 序变更（见 ReassertTopmost）——
+    /// SetWindowPos(HWND_TOPMOST) 会把主窗重新插回置顶带顶端，遮挡候选窗；
+    /// 编辑结束后下一轮周期重申（≤2 秒）自动恢复层级。
+    /// </summary>
+    private bool IsImeInputSensitive =>
+        IsPanelTextEditor(Keyboard.FocusedElement) ||
+        _isPanelEditorComposing;
 
     /// <summary>编辑保持结束后的表面重估：指针仍在面板内则维持，否则按既有节奏恢复收起。</summary>
     private void ReconcileSurfaceAfterEditing()
