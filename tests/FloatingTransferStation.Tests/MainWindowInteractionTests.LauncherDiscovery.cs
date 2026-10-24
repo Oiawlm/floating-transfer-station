@@ -451,7 +451,7 @@ public sealed partial class MainWindowInteractionTests
                 CompleteLayout(settings);
                 Assert.AreEqual(
                     watchFolder,
-                    preferencesStore.LastSaved.LauncherDiscoveryFolders!.Single(),
+                    preferencesStore.LastSaved!.LauncherDiscoveryFolders!.Single(),
                     "文件夹改动立即原子持久化。");
                 var rows = (StackPanel)settings.FindName("LauncherDiscoveryFolderList")!;
                 Assert.AreEqual(1, rows.Children.Count, "文件夹行渲染。");
