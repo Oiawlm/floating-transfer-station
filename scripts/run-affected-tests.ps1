@@ -79,6 +79,11 @@ $rules = @(
         'src/FloatingTransferStation/Views/MainWindow.CardTextEditing.cs') },
     @{ Name = 'CategoryEditing'; Filter = 'FullyQualifiedName~Category'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.CategoryEditing.cs', 'src/FloatingTransferStation/Views/CategoryFeedbackAnimation.cs') },
+    # 点击编辑器外部＝提交共享协调（2026-10-26，契约 #49）：协调四处编辑位的提交
+    # 触发通道——受影响面＝新矩阵＋四处编辑位既有锁定族（分类/卡片正文与备注/
+    # 复盘编辑器含 Esc 族/瓦片改名）。
+    @{ Name = 'EditingCommit'; Filter = 'FullyQualifiedName~EditingCommit|FullyQualifiedName~Category|FullyQualifiedName~CardEditing|FullyQualifiedName~CardNote|FullyQualifiedName~ReviewEditor|FullyQualifiedName~QuickLaunch_Rename'; Globs = @(
+        'src/FloatingTransferStation/Views/MainWindow.EditingCommit.cs') },
     # CtrlC 为取证修订：原 ClipboardDelivery 词根在测试方法名中不存在（欠选）；
     # LeftClickCopy/RightClick 为手势交换（Issue #216）后的方法名前缀（原 RightClickCopy 已随右键复制移除）
     @{ Name = 'ClipboardDelivery'; Filter = 'FullyQualifiedName~LeftClickCopy|FullyQualifiedName~RightClick|FullyQualifiedName~CtrlC'; Globs = @(
@@ -205,6 +210,7 @@ $interactionTestPrefixes = @{
     'DragAndDrop'            = @('AnimatedImageFile', 'BoardInsertionFeedback', 'BoardListBlankHover', 'CategoryDropFeedback', 'CategoryHoverDuringInternalDragKeepsSourcePanelAndSelection', 'DragLifecycle', 'ExternalDropRailProjection', 'ExternalFileDrop', 'ExternalOrderedFileDrop', 'ExternalRail', 'ExternalTextDrop', 'FailedExternalImport', 'InternalBatchCategoryDrop', 'InternalBatchEquivalentListDropDoesNotSaveAndKeepsSelection', 'InternalBatchListDrop', 'InternalCategoryDrop', 'InternalDragData', 'InternalImageBatch', 'MixedPinBatch', 'NormalCategoryDrop', 'PinnedBoundaryDrag', 'PinnedDrag', 'RejectedExternalDrop', 'SupportedExternalText', 'UnsupportedExternalDrag', 'UnsupportedOrInternalData')
     'EdgeGeometry'           = @('CollapsedGeometry', 'DisplayChange', 'ExpandedGeometry', 'ResetAction', 'SettingChange', 'WidthResize')
     'EdgeHide'               = @('EdgeHide')
+    'EditingCommit'          = @('EditingCommit')
     'ExpandPipeline'         = @('ColdExpandImageCategory', 'ExpandImageCategory', 'ExpandWithSavedDeepOffset')
     'LauncherDiscovery'      = @('Discovery')
     'HeaderIconMetrics'      = @('HeaderActionIcons')

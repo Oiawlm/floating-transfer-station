@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.ViewModels;
@@ -184,4 +185,45 @@ public partial class MainWindow : Window
 
     private bool IsCategoryNameEditActive() =>
         _viewModel.Categories.Any(category => category.IsEditingName);
+
+    /// <summary>当前改名会话的编辑器（「点击编辑器外部＝提交」协调查询缝）：
+    /// 编辑中的分类在标签栏/收起把手中的名字编辑器。改名会话不存在时为 null；
+    /// 会话在而编辑器未实现（模板未挂）同样为 null——调用方据此跳过本次触发，
+    /// 会话交回失焦等既有通道处置。</summary>
+    private TextBox? TryGetActiveCategoryNameEditor()
+    {
+        var editingCategory = _viewModel.Categories.FirstOrDefault(
+            category => category.IsEditingName);
+        if (editingCategory is null)
+        {
+            return null;
+        }
+
+        return FindCategoryNameEditor(CategoryRail, editingCategory) ??
+            FindCategoryNameEditor(CollapsedCategoryHandle, editingCategory);
+    }
+
+    /// <summary>按 DataContext 引用等值在子树内找该分类的名字编辑器（模板内
+    /// TextBox 不带名，与 FindCardEditor 同法递归；两处宿主树都很小，无虚拟化）。</summary>
+    private static TextBox? FindCategoryNameEditor(
+        DependencyObject parent,
+        CategoryViewModel category)
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is TextBox { DataContext: CategoryViewModel candidate } &&
+                ReferenceEquals(candidate, category))
+            {
+                return (TextBox)child;
+            }
+
+            if (FindCategoryNameEditor(child, category) is { } descendant)
+            {
+                return descendant;
+            }
+        }
+
+        return null;
+    }
 }

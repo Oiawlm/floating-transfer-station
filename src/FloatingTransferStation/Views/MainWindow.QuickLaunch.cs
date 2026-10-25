@@ -1806,6 +1806,15 @@ public partial class MainWindow
         editor.SelectAll();
     }
 
+    /// <summary>当前改名会话的编辑器（「点击编辑器外部＝提交」协调查询缝）：
+    /// 会话瓦片内的 TileNameEditor；瓦片未实现（虚拟化回收等）时为 null，
+    /// 调用方按「编辑器外按压」处理，Commit 自会跳过草稿推回。</summary>
+    private TextBox? TryGetLauncherRenameEditor() =>
+        _launcherRenamingItem is { } item &&
+        FindLauncherTile(item) is { } tile
+            ? FindTemplatePart<TextBox>(tile, "TileNameEditor")
+            : null;
+
     /// <summary>提交改名（空/空白=回退原名）；保存失败由目录还原原名+状态条。</summary>
     private void CommitLauncherTileRename()
     {

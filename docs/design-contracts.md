@@ -399,6 +399,15 @@
 - **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.DesignTokens.cs`（`DesignTokens_DefaultInterfaceFontIsMirroredByWpfFontResource`：默认字体串镜像＋推导行高=资源 20＋行数上限倍率互锁）、`tests/FloatingTransferStation.Tests/InterfaceFontManagerTests.cs`（推导公式矩阵 6 例含默认→20 与更高 em→21/22/25/29、1.0–2.5 em 单调＋不裁切扫描、全机已安装字体公式等价、默认族＝20、解析三例（空白/未安装/大小写不敏感）、槽位应用与默认态删除、Owner 链递归覆盖）、`tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs` 三件套（默认 null、camelCase 往返与键名、旧文件回落）、`tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs`（`InterfaceFontPreference_AppliesToLiveWindowsPersistsAndRestoresDefault`：选字体→主窗/设置窗/新建对话框即时生效＋持久化→恢复默认全窗回落＋偏好清空）、`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.InterfaceFont.cs`（`FontEvidence_RendersDefaultAndCustomFontsInBothThemes`：默认/微软雅黑/Gabriola × 浅/深渲染证据，4 行正文自然高度=4×推导行高逐像素断言，`FTS_FONT_EVIDENCE_DIR` 出 PNG）；既有 #25 全套锚点测试零回退。
 - **关联**：#25（行距唯一来源——本条修订其数值语义为随字体推导）、#5（设置即时生效唯一管线）、#24（设置窗外观组新增「界面字体」节）、#32（选择器词根表登记 `InterfaceFont→FontEvidence`）；CHANGELOG 未发布区；[docs/design.md](design.md) §五·F；[docs/usage.md](usage.md)「设置」。
 
+## 二十五、本次新增（49，「点击编辑器外部＝提交」共享协调；2026-10-26）
+
+### 49. 「点击编辑器外部＝提交」共享协调（四处编辑位统一触发通道；只补通道、不改提交/取消语义）
+
+- **断言**：四处就地编辑位——分类名（`CategoryEditing`）、瓦片名（`QuickLaunch` 改名会话）、卡片正文/备注（`CardTextEditing` 单会话机器）、复盘编辑器（`DailyReview` 700ms 防抖）——共用**单一定义点** `MainWindow.EditingCommit.cs` 的窗口级 `PreviewMouseLeftButtonDown` 隧道协调：左键按压命中在「当前编辑位编辑器」之外 → 调用该编辑位**既有**提交/冲刷实现（分类＝`CommitCategoryNameEdit(editor.Text)` 与失焦同参；瓦片＝`CommitLauncherTileRename`（Explicit 绑定推回读即时文本）；卡片＝`CommitCardTextEditing`；复盘＝`FlushReviewAsync` 立即冲刷停表不等防抖）。**通道四条不变量**：①只补触发、不改语义——各编辑位既有 `Enter`/`Esc`/失焦/锚点终结路径原样并存且幂等吸收重复冲刷；②不吞事件——协调器不置 `e.Handled`，按压继续原旅程（选择、拖拽起手、按钮点击照常；拖拽起手不误触＝提交后按压会话照常记录、瓦片拖拽照常发起）；③编辑器内按压不触发（交给编辑器放光标/选择）；卡片编辑会话对「正在编辑的卡片容器」内按压不在此触发（由卡片手势层按 #22 管辖：非编辑器按压＝提交并整卡吞掉），滚动条按压沿列表既有例外跳过（滚动语义不终结会话）；④IME 组合期点击外部经同一提交路径把组合文本一并保存不丢失（WPF 组合期文本已在 `Text` 中，组合标记随会话终结清理，防下次 `Enter`/`Esc` 失效——与 #22「组合标记随终结清理」同族）。独立对话框类编辑窗（编辑目标、网址输入、多选选择器、设置窗）不经本通道（弹层/独立窗口，天然不受影响）。
+- **由来**：四处编辑位此前各自只有「焦点离开才提交」一类通道，而面板空白区（标签栏空白、列表外表面、头部）多为不可聚焦元素——点击这些区域键盘焦点不动，编辑会话悬挂不提交（卡片在列表内有手势层冲刷、列表外没有；分类/瓦片改名、复盘防抖同缺口）。统一机制以窗口隧道单点补齐，而不是四处各写一份（单一定义点＋各编辑位仅暴露会话编辑器查询缝：`TryGetActiveCategoryNameEditor`/`TryGetLauncherRenameEditor`/`TryGetEditingCardContainer`）。
+- **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.EditingCommit.cs` STA 矩阵 15 例——四处「编辑中→点击面板空白→已保存」合成路径（`Mouse.PreviewMouseDownEvent` 隧道合成，**不得**用 `UIElement.PreviewMouseLeftButtonDownEvent` 直发：该事件注册为 Direct，合成 `RaiseEvent` 只触达命中元素自身、到不了窗口级挂接）、卡片正文一处真实 `SendInput` 点击路径（契约 #13 口径）、复盘「点击面板空白→停表立即冲刷（不等 700ms）」、IME 组合期四处组合文本不丢失＋组合标记清理、编辑器内按压不触发、`Esc` 取消语义零回归、卡片/瓦片「按压他卡他瓦→先提交→按压/拖拽会话照常」、`F2`/`Esc` 键盘旅程零回归；既有四处编辑位全套（`CategoryEditing`/`CardEditing`/`CardNote`/`QuickLaunchRename`/`ReviewEditorEscape` 等）零回退。
+- **关联**：#22（卡片编辑表面提交语义——容器内分支归 #22，本条补容器外）、#7（编辑持焦不自动收起——提交后的表面重估沿用既有 `ReconcileSurfaceAfterEditing`）、#13（真实输入可达性——矩阵含 SendInput 路径）、#20（复盘 `Esc` 语义不变，本条只加冲刷通道）、#32（选择器词根表登记 `EditingCommit→EditingCommit`）；CHANGELOG 未发布区；[docs/usage.md](usage.md)「就地编辑」「每日复盘」。
+
 ## 维护规则
 
 - 新契约入清单时机：行为定型的同一版本，随 CHANGELOG 与锁定测试一起落。
