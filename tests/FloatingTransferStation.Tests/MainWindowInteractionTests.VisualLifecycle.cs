@@ -1121,8 +1121,9 @@ public sealed partial class MainWindowInteractionTests
                 .ToArray();
             // 1.28.0 起备注交互条两枚按钮（点击面/添加备注钮）同以条目为 Tag；
             // 右上操作条 1.29.0 起四枚（备注/置顶/选择/删除，#19 矩阵扩展备注钮行），
-            // 1.41.0 起追加 AI 整理钮（#16/#19 修订：基座网格＋追加行网格）。
-            Assert.HasCount(6, buttons);
+            // 1.41.0 起追加 AI 整理钮（#16/#19 修订：基座网格＋追加行网格），
+            // Issue #240 起追加行右格插件动作钮（入口自左半右键迁入）。
+            Assert.HasCount(7, buttons);
             var pinButton = buttons.Single(
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.TogglePinCommand));
             var selectionButton = buttons.Single(
@@ -1131,6 +1132,8 @@ public sealed partial class MainWindowInteractionTests
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.DeleteCardCommand));
             var aiButton = buttons.Single(
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.AiOrganizeCommand));
+            var pluginActionsButton = buttons.Single(
+                candidate => Equals(candidate.CommandParameter, CardGestureZones.PluginActionsCommand));
             Assert.HasCount(2, buttons.Where(
                 candidate => Equals(candidate.CommandParameter, CardGestureZones.NoteStripCommand)));
             var noteButton = buttons.Single(candidate => candidate.Name == "CardOperationNoteButton");
@@ -1214,7 +1217,22 @@ public sealed partial class MainWindowInteractionTests
             Assert.HasCount(1, appendRow.RowDefinitions);
             Assert.AreEqual(new GridLength(30), appendRow.RowDefinitions[0].Height);
             Assert.AreEqual(0, Grid.GetRow(aiButton));
-            Assert.AreEqual(0, Grid.GetColumn(aiButton), "AI 钮占追加行左格，右格固定留空。");
+            Assert.AreEqual(0, Grid.GetColumn(aiButton), "AI 钮占追加行左格。");
+            // Issue #240 插件动作钮（追加行右格 (2,1)）：30×30、基态塌缩、未悬停
+            // 不可命中，意图参数 PluginActionsCommand；可见性矩阵由 CardGestures
+            // 插件钮测试锁定（悬停 ∧ 文字卡 ∧ 目录存在已启用动作）。
+            Assert.AreEqual("CardOperationPluginActionsButton", pluginActionsButton.Name);
+            Assert.AreEqual(30d, pluginActionsButton.Width);
+            Assert.AreEqual(30d, pluginActionsButton.Height);
+            Assert.AreEqual(0d, pluginActionsButton.Opacity);
+            Assert.IsFalse(pluginActionsButton.IsHitTestVisible);
+            Assert.AreEqual(Visibility.Collapsed, pluginActionsButton.Visibility, "插件钮基态必须塌缩（非纯 Opacity 隐藏）。");
+            Assert.AreEqual("插件动作", pluginActionsButton.ToolTip);
+            Assert.AreEqual("插件动作", System.Windows.Automation.AutomationProperties.GetName(pluginActionsButton));
+            Assert.IsTrue(pluginActionsButton.IsEnabled, "按钮恒不禁用（点击守卫在入口，禁用元素不可命中会穿透成选择手势）。");
+            Assert.AreSame(appendRow, pluginActionsButton.Parent, "插件钮必须落在 AI 追加行网格。");
+            Assert.AreEqual(0, Grid.GetRow(pluginActionsButton));
+            Assert.AreEqual(1, Grid.GetColumn(pluginActionsButton), "插件钮占追加行右格 (2,1)。");
             Assert.AreEqual(appendRow.Parent, operationsStack, "追加行与基座网格同属右列 StackPanel。");
             var operationsZone = operationsStack.Parent as Grid;
             Assert.IsNotNull(operationsZone);

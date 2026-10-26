@@ -686,8 +686,11 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CardNote_RightClickSemanticsUnchanged()
+    public void CardNote_RightClickTogglesSelectionOnBothHalves()
     {
+        // Issue #240：右键选择手势全卡面统一——备注行左半右键同样是 toggle
+        // 选择（此前只进不出的单向选择）；仍不复制、绝不进入备注编辑（备注带
+        // 判定只作用于左键）。
         using var directory = new TestDirectory();
         var board = new BoardService();
         var item = board.AddText("短卡字", BoardCategory.Inbox);
@@ -712,9 +715,7 @@ public sealed partial class MainWindowInteractionTests
 
             try
             {
-                // 右键备注行左半（点击面所在处）：左半右键无插件时无操作——
-                // 既不复制、也不进任何选择、更绝不进入备注编辑（备注带判定
-                // 只作用于左键）。
+                // 右键备注行左半（点击面所在处）：toggle 选中这一张（统一手势）。
                 ClickRealRightAt(
                     window,
                     container,
@@ -722,9 +723,20 @@ public sealed partial class MainWindowInteractionTests
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
                 Assert.IsEmpty(copied, "左半右键不得复制。");
                 Assert.IsFalse(item.IsEditingNote, "右键不得进入备注编辑。");
+                CollectionAssert.AreEquivalent(
+                    new[] { item },
+                    ((ListBox)window.FindName("BoardList"))!.SelectedItems.Cast<BoardItem>().ToArray(),
+                    "左半右键必须 toggle 选中该卡（Issue #240 统一）。");
+
+                // 左半再击一次：取消选中（两击往返——用户报障的核心复现）。
+                ClickRealRightAt(
+                    window,
+                    container,
+                    new Point(container.ActualWidth * 0.25, 22d));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(120));
                 Assert.IsFalse(
                     ((ListBox)window.FindName("BoardList"))!.SelectedItems.Cast<BoardItem>().Any(),
-                    "左半右键不得产生选择语义。");
+                    "左半右键第二击必须取消选中。");
 
                 // 右键右半（命中层右列）：toggle 选择这一张（手势交换，Issue
                 // #216——备注功能不得改变分区手势）。选点沿 CardHalves 约定

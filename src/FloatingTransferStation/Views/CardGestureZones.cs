@@ -8,10 +8,12 @@ namespace FloatingTransferStation.Views;
 /// </summary>
 public static class CardGestureZones
 {
-    /// <summary>左半：承载双击编辑与拖拽起点，无选择语义。</summary>
+    /// <summary>左半：承载双击编辑与拖拽起点，无左键选择语义（右键选择手势
+    /// 全卡面统一，Issue #240，右键不分区域）。</summary>
     public const string ContentZone = "CardContentZone";
 
-    /// <summary>右半（置顶/选择/删除按钮所在半区）：承载左键复制与右键选择。</summary>
+    /// <summary>右半（置顶/选择/删除按钮所在半区）：承载左键复制；右键选择
+    /// 手势与左半同构（全卡面统一，Issue #240）。</summary>
     public const string OperationsZone = "CardOperationsZone";
 
     /// <summary>
@@ -40,6 +42,14 @@ public static class CardGestureZones
     /// 双击窗、不记双击痕迹、滑离释放取消意图；左键绝不 toggle 选中。
     /// </summary>
     public const string AiOrganizeCommand = "AiOrganize";
+
+    /// <summary>
+    /// 插件动作钮（Issue #240）：单击打开「插件动作」菜单（菜单入口自左半
+    /// 右键迁入——右键已是全卡面统一选择手势）。独立意图会话，模式同置顶/
+    /// 删除/备注/AI 钮——不参与双击窗、不记双击痕迹、滑离释放取消意图；
+    /// 左键绝不 toggle 选中（「命中卡不在选集先单选」惯例在菜单函数内）。
+    /// </summary>
+    public const string PluginActionsCommand = "PluginActions";
 
     /// <summary>
     /// 启动瓦片启动区（#30 修订 2026-10-18，Issue #186）：图标槽区域，单击=启动

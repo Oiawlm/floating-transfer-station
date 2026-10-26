@@ -15,12 +15,13 @@ namespace FloatingTransferStation.Views;
 /// ToggleSelection、SelectRange、ToggleCardPinAsync、DeleteSingleCardAsync、
 /// CopyBoardItemsToClipboard）保持与手势判定解耦。
 /// 分区契约（对半）：卡片内容左右两半——左半（命中层左列）承载双击编辑与
-/// 拖拽起点，无选择语义；右半（命中层右列，置顶/选择按钮所在半区）承载左键
-/// 复制与右键选择（手势交换，Issue #216：任意修饰键的左键单击复制该卡，
-/// 裸/Ctrl 右键 toggle、Shift/Ctrl+Shift 右键范围选择在右键 Up 分发——见
+/// 拖拽起点，无左键选择语义（右键选择手势全卡面统一，Issue #240）；右半
+///（命中层右列，置顶/选择按钮所在半区）承载左键复制（手势交换，Issue #216：
+/// 任意修饰键的左键单击复制该卡），右键选择手势不分区域、全卡面统一
+///（裸/Ctrl 右键 toggle、Shift/Ctrl+Shift 右键范围选择在右键 Up 分发——见
 /// MainWindow.ClipboardDelivery.cs），置顶按钮为右半内的独立置顶意图；
-/// 卡片 12px 边缘环带不经命中层，按默认归左半（贴边点击承载拖拽，
-/// 不误触选择/复制）。
+/// 卡片 12px 边缘环带不经命中层，按默认归左半（贴边左键点击承载拖拽，
+/// 不误触复制；右键同属统一选择手势）。
 /// 双击判定由手势层自维护（上次点击的按下时刻、按下位置与命中区域），
 /// 与系统语义一致按 Down 判定，不依赖 Control.MouseDoubleClick——其系统触发
 /// 链会被预览层为压制 ListBox 默认选择而设置的 Handled 阻断
@@ -37,7 +38,8 @@ public partial class MainWindow
     /// <summary>卡片命中区域：决定 Up 分发与右键门控的手势分区。</summary>
     private enum CardHitZone
     {
-        /// <summary>左半：承载双击编辑与拖拽起点。</summary>
+        /// <summary>左半：承载双击编辑与拖拽起点（无左键选择语义——右键选择
+        /// 手势全卡面统一，Issue #240）。</summary>
         Content,
 
         /// <summary>右半：承载左键复制与右键选择（置顶/选择/删除按钮所在半区）。</summary>
@@ -64,6 +66,11 @@ public partial class MainWindow
         /// 直接替换正文，与右半选择手势不同的独立意图；模式照抄
         /// OperationsPin——不参与双击窗、不记双击痕迹、滑离释放取消意图。</summary>
         OperationsAiOrganize,
+
+        /// <summary>右半·插件动作钮（Issue #240）：单击打开「插件动作」菜单，
+        /// 与右半选择手势不同的独立意图；模式照抄 OperationsPin——不参与
+        /// 双击窗、不记双击痕迹、滑离释放取消意图。</summary>
+        OperationsPluginActions,
     }
 
     /// <summary>
@@ -152,7 +159,9 @@ public partial class MainWindow
                             ? CardHitZone.OperationsNote
                             : Equals(hitButton.CommandParameter, CardGestureZones.AiOrganizeCommand)
                                 ? CardHitZone.OperationsAiOrganize
-                                : CardHitZone.Operations;
+                                : Equals(hitButton.CommandParameter, CardGestureZones.PluginActionsCommand)
+                                    ? CardHitZone.OperationsPluginActions
+                                    : CardHitZone.Operations;
             _pressButton = hitButton;
             _dragThresholdCrossed = false;
             e.Handled = true;
@@ -171,8 +180,9 @@ public partial class MainWindow
             return;
         }
 
-        // 命中卡片：记录按压会话并压制 ListBox 默认单击选择——选择只经由
-        // 右半手势与选择按钮发生，左半点击不携带任何选择语义。
+        // 命中卡片：记录按压会话并压制 ListBox 默认单击选择——左键选择只经由
+        // 选择按钮发生（右键选择手势全卡面统一、不经按压会话，Issue #240），
+        // 左半左键点击不携带任何选择语义。
         _pressStartPosition = e.GetPosition(this);
         _pressTimestamp = e.Timestamp;
         _pressItem = container.DataContext as BoardItem;
@@ -265,6 +275,14 @@ public partial class MainWindow
             // 共用同一实现（合成与 UIA 自动化路径）。
             _ = BeginCardAiOrganizeAsync(item);
         }
+        else if (_pressZone == CardHitZone.OperationsPluginActions)
+        {
+            // 插件动作钮是独立意图（Issue #240）：单击打开「插件动作」菜单
+            //（入口自左半右键迁入——右键已是全卡面统一选择手势），绝不 toggle
+            // 选中；语义与 BoardList_ButtonClick 的 PluginActions 分支共用同一
+            // 实现 TryOpenPluginActionsMenu（「命中卡不在选集先单选」惯例在内）。
+            TryOpenPluginActionsMenu(item);
+        }
         else if (_pressZone == CardHitZone.Operations)
         {
             // 复制手势只属于右半（手势交换，Issue #216）：任意修饰键的左键
@@ -325,9 +343,10 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 命中区域判定：沿命中元素向上的可视树路径取第一个分区标记。
-    /// 未遇到标记（卡片边缘环带、容器自身）归左半：贴边点击承载拖拽，
-    /// 不误触选择/复制。
+    /// 命中区域判定（只服务左键路径）：沿命中元素向上的可视树路径取第一个
+    /// 分区标记。未遇到标记（卡片边缘环带、容器自身）归左半：贴边左键点击
+    /// 承载拖拽，不误触复制。右键选择手势已全卡面统一（Issue #240），
+    /// 不再消费区域判定。
     /// </summary>
     private static CardHitZone ResolveCardHitZone(DependencyObject? source, ListBoxItem container)
     {

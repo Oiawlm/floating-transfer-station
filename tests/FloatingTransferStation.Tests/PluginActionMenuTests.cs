@@ -303,10 +303,10 @@ public sealed class PluginActionMenuTests
     }
 
     [STATestMethod]
-    public void PluginActionsMenu_ReachableOnlyFromContentZoneRightClick()
+    public void PluginActionsMenu_ReachableFromOperationGridButtonNotFromRightClick()
     {
-        // 手势交换（Issue #216）：插件动作菜单入口收窄为左半右键——右半右键
-        // 是选择手势，不再弹菜单。
+        // Issue #240：插件动作菜单入口迁往操作网格插件动作钮（AI 追加行右格）；
+        // 卡面右键是统一选择手势，任何分区右键都不再弹菜单。
         using var harness = new Harness(ActionPluginManifest());
         var item = harness.AddCard("a1 菜单入口");
         Pump(harness.Window);
@@ -322,13 +322,27 @@ public sealed class PluginActionMenuTests
         CollectionAssert.AreEquivalent(new[] { item.Id }, list.SelectedItems.OfType<BoardItem>().Select(card => card.Id).ToArray());
         Assert.IsNull(harness.Window.LastPluginActionsMenuForEvidence, "右半右键不得打开插件动作菜单。");
 
-        // 左半右键：打开插件动作菜单（命中卡先单选）。
-        list.SelectedItems.Clear();
+        // 左半右键：toggle（取消上一击的选中），不弹菜单——入口已迁往按钮。
         list.RaiseEvent(NewZoneRightClickArgs(container, CardGestureZones.ContentZone));
         Pump(harness.Window);
+        Assert.AreEqual(0, list.SelectedItems.Count, "左半右键是统一选择手势：第二击取消选中。");
+        Assert.IsNull(harness.Window.LastPluginActionsMenuForEvidence, "左半右键不得打开插件动作菜单（Issue #240）。");
+
+        // 插件动作钮（合成/UIA 路径 BoardList_ButtonClick）：打开菜单，命中卡
+        // 不在选集内时先单选（资源管理器惯例，函数语义原样保留）。
+        var button = DescendantButtonOf(container, CardGestureZones.PluginActionsCommand);
+        Assert.IsNotNull(button, "卡片模板必须存在插件动作钮（操作网格追加行右格）。");
+        button.RaiseEvent(new System.Windows.RoutedEventArgs(
+            System.Windows.Controls.Primitives.ButtonBase.ClickEvent,
+            button));
+        Pump(harness.Window);
         var menu = harness.Window.LastPluginActionsMenuForEvidence;
-        Assert.IsNotNull(menu, "左半右键必须打开插件动作菜单。");
+        Assert.IsNotNull(menu, "插件动作钮必须打开插件动作菜单。");
         Assert.IsTrue(menu.IsOpen);
+        CollectionAssert.AreEquivalent(
+            new[] { item.Id },
+            list.SelectedItems.OfType<BoardItem>().Select(card => card.Id).ToArray(),
+            "命中卡不在选集时按钮入口先单选该卡。");
         menu.IsOpen = false;
     }
 
@@ -366,6 +380,34 @@ public sealed class PluginActionMenuTests
             if (System.Windows.Media.VisualTreeHelper.GetChild(element, index) is FrameworkElement child)
             {
                 var found = FindZoneSource(child, zoneTag);
+                if (found is not null)
+                {
+                    return found;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>深度优先搜索卡片容器可视化子树中带指定意图参数的按钮
+    ///（未命中返回 null——中途抛会截断兄弟子树的搜索）。</summary>
+    private static System.Windows.Controls.Button? DescendantButtonOf(
+        FrameworkElement element,
+        string commandParameter)
+    {
+        if (element is System.Windows.Controls.Button { CommandParameter: { } } candidateButton &&
+            Equals(candidateButton.CommandParameter, commandParameter))
+        {
+            return candidateButton;
+        }
+
+        var children = System.Windows.Media.VisualTreeHelper.GetChildrenCount(element);
+        for (var index = 0; index < children; index++)
+        {
+            if (System.Windows.Media.VisualTreeHelper.GetChild(element, index) is FrameworkElement child)
+            {
+                var found = DescendantButtonOf(child, commandParameter);
                 if (found is not null)
                 {
                     return found;

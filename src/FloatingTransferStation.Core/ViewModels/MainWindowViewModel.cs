@@ -24,6 +24,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _shortCardNotesEnabled;
     private string _statusText = string.Empty;
     private bool _aiOrganizeEnabled = true;
+    private bool _hasEnabledPluginActions;
 
     public MainWindowViewModel(
         BoardService board,
@@ -138,6 +139,16 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         get => _aiOrganizeEnabled;
         set => SetProperty(ref _aiOrganizeEnabled, value);
+    }
+
+    /// <summary>插件目录存在已启用动作（Issue #240 插件动作钮可见性的目录态，
+    /// 单一来源＝PluginCatalog.EnabledActions 非空，禁止在别处复制目录状态）：
+    /// 由窗口层在构造期与每次目录变化（启停/设置/重扫）后喂值，卡片模板的
+    /// 插件钮与追加行触发器经窗口祖先 DataContext 绑定消费。</summary>
+    public bool HasEnabledPluginActions
+    {
+        get => _hasEnabledPluginActions;
+        set => SetProperty(ref _hasEnabledPluginActions, value);
     }
 
     /// <summary>进入搜索态(窗口层负责应用过滤与焦点);复盘标签不参与(冻结)。</summary>
