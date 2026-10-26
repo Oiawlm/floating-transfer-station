@@ -6,12 +6,13 @@ using FloatingTransferStation.Services;
 namespace FloatingTransferStation.Views;
 
 /// <summary>
-/// 插件 L1 文本动作（1.51.0，契约「插件动作协议」）的窗口编排：卡片右键菜单
-/// 「插件动作」分组（唯一入口）→ 按选集组成判定可见与可用（single=选集恰为一张
-/// 文字卡；multi=文字卡 ≥2，图片卡不阻断）→ 后台执行动作管线（UI 不冻结，
+/// 插件 L1 文本动作（1.51.0，契约「插件动作协议」）的窗口编排：操作网格
+/// 插件动作钮（Issue #240 起唯一入口，自左半右键迁入——右键已是全卡面统一
+/// 选择手势）→「插件动作」菜单 → 按选集组成判定可见与可用（single=选集恰为
+/// 一张文字卡；multi=文字卡 ≥2，图片卡不阻断）→ 后台执行动作管线（UI 不冻结，
 /// 运行中禁再入）→ 经 <see cref="BoardMutationService.ReplaceItemsTextUndoableAsync"/>
 /// 统一提交（全有或全无，Ctrl+Z 逐卡恢复）。宿主统一提交、插件只提议：本类不
-/// 直接写板。右键命中卡不在选集内时先单选该卡（资源管理器惯例）；复制手势路径
+/// 直接写板。命中卡不在选集内时先单选该卡（资源管理器惯例）；复制手势路径
 /// 的选择语义不变（仍只复制不改选择）。
 /// </summary>
 public partial class MainWindow
@@ -22,8 +23,17 @@ public partial class MainWindow
     internal ContextMenu? LastPluginActionsMenuForEvidence { get; private set; }
 
     /// <summary>
-    /// 右键卡片：构建并打开「插件动作」菜单；返回是否真正打开（无可执行项
-    /// ——无插件目录/动作不可用——不弹菜单也不拦截，维持既有右键语义）。
+    /// 把插件目录态同步到 ViewModel（单一来源＝PluginCatalog.EnabledActions
+    /// 非空，卡片模板插件钮/追加行触发器经窗口 DataContext 绑定消费）：
+    /// 构造期与每次目录变化（启停/设置/重扫）后调用。
+    /// </summary>
+    internal void SyncPluginActionsAvailability() =>
+        _viewModel.HasEnabledPluginActions = _pluginCatalog?.EnabledActions.Count > 0;
+
+    /// <summary>
+    /// 打开「插件动作」菜单（插件动作钮与测试共用入口）；返回是否真正打开
+    ///（无可执行项——无插件目录/动作不可用/搜索态——不弹菜单也不拦截）。
+    /// 命中卡不在选集内时先单选该卡；已在选集时保持当前多选。
     /// </summary>
     private bool TryOpenPluginActionsMenu(BoardItem clickedItem)
     {

@@ -134,6 +134,16 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 插件动作钮（Issue #240）：合成与 UIA 自动化路径的插件动作菜单入口
+        //（自左半右键迁入——右键已是全卡面统一选择手势），与手势层
+        // OperationsPluginActions 会话共用 TryOpenPluginActionsMenu；「命中卡
+        // 不在选集先单选」惯例在菜单函数内，此路径不另触碰选择集合。
+        if (Equals(button.CommandParameter, CardGestureZones.PluginActionsCommand))
+        {
+            TryOpenPluginActionsMenu(item);
+            return;
+        }
+
         if (!Equals(button.CommandParameter, CardGestureZones.TogglePinCommand))
         {
             return;

@@ -1284,6 +1284,52 @@
     </Style.Triggers>
   </Style>
 
+  <!-- 插件动作钮（Issue #240）：「插件动作」菜单入口自左半右键迁入——右键已是
+       全卡面统一选择手势，插件菜单改经显式按钮打开（与备注钮 1.28.0、AI 钮
+       1.41.0 的显式入口迁移轨迹同向；悬停显式按钮的菜单可发现性优于隐藏右键）。
+       可见性＝卡片悬停 ∧ 文字卡 ∧ 目录存在已启用动作（单一来源
+       MainWindowViewModel.HasEnabledPluginActions，目录启停/设置/重扫即时刷新）
+       ∧ 本卡非正文/备注编辑 ∧ 非搜索态（菜单在搜索态不可用，与 AI 钮同族让路）；
+       与选中态无关。基态塌缩＋淡入（ManageVisibility），点击无可执行项
+       （纯图片选集等）不弹菜单。 -->
+  <Style x:Key="PluginActionsButtonStyle" TargetType="Button">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="Visibility" Value="Collapsed" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="6" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="ToolTip" Value="插件动作" />
+    <Setter Property="AutomationProperties.Name" Value="插件动作" />
+    <Setter Property="Template" Value="{StaticResource CardIconButtonTemplate}" />
+    <Setter Property="views:FadeAnimation.IsActive" Value="False" />
+    <Setter Property="views:FadeAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
+    <Setter Property="views:FadeAnimation.DurationMs"
+            Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+    <Setter Property="views:FadeAnimation.ManageVisibility" Value="True" />
+    <Style.Triggers>
+      <MultiDataTrigger>
+        <MultiDataTrigger.Conditions>
+          <Condition Binding="{Binding DataContext.HasEnabledPluginActions, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
+          <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True" />
+          <Condition Binding="{Binding IsEditing}" Value="False" />
+          <Condition Binding="{Binding IsEditingNote}" Value="False" />
+          <Condition Binding="{Binding Kind}" Value="{x:Static models:BoardItemKind.Text}" />
+          <Condition Binding="{Binding DataContext.IsSearchActive, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False" />
+        </MultiDataTrigger.Conditions>
+        <Setter Property="views:FadeAnimation.IsActive" Value="True" />
+        <Setter Property="IsHitTestVisible" Value="True" />
+      </MultiDataTrigger>
+    </Style.Triggers>
+  </Style>
+
 
   <!-- 快捷启动瓦片右键上下文菜单（#30 修订，Issue #176）：查看态/编辑态瓦片右键
        出「删除/上移/下移/重命名」四项（Win11 开始菜单先例；上移/下移＝WCAG 2.5.7
@@ -1492,12 +1538,13 @@
 
   <!-- AI 追加按钮行（1.41.0，#16/#19 修订）：命中层右列改垂直 StackPanel——
        基座 2×2 网格原样（恒 64）＋本追加网格（两列×CardOperationColumnWidth、
-       单 30 DIP 按钮行、上缘 4 DIP 间隔）。只在截断文字卡出现：正文恒钳
-       MaxHeight=100 ≥ 追加后网格总高 98，任何卡高度零跳变；短卡/图片卡整行
-       塌缩（短卡下限 64 不变、其余按钮零漂移）。显隐由截断布局事实驱动
-       （IsTruncated 唯一权威，TrimAwareTextBlock），不随悬停派生——悬停只
-       控制行内按钮的淡入淡出，追加行自身常在，高度稳定；AI 整理总开关关闭时
-       追加行整行塌缩（截断卡回到无 AI 行的旧布局，不留 34 DIP 空带）。 -->
+       单 30 DIP 按钮行、上缘 4 DIP 间隔）。Issue #240 起追加行承载两枚按钮
+       （左格 AI 整理钮、右格插件动作钮），显隐＝「AI 行条件 ∨ 插件行条件」
+       （Style.Triggers 多触发器天然 OR）：AI 行＝总开关 ∧ 截断文字卡；
+       插件行＝文字卡 ∧ 目录存在已启用动作（目录态单一来源，不随悬停派生，
+       插件可用时短文字卡也占行——行存在是内容事实，悬停只控制行内按钮
+       淡入淡出，追加行自身常在、高度稳定；AI 总开关关闭且无插件动作时
+       整行塌缩，截断卡回到无 AI 行的旧布局，不留 34 DIP 空带）。 -->
   <Style x:Key="CardAiAppendRowStyle" TargetType="Grid">
     <Setter Property="Visibility" Value="Collapsed" />
     <Style.Triggers>
@@ -1506,6 +1553,13 @@
           <Condition Binding="{Binding DataContext.AiOrganizeEnabled, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
           <Condition Binding="{Binding IsTruncated, ElementName=CardPreviewText}" Value="True" />
           <Condition Binding="{Binding Kind}" Value="{x:Static models:BoardItemKind.Text}" />
+        </MultiDataTrigger.Conditions>
+        <Setter Property="Visibility" Value="Visible" />
+      </MultiDataTrigger>
+      <MultiDataTrigger>
+        <MultiDataTrigger.Conditions>
+          <Condition Binding="{Binding Kind}" Value="{x:Static models:BoardItemKind.Text}" />
+          <Condition Binding="{Binding DataContext.HasEnabledPluginActions, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
         </MultiDataTrigger.Conditions>
         <Setter Property="Visibility" Value="Visible" />
       </MultiDataTrigger>
@@ -1833,8 +1887,9 @@
                     Background="Transparent"
                     Tag="{x:Static views:CardGestureZones.OperationsZone}">
                 <!-- 右列 1.41.0 起为垂直 StackPanel（右上锚定）：基座操作网格原样
-                     ＋ AI 追加行网格（见 CardAiAppendRowStyle——只在截断文字卡
-                     显形，短卡整行塌缩、正文恒钳 100 ≥ 98，任何卡高度零跳变）。 -->
+                     ＋ 追加行网格（见 CardAiAppendRowStyle——AI 行＝截断文字卡、
+                     插件行＝文字卡 ∧ 目录有已启用动作，Issue #240；截断卡正文恒钳
+                     100 ≥ 98 零跳变，插件可用时短文字卡整行常在、高度稳定）。 -->
                 <StackPanel HorizontalAlignment="Right"
                             VerticalAlignment="Top">
                 <!-- 操作按钮网格（1.33.0，Issue #103）：固定两列 × 按钮行、列与按钮行
@@ -1913,11 +1968,14 @@
                   </Button>
                 </Grid>
 
-                  <!-- AI 整理钮（1.41.0）：追加按钮行左格 (2,0)（上缘 4 DIP 间隔、
-                       单 30 DIP 按钮行），右格固定留空（后续按钮按行优先左→右）。
-                       追加行几何与显隐见 CardAiAppendRowStyle；按钮可见性六条件、
-                       忙态图标与防抖语义见 AiOrganizeButtonStyle。点击意图经
-                       AiOrganizeCommand 参数路由（手势层与 UIA 路径共用实现）。 -->
+                  <!-- AI 整理钮（1.41.0）＋插件动作钮（Issue #240）：追加按钮行
+                       左格 (2,0)=AI 整理钮、右格 (2,1)=插件动作钮（按行优先左→右
+                       补位，#19 规则首次两次行使）。追加行几何与显隐见
+                       CardAiAppendRowStyle（AI 行条件 ∨ 插件行条件）；AI 钮可见性
+                       六条件、忙态图标与防抖语义见 AiOrganizeButtonStyle，插件钮
+                       见 PluginActionsButtonStyle。点击意图分别经
+                       AiOrganizeCommand / PluginActionsCommand 参数路由（手势层
+                       与 UIA 路径共用实现）。 -->
                   <Grid Style="{StaticResource CardAiAppendRowStyle}"
                         Margin="0,4,0,0">
                     <Grid.ColumnDefinitions>
@@ -1951,6 +2009,21 @@
                                 StrokeEndLineCap="Round" />
                         </Viewbox>
                       </Grid>
+                    </Button>
+
+                    <!-- 插件动作钮（Issue #240）：闪电图标（16×16 网格规范，与
+                         各钮同几何），前景随共享模板的悬停强调色。 -->
+                    <Button x:Name="CardOperationPluginActionsButton"
+                            Grid.Row="0"
+                            Grid.Column="1"
+                            Style="{StaticResource PluginActionsButtonStyle}"
+                            Tag="{Binding}"
+                            CommandParameter="{x:Static views:CardGestureZones.PluginActionsCommand}">
+                      <Viewbox Width="16" Height="16">
+                        <Path Data="M12.9,2.5 L5,13 L10.8,13 L10.1,17.5 L18,7 L12.2,7 Z"
+                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                              Stretch="Uniform" />
+                      </Viewbox>
                     </Button>
                   </Grid>
                 </StackPanel>

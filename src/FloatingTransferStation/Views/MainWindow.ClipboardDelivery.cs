@@ -10,9 +10,9 @@ namespace FloatingTransferStation.Views;
 /// <summary>
 /// 卡片复制到剪贴板（交付第二通道，解决游戏聊天窗等无法拖入的目标）：
 /// 左键单击卡片右半复制那一张（手势交换，Issue #216；不依赖、不改变当前
-/// 选择，搜索过滤态同样可用）；右键卡片右半承载选择手势（裸/Ctrl 右键
-/// toggle、Shift/Ctrl+Shift 右键锚点范围选择）；左半右键打开「插件动作」
-/// 菜单；面板持有键盘焦点、存在选择且不在文字编辑态时 Ctrl+C 复制选中项。
+/// 选择，搜索过滤态同样可用）；右键选择手势全卡面统一（Issue #240）——
+/// 任意卡面位置的裸/Ctrl 右键 toggle、Shift/Ctrl+Shift 右键锚点范围选择；
+/// 面板持有键盘焦点、存在选择且不在文字编辑态时 Ctrl+C 复制选中项。
 /// 复制不删除源卡片、不进撤销栈；负载与拖出同构并携带内部条目标记，
 /// 自动采集据此跳过，复制旧卡片不会凭空生成重复条目。
 /// </summary>
@@ -45,10 +45,13 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 右键卡片分发（手势交换，Issue #216）：右半承载选择手势——Shift 走
-    /// 锚点范围选择（Ctrl+Shift 保留既有选择并追加范围），裸右键与 Ctrl+右键
-    /// 等效 toggle，均不清理其他已选条目；修饰键取 Up 时线程键盘态。左半
-    /// （非复制路径）右键打开「插件动作」菜单（命中卡不在选集内时先单选）。
+    /// 右键卡片分发（手势交换，Issue #216；全卡面统一，Issue #240）：凡命中卡片
+    /// 的右键一律承载选择手势——Shift 走锚点范围选择（Ctrl+Shift 保留既有选择
+    /// 并追加范围），裸右键与 Ctrl+右键等效 toggle，均不清理其他已选条目；修饰键
+    /// 取 Up 时线程键盘态。左半/右半/12px 边缘环带同构（区域判定只服务左键路径）。
+    /// 编辑中的卡让路（编辑表面属于编辑器，与左键路径同一家规）：右键不分发、
+    /// 不拦截，交还编辑器原生行为。插件动作菜单入口已迁往操作网格插件动作钮
+    ///（见 MainWindow.PluginActions.cs）。
     /// </summary>
     private void BoardList_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
@@ -60,28 +63,22 @@ public partial class MainWindow
             return;
         }
 
-        if (ResolveCardHitZone(source, container) == CardHitZone.Operations)
+        if (TryGetEditingCardContainer() is { } editingContainer &&
+            (ReferenceEquals(source, editingContainer) ||
+             editingContainer.IsAncestorOf(source)))
         {
-            e.Handled = true;
-            var modifiers = Keyboard.Modifiers;
-            if (modifiers.HasFlag(ModifierKeys.Shift))
-            {
-                SelectRange(item, modifiers.HasFlag(ModifierKeys.Control));
-            }
-            else
-            {
-                ToggleSelection(item);
-            }
-
             return;
         }
 
-        // 插件动作菜单入口＝左半右键（交换后右半右键不再出现菜单）。仅当
-        // 动作菜单真正打开时才拦截右键；无插件/无可执行项维持既有语义
-        //（ContentZone 左半无操作）。
-        if (TryOpenPluginActionsMenu(item))
+        e.Handled = true;
+        var modifiers = Keyboard.Modifiers;
+        if (modifiers.HasFlag(ModifierKeys.Shift))
         {
-            e.Handled = true;
+            SelectRange(item, modifiers.HasFlag(ModifierKeys.Control));
+        }
+        else
+        {
+            ToggleSelection(item);
         }
     }
 

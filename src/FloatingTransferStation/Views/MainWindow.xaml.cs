@@ -174,6 +174,10 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
         _viewModel.ShortCardNotesEnabled = _preferences.ShortCardNotesEnabled;
         _viewModel.AiOrganizeEnabled = _preferences.AiOrganizeEnabled;
+        // 插件目录态（Issue #240 插件钮可见性单一来源）：启动装载先于窗口构造
+        //（App 组合根），构造期即同步；后续目录变化经设置路径刷新（见
+        // MainWindow.Settings.cs）。
+        SyncPluginActionsAvailability();
         _expandIntentTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(60) };
         _expandIntentTimer.Tick += ExpandIntentTimer_Tick;
         _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };

@@ -453,15 +453,30 @@ public sealed partial class MainWindowInteractionTests
 
             try
             {
-                // 环带点：卡片左上角 12px 边距环内（非命中层两列覆盖区）。
-                var edgePoint = new Point(5, 5);
-                ClickRealRightAt(window, container, edgePoint);
+                // 预热一击（同 OperationsZone 惯例：几何定稿＋真实位移把光标带到
+                // 窗口上，保证首个右键消息不被输入管线丢弃），拉满双击时限。
+                ClickRealAt(window, container, new Point(24, container.ActualHeight / 2));
+                PumpDispatcherFor(
+                    window.Dispatcher,
+                    TimeSpan.FromMilliseconds(GetDoubleClickTime() + 100));
+
+                // 环带点：卡面内命中层（Margin=12）之外的 12px 边距环——从命中层
+                // 原点向左反推 7 DIP（卡面内、命中层外、避开圆角）。每击前重新
+                // 取样，吸收选中态徽章等布局微移。
+                Point RingPoint()
+                {
+                    var contentZone = HalvesZoneOf(container, CardGestureZones.ContentZone);
+                    var origin = contentZone.TranslatePoint(new Point(), container);
+                    return new Point(origin.X - 7, origin.Y + contentZone.ActualHeight * 0.5);
+                }
+
+                ClickRealRightAt(window, container, RingPoint());
                 CollectionAssert.AreEquivalent(
                     new[] { item },
                     list.SelectedItems.Cast<BoardItem>().ToArray(),
                     "边缘环带右键必须 toggle 选中。");
 
-                ClickRealRightAt(window, container, edgePoint);
+                ClickRealRightAt(window, container, RingPoint());
                 Assert.AreEqual(
                     0,
                     list.SelectedItems.Count,
@@ -602,11 +617,10 @@ public sealed partial class MainWindowInteractionTests
                 Assert.IsFalse(textButton.IsHitTestVisible, "未悬停插件钮不可命中。");
 
                 // 悬停文字卡：追加行常在（目录态驱动，不随悬停派生）、插件钮淡入。
+                //（真实光标悬停→触发器求值存在一拍调度差，按既有 PumpUntil 模式
+                // 泵帧等待而非单次断言。）
                 HoverRealAt(window, textContainer, new Point(24, textContainer.ActualHeight * 0.5));
-                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
-                Assert.IsTrue(
-                    FadeAnimation.GetIsActive(textButton),
-                    "悬停文字卡必须淡入插件钮。");
+                PumpUntil(window, () => FadeAnimation.GetIsActive(textButton), "悬停文字卡必须淡入插件钮。");
                 Assert.IsTrue(textButton.IsHitTestVisible, "淡入后插件钮可命中。");
                 var appendRow = (Grid)textButton.Parent;
                 Assert.AreEqual(
@@ -633,7 +647,7 @@ public sealed partial class MainWindowInteractionTests
                     ((Grid)imageButton.Parent).Visibility,
                     "图片卡的追加行必须整行塌缩。");
 
-                // 编辑中的卡让路：进入编辑后插件钮淡出。
+                // 编辑中的卡让路：进入编辑后插件钮淡出（Esc 取消编辑会话）。
                 HoverRealAt(window, textContainer, new Point(24, textContainer.ActualHeight * 0.5));
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
                 EnterCardEditingWithDoubleClick(window, textItem);
@@ -641,7 +655,15 @@ public sealed partial class MainWindowInteractionTests
                 Assert.IsFalse(
                     FadeAnimation.GetIsActive(textButton),
                     "编辑中的卡插件钮必须让路（淡出）。");
-                InvokePrivate(window, "CommitCardTextEditing");
+                EditorInput(window, textItem).RaiseEvent(new KeyEventArgs(
+                    Keyboard.PrimaryDevice,
+                    PresentationSource.FromVisual(window)!,
+                    Environment.TickCount,
+                    Key.Escape)
+                {
+                    RoutedEvent = Keyboard.KeyDownEvent,
+                    Source = EditorInput(window, textItem)
+                });
                 CompleteLayout(window);
 
                 // 停用插件（设置路径）：目录态翻转为无已启用动作——按钮淡出、
@@ -702,14 +724,20 @@ public sealed partial class MainWindowInteractionTests
 
             try
             {
+                // 先悬停卡面任意安全点淡入插件钮，再取可见按钮的实际中心点击
+                //（按钮基态塌缩时 ActualWidth 为 0，中心点必须在展开后取样）。
+                HoverRealAt(
+                    window,
+                    container,
+                    new Point(24, container.ActualHeight * 0.5));
+                PumpUntil(
+                    window,
+                    () => FadeAnimation.GetIsActive(button),
+                    "前置条件：悬停已淡入插件钮。");
+                CompleteLayout(window);
                 var buttonCenter = button.TranslatePoint(
                     new Point(button.ActualWidth / 2, button.ActualHeight / 2),
                     container);
-                HoverRealAt(window, container, buttonCenter);
-                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
-                Assert.IsTrue(
-                    FadeAnimation.GetIsActive(button),
-                    "前置条件：悬停已淡入插件钮。");
 
                 ClickRealAt(window, container, buttonCenter);
                 PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));

@@ -105,6 +105,9 @@ public partial class MainWindow : Window, ISettingsHost
         var operation = ApplyPluginEnabledCoreAsync(pluginId, enabled);
         TrackPendingOperation(operation);
         await operation;
+        // 目录态变化同步插件钮可见性（Issue #240）；无论持久化成败，内存态
+        // 已按本次选择重建，均需刷新。
+        SyncPluginActionsAvailability();
     }
 
     private async Task ApplyPluginEnabledCoreAsync(string pluginId, bool enabled)
@@ -139,6 +142,8 @@ public partial class MainWindow : Window, ISettingsHost
         var operation = SetPluginActionSettingCoreAsync(pluginId, actionId, key, value);
         TrackPendingOperation(operation);
         await operation;
+        // when 门控可能让全部动作失效（EnabledActions 清空），同步插件钮可见性。
+        SyncPluginActionsAvailability();
     }
 
     private async Task SetPluginActionSettingCoreAsync(string pluginId, string actionId, string key, string value)
@@ -170,6 +175,7 @@ public partial class MainWindow : Window, ISettingsHost
         var operation = _pluginCatalog.RescanAsync();
         TrackPendingOperation(operation);
         await operation;
+        SyncPluginActionsAvailability();
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
