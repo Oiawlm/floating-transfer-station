@@ -355,6 +355,385 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void CardGestures_ContentZoneRapidRepeatRightClicksToggleEachTime()
+    {
+        // Issue #240 核心复现（真实输入，Win32 右键消息直驱）：左半右键此前
+        // 承载插件动作菜单（只进不出），统一后必须与右半同构——同一位置快速
+        // 右键连点，每一击都 toggle（两击=选中→取消，三击=净选中）。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("左半连点", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            // 先稳定窗口几何（置顶与贴边重排定稿），三击的同一物理点才不会
+            // 因窗口移动而在双击位置容差内漂移。
+            window.Topmost = true;
+            CompleteLayout(window);
+            // 左半左缘内侧（远离正文中央与备注行，正文极短）。
+            var contentZone = HalvesZoneOf(container, CardGestureZones.ContentZone);
+            var zoneOrigin = contentZone.TranslatePoint(new Point(), container);
+            var clickPoint = new Point(
+                zoneOrigin.X + 12,
+                zoneOrigin.Y + contentZone.ActualHeight * 0.6);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                // 预热一击（打在右半，无选择语义的左键复制不发生——不注入
+                // ClipboardWriterOverride 即无副作用）让几何定稿，并把光标带到
+                // 窗口上（真实位移保证悬停事件生成）。
+                ClickRealAt(window, container, new Point(24, container.ActualHeight / 2));
+                PumpDispatcherFor(
+                    window.Dispatcher,
+                    TimeSpan.FromMilliseconds(GetDoubleClickTime() + 100));
+
+                // 端到端守护（Issue #240；Win32 右键消息直驱）：左半同一位置
+                // 快速右键连点，每一击都 toggle——两击=选中→取消，三击=净选中。
+                var list = (ListBox)window.FindName("BoardList");
+                ClickRealRightAt(window, container, clickPoint);
+                CollectionAssert.AreEquivalent(
+                    new[] { item },
+                    list.SelectedItems.Cast<BoardItem>().ToArray(),
+                    "左半第一击右键选中。");
+
+                ClickRealRightAt(window, container, clickPoint);
+                Assert.AreEqual(
+                    0,
+                    list.SelectedItems.Count,
+                    "左半第二击右键（同位置快速连点）必须取消选中——用户报障复现。");
+
+                ClickRealRightAt(window, container, clickPoint);
+                CollectionAssert.AreEquivalent(
+                    new[] { item },
+                    list.SelectedItems.Cast<BoardItem>().ToArray(),
+                    "左半第三击右键重新选中（三连击=选中→取消→选中）。");
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+
+            Assert.AreEqual(
+                string.Empty,
+                StatusOf(window),
+                "左半右键连点不触发编辑或复制等其他意图。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardGestures_EdgeRingRightClickTogglesSelection()
+    {
+        // Issue #240：卡片 12px 边缘环带不经命中层分区标记（默认归左半），
+        // 统一后环带右键同样是选择手势（两击往返）。取样点取左上环带内侧。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("环带右键", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var savedCursor = SaveCursorPosition();
+            var list = (ListBox)window.FindName("BoardList");
+
+            try
+            {
+                // 环带点：卡片左上角 12px 边距环内（非命中层两列覆盖区）。
+                var edgePoint = new Point(5, 5);
+                ClickRealRightAt(window, container, edgePoint);
+                CollectionAssert.AreEquivalent(
+                    new[] { item },
+                    list.SelectedItems.Cast<BoardItem>().ToArray(),
+                    "边缘环带右键必须 toggle 选中。");
+
+                ClickRealRightAt(window, container, edgePoint);
+                Assert.AreEqual(
+                    0,
+                    list.SelectedItems.Count,
+                    "边缘环带右键第二击必须取消选中。");
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardGestures_RightClickOnEditingCardYieldsToEditor()
+    {
+        // Issue #240：编辑中的卡右键不分发选择手势——编辑表面属于编辑器
+        //（与左键路径同一家规），任意半区右键都不改选择、不终结编辑。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("编辑中右键", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            EnterCardEditingWithDoubleClick(window, item);
+            CompleteLayout(window);
+            Assert.IsTrue(item.IsEditing, "前置条件：编辑会话已打开。");
+            var list = (ListBox)window.FindName("BoardList");
+
+            foreach (var zoneTag in new[]
+            {
+                CardGestureZones.ContentZone,
+                CardGestureZones.OperationsZone
+            })
+            {
+                var args = NewRightClickArgs(ZoneHitSource(window, item, zoneTag));
+                list.RaiseEvent(args);
+                CompleteLayout(window);
+
+                Assert.IsFalse(args.Handled, $"编辑卡的右键（{zoneTag}）不得被选择手势拦截。");
+                Assert.IsTrue(item.IsEditing, $"编辑卡的右键（{zoneTag}）不得终结编辑会话。");
+                Assert.IsFalse(
+                    list.SelectedItems.Cast<BoardItem>().Any(),
+                    $"编辑卡的右键（{zoneTag}）不得产生选择语义。");
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>已启用单动作插件的最小清单（Issue #240 插件钮测试基建）。</summary>
+    private const string CardGesturePluginManifest = """
+        {
+          "id": "typography-tidy",
+          "name": "中文排版整理",
+          "version": "1.0.0",
+          "description": "手势测试动作插件",
+          "kind": "text-actions",
+          "actions": [
+            {
+              "id": "tidy-single",
+              "title": "整理这张卡片",
+              "accept": "text",
+              "selection": "single",
+              "output": "replace",
+              "settings": [],
+              "rules": [{ "pattern": "([A-Za-z])([0-9])", "replacement": "$2$1" }]
+            }
+          ]
+        }
+        """;
+
+    /// <summary>在测试数据目录下落一个已启用的动作插件并装载目录。</summary>
+    private static PluginCatalog CreateEnabledActionCatalog(TestDirectory directory)
+    {
+        var pluginDirectory = Path.Combine(directory.Root, "Data", "plugins", "typography-tidy");
+        Directory.CreateDirectory(pluginDirectory);
+        File.WriteAllText(
+            Path.Combine(pluginDirectory, PluginCatalog.ManifestFileName),
+            CardGesturePluginManifest);
+        var catalog = new PluginCatalog(
+            AppPaths.ForTests(Path.Combine(directory.Root, "Data")),
+            null,
+            new AtomicTextWriter());
+        catalog.LoadAsync().Wait();
+        catalog.SetEnabledAsync("typography-tidy", true).Wait();
+        return catalog;
+    }
+
+    /// <summary>卡片容器内的插件动作钮（操作网格 AI 追加行右格）。</summary>
+    private static System.Windows.Controls.Button PluginActionsButtonOf(ListBoxItem container) =>
+        FindDescendants<System.Windows.Controls.Button>(container)
+            .Single(candidate => Equals(candidate.CommandParameter, CardGestureZones.PluginActionsCommand));
+
+    [STATestMethod]
+    public void CardGestures_PluginActionsButtonVisibilityMatrix()
+    {
+        // Issue #240 插件钮可见性＝卡片悬停 ∧ 文字卡 ∧ 目录存在已启用动作
+        //（单一来源 MainWindowViewModel.HasEnabledPluginActions）；与选中态
+        // 无关；图片卡恒无、编辑中的卡让路、插件停用整行塌缩。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var textItem = board.AddText("插件钮悬停", BoardCategory.Inbox);
+        var imageItem = AddImageCard(directory, board, "plugin-button.png");
+        var catalog = CreateEnabledActionCatalog(directory);
+        var window = CreateWindow(directory, board, pluginCatalog: catalog);
+        var viewModel = (MainWindowViewModel)window.DataContext;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            Assert.IsTrue(
+                viewModel.HasEnabledPluginActions,
+                "窗口构造期必须同步目录态（目录存在已启用动作）。");
+            var textContainer = ContainerOf(window, textItem);
+            var imageContainer = ContainerOf(window, imageItem);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var textButton = PluginActionsButtonOf(textContainer);
+            var imageButton = PluginActionsButtonOf(imageContainer);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                // 未悬停：基态隐藏、不可命中。
+                Assert.IsFalse(FadeAnimation.GetIsActive(textButton), "未悬停不得淡入插件钮。");
+                Assert.IsFalse(textButton.IsHitTestVisible, "未悬停插件钮不可命中。");
+
+                // 悬停文字卡：追加行常在（目录态驱动，不随悬停派生）、插件钮淡入。
+                HoverRealAt(window, textContainer, new Point(24, textContainer.ActualHeight * 0.5));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+                Assert.IsTrue(
+                    FadeAnimation.GetIsActive(textButton),
+                    "悬停文字卡必须淡入插件钮。");
+                Assert.IsTrue(textButton.IsHitTestVisible, "淡入后插件钮可命中。");
+                var appendRow = (Grid)textButton.Parent;
+                Assert.AreEqual(
+                    Visibility.Visible,
+                    appendRow.Visibility,
+                    "目录存在已启用动作时追加行必须常在（短卡也占行，不随悬停跳变）。");
+
+                // 与选中态无关：选中该卡不影响插件钮可见性。
+                var list = (ListBox)window.FindName("BoardList");
+                list.SelectedItems.Add(textItem);
+                CompleteLayout(window);
+                Assert.IsTrue(
+                    FadeAnimation.GetIsActive(textButton),
+                    "插件钮可见性与选中态无关。");
+
+                // 悬停图片卡：图片卡恒无插件钮，追加行整行塌缩。
+                HoverRealAt(window, imageContainer, new Point(24, imageContainer.ActualHeight * 0.5));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+                Assert.IsFalse(
+                    FadeAnimation.GetIsActive(imageButton),
+                    "图片卡不得淡入插件钮。");
+                Assert.AreEqual(
+                    Visibility.Collapsed,
+                    ((Grid)imageButton.Parent).Visibility,
+                    "图片卡的追加行必须整行塌缩。");
+
+                // 编辑中的卡让路：进入编辑后插件钮淡出。
+                HoverRealAt(window, textContainer, new Point(24, textContainer.ActualHeight * 0.5));
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+                EnterCardEditingWithDoubleClick(window, textItem);
+                CompleteLayout(window);
+                Assert.IsFalse(
+                    FadeAnimation.GetIsActive(textButton),
+                    "编辑中的卡插件钮必须让路（淡出）。");
+                InvokePrivate(window, "CommitCardTextEditing");
+                CompleteLayout(window);
+
+                // 停用插件（设置路径）：目录态翻转为无已启用动作——按钮淡出、
+                // 追加行整行塌缩；重新启用后恢复。
+                window.ApplyPluginEnabledAsync("typography-tidy", false).Wait();
+                CompleteLayout(window);
+                Assert.IsFalse(viewModel.HasEnabledPluginActions, "停用后目录态必须同步翻转。");
+                Assert.IsFalse(FadeAnimation.GetIsActive(textButton), "停用插件后插件钮必须淡出。");
+                Assert.AreEqual(
+                    Visibility.Collapsed,
+                    ((Grid)textButton.Parent).Visibility,
+                    "停用插件后短卡追加行必须整行塌缩。");
+
+                window.ApplyPluginEnabledAsync("typography-tidy", true).Wait();
+                CompleteLayout(window);
+                Assert.IsTrue(viewModel.HasEnabledPluginActions, "重新启用后目录态必须同步恢复。");
+                Assert.AreEqual(
+                    Visibility.Visible,
+                    ((Grid)textButton.Parent).Visibility,
+                    "重新启用后追加行恢复常在。");
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CardGestures_PluginActionsButtonRealClickOpensMenu()
+    {
+        // Issue #240 端到端（真实输入，完整 WPF 输入管线）：悬停淡入插件钮后
+        // 真实左键单击（手势层 OperationsPluginActions 独立意图会话）打开
+        // 「插件动作」菜单；命中卡不在选集内先单选（资源管理器惯例）。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var other = board.AddText("已选的另一张", BoardCategory.Inbox);
+        var item = board.AddText("插件钮点击", BoardCategory.Inbox);
+        var catalog = CreateEnabledActionCatalog(directory);
+        var window = CreateWindow(directory, board, pluginCatalog: catalog);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            list.SelectedItems.Add(other);
+            var button = PluginActionsButtonOf(container);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                var buttonCenter = button.TranslatePoint(
+                    new Point(button.ActualWidth / 2, button.ActualHeight / 2),
+                    container);
+                HoverRealAt(window, container, buttonCenter);
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+                Assert.IsTrue(
+                    FadeAnimation.GetIsActive(button),
+                    "前置条件：悬停已淡入插件钮。");
+
+                ClickRealAt(window, container, buttonCenter);
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+                var menu = window.LastPluginActionsMenuForEvidence;
+                Assert.IsNotNull(menu, "真实单击插件钮必须打开插件动作菜单。");
+                Assert.IsTrue(menu.IsOpen);
+                CollectionAssert.AreEquivalent(
+                    new[] { item.Id },
+                    list.SelectedItems.OfType<BoardItem>().Select(card => card.Id).ToArray(),
+                    "命中卡不在选集时先单选该卡。");
+                menu.IsOpen = false;
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void CardGestures_SecondClickBeyondDoubleClickWindowIsTwoSingleClicks()
     {
         using var directory = new TestDirectory();

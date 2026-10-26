@@ -512,6 +512,43 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
+    [STATestMethod]
+    public void RangeSelection_ShiftRightClickFromContentZoneSelectsDisplayedInterval()
+    {
+        // Issue #240：Shift+右键锚点范围选择自右半扩展到全卡面——左半（ContentZone）
+        // Shift 右键同样按锚点选区间，且不触发保存。
+        using var directory = new TestDirectory();
+        var board = CreateRangeSelectionBoard();
+        var items = board.Items(BoardCategory.Inbox).ToArray();
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+
+            // 锚点＝居中一张（单击选择钮建立），目标＝显示序更靠前的一张；
+            // 从左半 Shift 右键应选中锚点↔目标的显示区间（非追加，先清后选）。
+            ClickSelectionButton(window, items[2]);
+            RightClickCard(window, items[0], ModifierKeys.Shift, zoneTag: CardGestureZones.ContentZone);
+            CompleteLayout(window);
+
+            CollectionAssert.AreEquivalent(
+                items[..3],
+                list.SelectedItems.Cast<BoardItem>().ToArray(),
+                "左半 Shift 右键必须按锚点选中显示区间。");
+            Assert.AreEqual("3", ((TextBlock)window.FindName("SelectedCountText")).Text);
+            Assert.AreEqual(0, store.SaveCount, "范围选择不得触发保存。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
     private static BoardService CreateRangeSelectionBoard(int count = 5)
     {
         var board = new BoardService();

@@ -23,6 +23,7 @@ public sealed partial class MainWindowInteractionTests
             .Where(button => Equals(button.CommandParameter, CardGestureZones.TogglePinCommand) ||
                 Equals(button.CommandParameter, CardGestureZones.ToggleSelectionCommand) ||
                 Equals(button.CommandParameter, CardGestureZones.DeleteCardCommand) ||
+                Equals(button.CommandParameter, CardGestureZones.PluginActionsCommand) ||
                 (Equals(button.CommandParameter, CardGestureZones.NoteStripCommand) &&
                     button.Name == "CardOperationNoteButton"))
             .ToArray();
@@ -57,7 +58,8 @@ public sealed partial class MainWindowInteractionTests
             var body = FindDescendants<TextBlock>(list)
                 .Single(candidate => candidate.Text?.StartsWith('避') == true);
             var buttons = CardOperationButtons(container);
-            Assert.HasCount(4, buttons);
+            // Issue #240 起过滤器含插件动作钮（追加行右格），共五枚。
+            Assert.HasCount(5, buttons);
             // 激活备注钮以在最大态（网格完整两列）测量；悬停揭示是触发器语义，
             // 本测试守卫的是几何派生，直接驱动 FadeAnimation 即可。
             FadeAnimation.SetIsActive(

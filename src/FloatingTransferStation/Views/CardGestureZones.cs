@@ -42,6 +42,14 @@ public static class CardGestureZones
     public const string AiOrganizeCommand = "AiOrganize";
 
     /// <summary>
+    /// 插件动作钮（Issue #240）：单击打开「插件动作」菜单（菜单入口自左半
+    /// 右键迁入——右键已是全卡面统一选择手势）。独立意图会话，模式同置顶/
+    /// 删除/备注/AI 钮——不参与双击窗、不记双击痕迹、滑离释放取消意图；
+    /// 左键绝不 toggle 选中（「命中卡不在选集先单选」惯例在菜单函数内）。
+    /// </summary>
+    public const string PluginActionsCommand = "PluginActions";
+
+    /// <summary>
     /// 启动瓦片启动区（#30 修订 2026-10-18，Issue #186）：图标槽区域，单击=启动
     /// （500ms 重入门闩保持），拖拽仅从此区发起；选择非空时单击改 toggle 选择
     /// （启动挂起）。标记挂瓦片模板图标格 Tag 上，手势层沿可视树路径识别，

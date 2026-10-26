@@ -190,11 +190,13 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void RightClick_ContentZoneIsNotIntercepted()
+    public void RightClick_ContentZoneTogglesSelection()
     {
+        // Issue #240：右键选择手势全卡面统一——左半右键不再承载插件动作菜单，
+        // 与右半同样拦截并 toggle（两击往返：选中→取消），不复制、无状态提示。
         using var directory = new TestDirectory();
         var board = new BoardService();
-        var item = board.AddText("左半右键无操作");
+        var item = board.AddText("左半右键 toggle");
         var window = CreateWindow(directory, board);
         DataObject? captured = null;
         window.ClipboardWriterOverride = data =>
@@ -209,18 +211,29 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var list = (ListBox)window.FindName("BoardList");
-            var args = NewRightClickArgs(
-                ZoneHitSource(window, item, CardGestureZones.ContentZone));
 
-            list.RaiseEvent(args);
+            var firstClick = NewRightClickArgs(
+                ZoneHitSource(window, item, CardGestureZones.ContentZone));
+            list.RaiseEvent(firstClick);
             CompleteLayout(window);
 
-            Assert.IsFalse(args.Handled, "左半右键无插件时无操作、不拦截（选择手势只属于右半）。");
-            Assert.IsNull(captured);
-            Assert.IsEmpty(StatusOf(window));
+            Assert.IsTrue(firstClick.Handled, "左半右键是统一选择手势，必须拦截。");
+            CollectionAssert.AreEquivalent(
+                new[] { item },
+                list.SelectedItems.Cast<BoardItem>().ToArray(),
+                "左半右键第一击必须 toggle 选中命中卡。");
+
+            var secondClick = NewRightClickArgs(
+                ZoneHitSource(window, item, CardGestureZones.ContentZone));
+            list.RaiseEvent(secondClick);
+            CompleteLayout(window);
+
+            Assert.IsTrue(secondClick.Handled, "左半右键第二击仍是选择手势，必须拦截。");
             Assert.IsFalse(
                 list.SelectedItems.Cast<BoardItem>().Any(),
-                "左半右键不得产生选择语义。");
+                "左半右键第二击必须取消选中（用户报障：此前只进不出）。");
+            Assert.IsNull(captured, "右键选择手势不得触发复制。");
+            Assert.IsEmpty(StatusOf(window));
         }
         finally
         {

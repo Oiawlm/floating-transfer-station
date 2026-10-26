@@ -64,6 +64,11 @@ public partial class MainWindow
         /// 直接替换正文，与右半选择手势不同的独立意图；模式照抄
         /// OperationsPin——不参与双击窗、不记双击痕迹、滑离释放取消意图。</summary>
         OperationsAiOrganize,
+
+        /// <summary>右半·插件动作钮（Issue #240）：单击打开「插件动作」菜单，
+        /// 与右半选择手势不同的独立意图；模式照抄 OperationsPin——不参与
+        /// 双击窗、不记双击痕迹、滑离释放取消意图。</summary>
+        OperationsPluginActions,
     }
 
     /// <summary>

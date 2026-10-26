@@ -23,7 +23,8 @@ public sealed partial class MainWindowInteractionTests
         BoardService board,
         DefaultCaptureCategoryState? defaultCaptureCategory = null,
         IUpdateService? updateService = null,
-        IPreferencesStore? preferencesStore = null)
+        IPreferencesStore? preferencesStore = null,
+        PluginCatalog? pluginCatalog = null)
     {
         defaultCaptureCategory ??= new DefaultCaptureCategoryState();
         var paths = AppPaths.ForTests(directory.Root);
@@ -35,7 +36,8 @@ public sealed partial class MainWindowInteractionTests
             defaultCaptureCategory,
             new ImageNormalizer(store.ImagesDirectory),
             updateService: updateService,
-            preferencesStore: preferencesStore);
+            preferencesStore: preferencesStore,
+            pluginCatalog: pluginCatalog);
     }
 
     private static MainWindow CreateWindow(
@@ -64,7 +66,8 @@ public sealed partial class MainWindowInteractionTests
         ILauncherStore? launcherStore = null,
         AppLauncher? appLauncher = null,
         string? dataDirectory = null,
-        AppPreferences? preferences = null)
+        AppPreferences? preferences = null,
+        PluginCatalog? pluginCatalog = null)
     {
         defaultCaptureCategory ??= new DefaultCaptureCategoryState();
         var operationGate = new BoardOperationGate();
@@ -100,7 +103,8 @@ public sealed partial class MainWindowInteractionTests
             appLauncher: appLauncher,
             dataDirectory: dataDirectory ?? ((store as LocalStore)?.ImagesDirectory is { } imagesDirectory
                 ? Path.GetDirectoryName(imagesDirectory)
-                : null));
+                : null),
+            pluginCatalog: pluginCatalog);
         return window;
     }
 
