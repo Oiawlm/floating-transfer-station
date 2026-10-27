@@ -201,33 +201,36 @@ $overrides = @(
 # 2026-10-27 收缩（spec §三处置表）：删除 Core/Services/I*.cs 兜底（对 0 个现有跟踪文件改变
 # 行为，未登记新接口从静默全量变为 L3 指引全量）；scripts/* glob 拆为显式清单（选择器两文件
 # 已入例外表 SelectorContract，新脚本默认 L3 全量＋指引——先全量、稳定后缩圈）。
+# 理由自 2026-10-27 F2 终验起全部引用机制实证（RESEARCH-AFFECTED-NARROW-20261027 §三）：
+# 「F2 缩圈队列」占位全部兑现——可缩者（D/K/O 族）已入例外表，KEEP-FULL 升级为消费面证据
+#（视觉动画四件 category 由 C2 队列占位改判 C5 有意保留）。
 $globalFulls = @(
-    @{ Reason = '共享窗口壳（主窗 XAML/代码后置/App 入口）'; Category = 'C5'; Globs = @(
+    @{ Reason = '共享窗口壳（F2 §三.A KEEP-FULL：共享 harness 直接构造真实窗口＝全部 58 个 MIT.* 交互族＋14 文件 19 处直接 new MainWindow；App 类为资源根/结构性入口，0 直接引用）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.xaml', 'src/FloatingTransferStation/Views/MainWindow.xaml.cs',
         'src/FloatingTransferStation/App.xaml', 'src/FloatingTransferStation/App.xaml.cs') },
-    @{ Reason = '共享样式/主题资源字典（六窗口合并或运行时全局切换，取证 2026-10-19；F2 缩圈队列）'; Category = 'C5'; Globs = @(
+    @{ Reason = '共享样式/主题资源字典（F2 §三.B KEEP-FULL：键位断言＋约 90 处动画挂载；六窗口 MergedDictionaries 合并＋运行时整本切换（契约 #34），渲染真实控件/卡片的测试全部间接消费，不可枚举）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Resources/*') },
-    @{ Reason = '设置宿主接口——ApplyPreferences 等成员是跨区域测试驱动 API（取证 2026-10-19：设置/清理/选择/更新/热键/迁移八族直用；IImageNormalizer 拆条降级待 F2 消费面取证）'; Category = 'C5'; Globs = @(
+    @{ Reason = '设置宿主/图片归一化接口（F2 §三.C KEEP-FULL：ApplyPreferences＝跨区域测试驱动 API，11 文件 10 族直调；IImageNormalizer＝共享 harness 构造参数→全部交互族间接）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Services/ISettingsHost.cs', 'src/FloatingTransferStation/Services/IImageNormalizer.cs') },
     @{ Reason = '跨区域存储/偏好契约接口（F2 §三.D KEEP-FULL：IBoardStore 19 文件跨 12+ 族含共享 fixture、IPreferencesStore 10 文件含共享 harness 构造参数→全交互族间接）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation.Core/Services/IBoardStore.cs', 'src/FloatingTransferStation.Core/Services/IPreferencesStore.cs') },
-    @{ Reason = 'Core 视图模型——全部交互测试的共享机器（取证 2026-10-19：MainWindowViewModel 被 40+ 测试文件直用）'; Category = 'C5'; Globs = @(
+    @{ Reason = 'Core 视图模型（F2 §三.F KEEP-FULL：MainWindowViewModel 40 测试文件直用；CategoryViewModel 含共享 harness FindCategoryTab→全交互族间接；ObservableObject 基类继承链＝全部 VM 测试）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation.Core/ViewModels/*') },
-    @{ Reason = '全局设计 token/设置窗几何数学——全部界面与动效的唯一数值来源（取证 2026-10-19；LauncherGridMath/SettingsWindowMetrics 实际由例外表前置接住，本条为防御纵深）'; Category = 'C5'; Globs = @(
+    @{ Reason = '全局设计 token（F2 §三.G KEEP-FULL：10 文件直用＋全部 XAML x:Static 镜像与动画时长唯一数值来源（契约 #34）；LauncherGridMath/SettingsWindowMetrics 实际由例外表前置接住，本条为防御纵深）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation.Core/Design/*') },
-    @{ Reason = '原生互操作/窗口效果——全域消费（取证 2026-10-19）'; Category = 'C5'; Globs = @(
+    @{ Reason = '原生互操作/窗口效果（F2 §三.H KEEP-FULL：DwmWindowEffects 测试 0 直接引用、src 9 文件消费；NativeMethods 3 文件直用＋src 9 文件消费——Win32 路径行为面全域，不可枚举）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Services/DwmWindowEffects.cs', 'src/FloatingTransferStation/Services/NativeMethods.cs') },
-    @{ Reason = '构建/依赖/解决方案/CI 配置（解决方案级影响）'; Category = 'C5'; Globs = @(
+    @{ Reason = '构建/依赖/解决方案/CI 配置（F2 §三.I KEEP-FULL：构建输入影响全部产物与两测试工程全体，结构性全域）'; Category = 'C5'; Globs = @(
         'Directory.Build.props', 'Directory.Packages.props', 'FloatingTransferStation.slnx', 'global.json', 'nuget.config',
         '.github/workflows/*') },
-    @{ Reason = '窗口/卡片视觉与动画基础设施——测试方法名与源文件名不同族，保守回退全量（F2 缩圈取证队列）'; Category = 'C2'; Globs = @(
+    @{ Reason = '视觉/动画基础设施（F2 §三.J KEEP-FULL×4：FadeAnimation 卡片模板约 90 处挂载→渲染真实卡片的测试全部间接；LiftAnimation＝CardRootStyle 每卡根样式悬停触发；CardEntrance 经 CollectionChanged 任何新增卡片驱动；VisualTransitions CollapseTimer_Tick＝共享 harness 与 10 文件 InvokePrivate 驱动——共享路径间接消费机制实证，R-AppStem/L2 派生不能接管）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.VisualTransitions.cs', 'src/FloatingTransferStation/Views/MainWindow.CardEntrance.cs',
         'src/FloatingTransferStation/Views/FadeAnimation.cs', 'src/FloatingTransferStation/Views/LiftAnimation.cs') },
     @{ Reason = '共享测试设施（F2 §三.K KEEP-FULL：TestDirectory 102 文件消费 70%、tests GlobalUsings 全工程隐式 using、MIT.cs 58 partial 共享壳、双 fixture 跨族联合消费 10 文件）'; Category = 'C5'; Globs = @(
         'tests/FloatingTransferStation.Tests/TestDirectory.cs', 'tests/FloatingTransferStation.Tests/GlobalUsings.cs',
         'tests/FloatingTransferStation.Tests/FailingFirstSaveBoardStore.cs',
         'tests/FloatingTransferStation.Tests/GatedSettingsBoardStore.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.cs') },
-    @{ Reason = '构建/测试基础设施脚本（引导、打包、卫生检查、安装/发行契约链；显式清单——新脚本默认 L3 全量）'; Category = 'C5'; Globs = @(
+    @{ Reason = '构建/测试基础设施脚本（F2 §三.L KEEP-FULL：引导、打包、卫生检查、安装/发行契约链无测试级消费面——结构性全域；显式清单，新脚本默认 L3 全量）'; Category = 'C5'; Globs = @(
         'scripts/bootstrap-dotnet.ps1', 'scripts/bootstrap-inno.ps1', 'scripts/build-release.ps1', 'scripts/check-repo-hygiene.ps1',
         'scripts/run-adversarial.ps1', 'scripts/test-bootstrap-inno-path-contract.ps1', 'scripts/test-bootstrap-tool-versions.ps1',
         'scripts/test-installed-lifecycle.ps1', 'scripts/test-installer-cleanup.ps1', 'scripts/test-release-readiness.ps1') },
