@@ -182,6 +182,10 @@ $overrides = @(
     # 应用图标管线（2026-10-27 登记缩圈）：生成器工程与规格源（契约 #35 锁定面＝AppIconContractTests）
     @{ Name = 'AppIcon'; Filter = 'FullyQualifiedName~AppIcon'; Globs = @(
         'src/FloatingTransferStation.IconTool/*', 'src/FloatingTransferStation/Assets/AppIcon/*') },
+    # 测试共享设施缩圈件（2026-10-27 F2 缩圈 §三.K）：成员 SetItemCreatedAt/SetAllItemsCreatedAt
+    # 仅 3 消费文件（BoardService 40/BoardMutation 53/AutoCleanup 31），非跨族共享机器。
+    @{ Name = 'BoardCreatedAt'; Filter = 'FullyQualifiedName~BoardService|FullyQualifiedName~BoardMutation|FullyQualifiedName~AutoCleanup'; Globs = @(
+        'tests/FloatingTransferStation.Tests/BoardCreatedAtTestHelpers.cs') },
     # 选择器契约区域（2026-10-27 scripts 自噬消灭）：改选择器两文件不再全量，
     # 由本契约测试脚本承接（Kind=Script：Core 基线后子进程运行，非 0 退出＝失败；
     # 恒非零语义＝契约测试自身 0 场景即 exit 1）。
@@ -215,9 +219,9 @@ $globalFulls = @(
     @{ Reason = '窗口/卡片视觉与动画基础设施——测试方法名与源文件名不同族，保守回退全量（F2 缩圈取证队列）'; Category = 'C2'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.VisualTransitions.cs', 'src/FloatingTransferStation/Views/MainWindow.CardEntrance.cs',
         'src/FloatingTransferStation/Views/FadeAnimation.cs', 'src/FloatingTransferStation/Views/LiftAnimation.cs') },
-    @{ Reason = '共享测试设施'; Category = 'C5'; Globs = @(
+    @{ Reason = '共享测试设施（F2 §三.K KEEP-FULL：TestDirectory 102 文件消费 70%、tests GlobalUsings 全工程隐式 using、MIT.cs 58 partial 共享壳、双 fixture 跨族联合消费 10 文件）'; Category = 'C5'; Globs = @(
         'tests/FloatingTransferStation.Tests/TestDirectory.cs', 'tests/FloatingTransferStation.Tests/GlobalUsings.cs',
-        'tests/FloatingTransferStation.Tests/BoardCreatedAtTestHelpers.cs', 'tests/FloatingTransferStation.Tests/FailingFirstSaveBoardStore.cs',
+        'tests/FloatingTransferStation.Tests/FailingFirstSaveBoardStore.cs',
         'tests/FloatingTransferStation.Tests/GatedSettingsBoardStore.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.cs') },
     @{ Reason = '构建/测试基础设施脚本（引导、打包、卫生检查、安装/发行契约链；显式清单——新脚本默认 L3 全量）'; Category = 'C5'; Globs = @(
         'scripts/bootstrap-dotnet.ps1', 'scripts/bootstrap-inno.ps1', 'scripts/build-release.ps1', 'scripts/check-repo-hygiene.ps1',

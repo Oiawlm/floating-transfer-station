@@ -394,6 +394,17 @@ Assert-Scenario '迁移期登记：DesignTheme/Core.PluginActions/AppIcon（NONE
     Assert-True ($plan4.Mode -eq 'Full' -and $plan4.FullReasons.Count -eq 3) '构建基建/无专测件应入全量表（NONE=13 清零的全量部分）'
 }
 
+Assert-Scenario 'F2 缩圈集成·K 族测试共享设施：BoardCreatedAtTestHelpers 精确区（不再全量；F2 §三.K）' {
+    $plan = Get-AffectedTestPlan @('tests/FloatingTransferStation.Tests/BoardCreatedAtTestHelpers.cs') $app $core
+    Assert-True ($plan.Mode -eq 'Affected') "时间戳测试助手应为 Affected，实际 $($plan.Mode)"
+    Assert-True ($plan.Selected.Contains('BoardCreatedAt')) '应命中 BoardCreatedAt 区域（BoardService 40/BoardMutation 53/AutoCleanup 31 三族并集）'
+    $filter = $plan.Selected['BoardCreatedAt'].Filters -join '|'
+    Assert-True ($filter -like '*BoardService*' -and $filter -like '*BoardMutation*' -and $filter -like '*AutoCleanup*') "filter 应含三词根，实际 $filter"
+    # KEEP-FULL 五件照旧全量（F2 §三.K：TestDirectory 102 文件/GlobalUsings 隐式 using/MIT.cs 共享壳/双 fixture 跨族）
+    $plan2 = Get-AffectedTestPlan @('tests/FloatingTransferStation.Tests/TestDirectory.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.cs') $app $core
+    Assert-True ($plan2.Mode -eq 'Full' -and $plan2.FullReasons.Count -eq 2) '共享壳五件应保留全量（F2 KEEP-FULL 实证）'
+}
+
 Assert-Scenario 'F2 缩圈集成·D 族跨区域接口三件：原子写/自启/密钥契约精确区（不再全量；F2 §三.D）' {
     $plan = Get-AffectedTestPlan @('src/FloatingTransferStation.Core/Services/IAtomicTextWriter.cs', 'src/FloatingTransferStation.Core/Services/AtomicTextWriter.cs') $app $core
     Assert-True ($plan.Mode -eq 'Affected') "原子写契约族应为 Affected，实际 $($plan.Mode)"
@@ -561,7 +572,7 @@ if ($failures.Count) {
     exit 1
 }
 # 场景计数下限（Kind=Script 区域的恒非零承担：契约测试自身 0 场景/大幅缩水即 exit 1）
-$minimumScenarios = 47
+$minimumScenarios = 48
 if ($script:passedCount -lt $minimumScenarios) {
     Write-Host "选择器契约测试失败：场景计数 $($script:passedCount) 低于下限 $minimumScenarios（场景缩水＝恒非零语义失守）。"
     exit 1
