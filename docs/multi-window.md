@@ -29,6 +29,7 @@
   承接既有分支（如掉队分支）时改用检出写法：`git worktree add "../悬浮中转站-worktrees/<slug>" <类型>/<slug>`。
 
 - **gitignored 本地指令文档不随 worktree 复制**：创建后手动拷入 `AGENTS.md`、`PROJECT_GUIDE.md` 等本地指令文件与本地交接目录（不拷则规则链断裂）；用后清理：`git worktree remove <路径> && git worktree prune`。
+- **worktree 内跑分层测试**（2026-10-27 判定序 v2 起）：`scripts\run-affected-tests.ps1` 在各 worktree 内独立判定——`-Scope Integrate`（默认）取该 worktree 分支与 `origin/main` 的 merge-base（整条分支集成语义），`-Scope Edit` 只反馈基线 `HEAD` 之后的本窗编辑；两模式语义见[设计契约](design-contracts.md) #32。`.tools`（本地 SDK，gitignored）不随 worktree，用目录联接复用主检出。真实输入交互测试的全局串行与空闲 ≥180 秒纪律（B-009）不因 worktree 隔离而豁免——多窗口并行时 `dotnet test` 仍须串行排程。
 - 主检出保持 on main，受跟踪内容由集成窗口独占写入；gitignored 本地文档的三个不入库写动作不在此限：规划窗口落盘执行提示词、归位时的本地文档回写、执行报告落盘交接目录。worktree 内每文件单一写者。
 
 ## 错峰与并发
