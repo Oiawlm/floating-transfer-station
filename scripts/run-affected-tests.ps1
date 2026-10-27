@@ -186,6 +186,10 @@ $overrides = @(
     # 仅 3 消费文件（BoardService 40/BoardMutation 53/AutoCleanup 31），非跨族共享机器。
     @{ Name = 'BoardCreatedAt'; Filter = 'FullyQualifiedName~BoardService|FullyQualifiedName~BoardMutation|FullyQualifiedName~AutoCleanup'; Globs = @(
         'tests/FloatingTransferStation.Tests/BoardCreatedAtTestHelpers.cs') },
+    # 对话框壳回退（2026-10-27 F2 缩圈 §三.O）：src 消费者恰 4 对话框壳（编辑目标/网址输入/
+    # 多选器/插件试用窗），测试面＝QuickLaunch 104＋SettingsWindowPlugin 12。
+    @{ Name = 'DialogShell'; Filter = 'FullyQualifiedName~QuickLaunch|FullyQualifiedName~SettingsWindowPlugin'; Globs = @(
+        'src/FloatingTransferStation/Views/DialogShellFallback.cs') },
     # 选择器契约区域（2026-10-27 scripts 自噬消灭）：改选择器两文件不再全量，
     # 由本契约测试脚本承接（Kind=Script：Core 基线后子进程运行，非 0 退出＝失败；
     # 恒非零语义＝契约测试自身 0 场景即 exit 1）。
@@ -227,10 +231,9 @@ $globalFulls = @(
         'scripts/bootstrap-dotnet.ps1', 'scripts/bootstrap-inno.ps1', 'scripts/build-release.ps1', 'scripts/check-repo-hygiene.ps1',
         'scripts/run-adversarial.ps1', 'scripts/test-bootstrap-inno-path-contract.ps1', 'scripts/test-bootstrap-tool-versions.ps1',
         'scripts/test-installed-lifecycle.ps1', 'scripts/test-installer-cleanup.ps1', 'scripts/test-release-readiness.ps1') },
-    @{ Reason = '构建基建/无专测件（AssemblyInfo/GlobalUsings 构建基建；XAML 转换器与对话框壳无专测，F2 复核）'; Category = 'C5'; Globs = @(
+    @{ Reason = '构建基建（F2 §三.S KEEP-FULL：AssemblyInfo＝ThemeInfo 全局资源查找、GlobalUsings＝全 App 隐式 using，结构性全域）；XAML 转换器（§三.Q：唯一消费者 MainWindowStyles.xaml 资源声明→全部窗口测试间接）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/AssemblyInfo.cs', 'src/FloatingTransferStation/GlobalUsings.cs',
-        'src/FloatingTransferStation/Converters/BooleanOrConverter.cs', 'src/FloatingTransferStation/Converters/NonEmptyTextConverter.cs',
-        'src/FloatingTransferStation/Views/DialogShellFallback.cs') }
+        'src/FloatingTransferStation/Converters/BooleanOrConverter.cs', 'src/FloatingTransferStation/Converters/NonEmptyTextConverter.cs') }
 )
 
 # ---- App 交互测试词根表（单一事实源：文件词根 → 该文件测试方法名的首段前缀全集）----

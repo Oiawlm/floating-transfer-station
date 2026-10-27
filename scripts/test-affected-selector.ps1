@@ -390,8 +390,16 @@ Assert-Scenario '迁移期登记：DesignTheme/Core.PluginActions/AppIcon（NONE
     Assert-True ($plan2.Selected.Contains('Core.PluginActions')) 'OQ-1：Pipeline＋试用窗口三文件应同族登记 Core.PluginActions'
     $plan3 = Get-AffectedTestPlan @('src/FloatingTransferStation.IconTool/Program.cs', 'src/FloatingTransferStation/Assets/AppIcon/app-icon.json') $app $core
     Assert-True ($plan3.Selected.Contains('AppIcon')) 'IconTool 与图标规格源应命中 AppIcon（契约 #35 锁定面）'
-    $plan4 = Get-AffectedTestPlan @('src/FloatingTransferStation/AssemblyInfo.cs', 'src/FloatingTransferStation/Converters/BooleanOrConverter.cs', 'src/FloatingTransferStation/Views/DialogShellFallback.cs') $app $core
-    Assert-True ($plan4.Mode -eq 'Full' -and $plan4.FullReasons.Count -eq 3) '构建基建/无专测件应入全量表（NONE=13 清零的全量部分）'
+    $plan4 = Get-AffectedTestPlan @('src/FloatingTransferStation/AssemblyInfo.cs', 'src/FloatingTransferStation/Converters/BooleanOrConverter.cs') $app $core
+    Assert-True ($plan4.Mode -eq 'Full' -and $plan4.FullReasons.Count -eq 2) '构建基建/转换器应入全量表（NONE=13 清零的全量部分；DialogShellFallback 已随 F2 §三.O 缩圈移出）'
+}
+
+Assert-Scenario 'F2 缩圈集成·O 族对话框壳回退：DialogShellFallback 精确区（不再全量；F2 §三.O）' {
+    $plan = Get-AffectedTestPlan @('src/FloatingTransferStation/Views/DialogShellFallback.cs') $app $core
+    Assert-True ($plan.Mode -eq 'Affected') "对话框壳回退应为 Affected，实际 $($plan.Mode)"
+    Assert-True ($plan.Selected.Contains('DialogShell')) '应命中 DialogShell 区域（QuickLaunch 104＋SettingsWindowPlugin 12）'
+    $filter = $plan.Selected['DialogShell'].Filters -join '|'
+    Assert-True ($filter -like '*QuickLaunch*' -and $filter -like '*SettingsWindowPlugin*') "filter 应含双词根，实际 $filter"
 }
 
 Assert-Scenario 'F2 缩圈集成·K 族测试共享设施：BoardCreatedAtTestHelpers 精确区（不再全量；F2 §三.K）' {
@@ -572,7 +580,7 @@ if ($failures.Count) {
     exit 1
 }
 # 场景计数下限（Kind=Script 区域的恒非零承担：契约测试自身 0 场景/大幅缩水即 exit 1）
-$minimumScenarios = 48
+$minimumScenarios = 49
 if ($script:passedCount -lt $minimumScenarios) {
     Write-Host "选择器契约测试失败：场景计数 $($script:passedCount) 低于下限 $minimumScenarios（场景缩水＝恒非零语义失守）。"
     exit 1
