@@ -26,11 +26,16 @@ public readonly record struct CapturedContentFingerprint(CapturedContentKind Kin
         CapturedContentKind.Text,
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text))));
 
-    public static CapturedContentFingerprint? ForImageFile(string absolutePath)
+    public static CapturedContentFingerprint? ForImageFile(
+        string absolutePath,
+        ImageInputLimits? limits = null)
     {
         try
         {
-            using var image = Image.Load<Rgba32>(absolutePath);
+            // 与全部图片输入同一份受限解码配置（契约 #50）：指纹只读自管 PNG，
+            // 也不经默认配置——改名 TIFF 字节在此不可达。
+            using var image = Image.Load<Rgba32>(
+                (limits ?? ImageInputLimits.Default).DecodeFirstFrame, absolutePath);
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             Span<byte> header = stackalloc byte[8];
             BinaryPrimitives.WriteInt32LittleEndian(header, image.Width);

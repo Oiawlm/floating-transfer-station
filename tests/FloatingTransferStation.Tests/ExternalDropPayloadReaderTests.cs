@@ -32,8 +32,8 @@ public sealed class ExternalDropPayloadReaderTests
     [DataRow("photo.png", true)]
     [DataRow("photo.BMP", true)]
     [DataRow("photo.gif", true)]
-    [DataRow("photo.TIF", true)]
-    [DataRow("photo.tiff", true)]
+    [DataRow("photo.TIF", false)]
+    [DataRow("photo.tiff", false)]
     [DataRow("photo.WEBP", true)]
     [DataRow("photo.pdf", false)]
     [DataRow("   ", false)]
@@ -87,6 +87,8 @@ public sealed class ExternalDropPayloadReaderTests
     public void FileDropAcceptsSafelySnapshotableStringEnumerable()
     {
         using var directory = new TestDirectory();
+        // 1.64.0 起 TIFF 不再是图片输入：合法快照形态照旧识别，但负载按
+        // 原始文件清单（FileList）交付——契约 #50 的优雅降级路径。
         var path = Path.Combine(directory.Root, "image.tiff");
         WriteImage(path);
         var data = new DataObject();
@@ -94,10 +96,10 @@ public sealed class ExternalDropPayloadReaderTests
 
         var payload = new ExternalDropPayloadReader().Read(data);
 
-        Assert.IsInstanceOfType<ExternalDropPayload.ImageFiles>(payload);
+        Assert.IsInstanceOfType<ExternalDropPayload.FileList>(payload);
         CollectionAssert.AreEqual(
             new[] { path },
-            ((ExternalDropPayload.ImageFiles)payload).Paths.ToArray());
+            ((ExternalDropPayload.FileList)payload!).Paths.ToArray());
     }
 
     [STATestMethod]
@@ -105,7 +107,6 @@ public sealed class ExternalDropPayloadReaderTests
     [DataRow("png")]
     [DataRow("bmp")]
     [DataRow("webp")]
-    [DataRow("tiff")]
     public void CommonSingleFrameImageFileDropIsAccepted(string extension)
     {
         using var directory = new TestDirectory();

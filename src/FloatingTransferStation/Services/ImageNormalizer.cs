@@ -321,8 +321,10 @@ public sealed class ImageNormalizer : IImageNormalizer
     private async Task RepairStoredImageAsync(string imagePath, CancellationToken cancellationToken)
     {
         EnsureManagedImagePath(imagePath);
+        // 与全部图片输入同一份受限解码配置（契约 #50）：修复路径只读自管 PNG，
+        // 也不经默认配置——改名 TIFF 字节在此不可达。
         using var image = await SixLabors.ImageSharp.Image.LoadAsync<
-            SixLabors.ImageSharp.PixelFormats.Rgba32>(imagePath, cancellationToken).ConfigureAwait(false);
+            SixLabors.ImageSharp.PixelFormats.Rgba32>(_limits.DecodeFirstFrame, imagePath, cancellationToken).ConfigureAwait(false);
         var allAlphaZero = true;
         var hasNonZeroRgb = false;
         image.ProcessPixelRows(accessor =>
