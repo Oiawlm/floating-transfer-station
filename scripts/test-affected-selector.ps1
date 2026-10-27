@@ -65,7 +65,7 @@ $replayCases = @(
        Evidence = 'observations.md:54 + 2026-10-19-affected-test-scope-report.md:5 + b03a748' },
     @{ Id = 'R04'; Files = @('CHANGELOG.md', 'docs/design-contracts.md', 'docs/images/settings-window-dark.png', 'docs/images/settings-window.png', 'scripts/run-affected-tests.ps1', 'src/FloatingTransferStation/Views/MainWindow.BoardEmptyState.cs', 'src/FloatingTransferStation/Views/MainWindow.DailyReview.cs', 'src/FloatingTransferStation/Views/MainWindow.Search.cs', 'src/FloatingTransferStation/Views/MainWindow.xaml', 'src/FloatingTransferStation/Views/MainWindow.xaml.cs', 'src/FloatingTransferStation/Views/SettingsWindow.xaml', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.BoardEmptyState.cs', 'tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs')
        NewExpected = 'Affected'; ExpectedMode = 'Full'
-       Deviation = '主窗壳二件（MainWindow.xaml/.xaml.cs）按 spec §三 #0 保留 C5（F2 缩圈队列）；C1/C2 面（BoardEmptyState partial、scripts 自噬）已消灭'
+       Deviation = '主窗壳二件（MainWindow.xaml/.xaml.cs）按 F2 §三.A KEEP-FULL（58 交互族共享 harness 构造真实窗口，不可枚举）；C1/C2 面（BoardEmptyState partial、scripts 自噬）已消灭'
        Evidence = '2026-10-19-empty-state-settings-width-report.md:45 + f895fd0(PR#201) + 133d676' },
     @{ Id = 'R05'; Files = @('.github/PULL_REQUEST_TEMPLATE.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'README.md', 'docs/design-contracts.md', 'scripts/run-affected-tests.ps1', 'scripts/test-affected-selector.ps1')
        NewExpected = 'Affected'; ExpectedMode = 'Affected'; Deviation = $null
@@ -75,7 +75,7 @@ $replayCases = @(
        Evidence = '2026-10-19-contract-consolidation-report.md:135,139,144 + 3c17f8e(PR#205)' },
     @{ Id = 'R07'; Files = @('CHANGELOG.md', 'README.md', 'docs/design-contracts.md', 'docs/usage.md', 'src/FloatingTransferStation.Core/Models/AppPreferences.cs', 'src/FloatingTransferStation.Core/ViewModels/MainWindowViewModel.cs', 'src/FloatingTransferStation/Resources/MainWindowStyles.xaml', 'src/FloatingTransferStation/Views/MainWindow.Settings.cs', 'src/FloatingTransferStation/Views/MainWindow.xaml.cs', 'src/FloatingTransferStation/Views/SettingsWindow.xaml', 'src/FloatingTransferStation/Views/SettingsWindow.xaml.cs', 'tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardNote.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.DailyReview.cs', 'tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs', 'tests/FloatingTransferStation.Tests/SettingsWindowNavPaneTests.cs')
        NewExpected = 'Affected'; ExpectedMode = 'Full'
-       Deviation = 'Resources/ViewModels/主窗壳三全量类保留 C5（F2 取证队列；W1 Note 明言「否则维持 Full」）'
+       Deviation = 'Resources/ViewModels/主窗壳按 F2 §三.B/F/A KEEP-FULL（W1 Note 预判「否则维持 Full」兑现——机制实证维持全量）；其余文件全部已登记/派生'
        Evidence = '2026-10-22-short-card-note-report.md:39,64 + 182818a(PR#214)' },
     @{ Id = 'R08'; Files = @('CHANGELOG.md', 'README.md', 'version.txt')
        NewExpected = 'Full'; ExpectedMode = 'Affected'
@@ -86,11 +86,11 @@ $replayCases = @(
        Evidence = '2026-10-23-launcher-batch-integrate-release-report.md:11,15,40 + 0942735(PR#219)' },
     @{ Id = 'R10'; Files = @('CHANGELOG.md', 'README.md', 'docs/design-contracts.md', 'docs/readme-style-guide.md', 'docs/usage.md', 'installer/悬浮中转站.iss', 'scripts/test-installer-cleanup.ps1', 'src/FloatingTransferStation.Core/Services/DataDirectoryRelocation.cs', 'src/FloatingTransferStation.Core/Services/DataDirectorySettings.cs', 'src/FloatingTransferStation/Services/DataDirectoryChangeService.cs', 'src/FloatingTransferStation/Views/SettingsWindow.xaml', 'src/FloatingTransferStation/Views/SettingsWindow.xaml.cs', 'tests/FloatingTransferStation.Core.Tests/DataDirectoryRelocationTests.cs', 'tests/FloatingTransferStation.Core.Tests/RelocationCleanupTests.cs', 'tests/FloatingTransferStation.Tests/DataDirectoryChangeServiceTests.cs', 'tests/FloatingTransferStation.Tests/LifecycleTests.Installer.cs', 'tests/FloatingTransferStation.Tests/MainWindowDataRelocationTests.cs')
        NewExpected = 'Affected'; ExpectedMode = 'Full'
-       Deviation = 'scripts/test-installer-cleanup.ps1 属构建/安装链全量表保留（spec §四）；C1 面（DataDirectoryChangeService 未登记）已由 R-AppStem 消灭'
+       Deviation = 'scripts/test-installer-cleanup.ps1 属构建/安装链全量表保留（F2 §三.L KEEP-FULL——无测试级消费面）；C1 面（DataDirectoryChangeService 未登记）已由 R-AppStem 消灭'
        Evidence = '2026-10-24-batch10/traces-159-train/pr-body-data-directory-shape.md:55 + 03f0bbc(PR#232)' },
     @{ Id = 'R11'; Files = @('CHANGELOG.md', 'README.md', 'docs/design-contracts.md', 'docs/design.md', 'docs/usage.md', 'scripts/run-affected-tests.ps1', 'src/FloatingTransferStation.Core/Design/DesignTokens.cs', 'src/FloatingTransferStation.Core/Models/AppPreferences.cs', 'src/FloatingTransferStation/Resources/MainWindowStyles.xaml', 'src/FloatingTransferStation/Services/InterfaceFontManager.cs', 'src/FloatingTransferStation/Views/LauncherEditTargetWindow.xaml', 'src/FloatingTransferStation/Views/LauncherEditTargetWindow.xaml.cs', 'src/FloatingTransferStation/Views/LauncherUrlInputWindow.xaml', 'src/FloatingTransferStation/Views/LauncherUrlInputWindow.xaml.cs', 'src/FloatingTransferStation/Views/MainWindow.Settings.cs', 'src/FloatingTransferStation/Views/MainWindow.xaml', 'src/FloatingTransferStation/Views/MainWindow.xaml.cs', 'src/FloatingTransferStation/Views/MultiItemPickerWindow.xaml', 'src/FloatingTransferStation/Views/MultiItemPickerWindow.xaml.cs', 'src/FloatingTransferStation/Views/PluginActionTrialWindow.xaml', 'src/FloatingTransferStation/Views/PluginActionTrialWindow.xaml.cs', 'src/FloatingTransferStation/Views/SettingsWindow.xaml', 'src/FloatingTransferStation/Views/SettingsWindow.xaml.cs', 'tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs', 'tests/FloatingTransferStation.Tests/InterfaceFontManagerTests.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.DesignTokens.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.InterfaceFont.cs', 'tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs')
        NewExpected = 'Affected'; ExpectedMode = 'Full'
-       Deviation = 'DesignTokens/Resources/主窗壳保留 C5（F2 队列）；C1 面（InterfaceFontManager、PluginActionTrialWindow 未登记）已消灭'
+       Deviation = 'DesignTokens/Resources/主窗壳按 F2 §三.G/B/A KEEP-FULL；C1 面（InterfaceFontManager、PluginActionTrialWindow 未登记）已消灭'
        Evidence = 'loop-2026-10.md:98-103 + 518ba76(PR#235) + b7735e3' }
 )
 
@@ -390,8 +390,56 @@ Assert-Scenario '迁移期登记：DesignTheme/Core.PluginActions/AppIcon（NONE
     Assert-True ($plan2.Selected.Contains('Core.PluginActions')) 'OQ-1：Pipeline＋试用窗口三文件应同族登记 Core.PluginActions'
     $plan3 = Get-AffectedTestPlan @('src/FloatingTransferStation.IconTool/Program.cs', 'src/FloatingTransferStation/Assets/AppIcon/app-icon.json') $app $core
     Assert-True ($plan3.Selected.Contains('AppIcon')) 'IconTool 与图标规格源应命中 AppIcon（契约 #35 锁定面）'
-    $plan4 = Get-AffectedTestPlan @('src/FloatingTransferStation/AssemblyInfo.cs', 'src/FloatingTransferStation/Converters/BooleanOrConverter.cs', 'src/FloatingTransferStation/Views/DialogShellFallback.cs') $app $core
-    Assert-True ($plan4.Mode -eq 'Full' -and $plan4.FullReasons.Count -eq 3) '构建基建/无专测件应入全量表（NONE=13 清零的全量部分）'
+    $plan4 = Get-AffectedTestPlan @('src/FloatingTransferStation/AssemblyInfo.cs', 'src/FloatingTransferStation/Converters/BooleanOrConverter.cs') $app $core
+    Assert-True ($plan4.Mode -eq 'Full' -and $plan4.FullReasons.Count -eq 2) '构建基建/转换器应入全量表（NONE=13 清零的全量部分；DialogShellFallback 已随 F2 §三.O 缩圈移出）'
+}
+
+Assert-Scenario 'F2 缩圈对照·M/N/P 族由 F1 既有条目承接（数据源 RESEARCH-AFFECTED-NARROW §三.M/N/P）' {
+    # M 族（IconTool 四件）：F1 判定序 v2 已落成 AppIcon 条目（2cd8bbb），F2 建议（~AppIcon，3 命中）与现表逐字等价
+    $plan = Get-AffectedTestPlan @('src/FloatingTransferStation.IconTool/IconRenderer.cs', 'src/FloatingTransferStation.IconTool/Program.cs') $app $core
+    Assert-True ($plan.Mode -eq 'Affected' -and $plan.Selected.Contains('AppIcon')) 'M 族四件应由 AppIcon 条目承接（产物契约＝AppIconContractTests）'
+    # N 族（PluginActionTrialWindow 两件）：F1 已并入 Core.PluginActions（2cd8bbb），覆盖 F2 建议的 SettingsWindowPlugin 消费面
+    $plan2 = Get-AffectedTestPlan @('src/FloatingTransferStation/Views/PluginActionTrialWindow.xaml.cs') $app $core
+    Assert-True ($plan2.Mode -eq 'Affected' -and $plan2.Selected.Contains('Core.PluginActions')) 'N 族两件应由 Core.PluginActions 承接（唯一构造点 SettingsWindowPluginTests:380）'
+    $filter = $plan2.Selected['Core.PluginActions'].Filters -join '|'
+    Assert-True ($filter -like '*PluginAction*') "Core.PluginActions 词根应覆盖 PluginAction* 消费族，实际 $filter"
+    # P 族（MainWindow.DragAndDrop.cs）：L2 R-AppPartial 词根桥接内建承接（字面 0/桥接 27 词根并集）——F2 建议「复用词根派生同款过滤器」即派生机制本体
+    $plan3 = Get-AffectedTestPlan @('src/FloatingTransferStation/Views/MainWindow.DragAndDrop.cs') $app $core
+    Assert-True ($plan3.Mode -eq 'Affected' -and $plan3.Selected.Contains('App.DragAndDrop')) 'P 族应由 R-AppPartial 派生承接（无需 L1 条目）'
+}
+
+Assert-Scenario 'F2 缩圈集成·O 族对话框壳回退：DialogShellFallback 精确区（不再全量；F2 §三.O）' {
+    $plan = Get-AffectedTestPlan @('src/FloatingTransferStation/Views/DialogShellFallback.cs') $app $core
+    Assert-True ($plan.Mode -eq 'Affected') "对话框壳回退应为 Affected，实际 $($plan.Mode)"
+    Assert-True ($plan.Selected.Contains('DialogShell')) '应命中 DialogShell 区域（QuickLaunch 104＋SettingsWindowPlugin 12）'
+    $filter = $plan.Selected['DialogShell'].Filters -join '|'
+    Assert-True ($filter -like '*QuickLaunch*' -and $filter -like '*SettingsWindowPlugin*') "filter 应含双词根，实际 $filter"
+}
+
+Assert-Scenario 'F2 缩圈集成·K 族测试共享设施：BoardCreatedAtTestHelpers 精确区（不再全量；F2 §三.K）' {
+    $plan = Get-AffectedTestPlan @('tests/FloatingTransferStation.Tests/BoardCreatedAtTestHelpers.cs') $app $core
+    Assert-True ($plan.Mode -eq 'Affected') "时间戳测试助手应为 Affected，实际 $($plan.Mode)"
+    Assert-True ($plan.Selected.Contains('BoardCreatedAt')) '应命中 BoardCreatedAt 区域（BoardService 40/BoardMutation 53/AutoCleanup 31 三族并集）'
+    $filter = $plan.Selected['BoardCreatedAt'].Filters -join '|'
+    Assert-True ($filter -like '*BoardService*' -and $filter -like '*BoardMutation*' -and $filter -like '*AutoCleanup*') "filter 应含三词根，实际 $filter"
+    # KEEP-FULL 五件照旧全量（F2 §三.K：TestDirectory 102 文件/GlobalUsings 隐式 using/MIT.cs 共享壳/双 fixture 跨族）
+    $plan2 = Get-AffectedTestPlan @('tests/FloatingTransferStation.Tests/TestDirectory.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.cs') $app $core
+    Assert-True ($plan2.Mode -eq 'Full' -and $plan2.FullReasons.Count -eq 2) '共享壳五件应保留全量（F2 KEEP-FULL 实证）'
+}
+
+Assert-Scenario 'F2 缩圈集成·D 族跨区域接口三件：原子写/自启/密钥契约精确区（不再全量；F2 §三.D）' {
+    $plan = Get-AffectedTestPlan @('src/FloatingTransferStation.Core/Services/IAtomicTextWriter.cs', 'src/FloatingTransferStation.Core/Services/AtomicTextWriter.cs') $app $core
+    Assert-True ($plan.Mode -eq 'Affected') "原子写契约族应为 Affected，实际 $($plan.Mode)"
+    Assert-True ($plan.Selected.Contains('Core.AtomicTextWriter')) 'IAtomicTextWriter 应并入 Core.AtomicTextWriter（实现＋接口同族）'
+    $filter = $plan.Selected['Core.AtomicTextWriter'].Filters -join '|'
+    Assert-True ($filter -like '*LocalStore*' -and $filter -like '*DataDirectoryChange*') "filter 应含 LocalStore|DataDirectoryChange 词根（36＋5 命中），实际 $filter"
+    $plan2 = Get-AffectedTestPlan @('src/FloatingTransferStation.Core/Services/IStartupManager.cs') $app $core
+    Assert-True ($plan2.Mode -eq 'Affected' -and $plan2.Selected.Contains('Core.IStartupManager')) '自启契约接口应精确区 Core.IStartupManager（6 族并集 31/12/108/31）'
+    $plan3 = Get-AffectedTestPlan @('src/FloatingTransferStation.Core/Services/ISecretProtector.cs') $app $core
+    Assert-True ($plan3.Mode -eq 'Affected' -and $plan3.Selected.Contains('Core.ISecretProtector')) '密钥保护契约接口应精确区 Core.ISecretProtector（CardAi 11＋SettingsWindowAi 22）'
+    # KEEP-FULL 双件照旧全量（F2 §三.D：IBoardStore 19 文件跨 12+ 族、IPreferencesStore 含共享 harness 构造参数）
+    $plan4 = Get-AffectedTestPlan @('src/FloatingTransferStation.Core/Services/IBoardStore.cs', 'src/FloatingTransferStation.Core/Services/IPreferencesStore.cs') $app $core
+    Assert-True ($plan4.Mode -eq 'Full' -and $plan4.FullReasons.Count -eq 2) 'IBoardStore/IPreferencesStore 应保留全量（F2 KEEP-FULL 实证）'
 }
 
 Assert-Scenario 'L3 指引分派：partial 形态（C1）与运行时产物路径（C3）' {
@@ -546,7 +594,7 @@ if ($failures.Count) {
     exit 1
 }
 # 场景计数下限（Kind=Script 区域的恒非零承担：契约测试自身 0 场景/大幅缩水即 exit 1）
-$minimumScenarios = 46
+$minimumScenarios = 50
 if ($script:passedCount -lt $minimumScenarios) {
     Write-Host "选择器契约测试失败：场景计数 $($script:passedCount) 低于下限 $minimumScenarios（场景缩水＝恒非零语义失守）。"
     exit 1

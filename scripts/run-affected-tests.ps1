@@ -146,8 +146,10 @@ $overrides = @(
     # Core 服务显式覆写（约定派生前的特例：文件 stem 不等于/窄于测试类名）
     @{ Name = 'Core.AiOrganizePrompt'; Filter = 'FullyQualifiedName~AiTextOrganizer'; Globs = @(
         'src/FloatingTransferStation.Core/Services/AiOrganizePrompt.cs') },
-    @{ Name = 'Core.AtomicTextWriter'; Filter = 'FullyQualifiedName~LocalStore'; Globs = @(
-        'src/FloatingTransferStation.Core/Services/AtomicTextWriter.cs') },
+    # 原子写契约（实现＋接口，2026-10-27 F2 缩圈 §三.D）：接口消费面＝Core.Tests×5（恒跑基线已覆盖）
+    # ＋App 侧 LocalStore 36＋DataDirectoryChange 5——有限族可枚举、无共享 harness 间接。
+    @{ Name = 'Core.AtomicTextWriter'; Filter = 'FullyQualifiedName~LocalStore|FullyQualifiedName~DataDirectoryChange'; Globs = @(
+        'src/FloatingTransferStation.Core/Services/AtomicTextWriter.cs', 'src/FloatingTransferStation.Core/Services/IAtomicTextWriter.cs') },
     @{ Name = 'Core.BoardItemCollection'; Filter = 'FullyQualifiedName~Board'; Globs = @(
         'src/FloatingTransferStation.Core/Services/BoardItemCollection.cs') },
     @{ Name = 'Core.DailyReviewMerge'; Filter = 'FullyQualifiedName~DailyReview|FullyQualifiedName~Review'; Globs = @(
@@ -161,6 +163,14 @@ $overrides = @(
         'src/FloatingTransferStation.Core/Services/ImageFileSupport.cs', 'src/FloatingTransferStation.Core/Services/ImageInputLimits.cs') },
     @{ Name = 'Core.ManagedImagePath'; Filter = 'FullyQualifiedName~ImageNormalizer'; Globs = @(
         'src/FloatingTransferStation.Core/Services/ManagedImagePath.cs') },
+    # 自启契约接口（2026-10-27 F2 缩圈 §三.D）：fake 注入缝消费面＝6 族并集
+    # （AutoCleanup 31/Hotkey 12/SettingsWindow 108/PluginAction 31），无共享 harness 间接。
+    @{ Name = 'Core.IStartupManager'; Filter = 'FullyQualifiedName~AutoCleanup|FullyQualifiedName~Hotkey|FullyQualifiedName~SettingsWindow|FullyQualifiedName~PluginAction'; Globs = @(
+        'src/FloatingTransferStation.Core/Services/IStartupManager.cs') },
+    # 密钥保护契约接口（2026-10-27 F2 缩圈 §三.D）：唯二直接消费族＝CardAi 11＋SettingsWindowAi 22
+    # （实现 DpapiSecretProtector 与装配面由 SettingsWindow/SettingsWindowAi 词根覆盖）。
+    @{ Name = 'Core.ISecretProtector'; Filter = 'FullyQualifiedName~CardAi|FullyQualifiedName~SettingsWindowAi'; Globs = @(
+        'src/FloatingTransferStation.Core/Services/ISecretProtector.cs') },
     # 主题管理（2026-10-27 登记缩圈）：字面 0 命中的遗留未知路径，真实测试族＝主题证据/切换双锁
     @{ Name = 'DesignTheme'; Filter = 'FullyQualifiedName~ThemeEvidence|FullyQualifiedName~ThemeSwitch'; Globs = @(
         'src/FloatingTransferStation/Services/DesignThemeManager.cs') },
@@ -172,6 +182,14 @@ $overrides = @(
     # 应用图标管线（2026-10-27 登记缩圈）：生成器工程与规格源（契约 #35 锁定面＝AppIconContractTests）
     @{ Name = 'AppIcon'; Filter = 'FullyQualifiedName~AppIcon'; Globs = @(
         'src/FloatingTransferStation.IconTool/*', 'src/FloatingTransferStation/Assets/AppIcon/*') },
+    # 测试共享设施缩圈件（2026-10-27 F2 缩圈 §三.K）：成员 SetItemCreatedAt/SetAllItemsCreatedAt
+    # 仅 3 消费文件（BoardService 40/BoardMutation 53/AutoCleanup 31），非跨族共享机器。
+    @{ Name = 'BoardCreatedAt'; Filter = 'FullyQualifiedName~BoardService|FullyQualifiedName~BoardMutation|FullyQualifiedName~AutoCleanup'; Globs = @(
+        'tests/FloatingTransferStation.Tests/BoardCreatedAtTestHelpers.cs') },
+    # 对话框壳回退（2026-10-27 F2 缩圈 §三.O）：src 消费者恰 4 对话框壳（编辑目标/网址输入/
+    # 多选器/插件试用窗），测试面＝QuickLaunch 104＋SettingsWindowPlugin 12。
+    @{ Name = 'DialogShell'; Filter = 'FullyQualifiedName~QuickLaunch|FullyQualifiedName~SettingsWindowPlugin'; Globs = @(
+        'src/FloatingTransferStation/Views/DialogShellFallback.cs') },
     # 选择器契约区域（2026-10-27 scripts 自噬消灭）：改选择器两文件不再全量，
     # 由本契约测试脚本承接（Kind=Script：Core 基线后子进程运行，非 0 退出＝失败；
     # 恒非零语义＝契约测试自身 0 场景即 exit 1）。
@@ -183,42 +201,42 @@ $overrides = @(
 # 2026-10-27 收缩（spec §三处置表）：删除 Core/Services/I*.cs 兜底（对 0 个现有跟踪文件改变
 # 行为，未登记新接口从静默全量变为 L3 指引全量）；scripts/* glob 拆为显式清单（选择器两文件
 # 已入例外表 SelectorContract，新脚本默认 L3 全量＋指引——先全量、稳定后缩圈）。
+# 理由自 2026-10-27 F2 终验起全部引用机制实证（RESEARCH-AFFECTED-NARROW-20261027 §三）：
+# 「F2 缩圈队列」占位全部兑现——可缩者（D/K/O 族）已入例外表，KEEP-FULL 升级为消费面证据
+#（视觉动画四件 category 由 C2 队列占位改判 C5 有意保留）。
 $globalFulls = @(
-    @{ Reason = '共享窗口壳（主窗 XAML/代码后置/App 入口）'; Category = 'C5'; Globs = @(
+    @{ Reason = '共享窗口壳（F2 §三.A KEEP-FULL：共享 harness 直接构造真实窗口＝全部 58 个 MIT.* 交互族＋14 文件 19 处直接 new MainWindow；App 类为资源根/结构性入口，0 直接引用）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.xaml', 'src/FloatingTransferStation/Views/MainWindow.xaml.cs',
         'src/FloatingTransferStation/App.xaml', 'src/FloatingTransferStation/App.xaml.cs') },
-    @{ Reason = '共享样式/主题资源字典（六窗口合并或运行时全局切换，取证 2026-10-19；F2 缩圈队列）'; Category = 'C5'; Globs = @(
+    @{ Reason = '共享样式/主题资源字典（F2 §三.B KEEP-FULL：键位断言＋约 90 处动画挂载；六窗口 MergedDictionaries 合并＋运行时整本切换（契约 #34），渲染真实控件/卡片的测试全部间接消费，不可枚举）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Resources/*') },
-    @{ Reason = '设置宿主接口——ApplyPreferences 等成员是跨区域测试驱动 API（取证 2026-10-19：设置/清理/选择/更新/热键/迁移八族直用；IImageNormalizer 拆条降级待 F2 消费面取证）'; Category = 'C5'; Globs = @(
+    @{ Reason = '设置宿主/图片归一化接口（F2 §三.C KEEP-FULL：ApplyPreferences＝跨区域测试驱动 API，11 文件 10 族直调；IImageNormalizer＝共享 harness 构造参数→全部交互族间接）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Services/ISettingsHost.cs', 'src/FloatingTransferStation/Services/IImageNormalizer.cs') },
-    @{ Reason = '跨区域 Core 接口（存储/偏好/密钥/自启契约的多屏共享机器，取证 2026-10-19）'; Category = 'C5'; Globs = @(
-        'src/FloatingTransferStation.Core/Services/IAtomicTextWriter.cs', 'src/FloatingTransferStation.Core/Services/IBoardStore.cs',
-        'src/FloatingTransferStation.Core/Services/IPreferencesStore.cs', 'src/FloatingTransferStation.Core/Services/ISecretProtector.cs',
-        'src/FloatingTransferStation.Core/Services/IStartupManager.cs') },
-    @{ Reason = 'Core 视图模型——全部交互测试的共享机器（取证 2026-10-19：MainWindowViewModel 被 40+ 测试文件直用）'; Category = 'C5'; Globs = @(
+    @{ Reason = '跨区域存储/偏好契约接口（F2 §三.D KEEP-FULL：IBoardStore 19 文件跨 12+ 族含共享 fixture、IPreferencesStore 10 文件含共享 harness 构造参数→全交互族间接）'; Category = 'C5'; Globs = @(
+        'src/FloatingTransferStation.Core/Services/IBoardStore.cs', 'src/FloatingTransferStation.Core/Services/IPreferencesStore.cs') },
+    @{ Reason = 'Core 视图模型（F2 §三.F KEEP-FULL：MainWindowViewModel 40 测试文件直用；CategoryViewModel 含共享 harness FindCategoryTab→全交互族间接；ObservableObject 基类继承链＝全部 VM 测试）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation.Core/ViewModels/*') },
-    @{ Reason = '全局设计 token/设置窗几何数学——全部界面与动效的唯一数值来源（取证 2026-10-19；LauncherGridMath/SettingsWindowMetrics 实际由例外表前置接住，本条为防御纵深）'; Category = 'C5'; Globs = @(
+    @{ Reason = '全局设计 token（F2 §三.G KEEP-FULL：10 文件直用＋全部 XAML x:Static 镜像与动画时长唯一数值来源（契约 #34）；LauncherGridMath/SettingsWindowMetrics 实际由例外表前置接住，本条为防御纵深）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation.Core/Design/*') },
-    @{ Reason = '原生互操作/窗口效果——全域消费（取证 2026-10-19）'; Category = 'C5'; Globs = @(
+    @{ Reason = '原生互操作/窗口效果（F2 §三.H KEEP-FULL：DwmWindowEffects 测试 0 直接引用、src 9 文件消费；NativeMethods 3 文件直用＋src 9 文件消费——Win32 路径行为面全域，不可枚举）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Services/DwmWindowEffects.cs', 'src/FloatingTransferStation/Services/NativeMethods.cs') },
-    @{ Reason = '构建/依赖/解决方案/CI 配置（解决方案级影响）'; Category = 'C5'; Globs = @(
+    @{ Reason = '构建/依赖/解决方案/CI 配置（F2 §三.I KEEP-FULL：构建输入影响全部产物与两测试工程全体，结构性全域）'; Category = 'C5'; Globs = @(
         'Directory.Build.props', 'Directory.Packages.props', 'FloatingTransferStation.slnx', 'global.json', 'nuget.config',
         '.github/workflows/*') },
-    @{ Reason = '窗口/卡片视觉与动画基础设施——测试方法名与源文件名不同族，保守回退全量（F2 缩圈取证队列）'; Category = 'C2'; Globs = @(
+    @{ Reason = '视觉/动画基础设施（F2 §三.J KEEP-FULL×4：FadeAnimation 卡片模板约 90 处挂载→渲染真实卡片的测试全部间接；LiftAnimation＝CardRootStyle 每卡根样式悬停触发；CardEntrance 经 CollectionChanged 任何新增卡片驱动；VisualTransitions CollapseTimer_Tick＝共享 harness 与 10 文件 InvokePrivate 驱动——共享路径间接消费机制实证，R-AppStem/L2 派生不能接管）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.VisualTransitions.cs', 'src/FloatingTransferStation/Views/MainWindow.CardEntrance.cs',
         'src/FloatingTransferStation/Views/FadeAnimation.cs', 'src/FloatingTransferStation/Views/LiftAnimation.cs') },
-    @{ Reason = '共享测试设施'; Category = 'C5'; Globs = @(
+    @{ Reason = '共享测试设施（F2 §三.K KEEP-FULL：TestDirectory 102 文件消费 70%、tests GlobalUsings 全工程隐式 using、MIT.cs 58 partial 共享壳、双 fixture 跨族联合消费 10 文件）'; Category = 'C5'; Globs = @(
         'tests/FloatingTransferStation.Tests/TestDirectory.cs', 'tests/FloatingTransferStation.Tests/GlobalUsings.cs',
-        'tests/FloatingTransferStation.Tests/BoardCreatedAtTestHelpers.cs', 'tests/FloatingTransferStation.Tests/FailingFirstSaveBoardStore.cs',
+        'tests/FloatingTransferStation.Tests/FailingFirstSaveBoardStore.cs',
         'tests/FloatingTransferStation.Tests/GatedSettingsBoardStore.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.cs') },
-    @{ Reason = '构建/测试基础设施脚本（引导、打包、卫生检查、安装/发行契约链；显式清单——新脚本默认 L3 全量）'; Category = 'C5'; Globs = @(
+    @{ Reason = '构建/测试基础设施脚本（F2 §三.L KEEP-FULL：引导、打包、卫生检查、安装/发行契约链无测试级消费面——结构性全域；显式清单，新脚本默认 L3 全量）'; Category = 'C5'; Globs = @(
         'scripts/bootstrap-dotnet.ps1', 'scripts/bootstrap-inno.ps1', 'scripts/build-release.ps1', 'scripts/check-repo-hygiene.ps1',
         'scripts/run-adversarial.ps1', 'scripts/test-bootstrap-inno-path-contract.ps1', 'scripts/test-bootstrap-tool-versions.ps1',
         'scripts/test-installed-lifecycle.ps1', 'scripts/test-installer-cleanup.ps1', 'scripts/test-release-readiness.ps1') },
-    @{ Reason = '构建基建/无专测件（AssemblyInfo/GlobalUsings 构建基建；XAML 转换器与对话框壳无专测，F2 复核）'; Category = 'C5'; Globs = @(
+    @{ Reason = '构建基建（F2 §三.S KEEP-FULL：AssemblyInfo＝ThemeInfo 全局资源查找、GlobalUsings＝全 App 隐式 using，结构性全域）；XAML 转换器（§三.Q：唯一消费者 MainWindowStyles.xaml 资源声明→全部窗口测试间接）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/AssemblyInfo.cs', 'src/FloatingTransferStation/GlobalUsings.cs',
-        'src/FloatingTransferStation/Converters/BooleanOrConverter.cs', 'src/FloatingTransferStation/Converters/NonEmptyTextConverter.cs',
-        'src/FloatingTransferStation/Views/DialogShellFallback.cs') }
+        'src/FloatingTransferStation/Converters/BooleanOrConverter.cs', 'src/FloatingTransferStation/Converters/NonEmptyTextConverter.cs') }
 )
 
 # ---- App 交互测试词根表（单一事实源：文件词根 → 该文件测试方法名的首段前缀全集）----
