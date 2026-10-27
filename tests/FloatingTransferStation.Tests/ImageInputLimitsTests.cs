@@ -252,7 +252,6 @@ public sealed class ImageInputLimitsTests
     [DataRow("gif")]
     [DataRow("png")]
     [DataRow("webp")]
-    [DataRow("tiff")]
     public async Task NormalizeStaticFile_RejectsAnimationBeforeSingleFrameDecode(string extension)
     {
         using var directory = new TestDirectory();

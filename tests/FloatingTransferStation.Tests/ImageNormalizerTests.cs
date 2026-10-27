@@ -77,7 +77,6 @@ public sealed class ImageNormalizerTests
     [TestMethod]
     [DataRow("png")]
     [DataRow("bmp")]
-    [DataRow("tiff")]
     [DataRow("webp")]
     public async Task NormalizeFile_CommonStaticFormatBecomesManagedPng(string extension)
     {

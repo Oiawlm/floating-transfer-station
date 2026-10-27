@@ -1,4 +1,3 @@
-using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Memory;
 
@@ -19,7 +18,10 @@ public sealed class ImageInputLimits
         this.MaxEncodedBytes = MaxEncodedBytes;
         this.MaxPixels = MaxPixels;
         this.MaxDecodedBufferMegabytes = MaxDecodedBufferMegabytes;
-        var configuration = Configuration.Default.Clone();
+        // 全部图片输入解码共用这一份受限 Configuration（契约 #50）：解码器允许表从
+        // ImageFileSupport 的格式注册表派生，TIFF 等未登记格式按内容魔数命中即抛
+        // UnknownImageFormatException——不再 Clone 默认配置（默认配置含 TIFF 解码器）。
+        var configuration = ImageFileSupport.CreateRestrictedConfiguration();
         configuration.MemoryAllocator = MemoryAllocator.Create(new MemoryAllocatorOptions
         {
             AllocationLimitMegabytes = MaxDecodedBufferMegabytes,
