@@ -18,25 +18,24 @@
 
 Windows 正式版使用 .NET 10、WPF、MSTest 和 Inno Setup，引用 `FloatingTransferStation.Core`。仓库脚本会把 Windows 开发工具准备在不提交的 `.tools/` 中。2026-10-08 起 Mac 端永久停止开发并已从仓库移除，历史 Release 与 tag 原样保留。
 
-开发循环与本地推送前质量门（分层测试协议，2026-10-18 起；2026-10-19 选区精确化）：
+开发循环与本地推送前质量门（分层测试协议，2026-10-18 起；2026-10-27 判定序 v2：约定派生优先＋例外表覆写＋未知回退）：
 
 ```powershell
-# 开发循环（改完代码后的快速反馈）：按变更集三分语义选择计划——
-# 纯文档变更（docs/** 等白名单后缀）豁免跳过；受影响区域精确执行；未知路径/共享壳回退全量并打印理由。
-# Core.Tests 整项目恒跑作强制基线；区域选中 0 条测试按失败处理。
-# 默认基线＝merge-base origin/main（整条分支变更集，集成语义）；只看本次编辑用 -Base HEAD。
-# -Areas a,b,c 显式指定区域；-Explain 只打印计划；-Full 强制全量。
-& .\scripts\run-affected-tests.ps1
+# 开发循环（改完代码后的快速反馈）：按变更集四层判定序选择计划——
+# 豁免（纯文档）→ L1 例外表/全量表 → L2 约定派生（MainWindow.{Area}.cs 等命名约定自动可测）
+# → L3 未知回退全量（[affected-full] 标记行＋消除指引）。
+# Core.Tests 整项目恒跑作强制基线；区域选中 0 条测试按失败处理；跟踪源文件三态覆盖反向守卫 fail fast。
+& .\scripts\run-affected-tests.ps1 -Scope Edit   # 只看本次编辑（基线 HEAD）
 
 # 本地推送前质量门（五命令）：
 & .\.tools\dotnet\dotnet.exe build src/FloatingTransferStation.Core/FloatingTransferStation.Core.csproj -c Debug --no-restore -warnaserror
 & .\.tools\dotnet\dotnet.exe format FloatingTransferStation.slnx --verify-no-changes --no-restore
 & .\scripts\check-repo-hygiene.ps1
-& .\scripts\run-affected-tests.ps1
+& .\scripts\run-affected-tests.ps1 -Scope Integrate   # 整条分支变更集（merge-base，默认值；显式写出便于自文档化）
 & .\.tools\dotnet\dotnet.exe build FloatingTransferStation.slnx -c Release --no-restore -warnaserror
 ```
 
-分层测试协议的分工：本地负责「受影响范围反馈」，CI 的 `quality` 任务（“格式、测试与构建”）在 PR 上运行 Release 全量测试，是**权威全量门**——本地提交 PR 前不再要求跑全量 `dotnet test`，同一份代码不重复跑全量（与发行列车「无需在同一份未变化代码上重复跑全量」同一原则）。选择器自身带回归防线：App 交互测试文件按词根表派生类边界过滤器，方法名偏离文件词根由一致性守卫报错；全部映射过滤器对真实测试清单做恒非零漂移检查；`scripts/test-affected-selector.ps1` 内嵌场景矩阵做选择器契约测试（0 退出码＝通过）。选区语义的权威描述见[设计契约清单](docs/design-contracts.md)。三条纪律：
+分层测试协议的分工：本地负责「受影响范围反馈」，CI 的 `quality` 任务（“格式、测试与构建”）在 PR 上运行 Release 全量测试，是**权威全量门**——本地提交 PR 前不再要求跑全量 `dotnet test`，同一份代码不重复跑全量（与发行列车「无需在同一份未变化代码上重复跑全量」同一原则）。选择器自身带回归防线：App 交互测试文件按词根表派生类边界过滤器（src 侧约定派生同样骑在该表上，新功能登记＝写测试时登记词根），方法名偏离文件词根由一致性守卫报错；全部例外表过滤器对真实测试清单做恒非零漂移检查、派生规则恒非零校验内联；`scripts/test-affected-selector.ps1` 内嵌场景矩阵＋历史回放做选择器契约测试（0 退出码＝通过；改选择器两文件不再全量，由该契约测试区域承接）。选区语义的权威描述见[设计契约清单](docs/design-contracts.md)。三条纪律：
 
 - 不得为省时跳过受影响测试：映射命中的区域必须全绿，失败先修复再提交。
 - 空选集/未知路径必须回退全量（脚本自动执行并打印理由），不得把 0 条选中当通过。

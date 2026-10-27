@@ -243,8 +243,9 @@
 & .\scripts\bootstrap-dotnet.ps1
 & .\.tools\dotnet\dotnet.exe restore FloatingTransferStation.slnx
 
-# 开发循环测试：按变更集选受影响区域（Core.Tests 恒跑基线；纯文档变更自动跳过）
-& .\scripts\run-affected-tests.ps1
+# 开发循环测试：按变更集四层判定序选受影响区域（约定派生优先＋例外表覆写＋未知回退；
+# Core.Tests 恒跑基线；纯文档变更自动跳过）。-Scope Edit 只看本次编辑，默认 Integrate＝整条分支
+& .\scripts\run-affected-tests.ps1 -Scope Edit
 
 # 全量测试（发行打包与 CI 质量门使用；本地开发循环不要求）
 & .\.tools\dotnet\dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore
