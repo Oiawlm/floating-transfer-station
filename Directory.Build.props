@@ -8,26 +8,30 @@
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
   <!--
-    SixLabors.ImageSharp 已知漏洞公告评审结论（2026-10-08 评审，2026-10-27 增补）：
-    2026-10-27 增补：GHSA-v76p-62qx-wwq2（高危 CVSS 7.5，CVE-2026-106118，tiled TIFF
-    fax 压缩【解码】越界堆写）——官方补丁版本 3.2.0/4.1.1 均已启用构建期许可强制
-    （Six Labors Split License 免费线止于 3.1.x），升级＝购买/授权决策（维护者红线：
-    不自行申请或绕过密钥校验）。本应用 .tif/.tiff 在图片输入白名单（拖入可达，
-    影响类＝内存破坏，高于既往接受的 DoS 级），按 2026-10-08 框架经评审暂时接受
-    风险并抑制：与已发行 1.62.0 同一二进制依赖、不因本次发行引入回归；既有
-    ImageInputLimits（64 MiB/6400 万像素/512 MiB 缓冲）对攻击文件尺寸构成部分约束。
-    解除路径（待裁决，见 observations OBS-20261027C）：①Six Labors 授权 → 升级
-    3.2.0+；②产品决策移除 .tif/.tiff 白名单条目（向量转不可达）；③迁移他库。
+    SixLabors.ImageSharp 已知漏洞公告评审结论（2026-10-08 评审，2026-10-27 增补，2026-10-28 TIFF 双层收敛后复核）：
+    2026-10-28 复核（1.64.0 落地 OBS-20261027C 裁决②）：图片输入改为「扩展名白名单＋解码器
+    允许表」同源双层（ImageFileSupport 格式注册表唯一事实源，契约 #50），全部解码入口走仅含
+    PNG/JPEG/GIF/BMP/WebP 的受限 Configuration，TIFF 解码向量整体不可达。包版本仍为 3.1.12、
+    仍被 NuGet 审计标记，抑制条目按「仍被标记→保留、理由升级」原则保留。
+    - GHSA-v76p-62qx-wwq2（高危 CVSS 7.5，CVE-2026-106118，tiled TIFF fax 压缩【解码】
+      越界堆写）：官方补丁版本 3.2.0/4.1.1 均已启用构建期许可强制（Six Labors Split
+      License 免费线止于 3.1.x），升级＝购买/授权决策（维护者红线：不自行申请或绕过
+      密钥校验；授权保留为用户未来选项，迁移调研另立轨）。1.64.0 起 TIFF 从扩展名白名单
+      与解码器允许表双层移除：受限配置按内容魔数识别，改名 .png/.jpg 的 TIFF 字节在
+      Identify/Load 即抛 UnknownImageFormatException、永不进 TIFF 解码器（锁定测试
+      ImageInputVectorLockTests）；.tif/.tiff 仍可作普通文件传输。
     下列公告的修复版本均为 ImageSharp 4.1.2，而 4.x 为商业授权（构建期强制 license key），
     3.x 无对应补丁，经评审暂时接受风险并在此集中抑制（对全部工程生效）：
     - GHSA-jjfr-hcj7-qf5w / GHSA-j9gm-c75j-xc9q（高危，TIFF CCITT T6/T4 编码器越界写）：
       本应用唯一输出编码是 PNG（ImageNormalizer.SaveAsPngAsync / WPF PngBitmapEncoder），
-      从不编码 TIFF，向量不可达。
+      从不编码 TIFF；1.64.0 起解码输入向量亦整体移除（见上），向量双向不可达。
     - GHSA-j3p4-wp97-rph4（高危，HistogramEqualization 未校验亮度索引）：全仓无任何
       Histogram 操作调用，向量不可达。
-    - GHSA-wmxv-xphr-5c9g（中危，BigTIFF IFD 解码不进展循环）与 GHSA-gwg2-r3hj-4w44
-      （中危，ICC CLUT 解析按未校验维度分配内存）：仅恶意拖入图片可触发，影响均为
-      DoS 级（解码线程空转 / 过量分配），无内存破坏或数据泄露；既有编码长度与尺寸
+    - GHSA-wmxv-xphr-5c9g（中危，BigTIFF IFD 解码不进展循环）：TIFF 解码器已随 1.64.0
+      双层收敛移除，BigTIFF 解析路径不可达（理由由「DoS 级可达」升级为「不可达」）。
+    - GHSA-gwg2-r3hj-4w44（中危，ICC CLUT 解析按未校验维度分配内存）：不得声称关闭——
+      ICC 元数据 PNG/JPEG 也可携带，恶意拖入经受限配置解码（DecodeFirstFrame 不跳过
+      元数据）仍可触达，影响维持 DoS 级（过量分配，非内存破坏）；既有编码长度与尺寸
       上限（ImageInputLimits）提供部分约束。待 ImageSharp 4 授权或迁移方案确定后
       解除抑制。
   -->

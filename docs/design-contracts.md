@@ -59,6 +59,7 @@
 | 47 | 数据目录双形状：新选择恒在所选目录直下建 `Data`，旧嵌套形状只读兼容、存量零搬迁；卸载只删登记的 `Data`，新形状绝不触碰所选父目录 | 数据目录／安装器卸载 |
 | 48 | 界面默认字体唯一来源 `DesignTokens.InterfaceFontFamily`，用户字体经窗口级槽位换装即时生效；卡片行高按字体度量推导（默认＝20 不变），不随应用分发字体文件 | 设计系统／排版 |
 | 49 | 四处就地编辑位共用窗口级按压协调：点击当前编辑器之外即走该编辑位既有提交路径（IME 组合文本一并保存）；只补通道、不改提交/取消语义 | 就地编辑 |
+| 50 | 图片输入双层允许表同源：扩展名白名单与解码器允许表自 ImageFileSupport 格式注册表唯一派生、全部解码入口走受限 Configuration，TIFF 永不解码（改名即拒） | 图片输入／安全边界 |
 
 ## 一、自冻结清单迁入（1–11）
 
@@ -461,6 +462,15 @@
 - **由来**：四处编辑位此前各自只有「焦点离开才提交」一类通道，而面板空白区（标签栏空白、列表外表面、头部）多为不可聚焦元素——点击这些区域键盘焦点不动，编辑会话悬挂不提交（卡片在列表内有手势层冲刷、列表外没有；分类/瓦片改名、复盘防抖同缺口）。统一机制以窗口隧道单点补齐，而不是四处各写一份（单一定义点＋各编辑位仅暴露会话编辑器查询缝：`TryGetActiveCategoryNameEditor`/`TryGetLauncherRenameEditor`/`TryGetEditingCardContainer`）。
 - **锁定**：`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.EditingCommit.cs` STA 矩阵 15 例——四处「编辑中→点击面板空白→已保存」合成路径（`Mouse.PreviewMouseDownEvent` 隧道合成，**不得**用 `UIElement.PreviewMouseLeftButtonDownEvent` 直发：该事件注册为 Direct，合成 `RaiseEvent` 只触达命中元素自身、到不了窗口级挂接）、卡片正文一处真实 `SendInput` 点击路径（契约 #13 口径）、复盘「点击面板空白→停表立即冲刷（不等 700ms）」、IME 组合期四处组合文本不丢失＋组合标记清理、编辑器内按压不触发、`Esc` 取消语义零回归、卡片/瓦片「按压他卡他瓦→先提交→按压/拖拽会话照常」、`F2`/`Esc` 键盘旅程零回归；既有四处编辑位全套（`CategoryEditing`/`CardEditing`/`CardNote`/`QuickLaunchRename`/`ReviewEditorEscape` 等）零回退。
 - **关联**：#22（卡片编辑表面提交语义——容器内分支归 #22，本条补容器外）、#7（编辑持焦不自动收起——提交后的表面重估沿用既有 `ReconcileSurfaceAfterEditing`）、#13（真实输入可达性——矩阵含 SendInput 路径）、#20（复盘 `Esc` 语义不变，本条只加冲刷通道）、#32（选择器词根表登记 `EditingCommit→EditingCommit`）；CHANGELOG 未发布区；[docs/usage.md](usage.md)「就地编辑」「每日复盘」。
+
+## 二十六、本次新增（50，图片输入双层允许表同源与 TIFF 向量移除；2026-10-28）
+
+### 50. 图片输入双层允许表（同源格式注册表、受限 Configuration 唯一构造点；TIFF 永不解码）
+
+- **断言**：产品可见静态图片输入格式以 `ImageFileSupport`（`src/FloatingTransferStation.Core/Services/ImageFileSupport.cs`）内的格式注册表为**唯一事实源**（一行＝一个 `IImageFormatConfigurationModule` 解码模块＋其路由扩展名），两层同源派生、改一处两层同步变：①扩展名白名单（`IsSupported`，冻结集 `.jpg/.jpeg/.png/.bmp/.gif/.webp`）；②`ImageInputLimits` 构造的受限解码 `Configuration`（`new Configuration(注册表模块)`）——**绝不 `Configuration.Default.Clone()`**（默认配置含 TIFF 解码器）。`DecoderOptions` 只在 `ImageInputLimits` 构造（唯一构造点），全部不受信解码入口统一走它：静态文件门（`ImageFileSupport.IsSupportedStaticImageFile`）、文件归一化（`ImageNormalizer.NormalizeFileCoreInBackgroundAsync`）、剪贴板归一化（`NormalizeClipboardCore`/`TryDecodeClipboardImage`）、内容指纹（`CapturedContentFingerprint.ForImageFile`）、存量修复（`RepairStoredImagesOnceAsync`）——src 图片解码路径零 `Configuration.Default`。TIFF（`.tif/.tiff`）自 1.64.0 起整体移出输入向量（OBS-20261027C 裁决②，GHSA-v76p-62qx-wwq2／CVE-2026-106118 高危 7.5 解码越界堆写）：受限配置按内容魔数识别，改名白名单扩展名的 TIFF 字节在 Identify/Load 即抛 `UnknownImageFormatException`、永不进 TIFF 解码器；`.tif/.tiff` 文件照常作为普通文件传输（拖入路由原始 FileList，优雅降级，#39 分流语义）。未登记格式（TIFF/TGA/PBM/QOI 等 ImageSharp 内置而产品未登记者）即使改名白名单扩展也不可解码；加/删一种输入格式必须改注册表一处并在锁定测试冻结集同步。容量预算语义（#43 三道闸）不变——本条收的是格式允许面，不是尺寸面。
+- **由来**：GHSA-v76p-62qx-wwq2 补丁版 3.2.0/4.1.1 均启用 Six Labors 构建期许可强制（免费线止于 3.1.x），升级被授权红线阻断；2026-10-28 规划窗口核查发现「只删白名单条目」不闭合向量（ImageSharp 按内容魔数识别不看扩展名、`Configuration.Default.Clone()` 携带 TIFF 解码器，探针实证改名 `.png` 的 TIFF 在 main 上 Identify=TIFF 且完整解码），用户裁决定案移除 TIFF 输入向量并要求双层根因收敛（不打补丁：禁止调用点各自散配格式表）。
+- **锁定**：`tests/FloatingTransferStation.Tests/ImageInputVectorLockTests.cs`（`TiffBytesMasqueradedAsPngAreRejectedByBothLayers`——真实 TIFF 魔数改名 `.png`：门=False＋受限 Identify/Load 精确抛 `UnknownImageFormatException`＋指纹 null；`TiffFileAndClipboardVectorsAreRejectedAtDecode`——`.tif` 文件归一化与剪贴板编码字节向量解码即拒；`WhitelistExtensionsAndDecoderAllowListShareOneSource`——冻结集断言＋每个白名单扩展名经生产门可解码（扩展名有、解码器缺即红）＋每个未登记格式改名白名单扩展被拒（解码器有、扩展名缺即红）的同源互锁；`TiffFileDropRoutesToRawFileListNotImages`——`.tif/.tiff` 拖入路由原始 FileList 保序）；既有 `ExternalDropPayloadReaderTests`（`photo.TIF/.tiff`=false、tiff 单帧拖入 FileList、正例 DataRow 移除 tiff）与 `ImageNormalizerTests`/`ImageInputLimitsTests`（tiff 正例 DataRow 移除，拒绝路径由锁定测试承接）翻转锁定。
+- **关联**：#43（图像容量预算——三道闸语义不变，本条收格式允许面）、#39（外部拖入 FileList 分流——`.tif` 走文件路径即其优雅降级）、#32（选择器：`ImageFileSupport.cs`/`ImageInputLimits.cs` 属 `Core.ImageFileSupport` 区域 `~Image` 词根，新锁定测试类名自动命中）；OBS-20261027C（关闭记录）；`Directory.Build.props` 抑制注记（GHSA-v76p-62qx-wwq2/wmxv 理由升级、gwg2 不声称关闭）；CHANGELOG 未发布区。
 
 ## 维护规则
 
