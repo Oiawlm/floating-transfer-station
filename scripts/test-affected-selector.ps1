@@ -394,6 +394,21 @@ Assert-Scenario '迁移期登记：DesignTheme/Core.PluginActions/AppIcon（NONE
     Assert-True ($plan4.Mode -eq 'Full' -and $plan4.FullReasons.Count -eq 3) '构建基建/无专测件应入全量表（NONE=13 清零的全量部分）'
 }
 
+Assert-Scenario 'F2 缩圈集成·D 族跨区域接口三件：原子写/自启/密钥契约精确区（不再全量；F2 §三.D）' {
+    $plan = Get-AffectedTestPlan @('src/FloatingTransferStation.Core/Services/IAtomicTextWriter.cs', 'src/FloatingTransferStation.Core/Services/AtomicTextWriter.cs') $app $core
+    Assert-True ($plan.Mode -eq 'Affected') "原子写契约族应为 Affected，实际 $($plan.Mode)"
+    Assert-True ($plan.Selected.Contains('Core.AtomicTextWriter')) 'IAtomicTextWriter 应并入 Core.AtomicTextWriter（实现＋接口同族）'
+    $filter = $plan.Selected['Core.AtomicTextWriter'].Filters -join '|'
+    Assert-True ($filter -like '*LocalStore*' -and $filter -like '*DataDirectoryChange*') "filter 应含 LocalStore|DataDirectoryChange 词根（36＋5 命中），实际 $filter"
+    $plan2 = Get-AffectedTestPlan @('src/FloatingTransferStation.Core/Services/IStartupManager.cs') $app $core
+    Assert-True ($plan2.Mode -eq 'Affected' -and $plan2.Selected.Contains('Core.IStartupManager')) '自启契约接口应精确区 Core.IStartupManager（6 族并集 31/12/108/31）'
+    $plan3 = Get-AffectedTestPlan @('src/FloatingTransferStation.Core/Services/ISecretProtector.cs') $app $core
+    Assert-True ($plan3.Mode -eq 'Affected' -and $plan3.Selected.Contains('Core.ISecretProtector')) '密钥保护契约接口应精确区 Core.ISecretProtector（CardAi 11＋SettingsWindowAi 22）'
+    # KEEP-FULL 双件照旧全量（F2 §三.D：IBoardStore 19 文件跨 12+ 族、IPreferencesStore 含共享 harness 构造参数）
+    $plan4 = Get-AffectedTestPlan @('src/FloatingTransferStation.Core/Services/IBoardStore.cs', 'src/FloatingTransferStation.Core/Services/IPreferencesStore.cs') $app $core
+    Assert-True ($plan4.Mode -eq 'Full' -and $plan4.FullReasons.Count -eq 2) 'IBoardStore/IPreferencesStore 应保留全量（F2 KEEP-FULL 实证）'
+}
+
 Assert-Scenario 'L3 指引分派：partial 形态（C1）与运行时产物路径（C3）' {
     $plan = Get-AffectedTestPlan @('src/FloatingTransferStation/Views/MainWindow.BrandNew.cs') $app $core
     Assert-True ($plan.Mode -eq 'Full') '假想 MainWindow.BrandNew.cs 应全量'
@@ -546,7 +561,7 @@ if ($failures.Count) {
     exit 1
 }
 # 场景计数下限（Kind=Script 区域的恒非零承担：契约测试自身 0 场景/大幅缩水即 exit 1）
-$minimumScenarios = 46
+$minimumScenarios = 47
 if ($script:passedCount -lt $minimumScenarios) {
     Write-Host "选择器契约测试失败：场景计数 $($script:passedCount) 低于下限 $minimumScenarios（场景缩水＝恒非零语义失守）。"
     exit 1

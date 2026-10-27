@@ -146,8 +146,10 @@ $overrides = @(
     # Core 服务显式覆写（约定派生前的特例：文件 stem 不等于/窄于测试类名）
     @{ Name = 'Core.AiOrganizePrompt'; Filter = 'FullyQualifiedName~AiTextOrganizer'; Globs = @(
         'src/FloatingTransferStation.Core/Services/AiOrganizePrompt.cs') },
-    @{ Name = 'Core.AtomicTextWriter'; Filter = 'FullyQualifiedName~LocalStore'; Globs = @(
-        'src/FloatingTransferStation.Core/Services/AtomicTextWriter.cs') },
+    # 原子写契约（实现＋接口，2026-10-27 F2 缩圈 §三.D）：接口消费面＝Core.Tests×5（恒跑基线已覆盖）
+    # ＋App 侧 LocalStore 36＋DataDirectoryChange 5——有限族可枚举、无共享 harness 间接。
+    @{ Name = 'Core.AtomicTextWriter'; Filter = 'FullyQualifiedName~LocalStore|FullyQualifiedName~DataDirectoryChange'; Globs = @(
+        'src/FloatingTransferStation.Core/Services/AtomicTextWriter.cs', 'src/FloatingTransferStation.Core/Services/IAtomicTextWriter.cs') },
     @{ Name = 'Core.BoardItemCollection'; Filter = 'FullyQualifiedName~Board'; Globs = @(
         'src/FloatingTransferStation.Core/Services/BoardItemCollection.cs') },
     @{ Name = 'Core.DailyReviewMerge'; Filter = 'FullyQualifiedName~DailyReview|FullyQualifiedName~Review'; Globs = @(
@@ -161,6 +163,14 @@ $overrides = @(
         'src/FloatingTransferStation.Core/Services/ImageFileSupport.cs', 'src/FloatingTransferStation.Core/Services/ImageInputLimits.cs') },
     @{ Name = 'Core.ManagedImagePath'; Filter = 'FullyQualifiedName~ImageNormalizer'; Globs = @(
         'src/FloatingTransferStation.Core/Services/ManagedImagePath.cs') },
+    # 自启契约接口（2026-10-27 F2 缩圈 §三.D）：fake 注入缝消费面＝6 族并集
+    # （AutoCleanup 31/Hotkey 12/SettingsWindow 108/PluginAction 31），无共享 harness 间接。
+    @{ Name = 'Core.IStartupManager'; Filter = 'FullyQualifiedName~AutoCleanup|FullyQualifiedName~Hotkey|FullyQualifiedName~SettingsWindow|FullyQualifiedName~PluginAction'; Globs = @(
+        'src/FloatingTransferStation.Core/Services/IStartupManager.cs') },
+    # 密钥保护契约接口（2026-10-27 F2 缩圈 §三.D）：唯二直接消费族＝CardAi 11＋SettingsWindowAi 22
+    # （实现 DpapiSecretProtector 与装配面由 SettingsWindow/SettingsWindowAi 词根覆盖）。
+    @{ Name = 'Core.ISecretProtector'; Filter = 'FullyQualifiedName~CardAi|FullyQualifiedName~SettingsWindowAi'; Globs = @(
+        'src/FloatingTransferStation.Core/Services/ISecretProtector.cs') },
     # 主题管理（2026-10-27 登记缩圈）：字面 0 命中的遗留未知路径，真实测试族＝主题证据/切换双锁
     @{ Name = 'DesignTheme'; Filter = 'FullyQualifiedName~ThemeEvidence|FullyQualifiedName~ThemeSwitch'; Globs = @(
         'src/FloatingTransferStation/Services/DesignThemeManager.cs') },
@@ -191,10 +201,8 @@ $globalFulls = @(
         'src/FloatingTransferStation/Resources/*') },
     @{ Reason = '设置宿主接口——ApplyPreferences 等成员是跨区域测试驱动 API（取证 2026-10-19：设置/清理/选择/更新/热键/迁移八族直用；IImageNormalizer 拆条降级待 F2 消费面取证）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Services/ISettingsHost.cs', 'src/FloatingTransferStation/Services/IImageNormalizer.cs') },
-    @{ Reason = '跨区域 Core 接口（存储/偏好/密钥/自启契约的多屏共享机器，取证 2026-10-19）'; Category = 'C5'; Globs = @(
-        'src/FloatingTransferStation.Core/Services/IAtomicTextWriter.cs', 'src/FloatingTransferStation.Core/Services/IBoardStore.cs',
-        'src/FloatingTransferStation.Core/Services/IPreferencesStore.cs', 'src/FloatingTransferStation.Core/Services/ISecretProtector.cs',
-        'src/FloatingTransferStation.Core/Services/IStartupManager.cs') },
+    @{ Reason = '跨区域存储/偏好契约接口（F2 §三.D KEEP-FULL：IBoardStore 19 文件跨 12+ 族含共享 fixture、IPreferencesStore 10 文件含共享 harness 构造参数→全交互族间接）'; Category = 'C5'; Globs = @(
+        'src/FloatingTransferStation.Core/Services/IBoardStore.cs', 'src/FloatingTransferStation.Core/Services/IPreferencesStore.cs') },
     @{ Reason = 'Core 视图模型——全部交互测试的共享机器（取证 2026-10-19：MainWindowViewModel 被 40+ 测试文件直用）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation.Core/ViewModels/*') },
     @{ Reason = '全局设计 token/设置窗几何数学——全部界面与动效的唯一数值来源（取证 2026-10-19；LauncherGridMath/SettingsWindowMetrics 实际由例外表前置接住，本条为防御纵深）'; Category = 'C5'; Globs = @(
