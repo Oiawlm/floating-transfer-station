@@ -4,10 +4,12 @@
 
 ## 平台边界
 
-- `src/FloatingTransferStation.Core/`：共享数据模型、ViewModels、BoardService/BoardMutationService、LocalStore、原子写入、路径检查、图片输入限制与格式检查。
+本仓库是 Windows-only 工程：`FloatingTransferStation.Core` 的定位是**被 Windows WPF 工程复用的业务核心**——分类、顺序、置顶与保存规则只维护一份，由 Windows 工程消费；Mac 端于 2026-10-08 永久移除后，不再以「跨平台共享」为设计前提。
+
+- `src/FloatingTransferStation.Core/`：数据模型、ViewModels、BoardService/BoardMutationService、LocalStore、原子写入、路径检查、图片输入限制与格式检查。Core 内现存三处 Windows 专属残留，如实记录、保持现状（重划边界属另议事项，本文档不改变任何运行行为）：`Services/AppLauncher.cs:236` 与 `Services/UpdateService.cs:327` 直接 `Process.Start` 启动外部进程，`ProductIdentity.cs:7` 持有注册表键路径常量。
 - `LocalStore` 同时提供 `IDailyReviewStore`：按本地日期读写 `reviews/yyyy-MM-dd.md`，串行化原子保存，并通过目录监听向窗口报告外部变更。
-- `src/FloatingTransferStation/`：保留 WPF 窗口、Windows 剪贴板格式、注册表、安装器和系统集成；启动显式向共享 `AppPaths` 传入 Windows 数据目录设置。
-- `tests/FloatingTransferStation.Core.Tests/`：共享核心业务回归；覆盖原子保存的损坏恢复、受管图片路径形状（正斜杠/反斜杠）与大小写语义。
+- `src/FloatingTransferStation/`：保留 WPF 窗口、Windows 剪贴板格式、注册表、安装器和系统集成；启动显式向 Core 的 `AppPaths` 传入 Windows 数据目录设置。
+- `tests/FloatingTransferStation.Core.Tests/`：核心业务回归；覆盖原子保存的损坏恢复、受管图片路径形状（正斜杠/反斜杠）与大小写语义。
 
 `board.json`、`settings.json` 与 `reviews/*.md` 格式保持稳定。复盘文件是普通 Markdown，可由 Obsidian 直接打开。
 
