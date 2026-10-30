@@ -128,7 +128,7 @@ public sealed class UpdateService : IUpdateService
     private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan ChecksumsTimeout = TimeSpan.FromSeconds(30);
     // 响应体硬上限：检查响应（releases/latest JSON）与校验清单异常膨胀即拒读，
-    // 杜绝无上限 ReadAsStringAsync 的内存放大（wbx 评审 MAJOR）。
+    // 杜绝无上限 ReadAsStringAsync 的内存放大。
     private const long MaxCheckResponseBytes = 1024 * 1024;
     private const long MaxChecksumsBytes = 1024 * 1024;
     // 安装包大小硬上限（自包含 WPF 安装包实际 ~150MB 量级；异常/恶意响应超限即中止并清理）。
@@ -144,7 +144,7 @@ public sealed class UpdateService : IUpdateService
             // 长驻桌面进程：定期轮换池化连接，网络切换后不连到过期 DNS。
             PooledConnectionLifetime = TimeSpan.FromMinutes(5),
             // 资产/清单的 browser_download_url 会 302 到 GitHub CDN（objects.githubusercontent.com），
-            // 必须跟随重定向，否则下载必失败（wbx 评审 BLOCKER；API 检查正常不重定向）。
+            // 必须跟随重定向，否则下载必失败（API 检查正常不重定向）。
             AllowAutoRedirect = true
         })
     {
