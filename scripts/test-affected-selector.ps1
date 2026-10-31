@@ -70,7 +70,7 @@ $replayCases = @(
     @{ Id = 'R05'; Files = @('.github/PULL_REQUEST_TEMPLATE.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'README.md', 'docs/design-contracts.md', 'scripts/run-affected-tests.ps1', 'scripts/test-affected-selector.ps1')
        NewExpected = 'Affected'; ExpectedMode = 'Affected'; Deviation = $null
        Evidence = '2026-10-19-affected-test-scope-report.md:7 + a4fafbe(PR#199)' },
-    @{ Id = 'R06'; Files = @('CHANGELOG.md', 'ROADMAP.md', 'docs/architecture.md', 'docs/design-contracts.md', 'tests/FloatingTransferStation.Tests/GlobalHotkeyInteractionTests.cs', 'tests/FloatingTransferStation.Tests/ImageInputLimitsTests.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.Search.cs', '.wbx/jobs/20261019-sample/task.txt')
+    @{ Id = 'R06'; Files = @('CHANGELOG.md', 'ROADMAP.md', 'docs/architecture.md', 'docs/design-contracts.md', 'tests/FloatingTransferStation.Tests/GlobalHotkeyInteractionTests.cs', 'tests/FloatingTransferStation.Tests/ImageInputLimitsTests.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.Search.cs', 'TestResults/trx-20261019-sample/result.trx')
        NewExpected = 'Affected'; ExpectedMode = 'Affected'; Deviation = $null
        Evidence = '2026-10-19-contract-consolidation-report.md:135,139,144 + 3c17f8e(PR#205)' },
     @{ Id = 'R07'; Files = @('CHANGELOG.md', 'README.md', 'docs/design-contracts.md', 'docs/usage.md', 'src/FloatingTransferStation.Core/Models/AppPreferences.cs', 'src/FloatingTransferStation.Core/ViewModels/MainWindowViewModel.cs', 'src/FloatingTransferStation/Resources/MainWindowStyles.xaml', 'src/FloatingTransferStation/Views/MainWindow.Settings.cs', 'src/FloatingTransferStation/Views/MainWindow.xaml.cs', 'src/FloatingTransferStation/Views/SettingsWindow.xaml', 'src/FloatingTransferStation/Views/SettingsWindow.xaml.cs', 'tests/FloatingTransferStation.Core.Tests/AppPreferencesTests.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardNote.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.DailyReview.cs', 'tests/FloatingTransferStation.Tests/SettingsWindowInteractionTests.cs', 'tests/FloatingTransferStation.Tests/SettingsWindowNavPaneTests.cs')
@@ -447,7 +447,7 @@ Assert-Scenario 'L3 指引分派：partial 形态（C1）与运行时产物路�
     Assert-True ($plan.Mode -eq 'Full') '假想 MainWindow.BrandNew.cs 应全量'
     Assert-True ($plan.FullReasons[0] -like '*R-AppPartial 形态*' -and $plan.FullReasons[0] -like '*登记 BrandNew 的前缀*') 'partial 指引应含词根登记动作'
     Assert-True ($plan.FullReasons[0].Contains('[category=C1]')) 'partial 未登记 category=C1'
-    $plan2 = Get-AffectedTestPlan @('.wbx/jobs/20261019-sample/task.txt') $app $core
+    $plan2 = Get-AffectedTestPlan @('TestResults/trx-20261019-sample/result.trx') $app $core
     Assert-True ($plan2.Mode -eq 'Full') '清单外未知 untracked 路径应照走 L3（安全语义不破）'
     Assert-True ($plan2.FullReasons[0] -like '*疑运行时产物*' -and $plan2.FullReasons[0].Contains('[category=C3]')) '非产品树路径应给 C3 指引'
 }
@@ -499,10 +499,10 @@ Assert-Scenario '噪声防线：防后门校验（产品树前缀/非目录前�
 
 Assert-Scenario '噪声防线：推导层过滤（[affected-noise] 行＋清单外仍走 L3）' {
     try {
-        $script:changesetNoisePrefixes = @('.wbx/')
-        Assert-True (Test-ChangesetNoise '.wbx/jobs/x/task.txt') '忽略谓词对 .wbx/ 路径应 true'
+        $script:changesetNoisePrefixes = @('TestResults/')
+        Assert-True (Test-ChangesetNoise 'TestResults/trx-x/result.trx') '忽略谓词对 TestResults/ 路径应 true'
         Assert-True (-not (Test-ChangesetNoise 'src/FloatingTransferStation/App.xaml.cs')) '忽略谓词对 src/ 路径应 false'
-        $kept = @(Filter-ChangesetNoise @('.wbx/jobs/x/task.txt', 'src/FloatingTransferStation/Views/SettingsWindow.xaml.cs'))
+        $kept = @(Filter-ChangesetNoise @('TestResults/trx-x/result.trx', 'src/FloatingTransferStation/Views/SettingsWindow.xaml.cs'))
         Assert-True ($kept.Count -eq 1 -and $kept[0] -like 'src/*') '过滤后应只剩产品树文件'
     } finally {
         $script:changesetNoisePrefixes = @()
@@ -517,10 +517,10 @@ foreach ($case in $replayCases) {
         $files = @($captured.Files)
         if ($captured.Id -eq 'R06') {
             # C3 条目：以忽略清单形态回放该轮未跟踪噪声（现代等价物＝gitignore 已挡住真实运行；
-            # 显式注入时经推导层过滤）——spec §七.1 追加断言：谓词对 .wbx/ true、对 src/ false。
+            # 显式注入时经推导层过滤）——spec §七.1 追加断言：谓词对 TestResults/ true、对 src/ false。
             try {
-                $script:changesetNoisePrefixes = @('.wbx/')
-                Assert-True (Test-ChangesetNoise '.wbx/jobs/20261019-sample/task.txt') '忽略谓词对 .wbx/ 路径应 true'
+                $script:changesetNoisePrefixes = @('TestResults/')
+                Assert-True (Test-ChangesetNoise 'TestResults/trx-20261019-sample/result.trx') '忽略谓词对 TestResults/ 路径应 true'
                 Assert-True (-not (Test-ChangesetNoise 'src/FloatingTransferStation/Views/MainWindow.xaml.cs')) '忽略谓词对 src/ 路径应 false'
                 $files = @(Filter-ChangesetNoise $files)
             } finally {

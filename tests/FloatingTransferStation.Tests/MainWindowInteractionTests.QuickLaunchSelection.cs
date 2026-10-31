@@ -368,7 +368,7 @@ public sealed partial class MainWindowInteractionTests
         PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(60));
     }
 
-    // ---- T7 评审修订（wbx job 20261018-211654-wxb，Issue #186）：评审意见回归锁定 ----
+    // ---- T7 评审修订（Issue #186）：评审意见回归锁定 ----
 
     [STATestMethod]
     public void QuickLaunch_Selection_T7_CtrlAKeepsAnchorForShiftRange()

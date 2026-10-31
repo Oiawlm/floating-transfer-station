@@ -152,7 +152,7 @@ public partial class MainWindow : Window
     /// 检查结果采纳：更新可用 → 点亮按钮并按需状态条提示一次（手动检查必然提示）；
     /// 无更新/失败按手动与否决定是否提示，无更新同时熄灭按钮（远端撤回发布时
     /// 按钮状态仍由版本比较派生）。AssetMissing（精确名资产或校验清单缺失）仅在
-    /// 手动检查时经状态条提示并回退发布页（wbx 评审：自动检查的任何失败完全静默，
+    /// 手动检查时经状态条提示并回退发布页（自动检查的任何失败完全静默，
     /// 零操作不得弹浏览器）；浏览器回退每会话至多一次，防自动节奏反复打扰。
     /// </summary>
     private void AdoptCheckResult(UpdateCheckResult result, bool isManual)

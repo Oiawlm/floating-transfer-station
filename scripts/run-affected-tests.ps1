@@ -34,7 +34,7 @@ $exemptDocExtensions = @('.md', '.markdown', '.png', '.jpg', '.jpeg', '.gif', '.
 $assertedRootDocs = @('README.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'ROADMAP.md', 'LICENSE')
 
 # ---- 变更集忽略清单（推导层目录前缀；与豁免类是两个语义）----
-# 初始为空：已知运行时产物已由 .gitignore 兜住（.wbx/TestResults/.tools/artifacts 等）；
+# 初始为空：已知运行时产物已由 .gitignore 兜住（TestResults/.tools/artifacts 等）；
 # 仅当产物无法 gitignore 时经评审加入。启动时防后门校验（Assert-ChangesetNoisePrefixes）。
 # 清单外一切未知 untracked 路径照走 L3 全量（安全语义不破）。
 $changesetNoisePrefixes = @()
