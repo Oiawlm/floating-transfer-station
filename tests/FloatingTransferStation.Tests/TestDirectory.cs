@@ -9,7 +9,7 @@ public sealed class TestDirectory : IDisposable
 
     public TestDirectory()
     {
-        Root = Path.Combine(Path.GetTempPath(), "悬浮中转站-tests", Guid.NewGuid().ToString("N"));
+        Root = Path.Combine(TestTempRoot.Root, "悬浮中转站-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Root);
     }
 

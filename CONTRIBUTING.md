@@ -77,6 +77,7 @@ Windows 正式版使用 .NET 10、WPF、MSTest 和 Inno Setup，引用 `Floating
 - 同步更新受影响的 README、路线图、架构说明或更新记录；README 改动须叠加 [README 风格指南](docs/readme-style-guide.md) 的项目增量规则，并按其文末公开元规范指引执行通用写作方法论。
 - 拆分测试文件时保留测试发现与定向选集；当前窗口交互、生命周期测试采用同名 partial 类，避免因文件拆分漏跑测试。
 - 不提交 `.tools/`、`artifacts/`、`TestResults/`、用户数据、凭据或本机桌面截图。
+- 临时产物口径：仓库工作流的临时写入（测试/脚本）统一落仓库内 `TestResults\tmp\`（已 gitignore，沿用 GUID 隔离与用后清理）；产品运行时临时文件走 `%TEMP%` 且必带产品前缀（`FloatingTransferStation\` 子目录或 `fts-` 文件名前缀），不得新造无前缀散落点。
 
 ## 评审与合并
 

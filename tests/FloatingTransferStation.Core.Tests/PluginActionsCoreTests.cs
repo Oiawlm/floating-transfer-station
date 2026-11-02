@@ -15,7 +15,7 @@ public sealed class PluginActionsCoreTests
     private string _root = string.Empty;
 
     [TestInitialize]
-    public void Initialize() => _root = Path.Combine(Path.GetTempPath(), "fts-actions-" + Guid.NewGuid().ToString("N"));
+    public void Initialize() => _root = Path.Combine(TestTempRoot.Root, "fts-actions-" + Guid.NewGuid().ToString("N"));
 
     [TestCleanup]
     public void Cleanup()

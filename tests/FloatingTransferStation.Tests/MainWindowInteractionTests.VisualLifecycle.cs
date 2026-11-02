@@ -1380,7 +1380,7 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var imagePath = Path.Combine(
-            Path.GetTempPath(),
+            TestTempRoot.Root,
             $"悬浮中转站-ui-thumbnail-{Guid.NewGuid():N}.png");
         WritePng(imagePath, width: 1200, height: 600);
         var board = new BoardService();

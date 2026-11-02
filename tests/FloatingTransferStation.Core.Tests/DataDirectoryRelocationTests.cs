@@ -17,7 +17,7 @@ public sealed class DataDirectoryRelocationTests
     [TestInitialize]
     public void Initialize()
     {
-        _root = Path.Combine(Path.GetTempPath(), "fts-relocation-tests-" + Guid.NewGuid().ToString("N"));
+        _root = Path.Combine(TestTempRoot.Root, "fts-relocation-tests-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
         _relocator = new DataDirectoryRelocator();
     }

@@ -11,7 +11,7 @@ public sealed class RelocationCleanupTests
     [TestInitialize]
     public void Initialize()
     {
-        _root = Path.Combine(Path.GetTempPath(), "fts-cleanup-tests-" + Guid.NewGuid().ToString("N"));
+        _root = Path.Combine(TestTempRoot.Root, "fts-cleanup-tests-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
     }
 

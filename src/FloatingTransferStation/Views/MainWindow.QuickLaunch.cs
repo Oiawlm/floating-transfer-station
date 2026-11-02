@@ -106,10 +106,13 @@ public partial class MainWindow
             launcherDiscoveryStore ?? new VolatileLauncherDiscoveryStore());
     }
 
+    // 图标缓存目录：数据目录内的 launcher-icons 为常态；无数据目录的易失回退
+    // （窗口直连构造/测试）落 %TEMP% 时必须带产品前缀，不与其他应用的
+    // launcher-icons 泛名互撞。
     private string LauncherIconsDirectory() =>
-        Path.Combine(
-            string.IsNullOrWhiteSpace(_dataDirectory) ? Path.GetTempPath() : _dataDirectory,
-            "launcher-icons");
+        string.IsNullOrWhiteSpace(_dataDirectory)
+            ? Path.Combine(Path.GetTempPath(), "fts-launcher-icons")
+            : Path.Combine(_dataDirectory, "launcher-icons");
 
     internal LauncherCatalog LaunchersForTests() => _launchers;
 
