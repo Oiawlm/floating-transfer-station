@@ -27,19 +27,20 @@ public sealed partial class MainWindowInteractionTests
             var work = SystemParameters.WorkArea;
             var rowHeight = WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count;
 
-            Assert.AreEqual(rowHeight, window.Height, 0.5);
-            Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);
-            Assert.AreEqual(work.Right, window.Left + window.Width, 0.5);
-            Assert.IsTrue(window.Left >= work.Left - 0.5, "窗口左缘不得推出工作区。");
-            Assert.IsTrue(window.Top >= work.Top - 0.5, "窗口上缘不得推出工作区。");
-            Assert.IsTrue(window.Top + window.Height <= work.Bottom + 0.5, "窗口下缘不得推出工作区。");
+            DpiGeometryAssert.AreEqual(rowHeight, window.Height, window, PixelQuantization.Single, "收起高＝行高。");
+            DpiGeometryAssert.AreEqual(WindowSettings.TabWidth, window.Width, window, PixelQuantization.Single, "收起宽＝标签宽。");
+            DpiGeometryAssert.AreEqual(work.Right, window.Left + window.Width, window, PixelQuantization.Pair,
+                "收起矩形右缘贴齐工作区右缘（Left＋Width 两次量化）。");
+            DpiGeometryAssert.IsAtLeast(window.Left, work.Left, window, PixelQuantization.Single, "窗口左缘不得推出工作区。");
+            DpiGeometryAssert.IsAtLeast(window.Top, work.Top, window, PixelQuantization.Single, "窗口上缘不得推出工作区。");
+            DpiGeometryAssert.IsAtMost(window.Top + window.Height, work.Bottom, window, PixelQuantization.Pair, "窗口下缘不得推出工作区。");
 
             var handle = window.FindName("CollapsedCategoryHandle") as ContentControl;
             Assert.IsNotNull(handle);
-            Assert.AreEqual(WindowSettings.TabWidth, handle.ActualWidth, 0.5);
+            DpiGeometryAssert.AreEqual(WindowSettings.TabWidth, handle.ActualWidth, window, PixelQuantization.Single, "把手宽＝标签宽。");
             var handleRightInWindow =
                 handle.TranslatePoint(new Point(handle.ActualWidth, 0), window).X;
-            Assert.AreEqual(window.Width, handleRightInWindow, 0.5,
+            DpiGeometryAssert.AreEqual(window.Width, handleRightInWindow, window, PixelQuantization.Single,
                 "内容层必须填满窗口右缘：不存在越屏的窗壳区域。");
             AssertNoRightInset(window);
         }
@@ -63,21 +64,22 @@ public sealed partial class MainWindowInteractionTests
             var work = SystemParameters.WorkArea;
             var visibleWidth = WindowSettings.Default.PanelWidth + WindowSettings.TabWidth;
 
-            Assert.AreEqual(visibleWidth, window.Width, 0.5);
-            Assert.AreEqual(work.Right, window.Left + window.Width, 0.5);
-            Assert.IsTrue(window.Left >= work.Left - 0.5, "窗口左缘不得推出工作区。");
-            Assert.IsTrue(window.Top >= work.Top - 0.5, "窗口上缘不得推出工作区。");
-            Assert.IsTrue(window.Top + window.Height <= work.Bottom + 0.5, "窗口下缘不得推出工作区。");
+            DpiGeometryAssert.AreEqual(visibleWidth, window.Width, window, PixelQuantization.Single, "展开宽＝面板宽＋标签宽。");
+            DpiGeometryAssert.AreEqual(work.Right, window.Left + window.Width, window, PixelQuantization.Pair,
+                "展开矩形右缘贴齐工作区右缘（Left＋Width 两次量化）。");
+            DpiGeometryAssert.IsAtLeast(window.Left, work.Left, window, PixelQuantization.Single, "窗口左缘不得推出工作区。");
+            DpiGeometryAssert.IsAtLeast(window.Top, work.Top, window, PixelQuantization.Single, "窗口上缘不得推出工作区。");
+            DpiGeometryAssert.IsAtMost(window.Top + window.Height, work.Bottom, window, PixelQuantization.Pair, "窗口下缘不得推出工作区。");
 
             var rail = (Border)window.FindName("CategoryRail");
             Assert.IsNotNull(rail);
             var railRightInWindow = rail.TranslatePoint(new Point(rail.ActualWidth, 0), window).X;
-            Assert.AreEqual(window.Width, railRightInWindow, 0.5,
+            DpiGeometryAssert.AreEqual(window.Width, railRightInWindow, window, PixelQuantization.Single,
                 "内容层必须填满窗口右缘：不存在越屏的窗壳区域。");
 
             var panel = window.FindName("PanelContentHost") as Grid;
             Assert.IsNotNull(panel);
-            Assert.AreEqual(WindowSettings.Default.PanelWidth, panel.ActualWidth, 0.5);
+            DpiGeometryAssert.AreEqual(WindowSettings.Default.PanelWidth, panel.ActualWidth, window, PixelQuantization.Single, "面板宽＝面板冻结宽。");
             AssertNoRightInset(window);
         }
         finally
@@ -112,9 +114,10 @@ public sealed partial class MainWindowInteractionTests
                 WindowSettings.Default.WindowHeight,
                 WindowSettings.Default.Top).Normalize(work.Width, work.Height);
             var visibleWidth = normalized.PanelWidth + WindowSettings.TabWidth;
-            Assert.AreEqual(visibleWidth, window.Width, 0.5);
-            Assert.AreEqual(work.Right, window.Left + window.Width, 0.5);
-            Assert.IsTrue(window.Left >= work.Left - 0.5, "窗口左缘不得推出工作区。");
+            DpiGeometryAssert.AreEqual(visibleWidth, window.Width, window, PixelQuantization.Single, "拖宽后可见宽＝归一化面板宽＋标签宽。");
+            DpiGeometryAssert.AreEqual(work.Right, window.Left + window.Width, window, PixelQuantization.Pair,
+                "拖宽后右缘仍贴齐工作区右缘（Left＋Width 两次量化）。");
+            DpiGeometryAssert.IsAtLeast(window.Left, work.Left, window, PixelQuantization.Single, "窗口左缘不得推出工作区。");
             AssertNoRightInset(window);
         }
         finally
@@ -144,19 +147,19 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var work = SystemParameters.WorkArea;
             var visibleWidth = WindowSettings.Default.PanelWidth + WindowSettings.TabWidth;
-            Assert.AreEqual(visibleWidth, window.Width, 0.5);
+            DpiGeometryAssert.AreEqual(visibleWidth, window.Width, window, PixelQuantization.Single, "广播前基线：展开宽。");
 
             // 模拟环境漂移后窗口不在贴齐位：广播必须重新贴齐，外形与宽度不变。
             window.Left -= 120;
             CompleteLayout(window);
-            Assert.AreEqual(work.Right - visibleWidth - 120, window.Left, 0.5);
+            DpiGeometryAssert.AreEqual(work.Right - visibleWidth - 120, window.Left, window, PixelQuantization.Single, "人为左移 120 后的位置基线。");
 
             InvokePrivate(window, "WndProc", nint.Zero, 0x007E, nint.Zero, nint.Zero, false);
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             CompleteLayout(window);
 
-            Assert.AreEqual(visibleWidth, window.Width, 0.5, "显示器广播不得改变窗口外形。");
-            Assert.AreEqual(work.Right - visibleWidth, window.Left, 0.5, "显示器广播必须重新贴齐工作区右缘。");
+            DpiGeometryAssert.AreEqual(visibleWidth, window.Width, window, PixelQuantization.Single, "显示器广播不得改变窗口外形。");
+            DpiGeometryAssert.AreEqual(work.Right - visibleWidth, window.Left, window, PixelQuantization.Single, "显示器广播必须重新贴齐工作区右缘。");
             AssertNoRightInset(window);
         }
         finally
@@ -202,8 +205,8 @@ public sealed partial class MainWindowInteractionTests
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             CompleteLayout(window);
 
-            Assert.AreEqual(visibleWidth, window.Width, 0.5, "系统设置广播不得改变窗口外形。");
-            Assert.AreEqual(work.Right - visibleWidth, window.Left, 0.5,
+            DpiGeometryAssert.AreEqual(visibleWidth, window.Width, window, PixelQuantization.Single, "系统设置广播不得改变窗口外形。");
+            DpiGeometryAssert.AreEqual(work.Right - visibleWidth, window.Left, window, PixelQuantization.Single,
                 "WM_SETTINGCHANGE（工作区变化不伴随显示变更广播）必须重新贴齐工作区右缘。");
             AssertNoRightInset(window);
         }
@@ -230,18 +233,18 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var work = SystemParameters.WorkArea;
             var normalized = WindowSettings.Default.Normalize(work.Width, work.Height);
-            Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);
-            Assert.AreEqual(normalized.WindowHeight, window.Height, 0.5,
+            DpiGeometryAssert.AreEqual(WindowSettings.TabWidth, window.Width, window, PixelQuantization.Single, "轨道宽＝标签宽。");
+            DpiGeometryAssert.AreEqual(normalized.WindowHeight, window.Height, window, PixelQuantization.Single,
                 "前置条件：外部拖放把面板换成了轨道几何。");
 
             InvokePrivate(window, "WndProc", nint.Zero, 0x007E, nint.Zero, nint.Zero, false);
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             CompleteLayout(window);
 
-            Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5,
+            DpiGeometryAssert.AreEqual(WindowSettings.TabWidth, window.Width, window, PixelQuantization.Single,
                 "广播后仍须保持轨道几何，不得误贴为收起几何。");
-            Assert.AreEqual(normalized.WindowHeight, window.Height, 0.5);
-            Assert.AreEqual(work.Right - WindowSettings.TabWidth, window.Left, 0.5);
+            DpiGeometryAssert.AreEqual(normalized.WindowHeight, window.Height, window, PixelQuantization.Single, "广播后轨道高不变。");
+            DpiGeometryAssert.AreEqual(work.Right - WindowSettings.TabWidth, window.Left, window, PixelQuantization.Single, "轨道态右缘贴齐工作区右缘。");
             AssertNoRightInset(window);
         }
         finally
@@ -271,10 +274,10 @@ public sealed partial class MainWindowInteractionTests
             var work = SystemParameters.WorkArea;
             var expected = WindowSettings.Default.ResetToDefault(work.Width, work.Height);
             var visibleWidth = expected.PanelWidth + WindowSettings.TabWidth;
-            Assert.AreEqual(visibleWidth, window.Width, 0.5);
-            Assert.AreEqual(work.Right, window.Left + window.Width, 0.5);
-            Assert.AreEqual(expected.WindowHeight, window.Height, 0.5);
-            Assert.IsTrue(window.Left >= work.Left - 0.5, "窗口左缘不得推出工作区。");
+            DpiGeometryAssert.AreEqual(visibleWidth, window.Width, window, PixelQuantization.Single, "重置后可见宽。");
+            DpiGeometryAssert.AreEqual(work.Right, window.Left + window.Width, window, PixelQuantization.Pair, "重置后右缘贴齐工作区右缘。");
+            DpiGeometryAssert.AreEqual(expected.WindowHeight, window.Height, window, PixelQuantization.Single, "重置后窗口高。");
+            DpiGeometryAssert.IsAtLeast(window.Left, work.Left, window, PixelQuantization.Single, "窗口左缘不得推出工作区。");
             AssertNoRightInset(window);
         }
         finally

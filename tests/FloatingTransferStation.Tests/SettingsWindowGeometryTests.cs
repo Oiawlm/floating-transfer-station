@@ -42,25 +42,28 @@ public sealed class SettingsWindowGeometryTests
                 double.PositiveInfinity,
                 settings.MaxHeight,
                 "不得声明 Window.MaxHeight（同上；恢复路径由 Normalize 按工作区冻结式钳制）。");
-            Assert.AreEqual(680d, settings.ActualWidth, 0.01, "默认宽冻结值 680。");
-            Assert.AreEqual(600d, settings.ActualHeight, 0.01, "默认高冻结值 600。");
+            DpiGeometryAssert.AreEqual(680d, settings.ActualWidth, settings, PixelQuantization.Single, "默认宽冻结值 680。");
+            DpiGeometryAssert.AreEqual(600d, settings.ActualHeight, settings, PixelQuantization.Single, "默认高冻结值 600。");
 
             // 程序化下限仍由 MinWidth/MinHeight（Window 属性）兜底。
             settings.Width = 400;
             CompleteLayout(settings);
-            Assert.IsTrue(settings.ActualWidth >= 560 - 0.01, "宽度不得低于最小值。");
+            DpiGeometryAssert.IsAtLeast(settings.ActualWidth, 560, settings, PixelQuantization.Single, "宽度不得低于最小值。");
             settings.Height = 300;
             CompleteLayout(settings);
-            Assert.IsTrue(settings.ActualHeight >= 460 - 0.01, "高度不得低于最小值。");
+            DpiGeometryAssert.IsAtLeast(settings.ActualHeight, 460, settings, PixelQuantization.Single, "高度不得低于最小值。");
 
             // 程序化超宽同样被轨道尺寸钳回 900：轨道是窗口管理器对一切尺寸变更
             //（拖拽/程序化 SetWindowPos/贴靠/最大化之外）的统一边界——上限现在由
             // 真实消息路径强制，而不再依赖会把最大化根视觉钳出死区的 MaxWidth 属性。
             settings.Width = 1200;
             CompleteLayout(settings);
-            Assert.IsTrue(
-                settings.ActualWidth <= 900 + 0.01,
-                $"程序化超宽必须被消息路径轨道尺寸钳制（≤900），ActualWidth={settings.ActualWidth}。");
+            DpiGeometryAssert.IsAtMost(
+                settings.ActualWidth,
+                900,
+                settings,
+                PixelQuantization.Single,
+                "程序化超宽必须被消息路径轨道尺寸钳制（≤900）。");
         }
         finally
         {
@@ -82,10 +85,10 @@ public sealed class SettingsWindowGeometryTests
         try
         {
             CompleteLayout(settings);
-            Assert.AreEqual(860d, settings.ActualWidth, 0.01);
-            Assert.AreEqual(520d, settings.ActualHeight, 0.01);
-            Assert.AreEqual(60d, settings.Left, 0.01, "工作区内的持久化位置应原样恢复。");
-            Assert.AreEqual(80d, settings.Top, 0.01);
+            DpiGeometryAssert.AreEqual(860d, settings.ActualWidth, settings, PixelQuantization.Single, "持久化宽原样恢复。");
+            DpiGeometryAssert.AreEqual(520d, settings.ActualHeight, settings, PixelQuantization.Single, "持久化高原样恢复。");
+            DpiGeometryAssert.AreEqual(60d, settings.Left, settings, PixelQuantization.Single, "工作区内的持久化位置应原样恢复。");
+            DpiGeometryAssert.AreEqual(80d, settings.Top, settings, PixelQuantization.Single, "持久化顶原样恢复。");
         }
         finally
         {
@@ -112,10 +115,10 @@ public sealed class SettingsWindowGeometryTests
         try
         {
             CompleteLayout(settings);
-            Assert.AreEqual(-700d, settings.Left, 0.01, "左侧副屏内负坐标合法，不得被钳到非负。");
-            Assert.AreEqual(100d, settings.Top, 0.01);
-            Assert.AreEqual(680d, settings.ActualWidth, 0.01);
-            Assert.AreEqual(600d, settings.ActualHeight, 0.01, "未超目标屏冻结最大高（1040 − 48）的尺寸原样恢复。");
+            DpiGeometryAssert.AreEqual(-700d, settings.Left, settings, PixelQuantization.Single, "左侧副屏内负坐标合法，不得被钳到非负。");
+            DpiGeometryAssert.AreEqual(100d, settings.Top, settings, PixelQuantization.Single, "负坐标用例顶原样恢复。");
+            DpiGeometryAssert.AreEqual(680d, settings.ActualWidth, settings, PixelQuantization.Single, "负坐标用例宽原样恢复。");
+            DpiGeometryAssert.AreEqual(600d, settings.ActualHeight, settings, PixelQuantization.Single, "未超目标屏冻结最大高（1040 − 48）的尺寸原样恢复。");
         }
         finally
         {
@@ -161,8 +164,8 @@ public sealed class SettingsWindowGeometryTests
         {
             CompleteLayout(settings);
             var work = SystemParameters.WorkArea;
-            Assert.AreEqual(work.Left, settings.Left, 0.01, "左越界部分应钳到工作区左缘。");
-            Assert.AreEqual(50d, settings.Top, 0.01);
+            DpiGeometryAssert.AreEqual(work.Left, settings.Left, settings, PixelQuantization.Single, "左越界部分应钳到工作区左缘。");
+            DpiGeometryAssert.AreEqual(50d, settings.Top, settings, PixelQuantization.Single, "顶在工作区内时原样保留。");
         }
         finally
         {
@@ -326,8 +329,11 @@ public sealed class SettingsWindowGeometryTests
             PostMessage(handle, WmExitSizeMove, IntPtr.Zero, IntPtr.Zero);
             CompleteLayout(settings);
             var work = SystemParameters.WorkArea;
-            Assert.IsTrue(
-                settings.Top <= work.Bottom + 0.01,
+            DpiGeometryAssert.IsAtMost(
+                settings.Top,
+                work.Bottom,
+                settings,
+                PixelQuantization.Single,
                 "WM_EXITSIZEMOVE 后必须钳回工作区。");
             Assert.IsNotNull(store.LastSaved, "系统缩放结束必须落盘（EXITSIZEMOVE 路径）。");
         }
@@ -414,15 +420,17 @@ public sealed class SettingsWindowGeometryTests
         try
         {
             CompleteLayout(settings);
-            Assert.AreEqual(
+            DpiGeometryAssert.AreEqual(
                 460d,
                 settings.ActualHeight,
-                0.01,
+                settings,
+                PixelQuantization.Single,
                 "矮工作区（400 − 48 < 460）下恢复高度必须收敛到最小高 460。");
-            Assert.AreEqual(
+            DpiGeometryAssert.AreEqual(
                 0d,
                 settings.Top,
-                0.01,
+                settings,
+                PixelQuantization.Single,
                 "钳制后 Top 必须收回工作区内（工作区下缘 − 高度）。");
         }
         finally
@@ -454,12 +462,13 @@ public sealed class SettingsWindowGeometryTests
         try
         {
             CompleteLayout(settings);
-            Assert.AreEqual(
+            DpiGeometryAssert.AreEqual(
                 Math.Max(work.Right - 860, work.Left),
                 settings.Left,
-                0.01,
+                settings,
+                PixelQuantization.Single,
                 "显示器断开后位置应钳进主屏工作区（右缘对齐）而非回落默认定位。");
-            Assert.AreEqual(860d, settings.ActualWidth, 0.01, "尺寸合法时应原样保留。");
+            DpiGeometryAssert.AreEqual(860d, settings.ActualWidth, settings, PixelQuantization.Single, "尺寸合法时应原样保留。");
         }
         finally
         {
@@ -729,8 +738,8 @@ public sealed class SettingsWindowGeometryTests
             settings.WindowState = WindowState.Maximized;
             CompleteLayout(settings);
             Assert.IsTrue(settings.ActualWidth > 900.01, $"前提：最大化宽度必须超过旧 900 上限，实际 {settings.ActualWidth}。");
-            Assert.AreEqual(1600d, settings.ActualWidth, 0.5, "最大化尺寸必须是假显示器工作区整幅宽（轨道让位）。");
-            Assert.AreEqual(1040d, settings.ActualHeight, 0.5, "最大化尺寸必须是假显示器工作区整幅高。");
+            DpiGeometryAssert.AreEqual(1600d, settings.ActualWidth, settings, PixelQuantization.Single, "最大化尺寸必须是假显示器工作区整幅宽（轨道让位）。");
+            DpiGeometryAssert.AreEqual(1040d, settings.ActualHeight, settings, PixelQuantization.Single, "最大化尺寸必须是假显示器工作区整幅高。");
 
             var shell = (System.Windows.Controls.Border)settings.FindName("WindowShell");
             Assert.IsNotNull(shell);
@@ -827,9 +836,10 @@ public sealed class SettingsWindowGeometryTests
             var work = SystemParameters.WorkArea;
             var expectedLeft = Math.Max(work.Left, Math.Min(window.Left - settings.Width - 12, work.Right - settings.Width));
             var expectedTop = Math.Clamp(window.Top, work.Top, Math.Max(work.Top, work.Bottom - settings.ActualHeight));
-            Assert.AreEqual(expectedLeft, settings.Left, 0.01, message);
-            Assert.AreEqual(expectedTop, settings.Top, 0.01, message);
-            Assert.AreEqual(680d, settings.ActualWidth, 0.01, "回落默认定位时尺寸应为冻结默认值。");
+            // 期望式由主窗 HWND 读回推导、实测为设置窗 HWND 读回：两窗独立量化（Pair）。
+            DpiGeometryAssert.AreEqual(expectedLeft, settings.Left, settings, PixelQuantization.Pair, message);
+            DpiGeometryAssert.AreEqual(expectedTop, settings.Top, settings, PixelQuantization.Pair, message);
+            DpiGeometryAssert.AreEqual(680d, settings.ActualWidth, settings, PixelQuantization.Single, "回落默认定位时尺寸应为冻结默认值。");
         }
         finally
         {
