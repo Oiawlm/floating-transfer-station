@@ -153,4 +153,47 @@ public sealed class InsertionSlotResolverTests
         Assert.AreEqual(308d, InsertionSlotResolver.IndicatorEdgeY(ThreeItemsWithGaps, 99));
         Assert.AreEqual(0d, InsertionSlotResolver.IndicatorEdgeY([], 0));
     }
+
+    // 中线（54/156）与迟滞半径（3）共同决定翻转带：中线 ±3 DIP 内维持既有槽位。
+    // 条目 0/1/2 的翻转中线分别是 54、156、258。
+
+    [TestMethod]
+    public void ResolveHeldSlot_KeepsHeldSlotWhileCursorJittersAroundTheFlipLine()
+    {
+        // held=1，光标越过条目 1 中线（156）不足迟滞半径：维持 1（下行方向）。
+        Assert.AreEqual(1, InsertionSlotResolver.ResolveHeldSlot(ThreeItemsWithGaps, 157d, 2, 1));
+        Assert.AreEqual(1, InsertionSlotResolver.ResolveHeldSlot(ThreeItemsWithGaps, 158d, 2, 1));
+        // 越过中线 + 迟滞半径（≥159）才翻转。
+        Assert.AreEqual(2, InsertionSlotResolver.ResolveHeldSlot(ThreeItemsWithGaps, 159d, 2, 1));
+
+        // held=2，光标退回中线之上不足半径：维持 2（上行方向，迟滞对称）。
+        Assert.AreEqual(2, InsertionSlotResolver.ResolveHeldSlot(ThreeItemsWithGaps, 155d, 1, 2));
+        Assert.AreEqual(2, InsertionSlotResolver.ResolveHeldSlot(ThreeItemsWithGaps, 154d, 1, 2));
+        Assert.AreEqual(1, InsertionSlotResolver.ResolveHeldSlot(ThreeItemsWithGaps, 153d, 1, 2));
+    }
+
+    [TestMethod]
+    public void ResolveHeldSlot_NullOrEqualHeldFollowsResolution()
+    {
+        Assert.AreEqual(2, InsertionSlotResolver.ResolveHeldSlot(ThreeItemsWithGaps, 156.5d, 2, null));
+        Assert.AreEqual(2, InsertionSlotResolver.ResolveHeldSlot(ThreeItemsWithGaps, 156.5d, 2, 2));
+    }
+
+    [TestMethod]
+    public void ResolveHeldSlot_MultiSlotJumpFollowsResolutionWithoutHysteresis()
+    {
+        // 跨多槽跳变（快速移动/滚动后迁移）不经迟滞：既不可能由中线抖动产生，
+        // 也不应被迟滞带拦下。
+        Assert.AreEqual(3, InsertionSlotResolver.ResolveHeldSlot(ThreeItemsWithGaps, 300d, 3, 1));
+        Assert.AreEqual(0, InsertionSlotResolver.ResolveHeldSlot(ThreeItemsWithGaps, -10d, 0, 2));
+    }
+
+    [TestMethod]
+    public void ResolveHeldSlot_MissingBoundaryItemOrEmptySpansFollowResolution()
+    {
+        // 边界条目未实现（回收容器）或 spans 为空：迟滞绝不制造 Resolve 之外的索引。
+        var sparse = new[] { ThreeItemsWithGaps[0], ThreeItemsWithGaps[2] };
+        Assert.AreEqual(2, InsertionSlotResolver.ResolveHeldSlot(sparse, 156.5d, 2, 1));
+        Assert.AreEqual(1, InsertionSlotResolver.ResolveHeldSlot([], 156.5d, 1, 2));
+    }
 }

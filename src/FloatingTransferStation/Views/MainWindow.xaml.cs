@@ -82,6 +82,13 @@ public partial class MainWindow : Window
     private WindowSettings _settings;
     private long _externalDragSurfaceVersion;
     private int _scrollRestoreVersion;
+    // 拖放反馈稳定态（契约 #51）：分类高亮当前已应用真值／撤离复核版本与最后断言
+    // 时刻（保持窗判定）；列表插入槽位迟滞的上一有效槽位（拖拽会话内有效，
+    // 会话边界由 ClearDropFeedback 复位）。
+    private CategoryViewModel? _categoryDropTargetApplied;
+    private long _categoryDropTargetWithdrawVersion;
+    private long _categoryDropTargetAssertTick;
+    private int? _heldInsertionSlotIndex;
     private bool _isClosing;
     private bool _allowClose;
     private bool _globalHotkeyRegistered;
@@ -626,7 +633,8 @@ public partial class MainWindow : Window
         IReadOnlyCollection<Guid> dragItemIds)
     {
         var spans = BuildRealizedItemSpans(panel);
-        var slot = InsertionSlotResolver.Resolve(spans, e.GetPosition(BoardList).Y);
+        var cursorY = e.GetPosition(BoardList).Y;
+        var slot = InsertionSlotResolver.Resolve(spans, cursorY);
         var pinnedCount = panel.Items.TakeWhile(item => item.IsPinned).Count();
         var dragBatch = panel.Items
             .Where(item => dragItemIds.Contains(item.Id))
@@ -638,13 +646,24 @@ public partial class MainWindow : Window
             return (slot.InsertionIndex, ClampIndicatorY(slot.IndicatorEdgeY));
         }
 
-        var insertionIndex = InsertionSlotResolver.ClampInsertionIndex(
+        var resolvedIndex = InsertionSlotResolver.ClampInsertionIndex(
             slot.InsertionIndex,
             pinnedCount,
             pinStates[0]);
+        // 槽位迟滞（契约 #51）：翻转中线 ±SlotFlipHysteresisDip 带内的抖动维持上一
+        // 有效槽位。指示线、CanMoveMany 与 Drop 共用同一有效槽位（视觉与落点一致）；
+        // 带外位置与无迟滞解析完全相同，落点/钳制语义零变化。
+        var insertionIndex = InsertionSlotResolver.ResolveHeldSlot(
+            spans,
+            cursorY,
+            resolvedIndex,
+            _heldInsertionSlotIndex);
+        _heldInsertionSlotIndex = insertionIndex;
         var indicatorEdgeY = InsertionSlotResolver.IndicatorEdgeY(spans, insertionIndex);
         return (insertionIndex, ClampIndicatorY(indicatorEdgeY));
     }
+
+    private void ResetInsertionSlotHysteresis() => _heldInsertionSlotIndex = null;
 
     /// <summary>
     /// 枚举当前已实现的列表条目在 BoardList 坐标系的边缘矩形。每次拖动事件重新

@@ -223,6 +223,9 @@ public sealed partial class MainWindowInteractionTests
 
                 Assert.IsTrue(viewModel.IsExternalDropRailVisible);
                 Assert.AreEqual(WindowSettings.Default.WindowHeight, window.Height, 0.5);
+                // 契约 #51：标签高亮的撤离清理由保持窗复核承接（同步断言点后移到
+                // 输入通道排空之后）；轨道本身的跨标签和解仍是输入优先级延迟复核。
+                CompleteLayout(window);
                 Assert.IsFalse(viewModel.Categories.Any(candidate => candidate.IsDropTarget));
 
                 var enter = NewDragEventArgs(data, DragDrop.DragEnterEvent, next);
@@ -1326,7 +1329,11 @@ public sealed partial class MainWindowInteractionTests
             secondTab.RaiseEvent(NewDragEventArgs(internalData, DragDrop.DragEnterEvent, secondTab));
             Assert.AreSame(second, viewModel.Categories.Single(category => category.IsDropTarget));
 
+            // 契约 #51：撤离不立即清高亮——抖动窗口内 IsDropTarget 不回落；
+            // 真离开经保持窗复核后一次清到位。
             secondTab.RaiseEvent(NewDragEventArgs(internalData, DragDrop.DragLeaveEvent, secondTab));
+            Assert.AreSame(second, viewModel.Categories.Single(category => category.IsDropTarget));
+            CompleteLayout(window);
             Assert.IsFalse(viewModel.Categories.Any(category => category.IsDropTarget));
 
             var invalid = NewDragEventArgs(
@@ -1485,6 +1492,226 @@ public sealed partial class MainWindowInteractionTests
                 Assert.AreEqual(Visibility.Visible, indicator.Visibility, $"jitter {jitter}");
                 Assert.AreEqual(expectedEdgeY, Canvas.GetTop(indicator), 0.5, $"jitter {jitter}");
             }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void NormalCardMidpointDrag_KeepsIndicatorStableWhileCursorJittersAroundTheCenterLine()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        // 按显示顺序的反序添加，使显示为 [top, bottom]（两张普通卡）。
+        var bottom = board.AddText("bottom");
+        var top = board.AddText("top");
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var indicator = (Border)window.FindName("InsertionIndicator");
+            var bottomContainer =
+                (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(bottom);
+            Assert.IsNotNull(bottomContainer);
+            var topEdgeY = bottomContainer.TranslatePoint(new Point(), list).Y;
+            var bottomEdgeY = bottomContainer.TranslatePoint(
+                new Point(0, bottomContainer.ActualHeight),
+                list).Y;
+            var dragData = new DragPayloadService().Build(top);
+            var midY = bottomContainer.ActualHeight / 2;
+            var hysteresis = InsertionSlotResolver.SlotFlipHysteresisDip;
+
+            // 首次判定落在中线之上：槽位＝bottom 之前，指示线贴 bottom 上缘。
+            var initial = NewDragEventArgs(
+                dragData,
+                DragDrop.PreviewDragOverEvent,
+                bottomContainer,
+                new Point(8, midY - 1));
+            bottomContainer.RaiseEvent(initial);
+            Assert.AreEqual(DragDropEffects.Move, initial.Effects);
+            Assert.AreEqual(Visibility.Visible, indicator.Visibility);
+            Assert.AreEqual(topEdgeY, Canvas.GetTop(indicator), 0.5);
+
+            // 中线两侧 ±1–2 DIP 来回抖动：指示线钉在首次判定的槽位边缘，
+            // 不随翻转边界跳变；可见性与拖动效果全程稳定（显示/隐藏不交替）。
+            for (var jitter = 0; jitter < 8; jitter++)
+            {
+                var amplitude = jitter % 2 == 0 ? 1d : 2d;
+                var cursorY = midY + (jitter % 4 < 2 ? amplitude : -amplitude);
+                var over = NewDragEventArgs(
+                    dragData,
+                    DragDrop.PreviewDragOverEvent,
+                    bottomContainer,
+                    new Point(8, cursorY));
+                bottomContainer.RaiseEvent(over);
+
+                Assert.AreEqual(DragDropEffects.Move, over.Effects, $"jitter {jitter}");
+                Assert.AreEqual(Visibility.Visible, indicator.Visibility, $"jitter {jitter}");
+                Assert.AreEqual(topEdgeY, Canvas.GetTop(indicator), 0.5, $"jitter {jitter}");
+            }
+
+            // 果断越过中线超出迟滞半径：翻转即时跟随到末尾槽（迟滞不是锁死）。
+            var decisive = NewDragEventArgs(
+                dragData,
+                DragDrop.PreviewDragOverEvent,
+                bottomContainer,
+                new Point(8, midY + hysteresis + 2));
+            bottomContainer.RaiseEvent(decisive);
+            Assert.AreEqual(DragDropEffects.Move, decisive.Effects);
+            Assert.AreEqual(Visibility.Visible, indicator.Visibility);
+            Assert.AreEqual(bottomEdgeY, Canvas.GetTop(indicator), 0.5);
+
+            // 翻转后的中线附近小幅回抖：对称维持新槽位。
+            var backJitter = NewDragEventArgs(
+                dragData,
+                DragDrop.PreviewDragOverEvent,
+                bottomContainer,
+                new Point(8, midY + 2));
+            bottomContainer.RaiseEvent(backJitter);
+            Assert.AreEqual(DragDropEffects.Move, backJitter.Effects);
+            Assert.AreEqual(bottomEdgeY, Canvas.GetTop(indicator), 0.5);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public void CategoryDropFeedback_JitteredEnterOverLeaveSequenceKeepsTargetWithoutFalseDip(
+        bool clientAreaAnimations)
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("drag source");
+        var window = CreateWindow(directory, board);
+        // 两档都覆盖：动效开启（差分＝零重启动画）与系统「减弱动效」（直接达终态，
+        // 契约 #41——迟滞与差分在减动效下同样正确）。
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = clientAreaAnimations;
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var target = viewModel.Categories[0];
+            var tab = FindCategoryTab(window, target);
+            var rail = (Border)window.FindName("CategoryRail");
+            var gapSurface = rail.Child as ItemsControl;
+            Assert.IsNotNull(gapSurface);
+            var internalData = new DragPayloadService().Build(item);
+
+            tab.RaiseEvent(NewDragEventArgs(internalData, DragDrop.DragEnterEvent, tab));
+            Assert.AreSame(target, viewModel.Categories.Single(category => category.IsDropTarget));
+
+            // DragEnter/Over/Leave 抖动序列（标签边缘手抖、间隙瞬时穿越）：
+            // IsDropTarget 不得出现 false 回落——撤离只进入保持窗复核，断言事件
+            // 立即差分生效并作废挂起复核；稳态序列零属性翻转、零动画重启（契约 #51）。
+            for (var round = 0; round < 4; round++)
+            {
+                tab.RaiseEvent(NewDragEventArgs(internalData, DragDrop.DragLeaveEvent, tab));
+                Assert.AreSame(
+                    target,
+                    viewModel.Categories.Single(category => category.IsDropTarget),
+                    $"leave {round}");
+
+                tab.RaiseEvent(NewDragEventArgs(internalData, DragDrop.DragOverEvent, tab));
+                Assert.AreSame(
+                    target,
+                    viewModel.Categories.Single(category => category.IsDropTarget),
+                    $"over {round}");
+
+                gapSurface.RaiseEvent(NewDragEventArgs(
+                    internalData,
+                    DragDrop.DragEnterEvent,
+                    gapSurface));
+                Assert.AreSame(
+                    target,
+                    viewModel.Categories.Single(category => category.IsDropTarget),
+                    $"gap {round}");
+
+                tab.RaiseEvent(NewDragEventArgs(internalData, DragDrop.DragEnterEvent, tab));
+                Assert.AreSame(
+                    target,
+                    viewModel.Categories.Single(category => category.IsDropTarget),
+                    $"re-enter {round}");
+            }
+
+            // 真离开（末次事件为撤离且保持窗内无再断言）：复核期满后一次清到位，
+            // 撤离语义与既有一致——不闪，但也不会残留。
+            tab.RaiseEvent(NewDragEventArgs(internalData, DragDrop.DragLeaveEvent, tab));
+            Assert.AreSame(target, viewModel.Categories.Single(category => category.IsDropTarget));
+            CompleteLayout(window);
+            Assert.IsFalse(viewModel.Categories.Any(category => category.IsDropTarget));
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void MidpointJitterDrop_LandsAtTheHeldSlotShownByTheIndicator()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        // 按显示顺序的反序添加，使显示为 [top, middle, bottom]（三张普通卡）。
+        var bottom = board.AddText("bottom");
+        var middle = board.AddText("middle");
+        var top = board.AddText("top");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var indicator = (Border)window.FindName("InsertionIndicator");
+            var bottomContainer =
+                (ListBoxItem?)list.ItemContainerGenerator.ContainerFromItem(bottom);
+            Assert.IsNotNull(bottomContainer);
+            var bottomTopEdgeY = bottomContainer.TranslatePoint(new Point(), list).Y;
+            var dragData = new DragPayloadService().Build(top);
+            var midY = bottomContainer.ActualHeight / 2;
+
+            // 建立迟滞真值：中线之上判定 held=2（bottom 之前，真实移动）。
+            var over = NewDragEventArgs(
+                dragData,
+                DragDrop.PreviewDragOverEvent,
+                bottomContainer,
+                new Point(8, midY - 1));
+            bottomContainer.RaiseEvent(over);
+            Assert.AreEqual(DragDropEffects.Move, over.Effects);
+            Assert.AreEqual(bottomTopEdgeY, Canvas.GetTop(indicator), 0.5);
+
+            // 迟滞带内松手（raw=3 末尾槽、held=2）：所见即所落（契约 #51）——
+            // 落点必须是指示线所示 held 槽（[middle, top, bottom]），
+            // 而不是无迟滞解析的 raw 槽（那会得到 [middle, bottom, top]）。
+            var drop = NewDragEventArgs(
+                dragData,
+                DragDrop.PreviewDropEvent,
+                bottomContainer,
+                new Point(8, midY + 2));
+            bottomContainer.RaiseEvent(drop);
+            PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
+            CompleteLayout(window);
+
+            Assert.AreEqual(DragDropEffects.Move, drop.Effects);
+            Assert.AreEqual(1, store.SaveCount);
+            CollectionAssert.AreEqual(
+                new[] { middle.Id, top.Id, bottom.Id },
+                board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
+            Assert.AreEqual(Visibility.Collapsed, indicator.Visibility);
         }
         finally
         {

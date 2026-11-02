@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -165,12 +166,18 @@ public partial class MainWindow : Window
         _expandIntentTimer.Stop();
         _collapseTimer.Stop();
         ClearDropFeedback();
+        // 槽位迟滞是拖拽会话状态：会话开始即复位（上一会话的槽位不得渗入本次判定）。
+        ResetInsertionSlotHysteresis();
         _panelState.BeginDrag();
     }
 
     private void EndPanelDrag()
     {
         ClearDropFeedback();
+        // 会话结束同样复位：Drop 在 DoDragDrop 内发生，先于本方法消费迟滞真值
+        //（所见即所落，契约 #51），复位必须留在会话边界而不是 ClearDropFeedback——
+        // PreviewDrop 开头的终清若顺带复位，落点会退回无迟滞解析、与指示线背离。
+        ResetInsertionSlotHysteresis();
         _panelState.EndDrag();
         _expandIntentTimer.Stop();
         _collapseTimer.Stop();
@@ -210,7 +217,7 @@ public partial class MainWindow : Window
     private void UpdateExternalRailGap(DragEventArgs e)
     {
         HideInsertionIndicator();
-        ClearCategoryDropTargets();
+        WithdrawCategoryDropTarget();
         if (GetExternalDropPayload(e.Data) is not null)
         {
             _externalDragSurfaceVersion++;
@@ -228,7 +235,6 @@ public partial class MainWindow : Window
     private void UpdateCategoryDropTarget(object sender, DragEventArgs e)
     {
         HideInsertionIndicator();
-        ClearCategoryDropTargets();
         if (sender is Border { DataContext: CategoryViewModel tabCategory } &&
             !BoardCategoryCatalog.IsContentBucket(tabCategory.Category))
         {
@@ -238,12 +244,13 @@ public partial class MainWindow : Window
                 ReadImportableLauncherFiles(e.Data).Count > 0)
             {
                 ClearExternalDragPayload();
-                SetCategoryDropTarget(tabCategory);
+                ApplyCategoryDropTarget(tabCategory);
                 e.Effects = DragDropEffects.Copy;
                 e.Handled = true;
                 return;
             }
 
+            WithdrawCategoryDropTarget();
             e.Effects = DragDropEffects.None;
             e.Handled = true;
             return;
@@ -259,7 +266,7 @@ public partial class MainWindow : Window
                 HideExternalDropRail();
             }
 
-            SetCategoryDropTarget(category);
+            ApplyCategoryDropTarget(category);
             e.Effects = DragDropEffects.Move;
             e.Handled = true;
             return;
@@ -270,12 +277,13 @@ public partial class MainWindow : Window
         {
             _externalDragSurfaceVersion++;
             RevealExternalDropRail();
-            SetCategoryDropTarget(externalCategory);
+            ApplyCategoryDropTarget(externalCategory);
             e.Effects = DragDropEffects.Copy;
             e.Handled = true;
             return;
         }
 
+        WithdrawCategoryDropTarget();
         HideExternalDropRail();
         e.Effects = DragDropEffects.None;
         e.Handled = true;
@@ -304,7 +312,8 @@ public partial class MainWindow : Window
 
     private void HideExternalDropRail()
     {
-        ClearDropFeedback();
+        // 反馈清理由调用方表达（断言目标→差分应用；撤离→保持窗复核；Drop→终清），
+        // 本方法只负责轨道几何回落，不再顺手清拖放反馈（契约 #51）。
         if (!_viewModel.IsExternalDropRailVisible)
         {
             return;
@@ -329,14 +338,14 @@ public partial class MainWindow : Window
 
     private void CategoryTab_DragLeave(object sender, DragEventArgs e)
     {
-        ClearCategoryDropTargets();
+        WithdrawCategoryDropTarget();
         ScheduleExternalDropRailLeaveReconciliation();
         e.Handled = true;
     }
 
     private void CategoryRail_DragLeave(object sender, DragEventArgs e)
     {
-        ClearCategoryDropTargets();
+        WithdrawCategoryDropTarget();
         ScheduleExternalDropRailLeaveReconciliation();
         e.Handled = true;
     }
@@ -344,6 +353,7 @@ public partial class MainWindow : Window
     private void CategoryRail_Drop(object sender, DragEventArgs e)
     {
         ClearExternalDragPayload();
+        ClearDropFeedback();
         HideExternalDropRail();
         e.Effects = DragDropEffects.None;
         e.Handled = true;
@@ -491,7 +501,7 @@ public partial class MainWindow : Window
 
     private void BoardList_PreviewDragOver(object sender, DragEventArgs e)
     {
-        ClearCategoryDropTargets();
+        WithdrawCategoryDropTarget();
         if (_viewModel.ActivePanel is not { } panel ||
             _dragPayload.GetInternalItemIds(e.Data) is not { } itemIds)
         {
@@ -618,25 +628,69 @@ public partial class MainWindow : Window
         InsertionIndicator.Visibility = Visibility.Collapsed;
     }
 
-    private void SetCategoryDropTarget(CategoryViewModel target)
+    /// <summary>
+    /// 拖放目标高亮的「状态真值＋差分应用」（契约 #51）：断言事件（Enter/Over 命中
+    /// 有效目标）立即把全部分类一次性对齐到真值——属性值不变时底层 INPC 不触发，
+    /// 稳态拖拽零重启动画；同时作废挂起的撤离复核（抖动中的重断言不回落）。
+    /// </summary>
+    private void ApplyCategoryDropTarget(CategoryViewModel? target)
     {
+        _categoryDropTargetWithdrawVersion++;
+        if (target is not null)
+        {
+            _categoryDropTargetAssertTick = Environment.TickCount64;
+        }
+
+        _categoryDropTargetApplied = target;
         foreach (var category in _viewModel.Categories)
         {
             category.IsDropTarget = ReferenceEquals(category, target);
         }
     }
 
-    private void ClearCategoryDropTargets()
+    /// <summary>
+    /// 撤离（DragLeave／tab 间隙与轨道死区）不立即清高亮：进入保持窗
+    /// （<see cref="DesignTokens.DropTargetWithdrawHoldMs"/>）复核——窗口内任何
+    /// 重新断言都会作废本次复核，手抖在标签边缘产生的清-设交替被整段吸收；
+    /// 真离开（窗口内无再断言）才一次清到位，与既有的撤离语义保持一致。
+    /// </summary>
+    private void WithdrawCategoryDropTarget()
     {
-        foreach (var category in _viewModel.Categories)
+        var version = ++_categoryDropTargetWithdrawVersion;
+        if (_categoryDropTargetApplied is null)
         {
-            category.IsDropTarget = false;
+            return;
         }
+
+        ScheduleCategoryDropTargetWithdrawCommit(version);
+    }
+
+    private void ScheduleCategoryDropTargetWithdrawCommit(long version)
+    {
+        _ = Dispatcher.BeginInvoke(
+            DispatcherPriority.Input,
+            new Action(() =>
+            {
+                if (version != _categoryDropTargetWithdrawVersion)
+                {
+                    return;
+                }
+
+                if (Environment.TickCount64 - _categoryDropTargetAssertTick <
+                    DesignTokens.DropTargetWithdrawHoldMs)
+                {
+                    // 保持窗未期满：还不能确认真离开，再等一个输入通道。
+                    ScheduleCategoryDropTargetWithdrawCommit(version);
+                    return;
+                }
+
+                ApplyCategoryDropTarget(null);
+            }));
     }
 
     private void ClearDropFeedback()
     {
-        ClearCategoryDropTargets();
+        ApplyCategoryDropTarget(null);
         HideInsertionIndicator();
     }
 }

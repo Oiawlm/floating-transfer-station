@@ -265,7 +265,7 @@ $interactionTestPrefixes = @{
     'DailyReview'            = @('ReviewCategory', 'ReviewEditing', 'ReviewEditor', 'ReviewToolbar', 'ReviewWithoutEditorFocus')
     'DesignTheme'            = @('ThemeEvidence', 'ThemeSwitch')
     'DesignTokens'           = @('DesignTokens', 'WindowAnimationDurations')
-    'DragAndDrop'            = @('AnimatedImageFile', 'BoardInsertionFeedback', 'BoardListBlankHover', 'CategoryDropFeedback', 'CategoryHoverDuringInternalDragKeepsSourcePanelAndSelection', 'DragLifecycle', 'ExternalDropRailProjection', 'ExternalFileDrop', 'ExternalOrderedFileDrop', 'ExternalRail', 'ExternalTextDrop', 'FailedExternalImport', 'InternalBatchCategoryDrop', 'InternalBatchEquivalentListDropDoesNotSaveAndKeepsSelection', 'InternalBatchListDrop', 'InternalCategoryDrop', 'InternalDragData', 'InternalImageBatch', 'MixedPinBatch', 'NormalCategoryDrop', 'PinnedBoundaryDrag', 'PinnedDrag', 'RejectedExternalDrop', 'SupportedExternalText', 'UnsupportedExternalDrag', 'UnsupportedOrInternalData')
+    'DragAndDrop'            = @('AnimatedImageFile', 'BoardInsertionFeedback', 'BoardListBlankHover', 'CategoryDropFeedback', 'CategoryHoverDuringInternalDragKeepsSourcePanelAndSelection', 'DragLifecycle', 'ExternalDropRailProjection', 'ExternalFileDrop', 'ExternalOrderedFileDrop', 'ExternalRail', 'ExternalTextDrop', 'FailedExternalImport', 'InternalBatchCategoryDrop', 'InternalBatchEquivalentListDropDoesNotSaveAndKeepsSelection', 'InternalBatchListDrop', 'InternalCategoryDrop', 'InternalDragData', 'InternalImageBatch', 'MidpointJitterDrop', 'MixedPinBatch', 'NormalCardMidpointDrag', 'NormalCategoryDrop', 'PinnedBoundaryDrag', 'PinnedDrag', 'RejectedExternalDrop', 'SupportedExternalText', 'UnsupportedExternalDrag', 'UnsupportedOrInternalData')
     'EdgeGeometry'           = @('CollapsedGeometry', 'DisplayChange', 'ExpandedGeometry', 'ResetAction', 'SettingChange', 'WidthResize')
     'EdgeHide'               = @('EdgeHide')
     'EditingCommit'          = @('EditingCommit')
@@ -534,16 +534,19 @@ function Filter-ChangesetNoise([string[]]$files) {
     return $kept
 }
 
-function Assert-FilterSelectsTests([string]$areaName, [string]$filter, [string[]]$appInventory, [string[]]$coreInventory) {
+function Assert-FilterSelectsTests([string]$areaName, [string]$filter, [string[]]$appInventory, [string[]]$coreInventory, [string]$allowedDeadToken = '') {
     # 漂移检查：Core.* 区域走 solution 级（两工程任一命中即可）；其余区域跑 App 工程，必须命中 App。
     # 整组过滤器命中 0 条＝映射腐烂；任一词根在目标工程命中 0 条＝死词根。两者都 fail fast。
+    # allowedDeadToken：仅供 R-AppPartial 的字面 Area 兜底支——契约 #32「桥接∪字面」并集里
+    # 字面支本来就允许当下 0 命中（契约测试锚定 DragAndDrop 字面 0/桥接 36），词根桥接支
+    # 仍逐条死检；整组 0 命中照样抛（live 检查在前）。
     $targets = if ($areaName -like 'Core.*') { $appInventory + $coreInventory } else { $appInventory }
     $tokens = Get-FilterTokens $filter
     $dead = @()
     $live = $false
     foreach ($token in $tokens) {
         $hit = @($targets | Where-Object { $_ -like "*$token*" }).Count -gt 0
-        if ($hit) { $live = $true } else { $dead += $token }
+        if ($hit) { $live = $true } elseif ($token -ne $allowedDeadToken) { $dead += $token }
     }
     if (-not $live) { throw "区域 $areaName 的过滤器命中 0 条测试（$filter）——映射已腐烂，请修正映射或登记词根表。" }
     if ($dead.Count) { throw "区域 $areaName 过滤器死词根：$($dead -join ', ')（在目标测试工程中命中 0 条）——请清理映射。" }
@@ -736,10 +739,14 @@ if ($Areas) {
         $plan.Mode = 'Affected' # 显式选区即执行意图：豁免类变更集不得吞掉 -Areas
     }
 } else {
-    # 派生区域过滤器同样须过漂移检查（词根表改动即时暴露死词根）。
+    # 派生区域过滤器同样须过漂移检查（词根表改动即时暴露死词根）。R-AppPartial 派生区的
+    # 字面 Area 兜底支（＝区域名去 App. 前缀）按契约 #32 允许当下 0 命中，作 allowedDeadToken。
     foreach ($name in @($plan.Selected.Keys)) {
         $entry = $plan.Selected[$name]
-        if ($entry.Filters.Count) { Assert-FilterSelectsTests $name ($entry.Filters -join '|') $appInventory $coreInventory }
+        if ($entry.Filters.Count) {
+            $literal = if ($name -like 'App.*') { $name -replace '^App\.', '' } else { '' }
+            Assert-FilterSelectsTests $name ($entry.Filters -join '|') $appInventory $coreInventory $literal
+        }
     }
 }
 Show-TestPlan $plan

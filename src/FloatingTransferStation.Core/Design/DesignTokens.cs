@@ -68,6 +68,11 @@ public static class DesignTokens
     public const int FadeVisibilityMs = 120;
     public const int DeleteFeedbackMs = 120;
     public const int ItemEntranceStaggerMs = 40;
+    /// <summary>拖放目标撤离保持窗（ms）：标签高亮被 DragLeave/轨内死区撤销后，
+    /// 经此窗口无重新断言才一次清到位——窗口内 Enter/Over 抖动零回落（契约 #51）。
+    /// 取 120 覆盖手抖频率（≥4Hz 的断言间隔都低于它），又不至于让真离开的
+    /// 高亮消退有可感知迟滞。</summary>
+    public const int DropTargetWithdrawHoldMs = 120;
 
     // 快捷启动（#30）：场景常量不加档——LaunchConfirmMs/ItemLandingMs 直接锚 SlowDurationMs。
     public const int LaunchConfirmMs = SlowDurationMs;

@@ -74,6 +74,7 @@
 | 显隐淡入淡出 | FadeVisibilityMs | 120 |
 | 删除反馈 | DeleteFeedbackMs | 120 |
 | 新条目交错步长 | ItemEntranceStaggerMs | 40（区间 30–50 取中） |
+| 拖放目标撤离保持窗（#51） | DropTargetWithdrawHoldMs | 120（覆盖手抖频率，真离开无感知迟滞） |
 | 启动确认脉冲（#30） | LaunchConfirmMs | 250（＝SlowDurationMs，不加档） |
 | 启动项落位（#30） | ItemLandingMs | 250（＝SlowDurationMs，不加档） |
 | 启动后排队收起延迟（#30） | LaunchCollapseDelayMs | 250（时序性延迟，减动效保留） |

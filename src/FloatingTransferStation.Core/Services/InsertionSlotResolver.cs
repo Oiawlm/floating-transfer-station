@@ -21,6 +21,13 @@ public readonly record struct InsertionSlot(int InsertionIndex, double Indicator
 /// </summary>
 public static class InsertionSlotResolver
 {
+    /// <summary>
+    /// 槽位翻转迟滞半径（DIP）：光标越过翻转中线不足此值时维持既有槽位。
+    /// 取 3 覆盖指针在卡片中线附近 ±1–2 DIP 的常见抖动（指示线稳定不跳变），
+    /// 又远小于卡片高度——果断移动仍即时跟随，迟滞不构成可感知延迟。
+    /// </summary>
+    public const double SlotFlipHysteresisDip = 3;
+
     /// <summary>按条目中线判定光标所属槽位；空输入返回 (0, 0)。</summary>
     public static InsertionSlot Resolve(IReadOnlyList<InsertionItemSpan> spans, double cursorY)
     {
@@ -41,6 +48,53 @@ public static class InsertionSlotResolver
 
         var last = spans[spans.Count - 1];
         return new InsertionSlot(checked(last.ItemIndex + 1), last.BottomEdge);
+    }
+
+    /// <summary>
+    /// 对 <see cref="Resolve"/> 的结果应用翻转迟滞（纯几何，无隐藏状态）：
+    /// 光标在相邻槽位的翻转中线（较小索引条目的中线）两侧
+    /// ±<see cref="SlotFlipHysteresisDip"/> 带内抖动时维持上一有效槽位，
+    /// 越过迟滞带、跨多槽跳变（快速移动/滚动后的大步迁移）直接跟随本次解析。
+    /// heldIndex 为空或相等、spans 为空、边界条目未实现时原样返回 resolvedIndex
+    /// ——迟滞绝不制造 Resolve 之外的索引，落点语义对带外位置零变化。
+    /// </summary>
+    public static int ResolveHeldSlot(
+        IReadOnlyList<InsertionItemSpan> spans,
+        double cursorY,
+        int resolvedIndex,
+        int? heldIndex)
+    {
+        ArgumentNullException.ThrowIfNull(spans);
+        if (heldIndex is not { } held || held == resolvedIndex || spans.Count == 0)
+        {
+            return resolvedIndex;
+        }
+
+        if (Math.Abs(resolvedIndex - held) != 1)
+        {
+            // 相邻槽位之外的翻转来自果断移动或跨滚动区跳变，不经迟滞。
+            return resolvedIndex;
+        }
+
+        var boundaryIndex = Math.Min(held, resolvedIndex);
+        double? boundaryY = null;
+        foreach (var span in spans)
+        {
+            if (span.ItemIndex == boundaryIndex)
+            {
+                boundaryY = span.CenterY;
+                break;
+            }
+        }
+
+        if (boundaryY is not { } boundary)
+        {
+            return resolvedIndex;
+        }
+
+        return resolvedIndex > held
+            ? (cursorY >= boundary + SlotFlipHysteresisDip ? resolvedIndex : held)
+            : (cursorY <= boundary - SlotFlipHysteresisDip ? resolvedIndex : held);
     }
 
     /// <summary>

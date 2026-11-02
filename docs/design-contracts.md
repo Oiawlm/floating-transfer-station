@@ -60,6 +60,7 @@
 | 48 | 界面默认字体唯一来源 `DesignTokens.InterfaceFontFamily`（微软雅黑 UI→微软雅黑回退链），用户字体经窗口级槽位换装即时生效；卡片行高按字体度量推导（默认＝19），下拉链首项合并为唯一「（默认）」项；不随应用分发字体文件 | 设计系统／排版 |
 | 49 | 四处就地编辑位共用窗口级按压协调：点击当前编辑器之外即走该编辑位既有提交路径（IME 组合文本一并保存）；只补通道、不改提交/取消语义 | 就地编辑 |
 | 50 | 图片输入双层允许表同源：扩展名白名单与解码器允许表自 ImageFileSupport 格式注册表唯一派生、全部解码入口走受限 Configuration，TIFF 永不解码（改名即拒） | 图片输入／安全边界 |
+| 51 | 拖放视觉反馈稳定：插入槽位迟滞带内观测噪声零视觉变化（指示线与落点同源）、分类高亮状态真值差分应用（稳态零重启动画）、撤离保持窗复核（抖动无 false 回落、真离开一次清到位）；落点/批量/置顶钳制/Drop 语义零变化 | 拖放反馈／动效稳定性 |
 
 ## 一、自冻结清单迁入（1–11）
 
@@ -471,6 +472,18 @@
 - **由来**：GHSA-v76p-62qx-wwq2 补丁版 3.2.0/4.1.1 均启用 Six Labors 构建期许可强制（免费线止于 3.1.x），升级被授权红线阻断；2026-10-28 规划窗口核查发现「只删白名单条目」不闭合向量（ImageSharp 按内容魔数识别不看扩展名、`Configuration.Default.Clone()` 携带 TIFF 解码器，探针实证改名 `.png` 的 TIFF 在 main 上 Identify=TIFF 且完整解码），用户裁决定案移除 TIFF 输入向量并要求双层根因收敛（不打补丁：禁止调用点各自散配格式表）。
 - **锁定**：`tests/FloatingTransferStation.Tests/ImageInputVectorLockTests.cs`（`TiffBytesMasqueradedAsPngAreRejectedByBothLayers`——真实 TIFF 魔数改名 `.png`：门=False＋受限 Identify/Load 精确抛 `UnknownImageFormatException`＋指纹 null；`TiffFileAndClipboardVectorsAreRejectedAtDecode`——`.tif` 文件归一化与剪贴板编码字节向量解码即拒；`WhitelistExtensionsAndDecoderAllowListShareOneSource`——冻结集断言＋每个白名单扩展名经生产门可解码（扩展名有、解码器缺即红）＋每个未登记格式改名白名单扩展被拒（解码器有、扩展名缺即红）的同源互锁；`TiffFileDropRoutesToRawFileListNotImages`——`.tif/.tiff` 拖入路由原始 FileList 保序）；既有 `ExternalDropPayloadReaderTests`（`photo.TIF/.tiff`=false、tiff 单帧拖入 FileList、正例 DataRow 移除 tiff）与 `ImageNormalizerTests`/`ImageInputLimitsTests`（tiff 正例 DataRow 移除，拒绝路径由锁定测试承接）翻转锁定。
 - **关联**：#43（图像容量预算——三道闸语义不变，本条收格式允许面）、#39（外部拖入 FileList 分流——`.tif` 走文件路径即其优雅降级）、#32（选择器：`ImageFileSupport.cs`/`ImageInputLimits.cs` 属 `Core.ImageFileSupport` 区域 `~Image` 词根，新锁定测试类名自动命中）；OBS-20261027C（关闭记录）；`Directory.Build.props` 抑制注记（GHSA-v76p-62qx-wwq2/wmxv 理由升级、gwg2 不声称关闭）；CHANGELOG 未发布区。
+
+## 二十七、本次新增（51，拖放视觉反馈稳定性：槽位迟滞＋高亮差分＋撤离保持窗；2026-11-02）
+
+### 51. 拖放视觉反馈稳定（指示线迟滞与所见即所落、分类高亮真值差分、撤离保持窗复核）
+
+- **断言**：拖放**视觉反馈**由拖拽会话持有的真值驱动，事件只是观测值，噪声不改变视觉——三条子断言：
+  ①**插入槽位迟滞**：`InsertionSlotResolver.ResolveHeldSlot(spans, cursorY, resolved, held)` 纯函数（状态由 `MainWindow` 会话字段持有，`BeginPanelDrag`/`EndPanelDrag` 复位）——光标在相邻槽位翻转中线（较小索引条目中线）两侧 ±`SlotFlipHysteresisDip`（恒 3 DIP，覆盖 ±1–2 DIP 手抖）带内抖动时维持上一有效槽位，越过迟滞带或跨多槽跳变即时跟随；迟滞绝不制造 `Resolve` 之外的索引（held 为空/相等、spans 空、边界条目未实现时原样返回）。指示线、`CanMoveMany` 与 Drop 共用同一有效槽位——**所见即所落**：迟滞带内松手，落点＝指示线所示 held 槽（不是瞬时 raw 槽）；带外位置与无迟滞解析逐字节一致，落点/批量顺序/置顶分区钳制/Drop 效果语义零变化（#2 不动）。混合置顶批量不参与迟滞（CanMoveMany 拒绝隐藏的既有行为不变）。
+  ②**分类高亮状态真值＋差分应用**：`ApplyCategoryDropTarget(target)` 把全部分类一次对齐到真值（`CategoryViewModel.IsDropTarget` 经 `SetProperty` 值检查，值不变零 PropertyChanged）——断言事件（DragEnter/DragOver 命中有效目标）立即差分生效，稳态拖拽零属性翻转、零动画重启（#41 动效基础设施不回退；系统「减弱动效」下同样正确，直接跳终态）。
+  ③**撤离保持窗**：DragLeave、tab 间隙与 rail 死区（`UpdateExternalRailGap`）、不支持载荷不再立即清高亮——进入 `DropTargetWithdrawHoldMs`（恒 120ms，`DesignTokens` 唯一来源）保持窗复核（输入优先级延迟回调＋版本号，作废机制与外部轨道撤离和解同构）：窗口内任何重新断言作废复核（`IsDropTarget` 无 false 回落），真离开（窗口内无再断言、通道排空）一次清到位；Drop 与拖拽会话边界（`ClearDropFeedback` 于 Drop 处理器、`BeginPanelDrag`/`EndPanelDrag`）立即清，不残留。`HideExternalDropRail` 不再顺带清拖放反馈（反馈清理由调用方按 ①②③ 表达），轨道几何回落语义不变（#12/外部轨道契约不动）。
+- **由来**：2026-11-02 批次 W4——同列表拖卡时指示线在卡片中线附近抖动闪烁（`Resolve` 中线零宽阈值 ±1px 即翻转）、跨分类拖拽时标签紫框反复闪灭（每事件无条件清-设＋间隙/死区清后不重设，120ms 淡出被反复打断）。根治＝把视觉反馈从事件驱动重构为状态驱动（迟滞带内观测噪声零视觉变化），与 gong-wpf-dragdrop 延迟复核、pragmatic-drag-and-drop sticky 迟滞同源。
+- **锁定**：`tests/FloatingTransferStation.Tests/InsertionSlotResolverTests.cs`（`ResolveHeldSlot_KeepsHeldSlotWhileCursorJittersAroundTheFlipLine`、`ResolveHeldSlot_NullOrEqualHeldFollowsResolution`、`ResolveHeldSlot_MultiSlotJumpFollowsResolutionWithoutHysteresis`、`ResolveHeldSlot_MissingBoundaryItemOrEmptySpansFollowResolution`）；`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.DragAndDrop.cs`（`NormalCardMidpointDrag_KeepsIndicatorStableWhileCursorJittersAroundTheCenterLine`——中线 ±1–2 DIP 抖动指示线钉住＋果断越过跟随＋对称回抖维持；`MidpointJitterDrop_LandsAtTheHeldSlotShownByTheIndicator`——所见即所落；`CategoryDropFeedback_JitteredEnterOverLeaveSequenceKeepsTargetWithoutFalseDip`——Enter/Over/Leave/间隙序列抖动 IsDropTarget 无 false 回落（动效开/关两档）＋真离开复核清到位）；既有 `PinnedBoundaryDrag_KeepsIndicatorStableWhileCursorJittersAroundTheRegionLine`、`PinnedBoundaryDrag_DropsAtTheClampedIndicatorSlot`、`CategoryDropFeedback_AllowsOnlyOneInternalTargetAndClearsOnLeave`（撤离断言点后移到通道排空后）、`ExternalRail_CrossTabLeaveIsReconciledAndTrueLeaveRestoresCollapsedHandle`（同步理）继续锁定相邻语义。
+- **关联**：#2（分区/批量——语义零变化）、#41（动效可中断——差分应用不重启动画）、#12（视觉生命周期/一次矩形变更——未触碰）、#13（真实输入测试口径）、#34（token 唯一来源——`DropTargetWithdrawHoldMs` 入 DesignTokens 并同步 docs/design.md）；docs/handoff/2026-11-02-detail-polish-batch/evidence-w4/（多帧连拍证据）与 report-w4-drag-flicker.md。
 
 ## 维护规则
 
