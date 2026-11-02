@@ -59,7 +59,28 @@
 | 大数据量显示根因修复 | 1.19.0 | [CHANGELOG](../CHANGELOG.md#1190) |
 | 卡片文字避让、一次性贴边隐藏 | 1.20.0 | [CHANGELOG](../CHANGELOG.md#1200) |
 | 可见态四角圆角恒定 | 1.21.0 | [CHANGELOG](../CHANGELOG.md#1210) |
+| 卡片级删除按钮与选中态操作矩阵 | 1.24.0 | [CHANGELOG](../CHANGELOG.md#1240) |
+| 标签顺序调整 / 自动清理逐卡 TTL 与保留时长档位 | 1.25.0 / 1.44.0 | [CHANGELOG](../CHANGELOG.md#1250) |
+| 长卡片备注（1.55.0 起短卡可开启） | 1.28.0 | [CHANGELOG](../CHANGELOG.md#1280) |
+| 设置窗口双栏布局 | 1.32.0 | [CHANGELOG](../CHANGELOG.md#1320) |
+| 检查更新与一键更新 | 1.37.0 | [CHANGELOG](../CHANGELOG.md#1370) |
+| 置顶分隔样式 | 1.38.0 | [CHANGELOG](../CHANGELOG.md#1380) |
+| AI 整理（DeepSeek） | 1.42.0 | [CHANGELOG](../CHANGELOG.md#1420) |
+| 卡片悬停展开性能根因修复 | 1.43.0 | [CHANGELOG](../CHANGELOG.md#1430) |
+| 应用图标 | 1.46.0 | [CHANGELOG](../CHANGELOG.md#1460) |
+| 快捷启动标签（已安装应用 / 网页地址 / 系统位置 / 自动发现渐次补齐） | 1.47.0 | [CHANGELOG](../CHANGELOG.md#1470) |
+| README 门面与操作手册分层（usage.md） | 1.50.0 | [CHANGELOG](../CHANGELOG.md#1500) |
+| 插件动作协议（text-actions） | 1.51.0 | [CHANGELOG](../CHANGELOG.md#1510) |
+| AI 整理提示词自定义 | 1.52.0 | [CHANGELOG](../CHANGELOG.md#1520) |
+| 内容桶与复盘空状态引导 | 1.53.0 / 1.57.0 | [CHANGELOG](../CHANGELOG.md#1530) |
+| 网页瓦片自动抓取 favicon | 1.54.0 | [CHANGELOG](../CHANGELOG.md#1540) |
+| 卡片手势统一 / 系统位置瓦片与启动·自动发现 | 1.56.0 | [CHANGELOG](../CHANGELOG.md#1560) |
+| 启动·列数 / 输入法候选窗让位 | 1.58.0 / 1.58.1 | [CHANGELOG](../CHANGELOG.md#1580) |
+| 数据目录新形状（所选文件夹下 Data）/ AI 整理总开关 | 1.59.0 | [CHANGELOG](../CHANGELOG.md#1590) |
+| 界面字体 | 1.60.0 | [CHANGELOG](../CHANGELOG.md#1600) |
+| 点击编辑器外部＝提交 / 右键手势全卡面统一 | 1.61.0 / 1.62.0 | [CHANGELOG](../CHANGELOG.md#1610) |
+| TIFF 图片输入向量收敛（安全硬化） | 1.64.0 | [CHANGELOG](../CHANGELOG.md#1640) |
 
-尚未实施的方向（内容搜索后续切片、回收站、键盘直达、卡片多行编辑等）见[路线图候选池](../ROADMAP.md#持续改进候选池)。
+尚未实施的方向（内容搜索后续切片、回收站、键盘直达、分类标签内容直接编辑等，以路线图为准）见[路线图候选池](../ROADMAP.md#持续改进候选池)。
 
 设计与实施计划类过程资料由维护者本地保存，自 2026-10-08 起不在仓库内；仓库只保留软件本体与源码。截图、安装包和本机验证结果放在不提交的 `artifacts/`、`TestResults/` 中。
