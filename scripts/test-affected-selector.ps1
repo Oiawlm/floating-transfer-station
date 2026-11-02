@@ -211,7 +211,7 @@ Assert-Scenario '-ChangeSet 显式空数组＝空变更集（不回退 git 推�
 }
 
 Assert-Scenario '方法解析器变体：同行签名/[TestMethod()]/组合特性均识别（评审 #2）' {
-    $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("selector-parser-" + [guid]::NewGuid().ToString('N'))
+    $tempDir = Join-Path $repoRoot ("TestResults\tmp\selector-parser-" + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $tempDir | Out-Null
     try {
         $probe = Join-Path $tempDir 'ParserProbe.cs'
@@ -260,7 +260,7 @@ Assert-Scenario '一致性守卫：真实测试目录零违规' {
 }
 
 Assert-Scenario '一致性守卫：偏离词根的方法名报错（文件:方法）' {
-    $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("selector-guard-" + [guid]::NewGuid().ToString('N'))
+    $tempDir = Join-Path $repoRoot ("TestResults\tmp\selector-guard-" + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $tempDir | Out-Null
     try {
         $deviant = Join-Path $tempDir 'MainWindowInteractionTests.CardAi.cs'

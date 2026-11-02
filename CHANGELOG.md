@@ -4,6 +4,7 @@
 
 ## 未发布
 
+- 开发基础设施：临时文件存放规范统一——测试与脚本的临时写入点（`TestDirectory` 与两测试项目共七个用例根、exe stub、缩略图 png、选择器契约测试探针）从系统 `%TEMP%` 全部收敛到仓库内 `TestResults\tmp\`（gitignored；GUID 隔离与清理语义不变，测试侧经共享 `TestTempRoot` 单源解析，脱离源码树运行时回退 `%TEMP%` 保持可运行）；产品运行时临时文件保留 `%TEMP%` 并统一产品前缀，快捷启动图标缓存的易失回退目录由 `%TEMP%\launcher-icons\` 更名 `%TEMP%\fts-launcher-icons\`（无数据目录的窗口直连构造/测试路径，生产数据目录内 `launcher-icons` 不变）；规范落入贡献指南提交检查单。
 - 文档：仓库文档审计批次（W5）——`docs/releasing.md` 与 1.64.0 实际流程一致性核对并更新：发行列车步骤 3 补「归入后保留空『未发布』节标题」惯例（readiness 契约），「构建入口」CI 证据附件清单对齐现行 15 个上传（补 `delivery`/`gesture`/`quicklaunch-*`×4 共 6 个漏记与漂移附件，收敛为「共同策略＋清单」的抗漂移形态，并加登记提示）；README 与 `docs/usage.md` 重叠面精简（插件图集段落压缩为速览＋链接、快捷启动特性条目与速查表括注细节归操作手册，速览/详解分层不变，「下载与安装」冻结段零触碰）；`docs/README.md` 功能溯源表补 1.22.0–1.64.0 主要功能行，候选池括注对齐 ROADMAP 现行条目名。政策级事项（tracked 文档引用 gitignored 路径的处置、AGENTS↔CONTRIBUTING 同构段去重、双路由表同步机制）只出提案未改文件，待维护者裁决。
 
 ## 1.64.0

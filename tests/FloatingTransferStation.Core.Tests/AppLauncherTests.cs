@@ -41,7 +41,7 @@ public sealed class AppLauncherTests
     private sealed class TempAppFile : IDisposable
     {
         public string Path { get; } = System.IO.Path.Combine(
-            System.IO.Path.GetTempPath(),
+            TestTempRoot.Root,
             $"fts-launch-{Guid.NewGuid():N}.exe");
 
         public TempAppFile() => File.WriteAllText(Path, "stub");

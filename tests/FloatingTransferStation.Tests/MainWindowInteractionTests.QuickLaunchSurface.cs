@@ -40,7 +40,7 @@ public sealed partial class MainWindowInteractionTests
     private sealed class StubAppFile : IDisposable
     {
         public string Path { get; } = System.IO.Path.Combine(
-            System.IO.Path.GetTempPath(),
+            TestTempRoot.Root,
             $"fts-ql-{Guid.NewGuid():N}.exe");
 
         public StubAppFile() => File.WriteAllText(Path, "stub");

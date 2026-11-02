@@ -6,7 +6,7 @@ namespace FloatingTransferStation.Tests;
 [TestClass]
 public sealed class AppPathsPluginsOverrideTests
 {
-    private static string Root { get; } = Path.Combine(Path.GetTempPath(), "fts-app-paths-" + Guid.NewGuid().ToString("N"));
+    private static string Root { get; } = Path.Combine(TestTempRoot.Root, "fts-app-paths-" + Guid.NewGuid().ToString("N"));
 
     [TestInitialize]
     public void Initialize() => Directory.CreateDirectory(Root);
