@@ -175,18 +175,20 @@ public sealed partial class MainWindowInteractionTests
                 DesignTokens.InterfaceFontFamily,
                 family.Source,
                 "XAML 默认字体资源必须逐字镜像 DesignTokens.InterfaceFontFamily（默认字体串唯一来源）。");
-            // 公式与现状互锁：默认字体（Segoe UI / Segoe UI Variable 实测 LineSpacing
-            // 同为 1.330078）的推导行高必须等于 CardTextLineHeight 字面量 20。
+            // 公式与现状互锁：默认字体链（Microsoft YaHei UI, Microsoft YaHei——
+            // 链式族串按链首 Microsoft YaHei UI 实测 LineSpacing 1.27001953125 计
+            // 度量）的推导行高必须等于 CardTextLineHeight 字面量 19（2026-11-02
+            // 默认改微软雅黑链前 Segoe UI 链为 20）。
             Assert.AreEqual(
                 InterfaceFontManager.DeriveCardTextLineHeight(family),
                 (double)window.FindResource("CardTextLineHeight"),
-                "默认字体的推导行高必须与 CardTextLineHeight 现状 20 一致。");
-            // 行数上限倍率资源与既有几何一致（默认 100=5×20、40=2×20）。
+                "默认字体的推导行高必须与 CardTextLineHeight 现状 19 一致。");
+            // 行数上限倍率资源与既有几何一致（默认 95=5×19、38=2×19）。
             Assert.AreEqual(
-                20d * DesignTokens.CardTextMaxVisibleLines,
+                19d * DesignTokens.CardTextMaxVisibleLines,
                 (double)window.FindResource("CardTextPreviewMaxHeight"));
             Assert.AreEqual(
-                20d * DesignTokens.CardNoteMaxVisibleLines,
+                19d * DesignTokens.CardNoteMaxVisibleLines,
                 (double)window.FindResource("CardNoteMaxHeight"));
         }
         finally

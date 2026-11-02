@@ -341,7 +341,7 @@
                             AutomationProperties.Name="界面字体"
                             SelectionChanged="InterfaceFontComboBox_SelectionChanged" />
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="选择界面使用的字体，改动立即生效并自动保存；「默认」回到随 Windows 的 Segoe UI。可选列表只含本机已安装字体（应用不随包分发字体文件）。" />
+                             Text="选择界面使用的字体，改动立即生效并自动保存；带「（默认）」标注的微软雅黑即应用默认（微软雅黑 UI，缺失时回退微软雅黑）。可选列表只含本机已安装字体（应用不随包分发字体文件）。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}">

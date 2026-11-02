@@ -175,6 +175,91 @@ public sealed class SettingsWindowInteractionTests
         }
     }
 
+    [STATestMethod]
+    public void InterfaceFontOptions_MergeDefaultHeadIntoSingleAnnotatedItem()
+    {
+        // 契约 #48 修订（2026-11-02 默认项语义合并）：系统字体清单中与默认链链首
+        // 同名的那一项升级为唯一默认项——首位、显示名追加「（默认）」、Tag=null；
+        // 偏好 null 与显式链首名回显到同一项（无双项并存），其余字体不受影响，
+        // 存疑名字（字体已卸载）回落默认项（偏好原值保留待用户覆盖）。
+        var head = InterfaceFontManager.DefaultFamilyHeadName();
+        foreach (var (stored, describing) in new (string? Stored, string Describe)[]
+        {
+            (null, "偏好 null＝默认"),
+            ("Microsoft YaHei UI", "显式链首名（与默认同观感）"),
+            ("NoSuchFontXYZ-不存在的字体", "存疑名字（字体已卸载）")
+        })
+        {
+            using var directory = new TestDirectory();
+            var window = CreateWindow(
+                directory,
+                new RecordingPreferencesStore(),
+                new FakeStartupManager(),
+                AppPreferences.Default with { InterfaceFont = stored });
+            try
+            {
+                var settings = OpenSettings(window);
+                var combo = settings.FindName("InterfaceFontComboBox") as ComboBox;
+                Assert.IsNotNull(combo, "设置外观页必须提供界面字体选择。");
+                var items = combo.Items.OfType<ComboBoxItem>().ToArray();
+                var defaultItems = items.Where(item => item.Tag is null).ToArray();
+                Assert.AreEqual(
+                    1,
+                    defaultItems.Length,
+                    $"（{describing}）必须恰好一个默认项（Tag=null），不得与链首字体项并存。");
+                var defaultItem = defaultItems[0];
+                Assert.AreSame(items[0], defaultItem, $"（{describing}）默认项必须位于首位。");
+                StringAssert.EndsWith(
+                    (string)defaultItem.Content,
+                    "（默认）",
+                    $"（{describing}）默认项显示名必须带「（默认）」标注。");
+                Assert.IsFalse(
+                    items.Any(item => string.Equals((string?)item.Tag, head, StringComparison.OrdinalIgnoreCase)),
+                    $"（{describing}）链首字体不得再以普通项（Tag=族名）出现——已并入默认项。");
+                Assert.AreSame(
+                    defaultItem,
+                    combo.SelectedItem,
+                    $"（{describing}）回显必须选中唯一默认项。");
+            }
+            finally
+            {
+                CloseLeftoverSettingsWindow(window);
+                InterfaceFontManager.SetOverride(null);
+                CloseWindow(window);
+            }
+        }
+    }
+
+    [STATestMethod]
+    public void InterfaceFontOptions_NonHeadFontsRemainSelectableItems()
+    {
+        // 其余字体不受默认项合并影响：非链首字体仍以 Tag=族名的普通项出现并可回显。
+        using var directory = new TestDirectory();
+        var custom = Fonts.SystemFontFamilies.First(family => family.Source == "Segoe UI").Source;
+        var window = CreateWindow(
+            directory,
+            new RecordingPreferencesStore(),
+            new FakeStartupManager(),
+            AppPreferences.Default with { InterfaceFont = custom });
+        try
+        {
+            var settings = OpenSettings(window);
+            var combo = settings.FindName("InterfaceFontComboBox") as ComboBox;
+            Assert.IsNotNull(combo);
+            var customItem = combo.Items.OfType<ComboBoxItem>()
+                .SingleOrDefault(item => string.Equals((string?)item.Tag, custom, StringComparison.OrdinalIgnoreCase));
+            Assert.IsNotNull(customItem, "非链首字体必须仍以普通项出现。");
+            Assert.AreSame(customItem, combo.SelectedItem, "显式自定义字体偏好必须回显到该项。");
+            StringAssert.DoesNotMatch((string)customItem.Content, new System.Text.RegularExpressions.Regex("（默认）$"));
+        }
+        finally
+        {
+            CloseLeftoverSettingsWindow(window);
+            InterfaceFontManager.SetOverride(null);
+            CloseWindow(window);
+        }
+    }
+
     private static void AssertDefaultFontResources(Window window, string stage)
     {
         // 值口径断言（Contains 会穿透合并字典——窗口合并的 MainWindowStyles.xaml
@@ -184,17 +269,17 @@ public sealed class SettingsWindowInteractionTests
             ((FontFamily)window.FindResource("InterfaceFontFamily")).Source,
             $"{stage}：有效字体必须回到默认（窗口级覆盖被移除）。");
         Assert.AreEqual(
-            20d,
+            19d,
             (double)window.FindResource("CardTextLineHeight"),
-            $"{stage}：默认行高必须保持 20。");
+            $"{stage}：默认行高必须保持 19（微软雅黑链推导值）。");
         Assert.AreEqual(
-            100d,
+            95d,
             (double)window.FindResource("CardTextPreviewMaxHeight"),
-            $"{stage}：正文可见上限必须回到 100（5×20）。");
+            $"{stage}：正文可见上限必须回到 95（5×19）。");
         Assert.AreEqual(
-            40d,
+            38d,
             (double)window.FindResource("CardNoteMaxHeight"),
-            $"{stage}：备注可见上限必须回到 40（2×20）。");
+            $"{stage}：备注可见上限必须回到 38（2×19）。");
     }
 
     private static void AssertCustomFontResources(Window window, FontFamily family, string stage)

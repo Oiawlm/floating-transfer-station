@@ -6,36 +6,38 @@ using FloatingTransferStation.Services;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 界面字体管理器（自定义字体全链路，2026-10-25）守护：行高推导公式矩阵
-/// （默认字体→20 与现状一致；更高 em 字体→更大值且恒≥自然行高不裁切）、
-/// 字体名解析（空白/未安装→默认回落）、窗口级资源槽位应用与 Owner 链
-/// 存活窗口递归覆盖。
+/// 界面字体管理器（自定义字体全链路，2026-10-25；2026-11-02 默认字体改微软雅黑链）
+/// 守护：行高推导公式矩阵（默认字体链首→19 与现状一致；更高 em 字体→更大值且
+/// 恒≥自然行高不裁切）、字体名解析（空白/未安装→默认回落）、窗口级资源槽位应用
+/// 与 Owner 链存活窗口递归覆盖。
 /// </summary>
 [TestClass]
 public sealed class InterfaceFontManagerTests
 {
-    /// <summary>默认字体 Segoe UI / Segoe UI Variable 的实测 LineSpacing（两者同值）。</summary>
-    private const double DefaultLineSpacing = 1.330078125;
+    /// <summary>默认字体链链首 Microsoft YaHei UI 的实测 LineSpacing
+    /// （链式族串 WPF 按链首计度量）。</summary>
+    private const double DefaultLineSpacing = 1.27001953125;
 
-    /// <summary>推导行高越过默认 20 桶的 em 行距下界：(20−额外行距)/字号。</summary>
+    /// <summary>推导行高越过默认 19 桶的 em 行距下界：(19−额外行距)/字号。</summary>
     private static double TallerThanDefaultThreshold =>
-        (20d - DesignTokens.CardTextExtraLeadingPx) / DesignTokens.CardTextFontSize;
+        (19d - DesignTokens.CardTextExtraLeadingPx) / DesignTokens.CardTextFontSize;
 
     [TestCleanup]
     public void Cleanup() => InterfaceFontManager.SetOverride(null);
 
     // 推导公式矩阵：ceil(CardTextFontSize × LineSpacing + ExtraLeadingPx)。
-    // 默认行（1.330078125）＝20 与既有 CardTextLineHeight 字面量（契约 #25
-    // 现状）精确一致；更高 em 行（1.36/1.5/1.699951(Gabriola 实测)/2.0）
-    // 推导出 21/22/25/29 更大值；紧凑行（1.0）＝15 不低于自然行高上界。
+    // 默认行（链首 Microsoft YaHei UI 实测 1.27001953125）＝19 与既有
+    // CardTextLineHeight 字面量（契约 #25 现状）精确一致；更高 em 行
+    // （1.36/1.5/1.699951(Gabriola 实测)/2.0）推导出 21/22/25/29 更大值；
+    // 紧凑行（1.0）＝15 不低于自然行高上界。
     [TestMethod]
     [DataRow(1.0, 15d)]
-    [DataRow(1.330078125, 20d)]
+    [DataRow(1.27001953125, 19d)]
     [DataRow(1.36, 21d)]
     [DataRow(1.5, 22d)]
     [DataRow(1.699951171875, 25d)]
     [DataRow(2.0, 29d)]
-    public void DeriveCardTextLineHeight_FormulaMatrix_DefaultFontKeepsTwenty(
+    public void DeriveCardTextLineHeight_FormulaMatrix_DefaultFontKeepsNineteen(
         double lineSpacingEm,
         double expected)
     {
@@ -50,8 +52,8 @@ public sealed class InterfaceFontManagerTests
         if (lineSpacingEm > TallerThanDefaultThreshold)
         {
             Assert.IsTrue(
-                derived > 20d,
-                $"更高 em 字体（LineSpacing={lineSpacingEm}）的行高必须大于默认 20。");
+                derived > 19d,
+                $"更高 em 字体（LineSpacing={lineSpacingEm}）的行高必须大于默认 19。");
         }
     }
 
@@ -96,13 +98,18 @@ public sealed class InterfaceFontManagerTests
     }
 
     [TestMethod]
-    public void DeriveCardTextLineHeight_DefaultFamilyKeepsTwenty()
+    public void DeriveCardTextLineHeight_DefaultFamilyKeepsNineteen()
     {
         Assert.AreEqual(
-            20d,
+            19d,
             InterfaceFontManager.DeriveCardTextLineHeight(InterfaceFontManager.DefaultFamily()),
-            "默认字体（Segoe UI Variable, Segoe UI——两族实测 LineSpacing 同为 1.330078）"
-                + "的推导行高必须与既有 CardTextLineHeight=20 一致（现状零变化）。");
+            "默认字体链（Microsoft YaHei UI, Microsoft YaHei——链式族串按链首 Microsoft "
+                + "YaHei UI 实测 LineSpacing 1.27001953125 计度量）的推导行高必须与既有 "
+                + "CardTextLineHeight=19 一致（现状零变化）。");
+        Assert.AreEqual(
+            "Microsoft YaHei UI",
+            InterfaceFontManager.DefaultFamilyHeadName(),
+            "默认链链首族名必须是 Microsoft YaHei UI（设置窗默认项合并的匹配键）。");
     }
 
     [TestMethod]
@@ -149,11 +156,11 @@ public sealed class InterfaceFontManagerTests
             Assert.AreEqual(
                 lineHeight * DesignTokens.CardTextMaxVisibleLines,
                 (double)window.Resources[InterfaceFontManager.CardTextPreviewMaxHeightKey],
-                "正文可见上限＝行高×5（默认字体=100 与既有几何一致）。");
+                "正文可见上限＝行高×5。");
             Assert.AreEqual(
                 lineHeight * DesignTokens.CardNoteMaxVisibleLines,
                 (double)window.Resources[InterfaceFontManager.CardNoteMaxHeightKey],
-                "备注可见上限＝行高×2（默认字体=40 与既有几何一致）。");
+                "备注可见上限＝行高×2。");
 
             InterfaceFontManager.SetOverride(null);
             InterfaceFontManager.Apply(window);

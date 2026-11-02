@@ -691,7 +691,7 @@ public sealed class AppPreferencesTests
     {
         Assert.IsNull(
             AppPreferences.Default.InterfaceFont,
-            "默认界面字体必须为 null（=默认 Segoe UI Variable 回退链，升级零感知）。");
+            "默认界面字体必须为 null（=默认微软雅黑回退链 Microsoft YaHei UI → Microsoft YaHei，升级零感知）。");
     }
 
     [TestMethod]
