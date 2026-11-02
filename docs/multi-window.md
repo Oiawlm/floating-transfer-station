@@ -1,6 +1,6 @@
 # 多窗口并行开发协议
 
-多个窗口（会话）在同一仓库并行开发时的工作区隔离、冲突面申报与串行集成编排。原则承接[贡献指南](../CONTRIBUTING.md)「并行开发与分支纪律」（版本是发行属性，不是分支属性）与[发布指南](releasing.md)「发行列车」（一列串行、四道防线）；工作区隔离默认由独立 clone 调整为 worktree 兄弟目录，其余纪律不变；本文不重复其内容，只补齐并行执行期的角色分工与协调介质。追踪 Issue：#99。
+多个窗口（会话）在同一仓库并行开发时的工作区隔离、冲突面申报与串行集成编排。原则承接[贡献指南](../CONTRIBUTING.md)「并行开发与分支纪律」（版本是发行属性，不是分支属性）与[发布指南](releasing.md)「发行列车」（一列串行、四道防线）；工作区隔离默认由独立 clone 调整为项目壳目录（hub）内 worktree，其余纪律不变；本文不重复其内容，只补齐并行执行期的角色分工与协调介质。追踪 Issue：#99。
 
 协议零工具：协调介质是自包含执行提示词与 git 原生命令，不引入脚本、锁文件或编排工具——工作区分区把并发冲突压缩到共享轨道文件的最小面，剩余冲突按轨道约定处理，无需文件锁。
 
@@ -16,17 +16,17 @@
 
 ## worktree 规范
 
-- 隔离单元是 **git worktree 兄弟目录**：`../悬浮中转站-worktrees/<slug>/`（与仓库检出同级）。**禁止**放在仓库内 `.worktrees/`——`git clean -fdx` 会连带清空，且干扰工具扫描。独立完整 clone 留给需要完全隔离 refs/config/stash 的环境；任何情况**不得共享同一 checkout**。
+- 隔离单元是 **项目壳目录（hub）内的 git worktree**：`../悬浮中转站-worktree/<slug>/`（壳＝外层容器，收纳主检出 `悬浮中转站-main/` 与 worktree 父目录 `悬浮中转站-worktree/`，二者同级）。**禁止**放在仓库内 `.worktrees/`——`git clean -fdx` 会连带清空，且干扰工具扫描。独立完整 clone 留给需要完全隔离 refs/config/stash 的环境；任何情况**不得共享同一 checkout**。
 - 创建模板（slug 换成实际，创建即推送）：
 
   ```bash
   git fetch origin
   git ls-remote --heads origin <类型>/<slug>   # 必须为空；非空=撞名，报告用户或规划窗口裁决、不自行改名
-  git worktree add "../悬浮中转站-worktrees/<slug>" -b <类型>/<slug> origin/main
-  git -C "../悬浮中转站-worktrees/<slug>" push -u origin <类型>/<slug>
+  git worktree add "../悬浮中转站-worktree/<slug>" -b <类型>/<slug> origin/main
+  git -C "../悬浮中转站-worktree/<slug>" push -u origin <类型>/<slug>
   ```
 
-  承接既有分支（如掉队分支）时改用检出写法：`git worktree add "../悬浮中转站-worktrees/<slug>" <类型>/<slug>`。
+  承接既有分支（如掉队分支）时改用检出写法：`git worktree add "../悬浮中转站-worktree/<slug>" <类型>/<slug>`。
 
 - **gitignored 本地指令文档不随 worktree 复制**：创建后手动拷入 `AGENTS.md`、`PROJECT_GUIDE.md` 等本地指令文件与本地交接目录（不拷则规则链断裂）；用后清理：`git worktree remove <路径> && git worktree prune`。
 - **worktree 内跑分层测试**（2026-10-27 判定序 v2 起）：`scripts\run-affected-tests.ps1` 在各 worktree 内独立判定——`-Scope Integrate`（默认）取该 worktree 分支与 `origin/main` 的 merge-base（整条分支集成语义），`-Scope Edit` 只反馈基线 `HEAD` 之后的本窗编辑；两模式语义见[设计契约](design-contracts.md) #32。`.tools`（本地 SDK，gitignored）不随 worktree，用目录联接复用主检出。真实输入交互测试的全局串行与空闲 ≥180 秒纪律（B-009）不因 worktree 隔离而豁免——多窗口并行时 `dotnet test` 仍须串行排程。
