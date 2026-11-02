@@ -12,10 +12,11 @@ namespace FloatingTransferStation.Services;
 /// DynamicResource 引用，槽位增删即时生效；默认态删除槽位、回落样式字典的
 /// 单一定义（数值唯一来源不被窗口级副本稀释）。
 /// 行高推导：ceil(CardTextFontSize × LineSpacing + CardTextExtraLeadingPx)，
-/// 默认字体 Segoe UI / Segoe UI Variable（LineSpacing 同为 1.330078）→ 20，
-/// 与既有 CardTextLineHeight=20 精确一致（契约 #25 行距唯一来源的数值语义
-/// 保持，锁定测试互锁）；更高 em 字体得到更大行高且 ≥ 自然行高（不裁切），
-/// 行数上限资源随行高等比放大（默认 100/40 不变）。
+/// 默认字体链按链首度量（Microsoft YaHei UI 实测 LineSpacing 1.27001953125）
+/// → 19，与既有 CardTextLineHeight=19 精确一致（契约 #25 行距唯一来源的数值
+/// 语义保持，锁定测试互锁；2026-11-02 默认改微软雅黑链前 Segoe UI 链推导 20）；
+/// 更高 em 字体得到更大行高且 ≥ 自然行高（不裁切），行数上限资源随行高等比
+/// 放大（默认 95/38）。
 /// </summary>
 public static class InterfaceFontManager
 {
@@ -33,6 +34,13 @@ public static class InterfaceFontManager
     public static FontFamily CurrentFamily => _overrideFamily ?? DefaultFamily();
 
     public static FontFamily DefaultFamily() => new(DesignTokens.InterfaceFontFamily);
+
+    /// <summary>默认回退链的链首族名（首个逗号前的段，分隔语义与 WPF
+    /// FontFamily 构造的链式串一致）：设置窗下拉把系统字体清单中与链首同名的
+    /// 那一项合并为唯一默认项（显示名追加「（默认）」、Tag=null），本助手是
+    /// 该合并的匹配键——「默认」的可见字体恒等于链首，不设第二口径。</summary>
+    public static string DefaultFamilyHeadName() =>
+        DesignTokens.InterfaceFontFamily.Split(',')[0].Trim();
 
     /// <summary>
     /// 解析字体族名：空白、或不在系统字体清单（Fonts.SystemFontFamilies 的

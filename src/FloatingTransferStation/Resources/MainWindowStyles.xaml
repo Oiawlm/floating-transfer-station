@@ -9,10 +9,11 @@
   <!-- 颜色画刷与卡片阴影定义在 Resources/DesignTheme.Light.xaml 与 DesignTheme.Dark.xaml，
        由 DesignThemeManager 在运行时整体替换；本字典内一律以 DynamicResource 引用。 -->
   <!-- 默认界面字体（数值唯一来源=DesignTokens.InterfaceFontFamily，锁定测试镜像）：
+       链首 Microsoft YaHei UI（Win11 必装、行距更紧凑），回退 Microsoft YaHei。
        全部消费者（六个窗口根 + 本字典样式）一律 DynamicResource 引用本键——
        用户自定义字体（偏好 InterfaceFont）经 InterfaceFontManager 以窗口级槽位
        覆盖本值，即时生效；图标字体（Segoe Fluent Icons）是独立字面量，不随本键变化。 -->
-  <FontFamily x:Key="InterfaceFontFamily">Segoe UI Variable, Segoe UI</FontFamily>
+  <FontFamily x:Key="InterfaceFontFamily">Microsoft YaHei UI, Microsoft YaHei</FontFamily>
   <GridLength x:Key="CardOperationColumnWidth">30</GridLength>
   <!-- 文字卡正文右侧排他内缩（派生资源，唯一数值来源）：两列 CardOperationColumnWidth
        （固定两列按钮网格横向占地，Issue #103）+ 4 DIP 正文-网格水平缓冲（与网格内
@@ -25,18 +26,19 @@
   <!-- 卡片正文行距唯一数值来源（契约 #25）：显示态两处（正文预览/备注显示行）与
        编辑态（CardTextEditorStyle 经 TextBlock.LineHeight 附加属性）共同引用——
        双击光标锚点要求两态行距同源，行带才能逐像素对齐（就近行映射的确定性前提，
-       见 CardTextEditorStyle 注释）。默认值 20=InterfaceFontManager 对默认字体
-       （LineSpacing 1.330078）的推导值（ceil(14×1.330078+1)，公式常数=
-       DesignTokens.CardTextFontSize/CardTextExtraLeadingPx，锁定测试互锁）；
-       用户自定义字体时 InterfaceFontManager 以窗口级槽位注入按该字体度量推导
-       的行高与行数上限（更高 em 字体→更大行高，恒≥自然行高不裁切），
-       消费者一律 DynamicResource 引用。 -->
-  <sys:Double x:Key="CardTextLineHeight">20</sys:Double>
-  <!-- 正文/备注可见行数上限（行高倍率资源，默认字体=100(5×20)/40(2×20) 与
+       见 CardTextEditorStyle 注释）。默认值 19=InterfaceFontManager 对默认字体链
+       链首（Microsoft YaHei UI，LineSpacing 1.27001953125）的推导值
+       （ceil(14×1.27001953125+1)，公式常数=DesignTokens.CardTextFontSize/
+       CardTextExtraLeadingPx，锁定测试互锁；2026-11-02 默认改微软雅黑链前为
+       Segoe UI 链推导值 20）；用户自定义字体时 InterfaceFontManager 以窗口级
+       槽位注入按该字体度量推导的行高与行数上限（更高 em 字体→更大行高，
+       恒≥自然行高不裁切），消费者一律 DynamicResource 引用。 -->
+  <sys:Double x:Key="CardTextLineHeight">19</sys:Double>
+  <!-- 正文/备注可见行数上限（行高倍率资源，默认字体=95(5×19)/38(2×19) 与
        既有几何一致；自定义字体随推导行高等比放大，倍率=DesignTokens
        .CardTextMaxVisibleLines/CardNoteMaxVisibleLines）。 -->
-  <sys:Double x:Key="CardTextPreviewMaxHeight">100</sys:Double>
-  <sys:Double x:Key="CardNoteMaxHeight">40</sys:Double>
+  <sys:Double x:Key="CardTextPreviewMaxHeight">95</sys:Double>
+  <sys:Double x:Key="CardNoteMaxHeight">38</sys:Double>
   <CornerRadius x:Key="ShellCornerRadius">8</CornerRadius>
   <!-- 圆角两档阶梯（#30 修订 2026-10-18，Issue #186 D9）：控件 4 / 表面 8，
        数值唯一来源=DesignTokens.ControlCornerRadiusPx / SurfaceCornerRadiusPx

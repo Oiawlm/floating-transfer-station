@@ -134,12 +134,12 @@ public sealed partial class MainWindowInteractionTests
             var host = FindDescendants<TrimAwareTextBlock>(list)
                 .Single(candidate => ReferenceEquals(candidate.Child, body));
 
-            Assert.AreEqual(20d, body.LineHeight, 0d, "正文行高应为 20 DIP（14px 字号的自然行高）。");
+            Assert.AreEqual(19d, body.LineHeight, 0d, "正文行高应为 19 DIP（14px 字号、默认微软雅黑链的推导行高）。");
             Assert.AreEqual(
                 LineStackingStrategy.BlockLineHeight,
                 body.LineStackingStrategy,
                 "正文行距语义应保持 BlockLineHeight。");
-            Assert.AreEqual(100d, host.MaxHeight, 0d, "正文最大高度应为 100 DIP（5 行 × 20）。");
+            Assert.AreEqual(95d, host.MaxHeight, 0d, "正文最大高度应为 95 DIP（5 行 × 19）。");
             Assert.IsFalse(
                 double.IsFinite(body.MaxHeight) && body.MaxHeight < double.PositiveInfinity,
                 "限高 MaxHeight 不得在子 TextBlock 上重复声明（双来源漂移）。");

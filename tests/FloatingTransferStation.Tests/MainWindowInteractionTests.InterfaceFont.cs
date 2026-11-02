@@ -8,11 +8,11 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 界面字体证据（自定义字体全链路，2026-10-25）：默认字体与两款自定义字体
-/// （含高字形 Gabriola——本机未安装时自动跳过该字体组合）× 浅/深主题渲染
-/// 取证；同时断言显示态正文自然高度＝行数×推导行高（默认 4×20 与现状一致，
-/// 高字形字体＝更大值且不裁切）。取证目录环境变量 FTS_FONT_EVIDENCE_DIR
-/// 未设置时不出 PNG（CI 空转），与 ThemeEvidence 同法。
+/// 界面字体证据（自定义字体全链路，2026-10-25；2026-11-02 默认字体改微软雅黑链）：
+/// 默认字体与两款自定义字体（含高字形 Gabriola——本机未安装时自动跳过该字体
+/// 组合）× 浅/深主题渲染取证；同时断言显示态正文自然高度＝行数×推导行高
+/// （默认 4×19 与现状一致，高字形字体＝更大值且不裁切）。取证目录环境变量
+/// FTS_FONT_EVIDENCE_DIR 未设置时不出 PNG（CI 空转），与 ThemeEvidence 同法。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -24,7 +24,8 @@ public sealed partial class MainWindowInteractionTests
     [STATestMethod]
     public void FontEvidence_RendersDefaultAndCustomFontsInBothThemes()
     {
-        // 默认（null）＋两款自定义：微软雅黑 UI（CJK 常用）与 Gabriola（高字形，
+        // 默认（null）＋两款自定义：微软雅黑 UI（CJK 常用；2026-11-02 起即默认链
+        // 链首——显式选择与默认同观感，仍走覆盖槽位路径）与 Gabriola（高字形，
         // LineSpacing≈1.70）。渲染取证在本机出证：字体未安装的组合跳过。
         var fonts = new (string? Name, string Label)[]
         {
@@ -45,7 +46,7 @@ public sealed partial class MainWindowInteractionTests
             var expectedLineHeight = InterfaceFontManager.DeriveCardTextLineHeight(family);
             if (font is null)
             {
-                Assert.AreEqual(20d, expectedLineHeight, "前置：默认字体推导行高必须=现状 20。");
+                Assert.AreEqual(19d, expectedLineHeight, "前置：默认字体推导行高必须=现状 19。");
             }
 
             foreach (var theme in new[] { DesignTheme.Light, DesignTheme.Dark })
@@ -72,9 +73,9 @@ public sealed partial class MainWindowInteractionTests
                     if (font is null)
                     {
                         Assert.AreEqual(
-                            20d,
+                            19d,
                             (double)window.FindResource("CardTextLineHeight"),
-                            "默认态 FindResource 必须解析到样式字典的 20。");
+                            "默认态 FindResource 必须解析到样式字典的 19。");
                     }
                     else
                     {
