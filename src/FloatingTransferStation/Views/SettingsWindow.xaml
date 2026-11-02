@@ -810,7 +810,7 @@
                               Unchecked="AiOrganizeEnabledToggle_Unchecked" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="关闭后卡片上的 AI 整理按钮不再出现，整理入口不再发起任何请求；已保存的 API Key 与自定义提示词原样保留，仅停用不删除。改动立即生效并自动保存。" />
+                             Text="默认关闭；开启后截断的长文字卡悬停出现「AI 整理」按钮，关闭后按钮不再出现、整理入口不再发起任何请求；已保存的 API Key 与自定义提示词原样保留，仅停用不删除。改动立即生效并自动保存。" />
                 </StackPanel>
               </Border>
               <Border x:Name="AiKeyCard" Style="{StaticResource SettingsCardStyle}">

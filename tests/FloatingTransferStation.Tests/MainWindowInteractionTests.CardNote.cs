@@ -216,12 +216,18 @@ public sealed partial class MainWindowInteractionTests
         // 开关开（Issue #211，#22 2026-10-22 修订）：短文字卡悬停出现添加入口，
         // 真实输入点击可进入编辑、提交后备注行常显；图片卡仍无入口、搜索态仍隐藏；
         // AI 整理钮不随开关豁免（截断门槛独立，#29）——短卡悬停 AI 钮仍塌缩。
+        // 2026-11-02 起 AI 整理默认关闭：本用例锁的是「截断门槛独立于备注开关」，
+        // 必须显式注入 AI 开启，否则 AI 钮塌缩断言因总开关而 vacuous。
         using var directory = new TestDirectory();
         var board = new BoardService();
         var shortItem = board.AddText("短卡字", BoardCategory.Inbox);
         var imageItem = AddImageCard(directory, board, "pref-short-entry.png");
         var window = CreateWindow(directory, board);
-        window.ApplyPreferences(AppPreferences.Default with { ShortCardNotesEnabled = true });
+        window.ApplyPreferences(AppPreferences.Default with
+        {
+            ShortCardNotesEnabled = true,
+            AiOrganizeEnabled = true
+        });
 
         try
         {
