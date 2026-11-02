@@ -88,21 +88,24 @@ public static class DesignTokens
     public const string EnterEasingKeySpline = "0,0,0,1";
     public const string ExitEasingKeySpline = "1,0,1,1";
 
-    // 界面字体（2026-10-25 自定义字体全链路）：默认字体串唯一来源，XAML 资源
-    // InterfaceFontFamily 镜像它（锁定测试互锁）；用户自定义经偏好 InterfaceFont
-    // （null=默认）由 InterfaceFontManager 以窗口级槽位覆盖，图标字体
-    // （Segoe Fluent Icons）不随用户字体变化；不随应用分发字体文件。
-    public const string InterfaceFontFamily = "Segoe UI Variable, Segoe UI";
+    // 界面字体（2026-10-25 自定义字体全链路；2026-11-02 默认改微软雅黑链）：
+    // 默认字体串唯一来源，XAML 资源 InterfaceFontFamily 镜像它（锁定测试互锁）；
+    // 链首 Microsoft YaHei UI（Win11 必装、行距更紧凑），回退 Microsoft YaHei
+    // （链式回退保证缺失时不断字）。用户自定义经偏好 InterfaceFont（null=默认）
+    // 由 InterfaceFontManager 以窗口级槽位覆盖，图标字体（Segoe Fluent Icons）
+    // 不随用户字体变化；不随应用分发字体文件。
+    public const string InterfaceFontFamily = "Microsoft YaHei UI, Microsoft YaHei";
     /// <summary>卡片正文标称字号（px）：行高推导的字号输入（正文显示/编辑两态共用）。</summary>
     public const double CardTextFontSize = 14;
     /// <summary>行高额外行距（px）：行高推导公式 ceil(CardTextFontSize×LineSpacing＋
-    /// 此值) 的常数。默认字体 Segoe UI / Segoe UI Variable 的 LineSpacing 同为
-    /// 1.330078 → ceil(14×1.330078＋1)=20，与既有 CardTextLineHeight 字面量
-    /// 20 精确一致（锁定测试互锁：默认字体推导值=资源现状值）。</summary>
+    /// 此值) 的常数。默认字体链取链首度量（WPF 对链式族串按链首计 LineSpacing）：
+    /// Microsoft YaHei UI 实测 1.27001953125 → ceil(14×1.27001953125＋1)=19，
+    /// 与既有 CardTextLineHeight 字面量 19 精确一致（锁定测试互锁：默认字体推导值
+    /// =资源现状值；2026-11-02 前 Segoe UI 链推导 20，随默认字体改链同步）。</summary>
     public const double CardTextExtraLeadingPx = 1;
-    /// <summary>正文可见行数上限（CardTextPreviewMaxHeight=行高×此值；默认字体 5×20=100）。</summary>
+    /// <summary>正文可见行数上限（CardTextPreviewMaxHeight=行高×此值；默认字体 5×19=95）。</summary>
     public const int CardTextMaxVisibleLines = 5;
-    /// <summary>备注可见行数上限（CardNoteMaxHeight=行高×此值；默认字体 2×20=40）。</summary>
+    /// <summary>备注可见行数上限（CardNoteMaxHeight=行高×此值；默认字体 2×19=38）。</summary>
     public const int CardNoteMaxVisibleLines = 2;
 
     // 圆角。窗壳圆角权威=DwmCornerRadius（DWM 裁剪与内容层自裁剪同值），

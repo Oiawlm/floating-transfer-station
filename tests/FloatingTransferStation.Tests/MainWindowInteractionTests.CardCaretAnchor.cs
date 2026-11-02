@@ -13,13 +13,13 @@ namespace FloatingTransferStation.Tests;
 /// 卡片双击编辑光标锚点（caret anchor）守护：双击进入正文编辑，光标落在
 /// 双击点的就近插入边界且无选区（「从该处编辑」语义，多行正文全选有整段
 /// 误删风险）；横向语义与编辑器内直接点击同规（原生就近边界）；无锚点入口
-/// （备注单击）保持全选默认；编辑态与显示态行距同源（20/行，映射的确定性
-/// 前提）。真实输入路径用 Win32 消息直驱（契约 #13 口径），合成序列只作
-/// 「不全选」补充回归。
+/// （备注单击）保持全选默认；编辑态与显示态行距同源（19/行——默认微软雅黑链
+/// 的推导行高，映射的确定性前提）。真实输入路径用 Win32 消息直驱（契约 #13
+/// 口径），合成序列只作「不全选」补充回归。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
-    /// <summary>多行正文卡（换行定行，行数与宽度无关；4 行 × 行距 20 = 80 &lt; MaxHeight 100）。</summary>
+    /// <summary>多行正文卡（换行定行，行数与宽度无关；4 行 × 行距 19 = 76 &lt; MaxHeight 95）。</summary>
     private const string CaretAnchorCardText = "第一行内容\n第二行内容\n第三行内容\n第四行内容";
 
     /// <summary>卡片显示态正文 TextBlock（TrimAwareTextBlock 承载，1.28.0 起结构）。</summary>
@@ -251,14 +251,14 @@ public sealed partial class MainWindowInteractionTests
             var container = ContainerOf(window, item);
             var display = CardDisplayTextOf(container, item);
 
-            // 显示态先行锁定：4 行 × 行距 20（TrimAwareTextBlock 内层 TextBlock
+            // 显示态先行锁定：4 行 × 行距 19（TrimAwareTextBlock 内层 TextBlock
             // 的自然高度），显示态行距漂移同样使本测试红——两态同源是整条
             // 锚点映射正确性的前提，缺一侧即锁不住。
             Assert.AreEqual(
-                80d,
+                76d,
                 display.ActualHeight,
                 0.5,
-                "显示态 4 行自然高度必须为 4×20（显示态行距锁定）。");
+                "显示态 4 行自然高度必须为 4×19（显示态行距锁定）。");
 
             EnterCardEditingWithDoubleClick(window, item);
             CompleteLayout(window);
@@ -272,10 +272,10 @@ public sealed partial class MainWindowInteractionTests
                 var actual = editor.GetRectFromCharacterIndex(editor.GetCharacterIndexFromLineIndex(k)).Top
                     - editor.GetRectFromCharacterIndex(0).Top;
                 Assert.AreEqual(
-                    20d * k,
+                    19d * k,
                     actual,
                     0.5,
-                    $"编辑态第 {k + 1} 行行距必须与显示态同源（行距 20，第 {k + 1} 行 Top 差应 ≈ {20 * k}）。");
+                    $"编辑态第 {k + 1} 行行距必须与显示态同源（行距 19，第 {k + 1} 行 Top 差应 ≈ {19 * k}）。");
             }
 
             // 两态总高一致（同一换行数 × 同一行距的复合证据）。

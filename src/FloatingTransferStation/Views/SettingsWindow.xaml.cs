@@ -555,27 +555,50 @@ public partial class SettingsWindow : Window
         });
     }
 
+    /// <summary>默认项标注后缀：追加在链首字体显示名之后（如
+    /// 「Microsoft YaHei UI（默认）」；族名无本地化中文名的环境即为该形态）。</summary>
+    private const string InterfaceFontDefaultSuffix = "（默认）";
+
     /// <summary>
-    /// 界面字体选项：首项「默认」（Tag=null → 偏好 InterfaceFont=null），其余为
-    /// 本机已安装字体族（Source 串即偏好存储值，解析按同一清单校验），按当前
-    /// UI 文化的显示名排序；图标/符号字体排除（选作界面字体无意义）。存疑名字
-    /// （字体已卸载）不在清单，选中回落「默认」——偏好原值保留，待用户下次选择覆盖。
+    /// 界面字体选项（2026-11-02 默认项语义合并）：默认不再是无名首项——系统字体
+    /// 清单中与默认链链首（InterfaceFontManager.DefaultFamilyHeadName，即微软雅黑
+    /// UI）同名的那一项升级为唯一默认项，置于首位、显示名追加「（默认）」、
+    /// Tag=null（→ 偏好 InterfaceFont=null）；效果：偏好 null 或显式链首名回显到
+    /// 同一项，默认字体在列表中有名有形、无双项并存。其余为本机已安装字体族
+    /// （Source 串即偏好存储值，解析按同一清单校验），按当前 UI 文化的显示名排序；
+    /// 图标/符号字体排除（选作界面字体无意义）。存疑名字（字体已卸载）不在清单，
+    /// 选中回落默认项——偏好原值保留，待用户下次选择覆盖。链首字体不在本机清单
+    /// 时回落抽象「默认」首项（保住默认可选中；支持的目标系统不缺链首）。
     /// </summary>
     private void PopulateInterfaceFontOptions(string? interfaceFont)
     {
+        var defaultHead = InterfaceFontManager.DefaultFamilyHeadName();
         var families = Fonts.SystemFontFamilies
             .Where(family => !IsSymbolFont(family.Source))
             .OrderBy(FontDisplayName, StringComparer.CurrentCulture)
             .ToArray();
-        var items = new List<ComboBoxItem>(families.Length + 1)
+        var headFamily = Array.Find(families, family =>
+            string.Equals(family.Source, defaultHead, StringComparison.OrdinalIgnoreCase));
+        var items = new List<ComboBoxItem>(families.Length);
+        if (headFamily is null)
         {
-            new() { Content = "默认", Tag = null }
-        };
-        items.AddRange(families.Select(family => new ComboBoxItem
+            items.Add(new() { Content = "默认", Tag = null });
+        }
+        else
         {
-            Content = FontDisplayName(family),
-            Tag = family.Source
-        }));
+            items.Add(new()
+            {
+                Content = FontDisplayName(headFamily) + InterfaceFontDefaultSuffix,
+                Tag = null
+            });
+        }
+        items.AddRange(families
+            .Where(family => !string.Equals(family.Source, defaultHead, StringComparison.OrdinalIgnoreCase))
+            .Select(family => new ComboBoxItem
+            {
+                Content = FontDisplayName(family),
+                Tag = family.Source
+            }));
         InterfaceFontComboBox.ItemsSource = items;
         InterfaceFontComboBox.SelectedItem =
             items.FirstOrDefault(item => (string?)item.Tag == interfaceFont)
