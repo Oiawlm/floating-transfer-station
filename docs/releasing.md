@@ -36,7 +36,7 @@
 
 1. `git fetch --tags` 并核对远端最新版本（tag 清单与 `gh release list`）；远端已 ≥ 意图版本则重放顺延。
 2. 从最新 `origin/main` 切 `release/vX.Y.Z`，创建后立即推送（分支名即锁在推送时生效）。
-3. 整理版本段：`CHANGELOG.md`「未发布」条目归入新版本段（归入后**保留空的「未发布」节标题**——readiness 契约要求恰一个空节，见「发布记录检查」）、`version.txt` 设生产版本、README「下载」段同步发布说明与安装包名称，并同步更新本地维护文档（`PROJECT_GUIDE.md`，不入库）；历史设计和旧版本记录不改写。
+3. 整理版本段：`CHANGELOG.md`「未发布」条目归入新版本段（归入后**保留空的「未发布」节标题**——readiness 契约要求恰一个空节，见「发布记录检查」）、`version.txt` 设生产版本、README「下载」段同步发布说明与安装包名称、`docs/README.md` 功能溯源表按本版新功能扩行，并同步更新本地维护文档（`PROJECT_GUIDE.md`，不入库）；历史设计和旧版本记录不改写。
 4. 在准备发布的代码上完成依赖还原和格式验证（命令见 CONTRIBUTING.md；WPF 设计时格式工具先预构建 Core 的 Debug 程序集），再执行包含 Release 全量测试的打包入口；无需在同一份未变化代码上先重复跑一次全量测试：
 
    ```powershell
