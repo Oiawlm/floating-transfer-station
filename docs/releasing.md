@@ -36,7 +36,7 @@
 
 1. `git fetch --tags` 并核对远端最新版本（tag 清单与 `gh release list`）；远端已 ≥ 意图版本则重放顺延。
 2. 从最新 `origin/main` 切 `release/vX.Y.Z`，创建后立即推送（分支名即锁在推送时生效）。
-3. 整理版本段：`CHANGELOG.md`「未发布」条目归入新版本段、`version.txt` 设生产版本、README「下载」段同步发布说明与安装包名称，并同步更新本地维护文档（`PROJECT_GUIDE.md`，不入库）；历史设计和旧版本记录不改写。
+3. 整理版本段：`CHANGELOG.md`「未发布」条目归入新版本段（归入后**保留空的「未发布」节标题**——readiness 契约要求恰一个空节，见「发布记录检查」）、`version.txt` 设生产版本、README「下载」段同步发布说明与安装包名称，并同步更新本地维护文档（`PROJECT_GUIDE.md`，不入库）；历史设计和旧版本记录不改写。
 4. 在准备发布的代码上完成依赖还原和格式验证（命令见 CONTRIBUTING.md；WPF 设计时格式工具先预构建 Core 的 Debug 程序集），再执行包含 Release 全量测试的打包入口；无需在同一份未变化代码上先重复跑一次全量测试：
 
    ```powershell
@@ -67,19 +67,21 @@ CI 的 Windows 分支先安装 SDK、还原依赖、预构建共享核心供 WPF
 & .\scripts\build-release.ps1 -DotnetPath (Get-Command dotnet).Source
 ```
 
-CI 同时启用已有跨分类回归的截图输出，将四张使用合成内容的 WPF 控件截图上传为 `category-switch-evidence` 构建附件，保留 30 天。评审时可在 PR 中链接该附件；未生成任何截图时，上传检查会失败。本机截图和构建附件都不纳入源码提交。
+CI 的打包步骤为各专项回归注入证据目录环境变量（`FTS_*_EVIDENCE_DIR`），把真实 WPF 控件截图或安装态日志上传为构建附件，统一策略：保留 30 天、缺图即上传步骤失败（`if-no-files-found: error`）；截图全部使用合成内容，不读取系统剪贴板或真实用户内容。评审时可在 PR 中链接这些附件；本机截图和构建附件都不纳入源码提交。现行附件清单（CI 新增回归附件时在此登记一行，保持与 `.github/workflows/ci.yml` 一致）：
 
-审计修复的删除防重入与外部拖入重展开回归使用 `FTS_AUDIT_REMEDIATION_EVIDENCE_DIR` 输出真实 WPF 控件截图。图片均为合成内容，使用与既有截图相同的保留策略。
-
-剪贴板图片回退回归通过合成读取器、真实图片归一化与本地存储，将损坏大图后的有效小图显示在 WPF 窗口中。CI 通过 `FTS_CLIPBOARD_IMAGE_FALLBACK_EVIDENCE_DIR` 输出截图，保存为 `clipboard-image-fallback-evidence` 附件，同样保留 30 天且缺图失败；测试不读取系统剪贴板或真实用户内容。
-
-分类名称回归使用 `FTS_CATEGORY_NAMES_EVIDENCE_DIR` 输出新默认名称与自定义名称的真实 WPF 截图，保存为 `category-names-evidence` 附件，保留 30 天且缺图失败。
-
-连续范围选择回归使用 `FTS_RANGE_SELECTION_EVIDENCE_DIR` 输出 Shift 点击前后的真实 WPF 截图，保存为 `range-selection-evidence` 附件，同样保留 30 天且缺图失败；使用合成卡片验证连续选择、置顶边界与选择数量反馈。
-
-窗口过渡回归使用 `FTS_VISUAL_TRANSITIONS_EVIDENCE_DIR` 输出收起交接被重新展开或外部拖入中断后的真实 WPF 截图，保存为 `visual-transitions-evidence` 附件，同样保留 30 天且缺图失败；使用合成内容验证窗口尺寸、面板状态与命中区域一致。
-
-动效过渡回归使用 `FTS_MOTION_TRANSITIONS_EVIDENCE_DIR` 输出新内容交错入场与置顶重排不重演入场的真实 WPF 截图，保存为 `motion-transitions-evidence` 附件，同样保留 30 天且缺图失败；使用合成内容验证入场动画收窄语义（真正新入库的内容才播入场）。
+- `category-switch-evidence`：跨分类交互四张截图（删除保存期间选择与切换语义）。
+- `clipboard-image-fallback-evidence`：剪贴板损坏大图后的有效小图回退。
+- `audit-remediation-evidence`：删除防重入与外部拖入重展开回归。
+- `category-names-evidence`：分类默认名称与自定义名称。
+- `range-selection-evidence`：Shift 连续区间选择（连续选择、置顶边界与选择数量反馈）。
+- `visual-transitions-evidence`：收起交接被重新展开或外部拖入中断后的窗口过渡（窗口尺寸、面板状态与命中区域一致）。
+- `motion-transitions-evidence`：新内容交错入场与置顶重排不重演入场（入场动画收窄语义——真正新入库的内容才播入场）。
+- `delivery-evidence`：卡片复制到剪贴板与垃圾桶按钮双交互。
+- `gesture-evidence`：卡片左右分区手势。
+- `quicklaunch-surface-evidence`：快捷启动双主题双宽度瓦片表面。
+- `quicklaunch-interact-evidence`：快捷启动添加与启动失败反馈。
+- `quicklaunch-migration-evidence`：快捷启动标签迁移前后。
+- `quicklaunch-order-evidence`：快捷启动调序标签轨与把手。
 
 CI 还在一次性的 GitHub-hosted Windows 虚机运行 `scripts/test-installed-lifecycle.ps1`，使用真实候选安装包验证安装、原地更新、程序迁址和卸载：检查自启和数据目录登记、更新后的数据哈希（含保存分类名称的 `settings.json`）、旧卸载器拒绝操作，以及卸载后同级无关文件完整保留。缺少归属登记的旧版直接更改程序目录应被阻止；原地更新补齐登记后才允许迁址。日志和断言保存在 `installed-lifecycle-evidence` 附件中。
 
