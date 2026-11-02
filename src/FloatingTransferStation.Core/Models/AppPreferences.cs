@@ -104,10 +104,12 @@ public enum AutoCleanupRetention
 /// 文件夹为 null/空 = 无自定义监视文件夹（旧配置缺字段免迁移回落）。
 /// 启动器列数策略（默认自适应 = 现行为）：Adaptive 列数随面板宽自动增减，
 /// Fixed3–Fixed6 固定列数；旧配置缺字段免迁移回落自适应，老用户升级零感知。
-/// AI 整理总开关（默认开 = 老用户升级零感知）：关闭＝卡片 AI 整理钮不再出现、
-/// 整理入口零动作（连无 Key 状态条提示也不弹）、设置页 Key/提示词/测试连接区
-/// 置灰（已存 Key 与自定义提示词原样保留，只停用不删除）；只门控入口与设置面，
-/// 不改 AI 服务、提示词与密钥存储逻辑。旧配置缺字段免迁移回落开启。
+/// AI 整理总开关（默认关 = 用户 2026-11-02 决策：AI 功能默认零打扰，需显式
+/// 开启；已显式保存过 true 的存量用户不受影响）：开启后卡片 AI 整理钮随截断
+/// 门槛出现；关闭＝卡片 AI 整理钮不再出现、整理入口零动作（连无 Key 状态条
+/// 提示也不弹）、设置页 Key/提示词/测试连接区置灰（已存 Key 与自定义提示词
+/// 原样保留，只停用不删除）；只门控入口与设置面，不改 AI 服务、提示词与密钥
+/// 存储逻辑。旧配置缺字段免迁移回落关闭。
 /// 界面字体（2026-10-25 自定义字体全链路；null = 默认 Segoe UI Variable 回退链）：
 /// 字体族名（Fonts.SystemFontFamilies 的 Source 串），不随应用分发字体文件；
 /// 解析时名字不在系统字体清单（含被卸载）按未配置回落默认；旧配置缺字段
@@ -138,7 +140,7 @@ public sealed record AppPreferences(
     bool LauncherDiscoveryEnabled = true,
     IReadOnlyList<string>? LauncherDiscoveryFolders = null,
     LauncherColumnStrategy LauncherColumnStrategy = LauncherColumnStrategy.Adaptive,
-    bool AiOrganizeEnabled = true,
+    bool AiOrganizeEnabled = false,
     string? InterfaceFont = null)
 {
     public static AppPreferences Default { get; } = new();

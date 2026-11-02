@@ -131,10 +131,10 @@ public sealed class MainWindowViewModel : ObservableObject
         set => SetProperty(ref _shortCardNotesEnabled, value);
     }
 
-    /// <summary>AI 整理总开关（默认开 = 老用户升级零感知）：关闭＝卡片 AI 整理钮
-    /// 不再出现、整理入口零动作（含无 Key 提示也不弹）。由 ApplyPreferences 唯一
-    /// 管线喂值（契约 #5），卡片模板触发器与入口守卫经窗口祖先 DataContext 绑定
-    /// 消费（照 ShortCardNotesEnabled 先例）。</summary>
+    /// <summary>AI 整理总开关（默认关 = 用户 2026-11-02 决策：AI 功能默认零打扰，
+    /// 需显式开启）：关闭＝卡片 AI 整理钮不再出现、整理入口零动作（含无 Key 提示
+    /// 也不弹）。由 ApplyPreferences 唯一管线喂值（契约 #5），卡片模板触发器与
+    /// 入口守卫经窗口祖先 DataContext 绑定消费（照 ShortCardNotesEnabled 先例）。</summary>
     public bool AiOrganizeEnabled
     {
         get => _aiOrganizeEnabled;
