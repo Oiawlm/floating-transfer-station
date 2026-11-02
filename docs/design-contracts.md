@@ -61,6 +61,7 @@
 | 49 | 四处就地编辑位共用窗口级按压协调：点击当前编辑器之外即走该编辑位既有提交路径（IME 组合文本一并保存）；只补通道、不改提交/取消语义 | 就地编辑 |
 | 50 | 图片输入双层允许表同源：扩展名白名单与解码器允许表自 ImageFileSupport 格式注册表唯一派生、全部解码入口走受限 Configuration，TIFF 永不解码（改名即拒） | 图片输入／安全边界 |
 | 51 | 拖放视觉反馈稳定：插入槽位迟滞带内观测噪声零视觉变化（指示线与落点同源）、分类高亮状态真值差分应用（稳态零重启动画）、撤离保持窗复核（抖动无 false 回落、真离开一次清到位）；落点/批量/置顶钳制/Drop 语义零变化 | 拖放反馈／动效稳定性 |
+| 52 | tracked 文档对 gitignored 本地路径的引用按 hygiene 内嵌基线冻结（只减不增、新条目禁引）；指名历史设计/计划稿用「已归档设计稿〈文件名〉（维护者本地档案）」形态 | 仓库文档引用面／hygiene 检查 |
 
 ## 一、自冻结清单迁入（1–11）
 
@@ -484,6 +485,15 @@
 - **由来**：2026-11-02 批次 W4——同列表拖卡时指示线在卡片中线附近抖动闪烁（`Resolve` 中线零宽阈值 ±1px 即翻转）、跨分类拖拽时标签紫框反复闪灭（每事件无条件清-设＋间隙/死区清后不重设，120ms 淡出被反复打断）。根治＝把视觉反馈从事件驱动重构为状态驱动（迟滞带内观测噪声零视觉变化），与 gong-wpf-dragdrop 延迟复核、pragmatic-drag-and-drop sticky 迟滞同源。
 - **锁定**：`tests/FloatingTransferStation.Tests/InsertionSlotResolverTests.cs`（`ResolveHeldSlot_KeepsHeldSlotWhileCursorJittersAroundTheFlipLine`、`ResolveHeldSlot_NullOrEqualHeldFollowsResolution`、`ResolveHeldSlot_MultiSlotJumpFollowsResolutionWithoutHysteresis`、`ResolveHeldSlot_MissingBoundaryItemOrEmptySpansFollowResolution`）；`tests/FloatingTransferStation.Tests/MainWindowInteractionTests.DragAndDrop.cs`（`NormalCardMidpointDrag_KeepsIndicatorStableWhileCursorJittersAroundTheCenterLine`——中线 ±1–2 DIP 抖动指示线钉住＋果断越过跟随＋对称回抖维持；`MidpointJitterDrop_LandsAtTheHeldSlotShownByTheIndicator`——所见即所落；`CategoryDropFeedback_JitteredEnterOverLeaveSequenceKeepsTargetWithoutFalseDip`——Enter/Over/Leave/间隙序列抖动 IsDropTarget 无 false 回落（动效开/关两档）＋真离开复核清到位）；既有 `PinnedBoundaryDrag_KeepsIndicatorStableWhileCursorJittersAroundTheRegionLine`、`PinnedBoundaryDrag_DropsAtTheClampedIndicatorSlot`、`CategoryDropFeedback_AllowsOnlyOneInternalTargetAndClearsOnLeave`（撤离断言点后移到通道排空后）、`ExternalRail_CrossTabLeaveIsReconciledAndTrueLeaveRestoresCollapsedHandle`（同步理）继续锁定相邻语义。
 - **关联**：#2（分区/批量——语义零变化）、#41（动效可中断——差分应用不重启动画）、#12（视觉生命周期/一次矩形变更——未触碰）、#13（真实输入测试口径）、#34（token 唯一来源——`DropTargetWithdrawHoldMs` 入 DesignTokens 并同步 docs/design.md）；docs/handoff/2026-11-02-detail-polish-batch/evidence-w4/（多帧连拍证据）与 report-w4-drag-flicker.md。
+
+## 二十八、本次新增（52，tracked 文档本地路径引用冻结与新条目禁引；2026-11-02 用户裁定）
+
+### 52. tracked 文档对维护者本地路径的引用冻结（基线只减不增、新条目禁引、「已归档设计稿」替代形态）
+
+- **断言**：tracked 文件对 gitignored 维护者本地路径的引用，按文件冻结在 2026-11-02 落地实测基线（内嵌于 `scripts/check-repo-hygiene.ps1` Check C，模式表与豁免清单以该脚本为唯一来源；豁免＝`.gitignore` 本身与 hygiene 脚本自身），只减不增——任何 tracked 文件的新增引用超过其基线计数即 hygiene 红；基线随实际清理下调，上调只能来自对基线清单的显式修订且须在提交说明给出实测计数。CHANGELOG 与活文档新条目一律不得引用本地路径；确需指名历史设计/计划资料时，采用「已归档设计稿〈文件名〉（维护者本地档案 2026-10-28）」形态仅保留文件名（沿用本清单头部 2026-10-28 注记的既有实践），或改指公开对应物。历史条目存量引用只补「维护者本地」类标注，不追溯改写其他历史文字。
+- **由来**：2026-11-02 用户裁定（稳定度政策批次 P1-B）：仓库自 2026-10-08 起只保留软件本体与源码，历史条目残留的本地路径引用会让读者按图索骥在仓库内找不到文件——冻结存量、禁止增量，让引用面单调收敛，替代逐条追溯改写历史文字的高风险做法。
+- **锁定**：`scripts/check-repo-hygiene.ps1` Check C（贡献指南「本地推送前质量门」五命令之一，随 CI `quality` 门强制）；红绿自证与基线实测计数留痕见当日维护者本地交接报告（不入库）。
+- **关联**：`.gitignore`（本地条目清单的唯一来源）、[文档路由枢纽](README.md)「设计/实施过程资料不在仓库内」说明、CHANGELOG 2026-11-02「未发布」区政策落地条目；本清单头部「已归档设计稿」注记（2026-10-28 起的替代形态先例）。
 
 ## 维护规则
 
