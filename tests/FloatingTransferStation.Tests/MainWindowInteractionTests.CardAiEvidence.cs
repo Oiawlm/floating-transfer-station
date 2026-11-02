@@ -49,6 +49,9 @@ public sealed partial class MainWindowInteractionTests
         board.AddText(AiEvidenceTranscript, BoardCategory.Inbox);
         board.AddText("短卡示例：周五同步会改到下午三点。", BoardCategory.Inbox);
         var window = CreateWindow(directory, board);
+        // 2026-11-02 起 AI 整理默认关闭：证据拍的是 AI 开启态的悬停揭示，
+        // 必须显式注入（不依赖偏好默认值，契约 #29 修订）。
+        window.ApplyPreferences(AppPreferences.Default with { AiOrganizeEnabled = true });
         var savedCursor = SaveCursorPosition();
 
         try

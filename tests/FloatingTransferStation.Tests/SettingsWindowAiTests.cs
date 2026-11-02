@@ -17,6 +17,9 @@ namespace FloatingTransferStation.Tests;
 /// 整理提示词编辑卡（1.52.0，契约 #29 修订）——null 态空框＋状态显式、失焦
 /// Trim 保存/清空存 null、恢复默认终态 null（含失焦先行次序幂等）、填入默认
 /// 全文待失焦保存、超长前置校验不保存＋就地红字。明文 Key 只用假值。
+/// AI 整理总开关默认关闭（2026-11-02 起，契约 #29 修订）：本文件涉及 Key/
+/// 提示词/测试连接交互的用例一律显式注入 `AiOrganizeEnabled = true`（不依赖
+/// 偏好默认值）；关闭态行为由开关专项用例与关闭态证据用例锁定。
 /// </summary>
 [TestClass]
 public sealed class SettingsWindowAiTests
@@ -131,7 +134,10 @@ public sealed class SettingsWindowAiTests
     {
         using var directory = new TestDirectory();
         var protector = new FakeSecretProtector();
-        var preferencesStore = new RecordingPreferencesStore();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeEnabled = true }
+        };
         var window = CreateWindow(directory, preferencesStore, protector);
         try
         {
@@ -174,7 +180,8 @@ public sealed class SettingsWindowAiTests
         {
             Seeded = AppPreferences.Default with
             {
-                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey)
+                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey),
+                AiOrganizeEnabled = true
             }
         };
         var window = CreateWindow(directory, preferencesStore, protector);
@@ -206,7 +213,10 @@ public sealed class SettingsWindowAiTests
     {
         using var directory = new TestDirectory();
         var protector = new FakeSecretProtector();
-        var preferencesStore = new RecordingPreferencesStore();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeEnabled = true }
+        };
         var window = CreateWindow(directory, preferencesStore, protector);
         try
         {
@@ -250,7 +260,8 @@ public sealed class SettingsWindowAiTests
         {
             Seeded = AppPreferences.Default with
             {
-                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey)
+                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey),
+                AiOrganizeEnabled = true
             }
         };
         var window = CreateWindow(directory, preferencesStore, protector);
@@ -276,7 +287,11 @@ public sealed class SettingsWindowAiTests
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore
         {
-            Seeded = AppPreferences.Default with { DeepSeekApiKeyProtected = "broken-cipher" }
+            Seeded = AppPreferences.Default with
+            {
+                DeepSeekApiKeyProtected = "broken-cipher",
+                AiOrganizeEnabled = true
+            }
         };
         var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
         try
@@ -330,9 +345,9 @@ public sealed class SettingsWindowAiTests
     [STATestMethod]
     public void AiOrganizeToggle_OffGraysAreasAndPersists_RestoreOnReopensReflect()
     {
-        // 契约 #29 修订：关＝Key 卡（输入框/显示切换/测试连接/门户链接）与整理
-        // 提示词卡整卡置灰＋持久化；重开设置窗回显关闭态；开＝两卡恢复可用。
-        // 已存 Key 与自定义提示词只停用不删除（不触碰存储逻辑）。
+        // 契约 #29 修订＋2026-11-02 默认值修订：默认已改为关闭，本用例的测试
+        // 对象是「关」这个动作本身，故显式注入开启态作为前置（关→置灰→重开
+        // 回显→开→恢复）。已存 Key 与自定义提示词只停用不删除（不触碰存储逻辑）。
         using var directory = new TestDirectory();
         var protector = new FakeSecretProtector();
         var preferencesStore = new RecordingPreferencesStore
@@ -340,7 +355,8 @@ public sealed class SettingsWindowAiTests
             Seeded = AppPreferences.Default with
             {
                 DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey),
-                AiOrganizeSystemPromptOverride = "自定义提示词保持原样。"
+                AiOrganizeSystemPromptOverride = "自定义提示词保持原样。",
+                AiOrganizeEnabled = true
             }
         };
         var window = CreateWindow(directory, preferencesStore, protector);
@@ -351,8 +367,8 @@ public sealed class SettingsWindowAiTests
             var toggle = (CheckBox)settings.FindName("AiOrganizeEnabledToggle")!;
             var keyCard = (Border)settings.FindName("AiKeyCard")!;
             var promptCard = (Border)settings.FindName("AiPromptCard")!;
-            Assert.IsTrue(toggle.IsChecked == true, "前置：总开关默认开。");
-            Assert.IsTrue(keyCard.IsEnabled && promptCard.IsEnabled, "前置：两卡默认可用。");
+            Assert.IsTrue(toggle.IsChecked == true, "前置：显式注入开启。");
+            Assert.IsTrue(keyCard.IsEnabled && promptCard.IsEnabled, "前置：注入开启后两卡可用。");
 
             toggle.IsChecked = false;
             PumpUntil(settings.Dispatcher, () => preferencesStore.LastSaved is not null);
@@ -471,7 +487,8 @@ public sealed class SettingsWindowAiTests
         {
             Seeded = AppPreferences.Default with
             {
-                AiOrganizeSystemPromptOverride = "我的自定义整理规则。"
+                AiOrganizeSystemPromptOverride = "我的自定义整理规则。",
+                AiOrganizeEnabled = true
             }
         };
         var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
@@ -495,7 +512,13 @@ public sealed class SettingsWindowAiTests
     {
         // S3：null 态不预填默认全文（保住「是否默认」判定基线），状态显式可见。
         using var directory = new TestDirectory();
-        var window = CreateWindow(directory, new RecordingPreferencesStore(), new FakeSecretProtector());
+        var window = CreateWindow(
+            directory,
+            new RecordingPreferencesStore
+            {
+                Seeded = AppPreferences.Default with { AiOrganizeEnabled = true }
+            },
+            new FakeSecretProtector());
         try
         {
             var settings = OpenSettings(window);
@@ -517,7 +540,10 @@ public sealed class SettingsWindowAiTests
     public void PromptEdit_LostFocus_PersistsTrimmedOverrideAndSwitchesState()
     {
         using var directory = new TestDirectory();
-        var preferencesStore = new RecordingPreferencesStore();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeEnabled = true }
+        };
         var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
         try
         {
@@ -555,7 +581,11 @@ public sealed class SettingsWindowAiTests
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore
         {
-            Seeded = AppPreferences.Default with { AiOrganizeSystemPromptOverride = "旧自定义提示词" }
+            Seeded = AppPreferences.Default with
+            {
+                AiOrganizeSystemPromptOverride = "旧自定义提示词",
+                AiOrganizeEnabled = true
+            }
         };
         var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
         try
@@ -591,7 +621,11 @@ public sealed class SettingsWindowAiTests
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore
         {
-            Seeded = AppPreferences.Default with { AiOrganizeSystemPromptOverride = "旧自定义提示词" }
+            Seeded = AppPreferences.Default with
+            {
+                AiOrganizeSystemPromptOverride = "旧自定义提示词",
+                AiOrganizeEnabled = true
+            }
         };
         var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
         try
@@ -643,7 +677,11 @@ public sealed class SettingsWindowAiTests
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore
         {
-            Seeded = AppPreferences.Default with { AiOrganizeSystemPromptOverride = "旧自定义提示词" }
+            Seeded = AppPreferences.Default with
+            {
+                AiOrganizeSystemPromptOverride = "旧自定义提示词",
+                AiOrganizeEnabled = true
+            }
         };
         var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
         try
@@ -684,7 +722,11 @@ public sealed class SettingsWindowAiTests
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore
         {
-            Seeded = AppPreferences.Default with { AiOrganizeSystemPromptOverride = "旧自定义提示词" }
+            Seeded = AppPreferences.Default with
+            {
+                AiOrganizeSystemPromptOverride = "旧自定义提示词",
+                AiOrganizeEnabled = true
+            }
         };
         var window = CreateWindow(directory, preferencesStore, new FakeSecretProtector());
         try
@@ -727,7 +769,10 @@ public sealed class SettingsWindowAiTests
         // 当前状态无关（无选择状态可依）；成功文案模型名恒为 DefaultModel。
         using var directory = new TestDirectory();
         var protector = new FakeSecretProtector();
-        var preferencesStore = new RecordingPreferencesStore();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeEnabled = true }
+        };
         var handler = new StubHttpMessageHandler();
         handler.Respond = (_, _) => HandlerResponse(200, ModelsBody());
         var window = CreateWindow(
@@ -763,7 +808,10 @@ public sealed class SettingsWindowAiTests
     {
         using var directory = new TestDirectory();
         var protector = new FakeSecretProtector();
-        var preferencesStore = new RecordingPreferencesStore();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeEnabled = true }
+        };
         var handler = new StubHttpMessageHandler();
         handler.Respond = (_, _) => HandlerResponse(200, ModelsBody());
         var window = CreateWindow(
@@ -800,7 +848,10 @@ public sealed class SettingsWindowAiTests
     {
         using var directory = new TestDirectory();
         var protector = new FakeSecretProtector();
-        var preferencesStore = new RecordingPreferencesStore();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeEnabled = true }
+        };
         var handler = new StubHttpMessageHandler();
         handler.Respond = (_, _) => HandlerResponse(401, """{"error":{"message":"auth failed"}}""");
         var window = CreateWindow(
@@ -836,7 +887,10 @@ public sealed class SettingsWindowAiTests
         // 纯崩溃护栏。
         using var directory = new TestDirectory();
         var protector = new FakeSecretProtector();
-        var preferencesStore = new RecordingPreferencesStore();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeEnabled = true }
+        };
         var handler = new StubHttpMessageHandler();
         handler.Respond = (_, _) => throw new System.Net.Sockets.SocketException();
         var window = CreateWindow(
@@ -870,7 +924,10 @@ public sealed class SettingsWindowAiTests
     {
         using var directory = new TestDirectory();
         var protector = new FakeSecretProtector();
-        var preferencesStore = new RecordingPreferencesStore();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeEnabled = true }
+        };
         var handler = new StubHttpMessageHandler();
         handler.Respond = (_, _) => throw new AssertFailedException("空 key 不得发起请求。");
         var window = CreateWindow(
@@ -917,7 +974,8 @@ public sealed class SettingsWindowAiTests
         {
             Seeded = AppPreferences.Default with
             {
-                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey)
+                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey),
+                AiOrganizeEnabled = true
             }
         };
         using var directory = new TestDirectory();
@@ -985,7 +1043,8 @@ public sealed class SettingsWindowAiTests
         {
             Seeded = AppPreferences.Default with
             {
-                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey)
+                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey),
+                AiOrganizeEnabled = true
             }
         };
         using var directory = new TestDirectory();

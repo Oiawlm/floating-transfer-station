@@ -638,11 +638,11 @@ public sealed class AppPreferencesTests
     }
 
     [TestMethod]
-    public void Default_EnablesAiOrganize()
+    public void Default_DisablesAiOrganize()
     {
-        Assert.IsTrue(
+        Assert.IsFalse(
             AppPreferences.Default.AiOrganizeEnabled,
-            "AI 整理总开关默认开启（老用户升级零感知＝现行为）。");
+            "AI 整理总开关默认关闭（用户 2026-11-02 决策：AI 功能默认零打扰＝现行为）。");
     }
 
     [TestMethod]
@@ -669,7 +669,7 @@ public sealed class AppPreferencesTests
     }
 
     [TestMethod]
-    public void OlderJson_WithoutAiOrganizeEnabledField_FallsBackToEnabled()
+    public void OlderJson_WithoutAiOrganizeEnabledField_FallsBackToDisabled()
     {
         var storeOptions = new JsonSerializerOptions
         {
@@ -681,9 +681,9 @@ public sealed class AppPreferencesTests
             storeOptions);
 
         Assert.IsNotNull(restored);
-        Assert.IsTrue(
+        Assert.IsFalse(
             restored.AiOrganizeEnabled,
-            "旧 preferences.json 缺字段时必须回落到默认开启（升级零感知＝现行为）。");
+            "旧 preferences.json 缺字段时必须回落到默认关闭（默认关＝现行为）。");
     }
 
     [TestMethod]

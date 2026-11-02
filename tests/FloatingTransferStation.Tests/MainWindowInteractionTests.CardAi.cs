@@ -43,6 +43,9 @@ public sealed partial class MainWindowInteractionTests
         var shortItem = board.AddText("短卡字", BoardCategory.Inbox);
         var imageItem = AddImageCard(directory, board, "ai-matrix.png");
         var window = CreateWindow(directory, board);
+        // 2026-11-02 起 AI 整理默认关闭：本矩阵锁的是 AI 钮可见性条件本身，
+        // 必须显式注入开启（不依赖偏好默认值，契约 #29 修订）。
+        window.ApplyPreferences(AppPreferences.Default with { AiOrganizeEnabled = true });
 
         try
         {
@@ -146,6 +149,9 @@ public sealed partial class MainWindowInteractionTests
         var longItem = board.AddText(LongCardText, BoardCategory.Inbox);
         var imageItem = AddImageCard(directory, board, "ai-height.png");
         var window = CreateWindow(directory, board);
+        // 2026-11-02 起 AI 整理默认关闭：追加行「截断卡常在」的布局事实以开关
+        // 开启为前提，必须显式注入（不依赖偏好默认值，契约 #29 修订）。
+        window.ApplyPreferences(AppPreferences.Default with { AiOrganizeEnabled = true });
 
         try
         {
