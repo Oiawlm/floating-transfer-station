@@ -1248,10 +1248,10 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(0, Grid.GetColumn(contentZone));
             Assert.IsNull((text.Parent as Grid)?.Tag, "内容视觉层不得携带命中标记（命中总落在命中层）。");
             Assert.AreEqual(14d, text.FontSize);
-            Assert.AreEqual(20d, text.LineHeight);
+            Assert.AreEqual(19d, text.LineHeight);
             // 1.28.0 起限高 MaxHeight 上移到 TrimAwareTextBlock 承载元素（唯一来源）。
             Assert.AreEqual(
-                100d,
+                95d,
                 text.Parent is FloatingTransferStation.Controls.TrimAwareTextBlock host
                     ? host.MaxHeight
                     : double.NaN);
