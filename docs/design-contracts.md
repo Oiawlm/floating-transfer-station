@@ -62,6 +62,7 @@
 | 50 | 图片输入双层允许表同源：扩展名白名单与解码器允许表自 ImageFileSupport 格式注册表唯一派生、全部解码入口走受限 Configuration，TIFF 永不解码（改名即拒） | 图片输入／安全边界 |
 | 51 | 拖放视觉反馈稳定：插入槽位迟滞带内观测噪声零视觉变化（指示线与落点同源）、分类高亮状态真值差分应用（稳态零重启动画）、撤离保持窗复核（抖动无 false 回落、真离开一次清到位）；落点/批量/置顶钳制/Drop 语义零变化 | 拖放反馈／动效稳定性 |
 | 52 | tracked 文档对 gitignored 本地路径的引用按 hygiene 内嵌基线冻结（只减不增、新条目禁引）；指名历史设计/计划稿用「已归档设计稿〈文件名〉（维护者本地档案）」形态 | 仓库文档引用面／hygiene 检查 |
+| 53 | UI 测试套件机器准入网关：可注入内核五步准入（已装实例 fail-fast→登记先于等锁→取互斥→外来套件等待→空闲准入）、登记目录死锁规避、CI 零影响；harness 密封缺省（真实剪贴板写响亮失败 stub＋无网络更新假件）；TRX 清理不删并发新文件 | 测试基建／机器准入 |
 
 ## 一、自冻结清单迁入（1–11）
 
@@ -494,6 +495,15 @@
 - **由来**：2026-11-02 用户裁定（稳定度政策批次 P1-B）：仓库自 2026-10-08 起只保留软件本体与源码，历史条目残留的本地路径引用会让读者按图索骥在仓库内找不到文件——冻结存量、禁止增量，让引用面单调收敛，替代逐条追溯改写历史文字的高风险做法。
 - **锁定**：`scripts/check-repo-hygiene.ps1` Check C（贡献指南「本地推送前质量门」五命令之一，随 CI `quality` 门强制）；红绿自证与基线实测计数留痕见当日维护者本地交接报告（不入库）。
 - **关联**：`.gitignore`（本地条目清单的唯一来源）、[文档路由枢纽](README.md)「设计/实施过程资料不在仓库内」说明、CHANGELOG 2026-11-02「未发布」区政策落地条目；本清单头部「已归档设计稿」注记（2026-10-28 起的替代形态先例）。
+
+## 二十九、本次新增（53，UI 测试套件机器准入网关；2026-11-03）
+
+### 53. UI 测试套件机器准入网关（五步准入、登记目录与死锁规避、CI 零影响、harness 密封缺省）
+
+- **断言**：App.Tests 程序集的机器准入一切决策集中在 `MachineAdmissionGate.cs` 的可注入内核（`MachineAdmissionKernel`＋互斥/空闲/进程/实例四探针接口），`UiSuiteMachineGate` 只做生产装配与 MSTest 接线——不引入脚本级锁、锁文件或第二套并行机制，命名互斥体是唯一排他原语。五步顺序锁定：①已装实例 fail-fast（产品单实例锁 `Local\FloatingTransferStation.App` 可打开＝实例在跑即 `Assert.Fail`，文案指向优雅关闭、不盲杀）；②登记——`%TEMP%\FloatingTransferStation\ui-suite-gate\<pid>.json`（pid 为语义键取自文件名，JSON 负载只做归因；创建即机会式清扫死 pid 陈旧文件）**先登记后等锁**；③取互斥 `Local\FloatingTransferStation.UiTests`（`Local\` 会话作用域＝冲突域恰是同会话交互桌面；等待上限＝套件等待预算，依据 2026-11-03 本机全量实测 5.92 分钟 ×2 排队深度 < 45 分钟下限 → 取 45 分钟，abandoned 接管保留）；④外来套件探测等待——命中＝进程名族 testhost*/VSTestRunner*（与 `scripts/clear-stale-ui-test-processes.ps1` 口径同源）∧ 已加载模块含 `FloatingTransferStation.Tests.dll`（套件 dll 名 token 的进程内等价形；实测本机 vstest 派生 testhost 命令行携带 --runtimeconfig/--depsfile 而非字面 .dll，Core.Tests 的 `*.Core.Tests.*` token 不同天然排除）∧ 未登记；有界等待、超时可归因失败（指向 clear-stale 处置）；⑤空闲准入 `GetLastInputInfo` ≥180 秒、有界等待 ≤15 分钟、超时可归因失败（「宿主机持续人用」）。**死锁规避**：已登记（含网关）的等待者在内核侧被第④步排除——两个含网关套件交错启动只被互斥串行化，不互等成环；轮询每轮重读登记目录、超时判定前终读，消除毫秒级登记竞态。**CI 零影响**：`GITHUB_ACTIONS=true` 或 `CI=true` 时空闲步整体跳过（GetLastInputInfo 在 CI/自动登录会话可能恒 0），无竞争、无已装实例＝其余步骤天然无操作。**失败路径收尾**：一切失败（含异常）释放租约并删自己的登记文件；成功票据 `Dispose`（AssemblyCleanup）同样收尾。**harness 密封缺省**（测试窗口唯一组合接缝 `MainWindowInteractionTests.CreateWindow`，internal 供全部测试类委托，不逐测试打补丁）：①真实剪贴板写缺省＝响亮失败 stub（未显式声明 `ClipboardWriterOverride` 的测试走到 `WriteClipboardData` 即失败并给可读原因；既有显式 override 在测试体内覆写，零改动）；②未显式注入更新服务时缺省无网络假件（恒无更新），消灭窗口存活 ≥30 秒触发真实 GitHub 外联的敞口。**脚本配套**：`run-affected-tests.ps1` 与 `run-adversarial.ps1` 的 TRX 清理只删本次运行开始时刻之前修改的文件（adversarial 换 LogFilePrefix 独立时间戳名），消灭同检出并发互删/覆写新 trx 的窗口；除此之外脚本零改动、`ci.yml` 零改动。
+- **由来**：多窗口并行复检互相污染（用户症状：某窗口复检整轮判废）。根因＝UI 套件非密封触碰交互桌面单例资源（真实光标 `SetCursorPos` 17 文件、SendInput 键鼠族、测试窗口 Topmost 带＋2 秒周期重申、兜底真实剪贴板写），两套件并发即互踩；2026-11-02 W2 的裸互斥只约束双方都含网关的套件（旧分支/裸跑不受约束）、无空闲准入、无外来探测、无已装实例检查，且并行期人工锁 `%TEMP%\fts-ui-test.lock` 已被实证违反（report-w2 §1）——机制化取代三条人工纪律与人工锁。外部佐证：vstest 解决方案级逐工程串行起 testhost（dotnet/sdk#10178、vstest#1851）；GetLastInputInfo 会话作用域且 CI 会话可能恒 0（Raymond Chen 2026-06-18、SO 6146114）；命名互斥体是「多 runner 共享同一桌面」的成熟排他模式（MS Mutex 文档）。行为级前后对照证据见批次 `evidence/`（外来被等待、实例 fail-fast 1.35 秒、双网关并发不互等）。
+- **锁定**：`tests/FloatingTransferStation.Tests/MachineAdmissionGateTests.cs`（13 例全绿：互斥等待/超时归因（登记目录 pid/state/root 进消息）/abandoned 接管/外来等待与超时归因/已登记排除（死锁规避核心，活进程登记）/已装实例 fail-fast/空闲等待与超时归因/CI 跳过（空闲探针禁止被咨询）/登记 running 态与票据释放删除/死 pid 机会式清扫/归因描述——全部 GUID 名互斥体＋假探针，严禁触碰真实命名互斥）；harness 密封缺省由 `MainWindowInteractionTests.CreateWindow` 单一接缝施加（迁移五处直构为委托）。
+- **关联**：#13（真实输入可达性——网关保护其宿主前提）、#32（选区协议——§三.K 共享设施注册表同步 `MachineAdmissionGate.cs`）、[多窗口协议](multi-window.md)（机器准入机制化后的窗口测试纪律）、B-009 观察条目（对策已机制化，见维护者本地档案）；CHANGELOG 未发布区。
 
 ## 维护规则
 

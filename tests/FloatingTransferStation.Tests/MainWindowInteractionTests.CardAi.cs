@@ -576,17 +576,6 @@ public sealed partial class MainWindowInteractionTests
     {
         var paths = AppPaths.ForTests(directory.Root);
         var store = new LocalStore(paths, new AtomicTextWriter());
-        var operationGate = new BoardOperationGate();
-        MainWindow? window = null;
-        void ShowStatus(string message) => window?.ShowStatus(message);
-        var normalizer = new ImageNormalizer(store.ImagesDirectory);
-        var clipboard = new ClipboardCaptureService(
-            new NeverReadClipboardReader(),
-            normalizer,
-            board,
-            store,
-            ShowStatus,
-            operationGate: operationGate);
         var preferences = plaintextKey is null
             ? AppPreferences.Default
             : AppPreferences.Default with { DeepSeekApiKeyProtected = "fake-cipher" };
@@ -595,20 +584,19 @@ public sealed partial class MainWindowInteractionTests
             AiOrganizeEnabled = aiOrganizeEnabled,
             AiOrganizeSystemPromptOverride = aiOrganizeSystemPromptOverride
         };
-        window = new MainWindow(
+        // 委托共享组合接缝（含 harness 密封缺省，契约 #53），本族只补离线 AI 管线差异件
+        //（编排器与主客户端各持一个挂假 handler 的 DeepSeekClient，维持原有双实例形态）。
+        return CreateWindow(
             board,
             store,
             WindowSettings.Default,
-            clipboard,
-            new BoardMutationService(board, store, ShowStatus, operationGate),
-            new DragPayloadService(),
-            new ExternalDropPayloadReader(new WindowsDataImageReader()),
-            new ExternalDropImportService(normalizer, board, store, ShowStatus, operationGate),
+            defaultCaptureCategory: null,
+            new ImageNormalizer(store.ImagesDirectory),
+            clipboardReader: new NeverReadClipboardReader(),
             preferences: preferences,
             secretProtector: new FakeCardAiSecretProtector(plaintextKey),
             deepSeekClient: new DeepSeekClient(handler),
             aiTextOrganizer: new AiTextOrganizer(new DeepSeekClient(handler)));
-        return window;
     }
 
     private sealed class FakeCardAiSecretProtector(string? key) : ISecretProtector

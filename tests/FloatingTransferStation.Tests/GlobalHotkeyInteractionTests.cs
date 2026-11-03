@@ -21,38 +21,20 @@ public sealed class GlobalHotkeyInteractionTests
         AppPreferences? preferences = null)
     {
         var store = new RecordingHotkeyBoardStore(directory.Root);
-        var board = new BoardService();
-        var normalizer = new ImageNormalizer(store.ImagesDirectory);
-        var operationGate = new BoardOperationGate();
-        MainWindow? window = null;
-        void ShowStatus(string message) => window?.ShowStatus(message);
-        var clipboard = new ClipboardCaptureService(
-            new IdleHotkeyClipboardReader(),
-            normalizer,
-            board,
-            store,
-            ShowStatus,
-            operationGate: operationGate);
-        window = new MainWindow(
-            board,
+        // 委托共享组合接缝（含 harness 密封缺省，契约 #53），本类只补差异件：
+        // 热键源、热键假启动器、热键读者的偏好与数据存储。
+        return MainWindowInteractionTests.CreateWindow(
+            new BoardService(),
             store,
             WindowSettings.Default,
-            clipboard,
-            new BoardMutationService(board, store, ShowStatus, operationGate),
-            new DragPayloadService(),
-            new ExternalDropPayloadReader(new WindowsDataImageReader()),
-            new ExternalDropImportService(
-                normalizer,
-                board,
-                store,
-                ShowStatus,
-                operationGate),
+            defaultCaptureCategory: null,
+            new ImageNormalizer(store.ImagesDirectory),
+            clipboardReader: new IdleHotkeyClipboardReader(),
             preferences: preferences,
             preferencesStore: preferencesStore,
             startupManager: new FakeHotkeyStartupManager(),
             dataDirectory: directory.Root,
             globalHotkeySource: hotkeySource);
-        return window;
     }
 
     private static SettingsWindow OpenSettings(MainWindow window)

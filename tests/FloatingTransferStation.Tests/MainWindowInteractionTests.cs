@@ -54,7 +54,11 @@ public sealed partial class MainWindowInteractionTests
             new ImageNormalizer(store.ImagesDirectory),
             updateService: updateService);
 
-    private static MainWindow CreateWindow(
+    /// <summary>测试窗口的唯一组合接缝（internal 供全部测试类委托）：组装共享服务元组并
+    /// 施加 harness 密封缺省（契约 #53：真实剪贴板写响亮失败 stub＋无网络更新服务假件）。
+    /// 各测试类的本地 CreateWindow 只负责自己的差异件（读者/启动器/热键源/密钥保护器等），
+    /// 组合核收敛于此——不逐测试打补丁。</summary>
+    internal static MainWindow CreateWindow(
         BoardService board,
         IBoardStore store,
         WindowSettings settings,
@@ -67,10 +71,21 @@ public sealed partial class MainWindowInteractionTests
         AppLauncher? appLauncher = null,
         string? dataDirectory = null,
         AppPreferences? preferences = null,
-        PluginCatalog? pluginCatalog = null)
+        PluginCatalog? pluginCatalog = null,
+        IStartupManager? startupManager = null,
+        IGlobalHotkeySource? globalHotkeySource = null,
+        BoardOperationGate? operationGate = null,
+        DataDirectoryChangeService? dataDirectoryChangeService = null,
+        ISecretProtector? secretProtector = null,
+        DeepSeekClient? deepSeekClient = null,
+        AiTextOrganizer? aiTextOrganizer = null)
     {
         defaultCaptureCategory ??= new DefaultCaptureCategoryState();
-        var operationGate = new BoardOperationGate();
+        // harness 密封缺省②（契约 #53）：未显式注入更新服务时缺省用无网络假件（恒无更新），
+        // 消灭「窗口存活 ≥30 秒即触发真实 GitHub 外联」的敞口（MainWindow.xaml.cs 的
+        // UpdateService 兜底只属生产组合根）。显式传假的 Updates 族测试零改动。
+        updateService ??= SealedUpdateService.Instance;
+        operationGate ??= new BoardOperationGate();
         MainWindow? window = null;
         void ShowStatus(string message) => window?.ShowStatus(message);
         var clipboard = new ClipboardCaptureService(
@@ -104,8 +119,46 @@ public sealed partial class MainWindowInteractionTests
             dataDirectory: dataDirectory ?? ((store as LocalStore)?.ImagesDirectory is { } imagesDirectory
                 ? Path.GetDirectoryName(imagesDirectory)
                 : null),
-            pluginCatalog: pluginCatalog);
+            pluginCatalog: pluginCatalog,
+            startupManager: startupManager,
+            globalHotkeySource: globalHotkeySource,
+            operationGate: operationGate,
+            dataDirectoryChangeService: dataDirectoryChangeService,
+            secretProtector: secretProtector,
+            deepSeekClient: deepSeekClient,
+            aiTextOrganizer: aiTextOrganizer);
+        // harness 密封缺省①（契约 #53）：真实剪贴板写缺省＝响亮失败 stub——未显式声明写
+        // 意图的测试一旦走到 WriteClipboardData 即失败并给可读原因（产品侧捕获子句只接
+        // COM/External/InvalidOperation，AssertFailedException 穿透直达测试）。既有显式
+        // 设置 ClipboardWriterOverride 的测试在测试体内覆写本缺省，零改动。
+        window.ClipboardWriterOverride ??= RejectUndeclaredRealClipboardWrite;
         return window;
+    }
+
+    /// <summary>密封缺省①的响亮失败 stub：真实剪贴板写必须显式声明（捕获 override）。</summary>
+    private static bool RejectUndeclaredRealClipboardWrite(DataObject data)
+        => throw new AssertFailedException(
+            "harness 密封缺省（契约 #53）：本测试触发了真实剪贴板写（WriteClipboardData）但未声明写意图。"
+            + "真实剪贴板是全机共享资源，测试写它会污染宿主现场；请在测试内显式设置 "
+            + "window.ClipboardWriterOverride 捕获负载后断言。");
+
+    /// <summary>密封缺省②的无网络更新服务假件：恒无更新、不支持下载与安装启动。</summary>
+    private sealed class SealedUpdateService : IUpdateService
+    {
+        public static readonly SealedUpdateService Instance = new();
+
+        public Task<UpdateCheckResult> CheckForUpdateAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(UpdateCheckResult.UpToDate());
+
+        public Task<UpdateDownloadResult> DownloadUpdateAsync(
+            UpdateCheckResult check,
+            string downloadDirectory,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(UpdateDownloadResult.Fail(
+                UpdateErrorKind.DownloadFailed,
+                "harness 密封缺省：无网络假件不支持下载。"));
+
+        public bool TryStartSilentInstaller(string installerPath) => false;
     }
 
     private static (Border Layer, Border Marker) FindCategoryFeedback(
