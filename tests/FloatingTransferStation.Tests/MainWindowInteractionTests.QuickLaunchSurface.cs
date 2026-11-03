@@ -437,7 +437,7 @@ public sealed partial class MainWindowInteractionTests
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             SetCursorPos(handleCenter.X, handleCenter.Y);
             EnterCategory(window, BoardCategory.Inbox);
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            WaitForReentryExpand(viewModel, window);
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "指针离开把手后重新进入即恢复悬停展开。");
         }
@@ -472,7 +472,7 @@ public sealed partial class MainWindowInteractionTests
         Assert.IsNotNull(tile);
         tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile, upTimestamp));
         tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, upTimestamp + 3));
-        PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
+        WaitForLaunchAutoCollapse(viewModel, window);
         CompleteLayout(window);
         Assert.IsFalse(viewModel.IsPanelExpanded, "前置：启动成功后排队收起。");
         return (viewModel, expandedCenter, tileWindowCenter(window));
@@ -498,10 +498,28 @@ public sealed partial class MainWindowInteractionTests
         tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile, upTimestamp));
         tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, upTimestamp + 3));
         SetCursorPos(handleCenter.X, handleCenter.Y);
-        PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
+        WaitForLaunchAutoCollapse(viewModel, window);
         CompleteLayout(window);
         Assert.IsFalse(viewModel.IsPanelExpanded, "前置：启动成功后排队收起（提交点指针在把手内＝抑制布防，交接补发被闩拦）。");
         return (viewModel, expandedCenter, handleCenter);
+    }
+
+    /// <summary>等待「启动成功后的自动收起」完成（收起由 250ms 定时驱动，负载下
+    /// 完成点晚于固定 400ms 泵——固定泵假设属 flake 台账 A6 同款；Reexpand
+    /// Suppression 族本机隔离复跑 1/6 红实证，2026-11-03）。谓词成立即返，
+    /// 超时由调用方断言以原语义消息暴露。</summary>
+    private static void WaitForLaunchAutoCollapse(MainWindowViewModel viewModel, MainWindow window)
+    {
+        PumpUntilCondition(window.Dispatcher, () => !viewModel.IsPanelExpanded);
+    }
+
+    /// <summary>等待「再进入把手后的悬停展开」完成（展开经去抖/意图定时驱动，
+    /// 冷启 testhost 与负载下完成点晚于固定 200ms 泵——同 A6 固定泵假设，
+    /// ReexpandSuppression 族隔离复跑复红实证，2026-11-03）。负向断言
+    /// （抑制期保持收起）的观测窗不动——那是刻意的时序语义。</summary>
+    private static void WaitForReentryExpand(MainWindowViewModel viewModel, MainWindow window)
+    {
+        PumpUntilCondition(window.Dispatcher, () => viewModel.IsPanelExpanded);
     }
 
     /// <summary>构造当前收起放置（直驱交接盲窗用）：与产品同一单源
@@ -633,7 +651,7 @@ public sealed partial class MainWindowInteractionTests
 
             SetCursorPos(handleCenter.X, handleCenter.Y);
             EnterCategory(window, BoardCategory.Inbox);
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            WaitForReentryExpand(viewModel, window);
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "解除后回把手悬停必须展开。");
         }
@@ -676,14 +694,14 @@ public sealed partial class MainWindowInteractionTests
             tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile));
             tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, timestamp: 3));
             SetCursorPos(40, 40);
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
+            WaitForLaunchAutoCollapse(viewModel, window);
             CompleteLayout(window);
             Assert.IsFalse(viewModel.IsPanelExpanded, "前置：启动成功后收起。");
 
             var collapsedCenter = tileWindowCenter(window);
             SetCursorPos(collapsedCenter.X, collapsedCenter.Y);
             EnterCategory(window, BoardCategory.Inbox);
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            WaitForReentryExpand(viewModel, window);
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "提交点指针在把手外＝不布防：合法首次接近直接展开。");
         }
@@ -738,7 +756,7 @@ public sealed partial class MainWindowInteractionTests
             var collapsedAgain = tileWindowCenter(window);
             SetCursorPos(collapsedAgain.X, collapsedAgain.Y);
             EnterCategory(window, BoardCategory.Inbox);
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            WaitForReentryExpand(viewModel, window);
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "热键已终止会话：自然收起后悬停正常展开（抑制不跨会话残留）。");
         }
@@ -779,7 +797,7 @@ public sealed partial class MainWindowInteractionTests
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             SetCursorPos(handleCenter.X, handleCenter.Y);
             EnterCategory(window, BoardCategory.Inbox);
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            WaitForReentryExpand(viewModel, window);
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "前置：第一次会话观测离场后恢复展开。");
 
@@ -792,7 +810,7 @@ public sealed partial class MainWindowInteractionTests
             tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile, 4000));
             tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, 4003));
             SetCursorPos(handleCenter.X, handleCenter.Y);
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
+            WaitForLaunchAutoCollapse(viewModel, window);
             CompleteLayout(window);
             Assert.IsFalse(viewModel.IsPanelExpanded, "第二次启动成功后再次收起。");
             Assert.IsTrue(panelState.IsReexpandSuppressed, "第二次提交点指针在把手内＝重布防（替换旧会话）。");
@@ -805,7 +823,7 @@ public sealed partial class MainWindowInteractionTests
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             SetCursorPos(handleCenter.X, handleCenter.Y);
             EnterCategory(window, BoardCategory.Inbox);
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            WaitForReentryExpand(viewModel, window);
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "第二次会话同样观测离场即恢复（连发启动不死锁）。");
         }
@@ -846,7 +864,7 @@ public sealed partial class MainWindowInteractionTests
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             SetCursorPos(handleCenter.X, handleCenter.Y);
             EnterCategory(window, BoardCategory.Inbox);
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            WaitForReentryExpand(viewModel, window);
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "前置：第一次会话观测离场后恢复展开。");
 
@@ -872,7 +890,7 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsNotNull(tile);
             tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonDownEvent, tile, 4000));
             tile.RaiseEvent(NewMouseButtonEventArgs(UIElement.MouseLeftButtonUpEvent, tile, 4003));
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(400));
+            WaitForLaunchAutoCollapse(viewModel, window);
             CompleteLayout(window);
             Assert.IsFalse(viewModel.IsPanelExpanded, "第二次启动成功后再次收起。");
             Assert.IsFalse(
@@ -883,7 +901,7 @@ public sealed partial class MainWindowInteractionTests
             var handleCenter2 = tileWindowCenter(window);
             SetCursorPos(handleCenter2.X, handleCenter2.Y);
             EnterCategory(window, BoardCategory.Inbox);
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            WaitForReentryExpand(viewModel, window);
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "无残留闩：第二次收起后把手悬停直接展开。");
         }
@@ -972,7 +990,7 @@ public sealed partial class MainWindowInteractionTests
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             SetCursorPos(handleCenter.X, handleCenter.Y);
             EnterCategory(window, BoardCategory.Inbox);
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+            WaitForReentryExpand(viewModel, window);
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "下一次观测到真实离场即解除，其后悬停展开。");
         }
