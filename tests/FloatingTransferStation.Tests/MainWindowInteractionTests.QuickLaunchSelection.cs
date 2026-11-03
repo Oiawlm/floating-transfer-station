@@ -288,12 +288,15 @@ public sealed partial class MainWindowInteractionTests
     {
         // Ctrl+单击语义读全局 Keyboard.Modifiers（与真实输入同源）：修饰键经
         // SendInput VK 硬件级注入（契约 #13；合成事件携带不了全局修饰态）。
+        // 修饰键须在本窗口持前台期间按下（台账 A1：前台在别处时按下的修饰键
+        // 进不了本窗口线程键态，点击即成裸单击语义）。
         var tile = FindLauncherTile(window, item);
         Assert.IsNotNull(tile);
         var center = tile.TranslatePoint(new Point(tile.ActualWidth / 2, tile.ActualHeight - 12), window);
         var screen = window.PointToScreen(center);
         SetCursorPos((int)screen.X, (int)screen.Y);
         PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(60));
+        RealInputGate.WaitForForegroundActive(window, "Ctrl 单击修饰键注入");
         HoldKeyBySendInput(window, VkControl, isDown: true);
         ClickBySendInput(window);
         HoldKeyBySendInput(window, VkControl, isDown: false);
@@ -308,6 +311,7 @@ public sealed partial class MainWindowInteractionTests
         var screen = window.PointToScreen(center);
         SetCursorPos((int)screen.X, (int)screen.Y);
         PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(60));
+        RealInputGate.WaitForForegroundActive(window, "Shift 单击修饰键注入");
         HoldKeyBySendInput(window, VkShift, isDown: true);
         ClickBySendInput(window);
         HoldKeyBySendInput(window, VkShift, isDown: false);
@@ -338,7 +342,9 @@ public sealed partial class MainWindowInteractionTests
     }
 
     /// <summary>真实点击首个瓦片把窗口带到前台（修饰键 SendInput 要求目标窗口
-    // 已是前台，CardAi 同约束）；点击点取名称带（不启动不选择，纯净前置）。</summary>
+    // 已是前台，CardAi 同约束）；点击点取名称带（不启动不选择，纯净前置）。
+    // 返回前经 RealInputGate 等前台谓词成立——固定泵不能保证异步激活已完成
+    // （台账 A1，PR #256 CI 三例键入丢失实证）。</summary>
     private static void ForegroundActivateLauncherSurface(MainWindow window)
     {
         var tile = FindLauncherTile(window, window.LaunchersForTests().Items[0]);
@@ -347,6 +353,7 @@ public sealed partial class MainWindowInteractionTests
         CompleteLayout(window);
         HoverRealAt(window, tile, new Point(tile.ActualWidth / 2, tile.ActualHeight - 12));
         ClickBySendInput(window);
+        RealInputGate.WaitForForegroundActive(window, "启动器修饰键注入");
         CompleteLayout(window);
     }
 

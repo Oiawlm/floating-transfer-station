@@ -511,6 +511,9 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsFalse(
                 catalog.Items.Any(item => item.Id == first.Id),
                 $"删除的是焦点项（remaining={string.Join(",", catalog.Items.Select(entry => entry.DisplayName))}）。");
+            // 提示条出现是异步编排：等谓词再断言（CI 负载下固定 250ms 泵后未及
+            // 显示即断言＝偶发红，台账 A6）。
+            PumpUntilCondition(window.Dispatcher, () => IsLauncherToastVisible(window));
             Assert.IsTrue(IsLauncherToastVisible(window), "删除有撤销提示条兜底（无模态）。");
 
             // 键盘 F2=改名焦点项（进入既有改名会话，无编辑模式）。
