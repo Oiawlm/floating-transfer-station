@@ -132,6 +132,74 @@ public sealed class SettingsWindowPluginTests
         }
     }
 
+    /// <summary>等待插件状态文件落盘到内容谓词成立（flake 台账 A3，2026-11-02 的
+    /// 单一事实源）。读侧必须以 FileShare.Read|Write|Delete 打开：File.ReadAllText
+    /// 的只读共享句柄会阻塞 AtomicTextWriter.File.Replace 的目标删除，写侧
+    /// IOException 被 ApplyPluginEnabledCoreAsync 捕获吞掉＝该次写入永久丢失
+    /// （CI 10-24 禁用写丢失、栈定位禁用落盘泵）。文件尚不存在＝写入未落盘，
+    /// 按未就绪继续轮询；Replace 中间态的瞬态读失败同样重试。超时消息携带现场
+    /// （文件存在性/最后内容/状态条文案）供归因，不静默红。</summary>
+    private static void WaitUntilPluginStateFile(
+        Dispatcher dispatcher,
+        string stateFile,
+        Func<string, bool> contentMatches,
+        SettingsWindow settings,
+        string stage)
+    {
+        var fileSeen = false;
+        string? lastContent = null;
+        try
+        {
+            PumpDispatcherUntil(
+                dispatcher,
+                () =>
+                {
+                    if (!File.Exists(stateFile))
+                    {
+                        return false;
+                    }
+
+                    fileSeen = true;
+                    try
+                    {
+                        using var stream = new FileStream(
+                            stateFile,
+                            FileMode.Open,
+                            FileAccess.Read,
+                            FileShare.Read | FileShare.Write | FileShare.Delete);
+                        using var reader = new StreamReader(stream);
+                        lastContent = reader.ReadToEnd();
+                        return contentMatches(lastContent);
+                    }
+                    catch (IOException)
+                    {
+                        return false;
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                        return false;
+                    }
+                });
+        }
+        catch (TimeoutException)
+        {
+            var statusText = settings.FindName("PluginStatusText") as System.Windows.Controls.TextBlock;
+            Assert.Fail(
+                $"{stage}未在五秒内落盘。DIAG fileSeen={fileSeen} " +
+                $"content={(fileSeen ? lastContent ?? "<读取未成功>" : "<文件不存在>")} " +
+                $"statusText={statusText?.Text ?? "<无>"}");
+        }
+    }
+
+    /// <summary>状态 JSON 的 enabled 数组是否含插件（与 PluginCatalog.Entries.Enabled 同源判定）。</summary>
+    private static bool PluginStateEnables(string json, string pluginId)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        return document.RootElement.TryGetProperty("enabled", out var enabled) &&
+            enabled.ValueKind == System.Text.Json.JsonValueKind.Array &&
+            enabled.EnumerateArray().Any(entry => entry.GetString() == pluginId);
+    }
+
     private static void CloseWindow(Window window)
     {
         var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -331,28 +399,19 @@ public sealed class SettingsWindowPluginTests
 
             // 改 bool → 原子持久化 + 管线重建（when 门控的规则生效）。内存值先于
             // 落盘生效（生产契约：改动即时生效、持久化异步原子），所以持久化断言
-            // 必须轮询文件内容而非仅等内存值——否则快盘上掩盖时序、慢盘（CI）上
-            // 读到不存在的文件。
+            // 必须轮询文件内容而非仅等内存值——轮询统一走 WaitUntilPluginStateFile
+            // （存在性守卫＝b88bbb3 修复的 CI 裸读竞态；非阻塞读＝防轮询句柄毁写）。
             toggles[0].IsChecked = true;
             var stateFile = AppPaths.FromDataDirectory(directory.Root).PluginStateFile;
             Assert.AreEqual(
                 "true",
                 catalog.GetActionSettingOverrides("typography-tidy", "tidy-card")["punct-to-fullwidth"]);
-            PumpDispatcherUntil(
+            WaitUntilPluginStateFile(
                 settings.Dispatcher,
-                () =>
-                {
-                    try
-                    {
-                        return File.Exists(stateFile) &&
-                            File.ReadAllText(stateFile).Contains("punct-to-fullwidth");
-                    }
-                    catch (IOException)
-                    {
-                        // 原子写经 .tmp + Replace，读取瞬间可能撞上中间态。
-                        return false;
-                    }
-                });
+                stateFile,
+                content => content.Contains("punct-to-fullwidth"),
+                settings,
+                "动作设置持久化");
 
             // 试运行按钮存在且可点（对话框逻辑由独立用例驱动）。
             var trialButton = FindDescendants<Button>(panel).Single(button =>
@@ -494,33 +553,26 @@ public sealed class SettingsWindowPluginTests
             Assert.AreEqual("好的", catalog.TextCleaner.Apply("ok"));
             SaveVisualEvidence(settings, "plugin-section-enabled.png");
 
-            // 应用立即生效、异步持久化:重载断言前必须等到状态文件可重读为启用,
-            // 否则慢盘上会读到尚未落盘的旧状态(间歇性失败两次,据此修复)。
-            var paths = AppPaths.FromDataDirectory(directory.Root);
-            PluginCatalog? persisted = null;
-            PumpDispatcherUntil(
+            // 应用立即生效、异步持久化：落盘断言经共享的 WaitUntilPluginStateFile
+            // （非阻塞读，防轮询句柄毁掉被等的写入；见其注释），禁用态同理。
+            var stateFile = AppPaths.FromDataDirectory(directory.Root).PluginStateFile;
+            WaitUntilPluginStateFile(
                 settings.Dispatcher,
-                () =>
-                {
-                    persisted = new PluginCatalog(paths, null, new AtomicTextWriter());
-                    persisted.LoadAsync().GetAwaiter().GetResult();
-                    return persisted.Entries.Single(entry => entry.Id == "demo-tidy").Enabled;
-                });
-            Assert.IsNotNull(persisted);
+                stateFile,
+                content => PluginStateEnables(content, "demo-tidy"),
+                settings,
+                "启用插件");
 
             toggle.IsChecked = false;
             PumpDispatcherUntil(
                 settings.Dispatcher,
                 () => catalog.TextCleaner.RuleCount == 0);
-            // 等待禁用状态同样落盘:避免 TestDirectory 清理与原子写临时文件并发。
-            PumpDispatcherUntil(
+            WaitUntilPluginStateFile(
                 settings.Dispatcher,
-                () =>
-                {
-                    var probe = new PluginCatalog(paths, null, new AtomicTextWriter());
-                    probe.LoadAsync().GetAwaiter().GetResult();
-                    return !probe.Entries.Single(entry => entry.Id == "demo-tidy").Enabled;
-                });
+                stateFile,
+                content => !PluginStateEnables(content, "demo-tidy"),
+                settings,
+                "禁用插件");
         }
         finally
         {
