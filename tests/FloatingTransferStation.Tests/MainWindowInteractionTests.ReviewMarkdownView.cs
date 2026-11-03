@@ -33,7 +33,7 @@ public sealed partial class MainWindowInteractionTests
             ReviewMigrationVersion = DailyReviewMigration.CurrentVersion,
             CategoryNames = WindowSettings.Default.WithCategoryName(BoardCategory.Reference, "复盘").CategoryNames
         };
-        return CreateWindow(
+        var window = CreateWindow(
             new BoardService(),
             store,
             settings,
@@ -41,6 +41,37 @@ public sealed partial class MainWindowInteractionTests
             new ImageNormalizer(store.ImagesDirectory),
             preferences: AppPreferences.Default with { ReviewMarkdownViewEnabled = enabled },
             preferencesStore: preferencesStore);
+        // 线程宿主（批次 2026-11-03 W4 取证）：MSTest 的 STA 线程不装 Dispatcher 同步
+        // 上下文（WPF 只在 Application 主线程安装；探针实测 context=null），复盘装载/
+        // 保存链 await LocalStore 后的 UI 写入依赖该上下文回分发器——小文件 IO 缓存命中
+        // 同步完成时碰巧不触发，真实异步完成时续体落线程池即跨线程崩溃。本文件用例的
+        // 日期切换链必经真实异步读，故仅在本文件用例期间安装与生产线程同语义的上下文，
+        // 关窗时恢复——全局安装会让其他用例「阻塞等待＋UI 链续体」的组合死锁（CI run
+        // 41676803302 套件 27 分钟零输出、30 分钟超时取消实证）。
+        if (!_reviewMarkdownContextInstalled)
+        {
+            if (System.Threading.SynchronizationContext.Current is null)
+            {
+                System.Threading.SynchronizationContext.SetSynchronizationContext(
+                    new System.Windows.Threading.DispatcherSynchronizationContext(window.Dispatcher));
+                _reviewMarkdownContextInstalled = true;
+            }
+        }
+
+        return window;
+    }
+
+    private static bool _reviewMarkdownContextInstalled;
+
+    /// <summary>关窗并恢复线程同步上下文（与安装点成对；早退路径不残留全局副作用）。</summary>
+    private static void CloseReviewMarkdownWindow(MainWindow window)
+    {
+        CloseReviewWindow(window);
+        if (_reviewMarkdownContextInstalled)
+        {
+            System.Threading.SynchronizationContext.SetSynchronizationContext(null);
+            _reviewMarkdownContextInstalled = false;
+        }
     }
 
     private static FlowDocumentScrollViewer GetReadingView(MainWindow window) =>
@@ -125,7 +156,7 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
-            CloseReviewWindow(window);
+            CloseReviewMarkdownWindow(window);
         }
     }
 
@@ -168,7 +199,7 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
-            CloseReviewWindow(window);
+            CloseReviewMarkdownWindow(window);
         }
     }
 
@@ -218,7 +249,7 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
-            CloseReviewWindow(window);
+            CloseReviewMarkdownWindow(window);
         }
     }
 
@@ -256,7 +287,7 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
-            CloseReviewWindow(window);
+            CloseReviewMarkdownWindow(window);
         }
     }
 
@@ -291,7 +322,7 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
-            CloseReviewWindow(window);
+            CloseReviewMarkdownWindow(window);
         }
     }
 
@@ -333,7 +364,7 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
-            CloseReviewWindow(window);
+            CloseReviewMarkdownWindow(window);
         }
     }
 
@@ -379,7 +410,7 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
-            CloseReviewWindow(window);
+            CloseReviewMarkdownWindow(window);
         }
     }
 
@@ -428,7 +459,7 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
-            CloseReviewWindow(window);
+            CloseReviewMarkdownWindow(window);
         }
     }
 
@@ -489,7 +520,7 @@ public sealed partial class MainWindowInteractionTests
             }
             finally
             {
-                CloseReviewWindow(window);
+                CloseReviewMarkdownWindow(window);
             }
         }
     }
