@@ -43,7 +43,7 @@ internal sealed class MachineAdmissionKernel
     }
 
     /// <summary>登记目录默认位置：%TEMP% 下按产品前缀（机器级测试准入状态，
-    /// PROJECT_GUIDE 临时产物分类的 %TEMP%\FloatingTransferStation\ 语义）。</summary>
+    /// 与产品运行时临时产物同走 %TEMP%\FloatingTransferStation\ 前缀口径）。</summary>
     public static string DefaultRegistrationDirectory()
         => Path.Combine(Path.GetTempPath(), "FloatingTransferStation", "ui-suite-gate");
 
