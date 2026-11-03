@@ -226,12 +226,13 @@ $globalFulls = @(
     @{ Reason = '视觉/动画基础设施（F2 §三.J KEEP-FULL×4：FadeAnimation 卡片模板约 90 处挂载→渲染真实卡片的测试全部间接；LiftAnimation＝CardRootStyle 每卡根样式悬停触发；CardEntrance 经 CollectionChanged 任何新增卡片驱动；VisualTransitions CollapseTimer_Tick＝共享 harness 与 10 文件 InvokePrivate 驱动——共享路径间接消费机制实证，R-AppStem/L2 派生不能接管）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.VisualTransitions.cs', 'src/FloatingTransferStation/Views/MainWindow.CardEntrance.cs',
         'src/FloatingTransferStation/Views/FadeAnimation.cs', 'src/FloatingTransferStation/Views/LiftAnimation.cs') },
-    @{ Reason = '共享测试设施（F2 §三.K KEEP-FULL：TestDirectory 102 文件消费 70%、tests GlobalUsings 全工程隐式 using、MIT.cs 58 partial 共享壳、双 fixture 跨族联合消费 10 文件；TestTempRoot＝两测试项目共享的仓库内临时根，TestDirectory 与七个用例根消费；RealInputGate＝真实键盘注入前台谓词（QuickLaunch/CardAi 真输入族共享，2026-11-02 W2）；UiSuiteMachineGate＝程序集级机器互斥网关（全 UI 套件 AssemblyInitialize 消费，2026-11-02 W2））'; Category = 'C5'; Globs = @(
+    @{ Reason = '共享测试设施（F2 §三.K KEEP-FULL：TestDirectory 102 文件消费 70%、tests GlobalUsings 全工程隐式 using、MIT.cs 58 partial 共享壳＋全测试类窗口组合接缝（含 harness 密封缺省，契约 #53）、双 fixture 跨族联合消费 10 文件；TestTempRoot＝两测试项目共享的仓库内临时根，TestDirectory 与七个用例根消费；RealInputGate＝真实键盘注入前台谓词（QuickLaunch/CardAi 真输入族共享，2026-11-02 W2）；UiSuiteMachineGate＝程序集级机器准入网关薄壳（全 UI 套件 AssemblyInitialize 消费，2026-11-02 W2 落地、2026-11-03 重构为薄壳）；MachineAdmissionGate＝准入网关内核与四探针（薄壳与语义测试 MachineAdmissionGateTests 消费，2026-11-03，契约 #53））'; Category = 'C5'; Globs = @(
         'tests/FloatingTransferStation.Tests/TestDirectory.cs', 'tests/FloatingTransferStation.Tests/GlobalUsings.cs',
         'tests/FloatingTransferStation.Tests/TestTempRoot.cs',
         'tests/FloatingTransferStation.Tests/FailingFirstSaveBoardStore.cs',
         'tests/FloatingTransferStation.Tests/GatedSettingsBoardStore.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.cs',
-        'tests/FloatingTransferStation.Tests/RealInputGate.cs', 'tests/FloatingTransferStation.Tests/UiSuiteMachineGate.cs') },
+        'tests/FloatingTransferStation.Tests/RealInputGate.cs', 'tests/FloatingTransferStation.Tests/UiSuiteMachineGate.cs',
+        'tests/FloatingTransferStation.Tests/MachineAdmissionGate.cs') },
     @{ Reason = '构建/测试基础设施脚本（F2 §三.L KEEP-FULL：引导、打包、卫生检查、安装/发行契约链无测试级消费面——结构性全域；显式清单，新脚本默认 L3 全量）'; Category = 'C5'; Globs = @(
         'scripts/bootstrap-dotnet.ps1', 'scripts/bootstrap-inno.ps1', 'scripts/build-release.ps1', 'scripts/check-repo-hygiene.ps1',
         'scripts/run-adversarial.ps1', 'scripts/test-bootstrap-inno-path-contract.ps1', 'scripts/test-bootstrap-tool-versions.ps1',
@@ -631,14 +632,21 @@ function Show-TestPlan($plan) {
 function Invoke-TestRun([string]$Title, [string]$Project, [string]$Filter) {
     $prefix = 'affected-' + ($Title -replace '[^A-Za-z0-9._-]', '_')
     $results = Join-Path $repoRoot 'TestResults'
-    # LogFilePrefix 使 solution 级运行的两个测试工程各写独立 TRX；运行前清理同名前缀旧文件防累积。
-    Get-ChildItem $results -Filter "$prefix*.trx" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+    # LogFilePrefix 使 solution 级运行的两个测试工程各写独立 TRX；运行前清理同名前缀旧文件
+    # 防累积。清理只删「本次运行开始时刻之前」修改的文件（契约 #53）：同检出并发跑动的另一
+    # 个套件刚写出的新 trx 不在清理面内，消灭并发互删新 trx 的窗口。
+    $runStartedUtc = [DateTime]::UtcNow
+    Get-ChildItem $results -Filter "$prefix*.trx" -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTimeUtc -lt $runStartedUtc } |
+        Remove-Item -Force -ErrorAction SilentlyContinue
     $testArgs = @('test', $Project, '-c', $Configuration, '--no-build', '--results-directory', $results, '--logger', "trx;LogFilePrefix=$prefix")
     if ($Filter) { $testArgs += @('--filter', $Filter) }
     Write-Host "运行 $Title ..."
     & $DotnetPath @testArgs | Out-Host # dotnet 输出直送控制台，不进函数返回值（保持计数纯净）
     if ($LASTEXITCODE -ne 0) { throw "$Title 失败（dotnet 退出码 $LASTEXITCODE）。" }
-    $trxFiles = @(Get-ChildItem $results -Filter "$prefix*.trx" -ErrorAction SilentlyContinue)
+    # 只统计本次运行写出（开始时刻之后落盘）的 trx——同前缀的并发新文件归并发方，不并入计数。
+    $trxFiles = @(Get-ChildItem $results -Filter "$prefix*.trx" -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTimeUtc -ge $runStartedUtc })
     if (-not $trxFiles.Count) { throw "$Title 未找到 TRX 结果（$prefix*.trx）。" }
     $total = 0; $passed = 0; $failed = 0
     foreach ($trx in $trxFiles) {

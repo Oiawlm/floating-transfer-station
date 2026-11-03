@@ -450,37 +450,19 @@ public sealed class MainWindowAutoCleanupTests
         AppPreferences? preferences = null)
     {
         var store = new FakeBoardStore(directory.Root);
-        var board = new BoardService();
-        var normalizer = new ImageNormalizer(store.ImagesDirectory);
-        var operationGate = new BoardOperationGate();
-        MainWindow? window = null;
-        void ShowStatus(string message) => window?.ShowStatus(message);
-        var clipboard = new ClipboardCaptureService(
-            new IdleClipboardReader(),
-            normalizer,
-            board,
-            store,
-            ShowStatus,
-            operationGate: operationGate);
-        window = new MainWindow(
-            board,
+        // 委托共享组合接缝（含 harness 密封缺省，契约 #53），本类只补自动清理差异件
+        //（假启动器、空闲读者、显式数据目录与偏好）。
+        return MainWindowInteractionTests.CreateWindow(
+            new BoardService(),
             store,
             WindowSettings.Default,
-            clipboard,
-            new BoardMutationService(board, store, ShowStatus, operationGate),
-            new DragPayloadService(),
-            new ExternalDropPayloadReader(new WindowsDataImageReader()),
-            new ExternalDropImportService(
-                normalizer,
-                board,
-                store,
-                ShowStatus,
-                operationGate),
+            defaultCaptureCategory: null,
+            new ImageNormalizer(store.ImagesDirectory),
+            clipboardReader: new IdleClipboardReader(),
             preferences: preferences ?? AppPreferences.Default,
             preferencesStore: preferencesStore,
             startupManager: new FakeStartupManager(),
             dataDirectory: directory.Root);
-        return window;
     }
 
     private static AppPreferences CreatePreferences(

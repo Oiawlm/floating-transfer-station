@@ -33,33 +33,16 @@ public sealed class SettingsWindowAiTests
         DeepSeekClient? deepSeekClient = null,
         PluginCatalog? pluginCatalog = null)
     {
-        var board = new BoardService();
         var store = new RecordingSettingsBoardStore(directory.Root);
-        var normalizer = new ImageNormalizer(store.ImagesDirectory);
-        var operationGate = new BoardOperationGate();
-        MainWindow? window = null;
-        void ShowStatus(string message) => window?.ShowStatus(message);
-        var clipboard = new ClipboardCaptureService(
-            new IdleClipboardReader(),
-            normalizer,
-            board,
-            store,
-            ShowStatus,
-            operationGate: operationGate);
-        window = new MainWindow(
-            board,
+        // 委托共享组合接缝（含 harness 密封缺省，契约 #53），本类只补 AI 设置差异件
+        //（密钥保护器、离线客户端、插件目录、种子偏好）。
+        return MainWindowInteractionTests.CreateWindow(
+            new BoardService(),
             store,
             WindowSettings.Default,
-            clipboard,
-            new BoardMutationService(board, store, ShowStatus, operationGate),
-            new DragPayloadService(),
-            new ExternalDropPayloadReader(new WindowsDataImageReader()),
-            new ExternalDropImportService(
-                normalizer,
-                board,
-                store,
-                ShowStatus,
-                operationGate),
+            defaultCaptureCategory: null,
+            new ImageNormalizer(store.ImagesDirectory),
+            clipboardReader: new IdleClipboardReader(),
             preferences: preferencesStore.Seeded,
             preferencesStore: preferencesStore,
             startupManager: new FakeStartupManager(),
@@ -67,7 +50,6 @@ public sealed class SettingsWindowAiTests
             pluginCatalog: pluginCatalog,
             secretProtector: secretProtector,
             deepSeekClient: deepSeekClient ?? new DeepSeekClient(new StubHttpMessageHandler()));
-        return window;
     }
 
     private static SettingsWindow OpenSettings(MainWindow window)

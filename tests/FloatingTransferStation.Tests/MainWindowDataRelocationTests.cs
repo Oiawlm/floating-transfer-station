@@ -99,39 +99,27 @@ public sealed class MainWindowDataRelocationTests
     {
         var paths = AppPaths.ForTests(sourceDataDirectory);
         var store = new LocalStore(paths, new AtomicTextWriter());
-        var board = new BoardService();
         var operationGate = new BoardOperationGate();
-        MainWindow? window = null;
-        void ShowStatus(string message) => window?.ShowStatus(message);
         var changeService = new DataDirectoryChangeService(
             new DataDirectoryRelocator(),
             registration,
             new AtomicTextWriter(),
             static () => @"C:\fts-test-app.exe",
             _ => spawnSucceeds);
-        var clipboard = new ClipboardCaptureService(
-            reader,
-            new ImageNormalizer(store.ImagesDirectory),
-            board,
-            store,
-            ShowStatus,
-            operationGate: operationGate);
-        window = new MainWindow(
-            board,
+        gate = operationGate;
+        // 委托共享组合接缝（含 harness 密封缺省，契约 #53），本类只补搬迁差异件
+        //（显式数据目录、共享操作门、搬迁服务）。
+        return MainWindowInteractionTests.CreateWindow(
+            new BoardService(),
             store,
             WindowSettings.Default,
-            clipboard,
-            new BoardMutationService(board, store, ShowStatus, operationGate),
-            new DragPayloadService(),
-            new ExternalDropPayloadReader(new WindowsDataImageReader()),
-            new ExternalDropImportService(
-                new ImageNormalizer(store.ImagesDirectory), board, store, ShowStatus, operationGate),
-            preferencesStore: preferencesStore is null ? null : preferencesStore,
+            defaultCaptureCategory: null,
+            new ImageNormalizer(store.ImagesDirectory),
+            clipboardReader: reader,
+            preferencesStore: preferencesStore,
             dataDirectory: sourceDataDirectory,
             operationGate: operationGate,
             dataDirectoryChangeService: changeService);
-        gate = operationGate;
-        return window;
     }
 
     private string CreateManagedSource()
