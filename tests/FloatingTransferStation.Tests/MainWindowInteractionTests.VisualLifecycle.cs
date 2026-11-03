@@ -2226,7 +2226,7 @@ public sealed partial class MainWindowInteractionTests
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(240));
             CompleteLayout(window);
 
-            Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);
+            DpiGeometryAssert.AreEqual(WindowSettings.TabWidth, window.Width, window, PixelQuantization.Single, "收起交接完成后宽＝标签宽。");
             Assert.AreEqual(1d, shell.Opacity);
             Assert.IsTrue(shell.IsHitTestVisible);
             Assert.IsFalse(viewModel.IsPanelExpanded);
