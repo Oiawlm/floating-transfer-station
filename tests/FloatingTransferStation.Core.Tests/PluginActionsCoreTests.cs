@@ -346,15 +346,20 @@ public sealed class PluginActionsCoreTests
     public void Pipeline_OutputBudgetFailureAbortsWholeBatch()
     {
         var catalog = CreateCatalog();
-        // 复制扩张规则：a → aa（每轮翻倍），把 2000 字符复制到 64k（> 单卡输出上限 50k）。
-        var rules = string.Join(",", Enumerable.Repeat(RuleJson("a", "aa"), 5));
+        // 输出超限用最省算力的路径触发（flake 台账 A4，2026-11-02）：此前用 5 轮
+        // a→aa 复制扩张（2000→64000 字符），但管线在输出上限检查之前还有两条按
+        // 时长判定的中止路径（单规则 100ms 超时、全程 2000ms 预算），CI 负载/JIT
+        // 下先触发即返回「超时/预算」而非「输出上限」（CI 三次红＋本机满载 1/8
+        // 红、复跑绿）。改为单条规则把 100 个 a 各替换为 512 个 b（=51,200 字符）
+        // 一次越过上限：断言语义（输出超限→整批失败＋可读原因）不变，触发路径
+        // 与时长预算解耦——被测的是输出预算不是机器速度。
         WritePlugin(Path.Combine(UserPluginsDirectory, "typography-tidy"),
-            TextActionsManifestJson($"[{ActionJson(rules: $"[{rules}]")}]"));
+            TextActionsManifestJson($"[{ActionJson(rules: $"[{RuleJson("a", new string('b', 512))}]")}]"));
         catalog.LoadAsync().Wait();
         catalog.SetEnabledAsync("typography-tidy", true).Wait();
 
         var result = catalog.EnabledActions.Single().Pipeline.Apply(
-            [new PluginActionCardInput(Guid.NewGuid(), new string('a', 2000))]);
+            [new PluginActionCardInput(Guid.NewGuid(), new string('a', 100))]);
 
         Assert.IsFalse(result.IsSuccess);
         Assert.IsTrue(result.FailureReason!.Contains("输出上限"), result.FailureReason);

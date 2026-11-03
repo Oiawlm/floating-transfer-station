@@ -1074,6 +1074,7 @@ public sealed partial class MainWindowInteractionTests
 
     private const int WmLeftButtonDown = 0x0201;
     private const int WmLeftButtonUp = 0x0202;
+    private const int WmMousemove = 0x0200;
     private const int MkLbutton = 0x0001;
 
     /// <summary>
@@ -1206,11 +1207,20 @@ public sealed partial class MainWindowInteractionTests
         // 全量批跑中上一测试恢复的光标位置可能与本测试点击点重合（窗口都在
         // 同一贴边位置生成），悬停/抬起的瞬时未命中（窗口贴边重排、淡入时钟
         // 与消息到达的先后抖动）用一次完整重试吸收——重试重新预热位移、重新
-        // 悬停再投递按下/抬起，连续两次都无 Up 事件才判失败。
+        // 悬停再投递按下/抬起，连续两次都无 Up 事件才判失败。悬停等待超时
+        // （PumpUntilMouseOver 的 5s TimeoutException）与 HoverRealAt 既有序次
+        // 同法并入重试（台账 A5 残余实证：满载下 MouseEnter 偶发迟到，重试恢复）。
         MouseButtonEventArgs? upArgs = null;
         for (var attempt = 0; attempt < 2 && upArgs is null; attempt++)
         {
-            upArgs = ClickRealAtOnce(window, container, positionInContainer, hoverSettleMilliseconds);
+            try
+            {
+                upArgs = ClickRealAtOnce(window, container, positionInContainer, hoverSettleMilliseconds);
+            }
+            catch (TimeoutException) when (attempt == 0)
+            {
+                // 首轮悬停未达：重试整段（强制位移预热＋悬停＋投递）。
+            }
         }
 
         // 路由同步完成后 Handled 已定型：手势层的 Up 处理器对命中卡片置 true，

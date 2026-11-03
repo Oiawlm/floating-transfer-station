@@ -90,13 +90,16 @@ public sealed partial class MainWindowInteractionTests
     /// <summary>进入就地改名：真实单击名称带（SendInput 硬件级，窗口随之成为前台，
     /// 名称带单击不启动不选择）＋键盘 F2 进入既有改名会话；后续键入旅程保持
     /// SendInput（1.49.1 Explicit 绑定键入断链的端到端守护）。点击点取名称带中心
-    /// （瓦片底部内边距上方；瓦片几何中心在图标启动区，单击会启动）。</summary>
+    /// （瓦片底部内边距上方；瓦片几何中心在图标启动区，单击会启动）。
+    /// 键入前经 RealInputGate 等前台谓词：前台激活异步完成，固定泵下先注入会把
+    /// 键入送进别处（PR #256 CI 三例实证，台账 A1）。</summary>
     private static TextBox BeginRenameByRealDoubleClick(MainWindow window, Border tile, string expectedPrefill)
     {
         window.Topmost = true;
         CompleteLayout(window);
         HoverRealAt(window, tile, new Point(tile.ActualWidth / 2, tile.ActualHeight - 12));
         ClickBySendInput(window);
+        RealInputGate.WaitForForegroundActive(window, "瓦片改名真实键入");
         CompleteLayout(window);
         window.RaiseEvent(NewKeyEventArgs(window, Key.F2));
         CompleteLayout(window);

@@ -35,6 +35,46 @@ public sealed partial class MainWindowInteractionTests
             container);
     }
 
+    /// <summary>容器坐标系内的一点当前是否命中指定操作钮本体（含其子视觉）——
+    /// 真实按下前的确定性前置（flake 台账 A5）：注入的按下消息由 WPF 按「输入
+    /// 命中测试」解析路由源（尊重 IsHitTestVisible/IsEnabled，淡入揭示未完成时
+    /// 按钮不可命中而几何命中已通过——VisualTreeHelper.HitTest 不等价）；路由源
+    /// 不是按钮时 zone 落操作条空区（Operations），滑离抬键即被「右半未成拖拽
+    /// 单击＝复制」误分发。故谓词用 window.InputHitTest（与输入路由同源）。</summary>
+    private static bool ContainerPointHitsOperationButton(
+        MainWindow window,
+        ListBoxItem container,
+        Point positionInContainer,
+        string commandParameter)
+    {
+        var button = CardOperationButton(container, commandParameter);
+        if (!button.IsHitTestVisible || !button.IsEnabled)
+        {
+            return false;
+        }
+
+        var pointInWindow = container.TransformToAncestor(window).Transform(positionInContainer);
+        return window.InputHitTest(pointInWindow) is DependencyObject hit &&
+            button.IsAncestorOf(hit);
+    }
+
+    /// <summary>产品的最近卡片点击痕迹（zone/时间戳/点位）——误分发归因用
+    /// （痕迹只在 Content/Operations 区记录且 reset 不清空，见 CardClickTrace）。</summary>
+    private static string DescribeLastCardClick(MainWindow window)
+    {
+        var trace = GetPrivateField<object?>(window, "_lastCardClick");
+        if (trace is null)
+        {
+            return "<null>";
+        }
+
+        var type = trace.GetType();
+        var zone = type.GetProperty("Zone")?.GetValue(trace);
+        var timestamp = type.GetProperty("Timestamp")?.GetValue(trace);
+        var position = type.GetProperty("Position")?.GetValue(trace);
+        return $"zone={zone} ts={timestamp} pos={position}";
+    }
+
     /// <summary>真实光标悬停到容器坐标系指定点并等待淡入完成（不点击）。
     /// settle 取 300ms：淡入 120ms 完成后留余量，又不进入 ~400ms 的工具提示
     /// 初显窗口（实测工具提示开启会让悬停态闪断、按钮命中瞬间失效）。
@@ -463,6 +503,14 @@ public sealed partial class MainWindowInteractionTests
         try
         {
             window.Show();
+            // 压制工具提示（flake 台账 A5 根因，2026-11-02）：本用例的按压旅程
+            // 需要悬停驻留（HoverRealUntil＋命中前置验证），满载下旅程拉伸超过
+            // 提示初显窗口（~400ms）——提示 Popup 开启会闪断操作钮命中（按下落
+            // 进操作条空区＝zone 误判 Operations）并吞掉滑离位移（阈值不越过，
+            // 抬键被判「未成拖拽的右半单击」→误复制；HoverRealAt 注释对「提示
+            // 开启让按钮命中瞬间失效」早有实证）。工具提示与本用例语义无关，
+            // InitialShowDelay=MaxValue 使其在测试窗口内确定性不开启。
+            window.SetValue(ToolTipService.InitialShowDelayProperty, int.MaxValue);
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var container = ContainerOf(window, item);
@@ -474,23 +522,79 @@ public sealed partial class MainWindowInteractionTests
             try
             {
                 // 真实输入：按住删除钮后滑离卡片抬键——按钮常规语义取消意图。
+                // 两个确定性前置（flake 台账 A5，2026-11-02；本机满载 2/3 复现
+                // 「操作条内右键不得复制」与 CI 三次同族红同签名）：
+                // ①按下点必须命中删除钮本体——按钮淡入/重排未落定时
+                //   ButtonCenterIn 的计算点可能落在操作条空区（命中区=
+                //   Operations 而非 OperationsDelete），随后抬键即被
+                //   「右半未成拖拽单击＝复制」误分发；
+                // ②滑离位移必须已被 WPF 输入管线观察到——固定 80ms 泵在负载下
+                //   可能没消化 WM_MOUSEMOVE，抬键被当成就地点击（未成拖拽）。
                 HoverRealUntil(
                     window,
                     container,
                     deletePoint,
                     () => container.IsMouseOver);
+                var deleteHitVerified = false;
+                for (var attempt = 0; attempt < 3 && !deleteHitVerified; attempt++)
+                {
+                    deletePoint = ButtonCenterIn(container, CardGestureZones.DeleteCardCommand);
+                    deleteHitVerified = ContainerPointHitsOperationButton(
+                        window, container, deletePoint, CardGestureZones.DeleteCardCommand);
+                    if (!deleteHitVerified)
+                    {
+                        CompleteLayout(window);
+                    }
+                }
+
+                Assert.IsTrue(
+                    deleteHitVerified,
+                    $"前置：删除钮按下点必须命中钮本体（zone 误判 Operations 会让滑离抬键走复制误分发）。" +
+                    $"DIAG point={deletePoint:0.#} buttonRect={new Rect(CardOperationButton(container, CardGestureZones.DeleteCardCommand).TranslatePoint(new Point(), container), new Size(CardOperationButton(container, CardGestureZones.DeleteCardCommand).ActualWidth, CardOperationButton(container, CardGestureZones.DeleteCardCommand).ActualHeight))}");
                 var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
                 var downScreen = container.PointToScreen(deletePoint);
                 var downClient = new NativePoint((int)Math.Round(downScreen.X), (int)Math.Round(downScreen.Y));
                 Assert.IsTrue(ScreenToClient(hwnd, ref downClient), "屏幕点到客户区换算必须成功。");
-                var awayScreen = container.PointToScreen(new Point(24, container.ActualHeight / 2));
+                var awayPoint = new Point(24, container.ActualHeight / 2);
+                var awayScreen = container.PointToScreen(awayPoint);
                 Assert.IsTrue(
                     PostMessage(hwnd, WmLeftButtonDown, MkLbutton, MakeLParam(downClient.X, downClient.Y)),
                     "投递删除按下消息失败。");
+                // 滑离位移投递携带 MK_LBUTTON 的 WM_MOUSEMOVE（flake 台账 A5 根因
+                // 修正，2026-11-02）：物理输入里「按住期间的移动」必带键态；此前
+                // 用 SetCursorPos 生成的位移 wParam 无键态（左键＝Released），产品
+                // 的移动处理按无键位移重评估悬停/揭示，满载下揭示状态机掉出→
+                // 按钮不可命中→抬键的命中源落到操作条空区（zone=Operations）→
+                // 「未成拖拽的右半单击」误复制（DIAG deleteBtnHitNow=False 实证）。
+                // 物理光标仍移到滑离点（后续右键旅程的落位），消息补键态。
+                var awayClientEarly = new NativePoint((int)Math.Round(awayScreen.X), (int)Math.Round(awayScreen.Y));
+                Assert.IsTrue(ScreenToClient(hwnd, ref awayClientEarly), "滑离点客户区换算必须成功。");
                 Assert.IsTrue(
                     SetCursorPos((int)Math.Round(awayScreen.X), (int)Math.Round(awayScreen.Y)),
                     "真实光标必须可滑离。");
-                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(80));
+                Assert.IsTrue(
+                    PostMessage(hwnd, WmMousemove, MkLbutton, MakeLParam(awayClientEarly.X, awayClientEarly.Y)),
+                    "投递滑离位移消息失败。");
+                // 等位移已被观察到（WPF 鼠标位置到达滑离点）再投递抬键：
+                var awayInWindow = container.TransformToAncestor(window).Transform(awayPoint);
+                var awayObserved = false;
+                var observedDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+                while (!awayObserved && DateTime.UtcNow < observedDeadline)
+                {
+                    var mouseInWindow = Mouse.GetPosition(window);
+                    awayObserved =
+                        Math.Abs(mouseInWindow.X - awayInWindow.X) < 2 &&
+                        Math.Abs(mouseInWindow.Y - awayInWindow.Y) < 2;
+                    if (!awayObserved)
+                    {
+                        PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+                    }
+                }
+
+                Assert.IsTrue(
+                    awayObserved,
+                    $"前置：滑离位移必须已被输入管线观察到（否则抬键被当就地点击＝未成拖拽分发）。" +
+                    $"DIAG mouse={Mouse.GetPosition(window):0.#} expect={awayInWindow:0.#}");
                 MouseButtonEventArgs? upArgs = null;
                 var upSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 MouseButtonEventHandler onUp = (_, e) =>
@@ -520,9 +624,18 @@ public sealed partial class MainWindowInteractionTests
                     "按住删除钮滑离释放必须取消删除意图。");
 
                 // 操作条内（删除钮正上方）右键＝toggle 选择（手势交换，Issue #216）：
-                // 不复制、不删除、不改既有选择之外的状态。
+                // 不复制、不删除、不改既有选择之外的状态。delivered 若非 null，
+                // DIAG 携带手势会话现场（zone/拖拽态/修饰键）供归因（台账 A5 的
+                // 残余观测项：修复后满载 47 轮 1 红未存日志，复现时凭此定位）。
                 ClickRealRightAt(window, container, deletePoint);
-                Assert.IsNull(delivered, "操作条内右键不得复制。");
+                Assert.IsNull(
+                    delivered,
+                    "操作条内右键不得复制。" +
+                    $"DIAG pressZone={GetPrivateField<object>(window, "_pressZone")} " +
+                    $"dragThresholdCrossed={GetPrivateField<bool>(window, "_dragThresholdCrossed")} " +
+                    $"modifiers={Keyboard.Modifiers} " +
+                    $"deleteBtnHitNow={ContainerPointHitsOperationButton(window, container, deletePoint, CardGestureZones.DeleteCardCommand)} " +
+                    $"lastClick={DescribeLastCardClick(window)}");
                 Assert.IsTrue(
                     board.Items(BoardCategory.Inbox).Any(candidate => candidate.Id == item.Id),
                     "右键选择不得删除卡片。");

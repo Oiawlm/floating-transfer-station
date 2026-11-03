@@ -887,10 +887,20 @@ public sealed partial class MainWindowInteractionTests
     {
         // 与 ClickRealAt 同因：批跑中光标位置重合/悬停抖动会让投递被
         // Spurious mouse event 防护丢弃，重试一轮；连续两轮都无 Up 才判失败。
+        // 悬停等待超时（PumpUntilMouseOver）同样是瞬时未命中的一种——与
+        // HoverRealAt 的既有序次同法并入重试（台账 A5 残余：满载下悬停
+        // MouseEnter 偶发 5s 未达，重试即恢复；两轮仍失败才暴露）。
         MouseButtonEventArgs? upArgs = null;
         for (var attempt = 0; attempt < 2 && upArgs is null; attempt++)
         {
-            upArgs = ClickRealRightAtOnce(window, container, positionInContainer);
+            try
+            {
+                upArgs = ClickRealRightAtOnce(window, container, positionInContainer);
+            }
+            catch (TimeoutException) when (attempt == 0)
+            {
+                // 首轮悬停未达：重试整段（强制位移预热＋悬停＋投递）。
+            }
         }
 
         Assert.IsNotNull(upArgs, "真实右键必须到达右键预览抬起处理器。");

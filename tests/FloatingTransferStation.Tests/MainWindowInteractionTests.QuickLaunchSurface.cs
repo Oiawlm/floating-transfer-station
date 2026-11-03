@@ -1430,8 +1430,10 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(0, starter.Started.Count, "取消选择的 Space 不得顺带启动。");
 
             // Delete=删除焦点项（#30 修订：原「查看态 Delete 无操作」废止；带撤销）。
+            // 提示条出现是异步编排：等谓词而非固定 600ms 泵（CI 负载下未及显示即
+            // 断言＝偶发红，台账 A6）。
             window.RaiseEvent(NewKeyEventArgs(window, Key.Delete));
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(600));
+            PumpUntilCondition(window.Dispatcher, () => IsLauncherToastVisible(window));
             CompleteLayout(window);
 
             Assert.AreEqual(1, window.LaunchersForTests().Items.Count, "Delete 删除焦点项。");
