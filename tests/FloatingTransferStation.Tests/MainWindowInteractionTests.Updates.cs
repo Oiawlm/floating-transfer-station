@@ -49,6 +49,18 @@ public sealed partial class MainWindowInteractionTests
         PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
     }
 
+    /// <summary>等待状态条出现期望文案（点击后的 async void 续体经固定 300ms 泵
+    /// 存在竞态——CI 2026-11-03 红实证：下载失败续体晚于泵窗，断言读到检查期
+    /// 旧文案。谓词等待消除竞态；超时由调用方断言以原语义消息暴露）。</summary>
+    private static void WaitForStatusText(MainWindow window, string expected)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (StatusTextOf(window) != expected && DateTime.UtcNow < deadline)
+        {
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+        }
+    }
+
     private static void ClickUpdateButton(MainWindow window)
     {
         // 在 Dispatcher 上触发 async void 点击处理器：测试宿主线程没有 WPF 同步
@@ -219,6 +231,7 @@ public sealed partial class MainWindowInteractionTests
 
             ClickUpdateButton(window);
 
+            WaitForStatusText(window, "检查更新失败：请求过于频繁，请稍后再试。");
             Assert.AreEqual(
                 "检查更新失败：请求过于频繁，请稍后再试。",
                 StatusTextOf(window),
@@ -324,6 +337,7 @@ public sealed partial class MainWindowInteractionTests
             RunScheduledCheck(window);
             ClickUpdateButton(window);
 
+            WaitForStatusText(window, "更新包校验失败，已放弃安装。");
             Assert.AreEqual(
                 "更新包校验失败，已放弃安装。",
                 StatusTextOf(window),
