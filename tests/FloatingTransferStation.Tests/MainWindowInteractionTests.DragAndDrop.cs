@@ -166,16 +166,18 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(Visibility.Visible, rail.Visibility);
             Assert.AreNotEqual(Visibility.Visible, collapsedHandle.Visibility);
             Assert.AreNotEqual(Visibility.Visible, panel.Visibility);
-            Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);
-            Assert.AreEqual(WindowSettings.Default.WindowHeight, window.Height, 0.5);
-            Assert.AreEqual(
+            DpiGeometryAssert.AreEqual(WindowSettings.TabWidth, window.Width, window, PixelQuantization.Single, "轨道态窗口宽＝标签宽。");
+            DpiGeometryAssert.AreEqual(WindowSettings.Default.WindowHeight, window.Height, window, PixelQuantization.Single, "轨道态窗口高。");
+            DpiGeometryAssert.AreEqual(
                 SystemParameters.WorkArea.Top + WindowSettings.Default.Top,
                 window.Top,
-                0.5);
-            Assert.AreEqual(collapsedBounds.X, railBounds.X, 0.5);
-            Assert.AreEqual(collapsedBounds.Y, railBounds.Y, 0.5);
-            Assert.AreEqual(collapsedBounds.Width, railBounds.Width, 0.5);
-            Assert.AreEqual(collapsedBounds.Height, railBounds.Height, 0.5);
+                window,
+                PixelQuantization.Single,
+                "轨道态窗口顶＝工作区顶＋默认偏移。");
+            DpiGeometryAssert.AreEqualScreen(collapsedBounds.X, railBounds.X, PixelQuantization.ScreenPair, "进入轨道后默认标签屏幕 X 恒定。");
+            DpiGeometryAssert.AreEqualScreen(collapsedBounds.Y, railBounds.Y, PixelQuantization.ScreenPair, "进入轨道后默认标签屏幕 Y 恒定。");
+            DpiGeometryAssert.AreEqual(collapsedBounds.Width, railBounds.Width, window, PixelQuantization.Pair, "进入轨道后默认标签宽恒定（两次独立测量）。");
+            DpiGeometryAssert.AreEqual(collapsedBounds.Height, railBounds.Height, window, PixelQuantization.Pair, "进入轨道后默认标签高恒定（两次独立测量）。");
             Assert.AreSame(
                 viewModel.DefaultCapturePanel,
                 viewModel.Categories.Single(category => category.IsDropTarget));
@@ -222,7 +224,7 @@ public sealed partial class MainWindowInteractionTests
                 current.RaiseEvent(NewDragEventArgs(data, DragDrop.DragLeaveEvent, current));
 
                 Assert.IsTrue(viewModel.IsExternalDropRailVisible);
-                Assert.AreEqual(WindowSettings.Default.WindowHeight, window.Height, 0.5);
+                DpiGeometryAssert.AreEqual(WindowSettings.Default.WindowHeight, window.Height, window, PixelQuantization.Single, "轨道态窗口高（跨标签迁移中保持）。");
                 // 契约 #51：标签高亮的撤离清理由保持窗复核承接（同步断言点后移到
                 // 输入通道排空之后）；轨道本身的跨标签和解仍是输入优先级延迟复核。
                 CompleteLayout(window);
@@ -263,12 +265,14 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsFalse(viewModel.IsExternalDropRailVisible);
             Assert.IsFalse(viewModel.Categories.Any(category => category.IsDropTarget));
             Assert.AreEqual(Visibility.Visible, collapsedHandle.Visibility);
-            Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);
-            Assert.AreEqual(rowHeight, window.Height, 0.5);
-            Assert.AreEqual(
+            DpiGeometryAssert.AreEqual(WindowSettings.TabWidth, window.Width, window, PixelQuantization.Single, "轨道回落收起宽。");
+            DpiGeometryAssert.AreEqual(rowHeight, window.Height, window, PixelQuantization.Single, "轨道回落收起高＝单行高。");
+            DpiGeometryAssert.AreEqual(
                 SystemParameters.WorkArea.Top + WindowSettings.Default.Top + (3 * rowHeight),
                 window.Top,
-                0.5);
+                window,
+                PixelQuantization.Single,
+                "轨道回落收起顶＝工作区顶＋默认偏移＋行偏移。");
         }
         finally
         {
@@ -310,7 +314,7 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(DragDropEffects.None, gapEnter.Effects);
             Assert.IsFalse(viewModel.Categories.Any(category => category.IsDropTarget));
             Assert.IsFalse(viewModel.IsPanelExpanded);
-            Assert.AreEqual(WindowSettings.Default.WindowHeight, window.Height, 0.5);
+            DpiGeometryAssert.AreEqual(WindowSettings.Default.WindowHeight, window.Height, window, PixelQuantization.Single, "轨道态窗口高（间隙保持）。");
 
             var gapLeave = NewDragEventArgs(data, DragDrop.DragLeaveEvent, gapSurface);
             gapSurface.RaiseEvent(gapLeave);
@@ -318,10 +322,12 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.IsTrue(gapLeave.Handled);
             Assert.IsFalse(viewModel.IsExternalDropRailVisible);
-            Assert.AreEqual(
+            DpiGeometryAssert.AreEqual(
                 WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count,
                 window.Height,
-                0.5);
+                window,
+                PixelQuantization.Single,
+                "间隙离开回落收起高＝单行高。");
         }
         finally
         {
@@ -362,7 +368,7 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(DragDropEffects.None, gapEnter.Effects);
             Assert.IsFalse(viewModel.IsExternalDropRailVisible);
             Assert.IsTrue(viewModel.IsPanelExpanded);
-            Assert.AreEqual(expandedWidth, window.Width, 0.5);
+            DpiGeometryAssert.AreEqual(expandedWidth, window.Width, window, PixelQuantization.Pair, "内部拖入不改变展开宽（两次独立测量）。");
 
             var target = viewModel.Categories.Single(
                 category => category.Category == BoardCategory.CustomerOriginal);
@@ -418,11 +424,13 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsFalse(viewModel.Categories.Any(category => category.IsDropTarget));
             Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
             Assert.AreEqual(0, store.SaveCount);
-            Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);
-            Assert.AreEqual(
+            DpiGeometryAssert.AreEqual(WindowSettings.TabWidth, window.Width, window, PixelQuantization.Single, "拒绝后回落收起宽。");
+            DpiGeometryAssert.AreEqual(
                 WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count,
                 window.Height,
-                0.5);
+                window,
+                PixelQuantization.Single,
+                "拒绝后回落收起高＝单行高。");
         }
         finally
         {
@@ -494,8 +502,8 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.IsTrue(viewModel.IsExternalDropRailVisible);
             Assert.IsFalse(viewModel.IsPanelExpanded);
-            Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);
-            Assert.AreEqual(WindowSettings.Default.WindowHeight, window.Height, 0.5);
+            DpiGeometryAssert.AreEqual(WindowSettings.TabWidth, window.Width, window, PixelQuantization.Single, "收起宽＝标签宽。");
+            DpiGeometryAssert.AreEqual(WindowSettings.Default.WindowHeight, window.Height, window, PixelQuantization.Single, "轨道高。");
             Assert.IsNull(viewModel.ActivePanel);
         }
         finally
@@ -528,10 +536,12 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.AreEqual(DragDropEffects.None, unsupported.Effects);
             Assert.IsFalse(viewModel.IsExternalDropRailVisible);
-            Assert.AreEqual(
+            DpiGeometryAssert.AreEqual(
                 WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count,
                 window.Height,
-                0.5);
+                window,
+                PixelQuantization.Single,
+                "不支持载荷保持收起高＝单行高。");
 
             var internalDrag = NewDragEventArgs(
                 new DragPayloadService().Build(item),
@@ -614,10 +624,12 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(DragDropEffects.None, dragEnter.Effects);
             Assert.IsTrue(dragEnter.Handled);
             Assert.IsFalse(viewModel.IsExternalDropRailVisible);
-            Assert.AreEqual(
+            DpiGeometryAssert.AreEqual(
                 WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count,
                 window.Height,
-                0.5);
+                window,
+                PixelQuantization.Single,
+                "内部载荷保持收起高＝单行高。");
         }
         finally
         {
@@ -661,10 +673,12 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
             Assert.IsFalse(viewModel.IsExternalDropRailVisible);
             Assert.IsFalse(viewModel.IsPanelExpanded);
-            Assert.AreEqual(
+            DpiGeometryAssert.AreEqual(
                 WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count,
                 window.Height,
-                0.5);
+                window,
+                PixelQuantization.Single,
+                "提示词槽位收起高＝单行高。");
         }
         finally
         {
@@ -825,11 +839,13 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsFalse(overlay.IsVisible);
             Assert.AreEqual("拖入内容未保存，请重试。", viewModel.StatusText);
             Assert.IsFalse(viewModel.IsExternalDropRailVisible);
-            Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);
-            Assert.AreEqual(
+            DpiGeometryAssert.AreEqual(WindowSettings.TabWidth, window.Width, window, PixelQuantization.Single, "导入失败回落收起宽。");
+            DpiGeometryAssert.AreEqual(
                 WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count,
                 window.Height,
-                0.5);
+                window,
+                PixelQuantization.Single,
+                "导入失败回落收起高＝单行高。");
             Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count);
 
             InvokePrivate(window, "StatusTimer_Tick", null, EventArgs.Empty);
@@ -881,10 +897,12 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsFalse(viewModel.Categories.Any(category => category.IsDropTarget));
             Assert.AreEqual(0, store.SaveCount);
             Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count);
-            Assert.AreEqual(
+            DpiGeometryAssert.AreEqual(
                 WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count,
                 window.Height,
-                0.5);
+                window,
+                PixelQuantization.Single,
+                "取消导入后收起高＝单行高。");
         }
         finally
         {

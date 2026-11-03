@@ -507,10 +507,10 @@ public sealed partial class MainWindowInteractionTests
             var workArea = SystemParameters.WorkArea;
             var expected = customSettings.ResetToDefault(workArea.Width, workArea.Height);
             var viewModel = (MainWindowViewModel)window.DataContext;
-            Assert.AreEqual(expected.PanelWidth + WindowSettings.TabWidth, window.Width, 0.5);
-            Assert.AreEqual(expected.WindowHeight, window.Height, 0.5);
-            Assert.AreEqual(workArea.Top + expected.Top, window.Top, 0.5);
-            Assert.AreEqual(workArea.Right - window.Width, window.Left, 0.5);
+            DpiGeometryAssert.AreEqual(expected.PanelWidth + WindowSettings.TabWidth, window.Width, window, PixelQuantization.Single, "重置后展开宽。");
+            DpiGeometryAssert.AreEqual(expected.WindowHeight, window.Height, window, PixelQuantization.Single, "重置后窗口高。");
+            DpiGeometryAssert.AreEqual(workArea.Top + expected.Top, window.Top, window, PixelQuantization.Single, "重置后窗口顶。");
+            DpiGeometryAssert.AreEqual(workArea.Right - window.Width, window.Left, window, PixelQuantization.Pair, "重置后右缘贴齐工作区右缘（期望含实测宽，两次量化）。");
             Assert.AreEqual(BoardCategory.Prompt, viewModel.ActivePanel!.Category);
             Assert.AreSame(prompt, board.Items(BoardCategory.Prompt).Single());
             Assert.AreEqual(87d, scrollState.GetClamped(BoardCategory.Prompt, 1000d));
@@ -614,8 +614,8 @@ public sealed partial class MainWindowInteractionTests
             var expectedTop = SystemParameters.WorkArea.Top + WindowSettings.Default.Top + (3 * rowHeight);
             var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
 
-            Assert.AreEqual(rowHeight, window.Height, 0.5);
-            Assert.AreEqual(expectedTop, window.Top, 0.5);
+            DpiGeometryAssert.AreEqual(rowHeight, window.Height, window, PixelQuantization.Single, "收起高＝单行高。");
+            DpiGeometryAssert.AreEqual(expectedTop, window.Top, window, PixelQuantization.Single, "收起顶＝工作区顶＋默认偏移＋行偏移。");
             Assert.IsTrue(GetWindowRect(handle, out var collapsedBounds));
 
             for (var row = 0; row < 3; row++)
@@ -674,7 +674,7 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(Visibility.Visible, rail.Visibility);
             Assert.IsTrue(viewModel.IsPanelExpanded);
             Assert.AreEqual(1, viewModel.Categories.Count(category => category.IsActive));
-            Assert.AreEqual(WindowSettings.Default.WindowHeight, window.Height, 0.5);
+            DpiGeometryAssert.AreEqual(WindowSettings.Default.WindowHeight, window.Height, window, PixelQuantization.Single, "展开高＝窗口高。");
         }
         finally
         {
@@ -818,8 +818,8 @@ public sealed partial class MainWindowInteractionTests
 
             var rowHeight = WindowSettings.Default.WindowHeight / BoardCategoryCatalog.Ordered.Count;
             var expectedTop = SystemParameters.WorkArea.Top + WindowSettings.Default.Top;
-            Assert.AreEqual(expectedTop, window.Top, 0.5);
-            Assert.AreEqual(rowHeight, window.Height, 0.5);
+            DpiGeometryAssert.AreEqual(expectedTop, window.Top, window, PixelQuantization.Single, "换默认分类后收起顶。");
+            DpiGeometryAssert.AreEqual(rowHeight, window.Height, window, PixelQuantization.Single, "换默认分类后收起高＝单行高。");
             Assert.AreEqual(BoardCategory.CustomerOriginal, viewModel.DefaultCapturePanel.Category);
         }
         finally
@@ -1802,7 +1802,7 @@ public sealed partial class MainWindowInteractionTests
             tab.RaiseEvent(NewMouseEventArgs(Mouse.MouseLeaveEvent, tab));
             InvokePrivate(window, "ExpandIntentTimer_Tick", null, EventArgs.Empty);
 
-            Assert.AreEqual(WindowSettings.TabWidth, window.Width);
+            DpiGeometryAssert.AreEqual(WindowSettings.TabWidth, window.Width, window, PixelQuantization.Single, "意图未提交：窗口保持收起宽。");
             Assert.IsNull(viewModel.ActivePanel);
         }
         finally
@@ -1861,10 +1861,10 @@ public sealed partial class MainWindowInteractionTests
 
             var expandedDefaultTab = FindCategoryTab(window, viewModel.DefaultCapturePanel);
             var expandedDefaultBounds = ScreenBounds(expandedDefaultTab);
-            Assert.AreEqual(collapsedDefaultBounds.X, expandedDefaultBounds.X, 0.5);
-            Assert.AreEqual(collapsedDefaultBounds.Y, expandedDefaultBounds.Y, 0.5);
-            Assert.AreEqual(collapsedDefaultBounds.Width, expandedDefaultBounds.Width, 0.5);
-            Assert.AreEqual(collapsedDefaultBounds.Height, expandedDefaultBounds.Height, 0.5);
+            DpiGeometryAssert.AreEqualScreen(collapsedDefaultBounds.X, expandedDefaultBounds.X, PixelQuantization.ScreenPair, "展开揭示后默认标签屏幕 X 恒定。");
+            DpiGeometryAssert.AreEqualScreen(collapsedDefaultBounds.Y, expandedDefaultBounds.Y, PixelQuantization.ScreenPair, "展开揭示后默认标签屏幕 Y 恒定。");
+            DpiGeometryAssert.AreEqual(collapsedDefaultBounds.Width, expandedDefaultBounds.Width, window, PixelQuantization.Pair, "展开揭示后默认标签宽恒定（两次独立测量）。");
+            DpiGeometryAssert.AreEqual(collapsedDefaultBounds.Height, expandedDefaultBounds.Height, window, PixelQuantization.Pair, "展开揭示后默认标签高恒定（两次独立测量）。");
             Assert.IsFalse(expandedDefaultTab.HasAnimatedProperties);
 
             foreach (var category in viewModel.Categories.Where(candidate => !candidate.IsDefaultCapture))
@@ -2217,9 +2217,9 @@ public sealed partial class MainWindowInteractionTests
             InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
 
             // 出场动画期间几何保持展开、壳保持可见；动画完成后才进入几何交接。
-            Assert.AreEqual(expandedWidth, window.Width, 0.5);
-            Assert.AreEqual(expandedHeight, window.Height, 0.5);
-            Assert.AreEqual(expandedTop, window.Top, 0.5);
+            DpiGeometryAssert.AreEqual(expandedWidth, window.Width, window, PixelQuantization.Pair, "出场动画期间宽保持展开值（两次独立测量）。");
+            DpiGeometryAssert.AreEqual(expandedHeight, window.Height, window, PixelQuantization.Pair, "出场动画期间高保持展开值（两次独立测量）。");
+            DpiGeometryAssert.AreEqual(expandedTop, window.Top, window, PixelQuantization.Pair, "出场动画期间顶保持展开值（两次独立测量）。");
             Assert.AreEqual(1d, shell.Opacity);
             Assert.IsTrue(shell.IsHitTestVisible);
             Assert.IsTrue(viewModel.IsPanelExpanded);
