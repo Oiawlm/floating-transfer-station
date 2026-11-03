@@ -3,7 +3,7 @@
     Repository hygiene checks for floating-transfer-station.
 
 .DESCRIPTION
-    Two checks, both must pass (exit 0) or the script fails (exit 1):
+    Three checks, all must pass (exit 0) or the script fails (exit 1):
 
       A. Root entry whitelist
          Every root-level entry tracked by git must be listed in
@@ -12,6 +12,16 @@
       B. README local link integrity
          Every relative Markdown link in README.md must resolve to an
          existing file. Remote links, anchors, images and mailto are skipped.
+
+      C. Forbidden local-path references (frozen baseline)
+         Tracked text files must not reference gitignored maintainer-local
+         paths (docs/research/, docs/observations.md, docs/improvement-loop.md,
+         docs/handoff/, PROJECT_GUIDE, and the local image folder). Per-file
+         occurrence counts (case-insensitive, summed over all patterns) must
+         not exceed the frozen baseline measured on 2026-11-02 when the
+         policy landed (design contract #52). Exemptions: .gitignore (the
+         ignore list itself) and this script (its pattern table legitimately
+         contains the strings).
 
     All violations are collected before the script exits; it never stops at
     the first failure.
@@ -97,6 +107,7 @@ function Get-MarkdownLocalLinks {
         Skips images ![..](..), scheme links (http/https/mailto), pure
         anchors (#..) and protocol-relative (//..) targets.
     #>
+
     param([Parameter(Mandatory = $true)][string]$MarkdownText)
 
     $results = New-Object System.Collections.Generic.List[object]
@@ -145,6 +156,29 @@ function Get-MarkdownLocalLinks {
     }
 
     return $results.ToArray()
+}
+
+function Get-SubstringMatchCount {
+    <#
+        Counts non-overlapping, case-insensitive (ordinal) occurrences of
+        $Needle in $Text. OrdinalIgnoreCase prevents trivial casing from
+        evading Check C.
+    #>
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][string]$Needle
+    )
+
+    $count = 0
+    $index = 0
+    while ($true) {
+        $index = $Text.IndexOf($Needle, $index, [System.StringComparison]::OrdinalIgnoreCase)
+        if ($index -lt 0) { break }
+        $count++
+        $index += $Needle.Length
+    }
+
+    return $count
 }
 
 $repoRootPath = Get-RepositoryRoot
@@ -235,6 +269,121 @@ else {
     if ($brokenCount -eq 0) {
         Write-Output ("[OK] All {0} local links resolve to existing files." -f $localLinks.Count)
     }
+}
+
+Write-Output ''
+
+# ---------------------------------------------------------------------------
+# Check C: forbidden local-path references (frozen baseline)
+# ---------------------------------------------------------------------------
+
+# Gitignored maintainer-local paths that tracked files must not reference
+# (policy decided 2026-11-02, design contract #52). The last pattern is a
+# non-ASCII directory name built from char codes so this script stays
+# ASCII-only (Windows PowerShell 5.1 reads BOM-less scripts as ANSI).
+$ForbiddenLocalPathPatterns = @(
+    'docs/research/'
+    'docs/observations.md'
+    'docs/improvement-loop.md'
+    'docs/handoff/'
+    'PROJECT_GUIDE'
+    ([string][char]0x56FE + [string][char]0x7247 + '/')
+)
+
+# Files exempt from Check C: the ignore list itself (it legitimately lists
+# the local entries) and this script (its pattern table legitimately
+# contains the strings).
+$CheckCExemptFiles = @(
+    '.gitignore'
+    'scripts/check-repo-hygiene.ps1'
+)
+
+# Tracked-file extensions scanned as text; binary assets are skipped.
+$CheckCTextExtensions = @(
+    '.cs'
+    '.csproj'
+    '.editorconfig'
+    '.gitignore'
+    '.json'
+    '.md'
+    '.props'
+    '.ps1'
+    '.slnx'
+    '.txt'
+    '.xaml'
+    '.yml'
+)
+
+# Frozen baseline: per-file occurrence counts (case-insensitive, summed over
+# all patterns above) measured on 2026-11-02 when the policy landed. Counts
+# may only go down. Lowering the table requires re-measuring and editing it
+# in its own change with the measured counts stated in the commit message;
+# tracked files absent from the table have a baseline of 0. Historical
+# entries are frozen (annotations may be appended, wording is not rewritten).
+$ForbiddenLocalPathBaseline = @{
+    'CHANGELOG.md'                                                = 11
+    'ROADMAP.md'                                                  = 4
+    'docs/README.md'                                              = 1
+    'docs/design-contracts.md'                                    = 28
+    'docs/design.md'                                              = 1
+    'docs/images/README.md'                                       = 1
+    'docs/multi-window.md'                                        = 1
+    'docs/releasing.md'                                           = 1
+    'docs/usage.md'                                               = 1
+    'scripts/run-affected-tests.ps1'                              = 1
+    'scripts/test-affected-selector.ps1'                          = 1
+    'src/FloatingTransferStation.Core/Services/FaviconClient.cs'  = 1
+    'src/FloatingTransferStation/Models/ExternalDropPayload.cs'   = 1
+    'src/FloatingTransferStation/Resources/MainWindowStyles.xaml' = 1
+    'src/FloatingTransferStation/Views/MainWindow.CardGestures.cs' = 1
+    'src/FloatingTransferStation/Views/MainWindow.DragAndDrop.cs' = 1
+    'src/FloatingTransferStation/Views/MainWindow.xaml'           = 1
+    'tests/FloatingTransferStation.Tests/ExternalDropPayloadReaderTests.cs' = 1
+    'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.BtnGridEvidence.cs' = 1
+    'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.CardGestures.cs' = 1
+}
+
+Write-Output '--- Check C: forbidden local-path references (frozen baseline) ---'
+
+$checkCFilesWithReferences = 0
+$checkCRequired = $false
+$checkCBelowBaseline = 0
+
+foreach ($trackedFile in $trackedFiles) {
+    $normalizedPath = $trackedFile.Replace('\', '/')
+    if ($CheckCExemptFiles -ccontains $normalizedPath) { continue }
+
+    $extension = [System.IO.Path]::GetExtension($normalizedPath).ToLowerInvariant()
+    if ($CheckCTextExtensions -notcontains $extension) { continue }
+
+    $contentPath = Join-Path -Path $repoRootPath -ChildPath ($trackedFile.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
+    $content = [System.IO.File]::ReadAllText($contentPath)
+
+    $actualCount = 0
+    foreach ($forbiddenPattern in $ForbiddenLocalPathPatterns) {
+        $actualCount += Get-SubstringMatchCount -Text $content -Needle $forbiddenPattern
+    }
+    if ($actualCount -eq 0) { continue }
+
+    $checkCFilesWithReferences++
+    $allowedCount = 0
+    if ($ForbiddenLocalPathBaseline.ContainsKey($normalizedPath)) {
+        $allowedCount = $ForbiddenLocalPathBaseline[$normalizedPath]
+    }
+
+    if ($actualCount -gt $allowedCount) {
+        $checkCRequired = $true
+        Write-Output ("[FAIL] {0}: {1} forbidden local-path reference(s), frozen baseline allows {2}." -f $normalizedPath, $actualCount, $allowedCount)
+        Add-Violation ("Check C: '{0}' has {1} forbidden local-path reference(s); the frozen baseline allows {2} (design contract #52; references may only decrease)." -f $normalizedPath, $actualCount, $allowedCount)
+    }
+    elseif ($actualCount -lt $allowedCount) {
+        $checkCBelowBaseline++
+        Write-Output ("[INFO] {0}: {1} reference(s), below frozen baseline {2} (baseline can be tightened)." -f $normalizedPath, $actualCount, $allowedCount)
+    }
+}
+
+if (-not $checkCRequired) {
+    Write-Output ("[OK] All local-path references are within the frozen baseline ({0} file(s) with references, {1} below baseline)." -f $checkCFilesWithReferences, $checkCBelowBaseline)
 }
 
 Write-Output ''

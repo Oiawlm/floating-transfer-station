@@ -1531,7 +1531,10 @@ public sealed partial class MainWindowInteractionTests
             data.SetFileDropList(new System.Collections.Specialized.StringCollection { secondPath });
             host!.RaiseEvent(NewDragEventArgs(data, DragDrop.DropEvent, host));
             // 乐观上屏（Issue #176）：条目先于保存完成进入集合；落位动画由导入
-            // 续体在保存往返后编排——等到瓦片真正带动画再断言。
+            // 续体在保存往返后编排——等到瓦片真正带动画再断言。PumpUntilCondition
+            // 静默超时（flake 台账 R4：CI 2026-11-03 main 红实证＝PlayLauncher
+            // LandingAsync 在容器未生成时静默 continue，动画被跳过——产品竞态已
+            // 呈报不动手），故断言带归因现场而非裸 false。
             PumpUntilCondition(
                 window.Dispatcher,
                 () => catalog.Items.Count == 2 &&
@@ -1544,7 +1547,9 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsNotNull(addedTile);
             Assert.IsTrue(
                 addedTile.HasAnimatedProperties,
-                "真正新增的瓦片播放落位动画（M21）。");
+                $"真正新增的瓦片播放落位动画（M21）。DIAG opacity={addedTile.Opacity:0.###} " +
+                $"scale={(GetLauncherTileScale(addedTile)?.ScaleX ?? double.NaN):0.###} items={catalog.Items.Count} " +
+                $"animationsEnabled={window.Resources[SystemParameters.ClientAreaAnimationKey]}（若动画从未起播＝产品竞态 R4：容器未生成时落位动画被静默跳过）");
 
             // 重排（单 Move 容器复用）：不触发落位动画（不是新增事件）。先等首次
             // 落位动画自然结束（opacity/scale 回 1），再重排并即时断言全体瓦片无
