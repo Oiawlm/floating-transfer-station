@@ -5,6 +5,10 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
+    <!-- Markdown 解析（复盘阅读视图，2026-11-03）：BSD-2-Clause（MIT 级宽松许可，
+         无构建期许可强制——与 ImageSharp 3.2+ 的教训相反）；解析放 Core 共享核心，
+         UI 项目维持零包（渲染映射在 UI 侧消费 Core 文档模型）。 -->
+    <PackageReference Include="Markdig" Version="1.5.1" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
   <ItemGroup>
