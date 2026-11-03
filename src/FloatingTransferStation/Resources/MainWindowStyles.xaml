@@ -247,6 +247,54 @@
     <Setter Property="Focusable" Value="True" />
   </Style>
 
+  <!-- 复盘「阅读｜编辑」分段切换（实验性，2026-11-03，仅实验开关开启时可见）：外框
+       与分段段体沿用既有选中语言——外框 BorderBrush＋控件级圆角，选中段
+       ActiveCategoryBrush 底＋PrimaryText，未选中 SecondaryText，悬停
+       HoverSurfaceBrush；不引入新颜色键，浅深两主题随字典整本替换。RadioButton
+       原生承载 SelectionItem 自动化语义与方向键互切。 -->
+  <Style x:Key="ReviewModeSegmentBorderStyle" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+    <Setter Property="Padding" Value="1" />
+  </Style>
+  <Style x:Key="ReviewModeSegmentStyle" TargetType="RadioButton">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="Height" Value="26" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Border x:Name="Segment"
+                  Background="{TemplateBinding Background}"
+                  CornerRadius="{StaticResource ControlCornerRadius}">
+            <ContentPresenter HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Margin="{TemplateBinding Padding}"
+                              RecognizesAccessKey="True" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Segment" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Segment" Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
+              <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+              <Setter Property="FontWeight" Value="SemiBold" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- ＋ 添加两入口菜单项（快捷启动 #30 切片 4）：菜单行形态——透明底、无边框、
        左对齐，悬停 HoverSurfaceBrush；承载于 HeaderBrush 弹层。 -->
   <Style x:Key="LauncherAddMenuButtonStyle" TargetType="Button">

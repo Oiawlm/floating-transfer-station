@@ -297,6 +297,7 @@ $interactionTestPrefixes = @{
     'QuickLaunchUrl'         = @('QuickLaunch', 'UrlInput')
     'RangeSelection'         = @('RangeSelection')
     'ReviewEditorEscape'     = @('ReviewEditor')
+    'ReviewMarkdownView'     = @('ReviewMarkdownView')
     'ReviewNav'              = @('ReviewNav')
     'ScrollViewport'         = @('ScrollViewport')
     'Search'                 = @('Search')

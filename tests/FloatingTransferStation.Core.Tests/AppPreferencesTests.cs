@@ -730,4 +730,51 @@ public sealed class AppPreferencesTests
             "旧 preferences.json 缺字段时必须回落到默认界面字体（null）。");
         Assert.IsFalse(restored.AiOrganizeEnabled, "测试数据里的旧字段语义不受新字段影响。");
     }
+
+    [TestMethod]
+    public void Default_DisablesReviewMarkdownView()
+    {
+        Assert.IsFalse(
+            AppPreferences.Default.ReviewMarkdownViewEnabled,
+            "复盘阅读视图默认关闭（实验性＝零打扰，复盘表面与现状逐像素一致）。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesReviewMarkdownViewEnabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        foreach (var enabled in new[] { false, true })
+        {
+            var preferences = AppPreferences.Default with { ReviewMarkdownViewEnabled = enabled };
+
+            var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+            StringAssert.Contains(serialized, "\"reviewMarkdownViewEnabled\"", "落盘键名必须是 reviewMarkdownViewEnabled（camelCase）。");
+            var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+            Assert.AreEqual(preferences, restored);
+            Assert.AreEqual(enabled, restored!.ReviewMarkdownViewEnabled);
+        }
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutReviewMarkdownViewField_FallsBackToDisabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","interfaceFont":null}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsFalse(
+            restored.ReviewMarkdownViewEnabled,
+            "旧 preferences.json 缺字段时必须回落到默认关闭（升级零感知）。");
+    }
 }

@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -132,6 +133,18 @@ public sealed partial class MainWindowInteractionTests
         // COM/External/InvalidOperation，AssertFailedException 穿透直达测试）。既有显式
         // 设置 ClipboardWriterOverride 的测试在测试体内覆写本缺省，零改动。
         window.ClipboardWriterOverride ??= RejectUndeclaredRealClipboardWrite;
+        // harness 密封缺省③（线程宿主语义，2026-11-03 复盘阅读视图批次取证）：MSTest 的
+        // STA 线程不装 Dispatcher 同步上下文（WPF 只在 Application 主线程安装；探针实测
+        // context=null），产品 UI 异步链（如复盘装载 await LocalStore 后写 DP）依赖该
+        // 上下文回分发器——缓存命中的小文件 IO 同步完成时碰巧不触发，真实异步完成时
+        // 续体落线程池即跨线程崩溃。窗口构造后在此装上与生产线程同语义的上下文，
+        // 测试宿主与生产宿主线程模型对齐（此前是靠 IO 恰好同步完成的侥幸）。
+        if (SynchronizationContext.Current is null)
+        {
+            SynchronizationContext.SetSynchronizationContext(
+                new System.Windows.Threading.DispatcherSynchronizationContext(window.Dispatcher));
+        }
+
         return window;
     }
 
