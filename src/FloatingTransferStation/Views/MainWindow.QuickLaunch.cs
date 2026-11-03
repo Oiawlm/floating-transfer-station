@@ -1253,7 +1253,12 @@ public partial class MainWindow
             new DoubleAnimation(0.8, 1.0, new Duration(TimeSpan.FromMilliseconds(DesignTokens.ItemLandingMs))));
     }
 
-    /// <summary>新增项落位动画 M21：仅真正新增（多选 40ms 交错）；排序/图标回填/改名/撤销恢复一律不触发。</summary>
+    /// <summary>新增项落位动画 M21：仅真正新增（多选 40ms 交错）；排序/图标回填/改名/撤销恢复一律不触发。
+    /// 乐观上屏（Issue #176）后保存往返快于 ItemContainerGenerator 出容器时，编排续体可能先到——
+    /// 原先对未生成容器直接 continue 会静默跳过动画，让「真正新增必播」在负载下不成立（CI
+    /// 2026-11-03 三连红实证，DIAG＝瓦片 opacity/scale 直达终态且从未带动画）。改为有限预算内
+    /// 等待容器生成再起摆（await 让出 UI 线程，生成在调度器低优先级推进）；预算耗尽仍保持
+    /// 既有跳过降级（动画是装饰性反馈，不阻塞内容呈现）。</summary>
     private async void PlayLauncherLandingAsync(IReadOnlyList<LauncherItem> added)
     {
         if (!ClientAreaAnimationsEnabled)
@@ -1261,6 +1266,7 @@ public partial class MainWindow
             return;
         }
 
+        var generationDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(3);
         for (var index = 0; index < added.Count; index++)
         {
             if (index > 0)
@@ -1275,6 +1281,17 @@ public partial class MainWindow
 
             var item = added[index];
             var tile = FindLauncherTile(item);
+            while (tile is null && !_isClosing && DateTime.UtcNow < generationDeadline)
+            {
+                await Task.Delay(20);
+                tile = FindLauncherTile(item);
+            }
+
+            if (_isClosing)
+            {
+                return;
+            }
+
             if (tile is null)
             {
                 continue;
