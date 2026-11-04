@@ -650,6 +650,32 @@
                              Text="检查在后台静默进行；发现新版本即自动「下载 → 校验 → 安装 → 重启」，无需手动确认（手动检查同样如此）。关闭后仅停止自动检查，仍可随时点击标题栏「更新」按钮手动检查。" />
                 </StackPanel>
               </Border>
+              <!-- 实验性（首个先例，2026-11-03）：正在打磨中的能力按「默认关闭、显式
+                   开启」提供——不稳定的边缘体验不默认打扰任何用户；形态随既有卡片
+                   语言（CardBrush/BorderBrush/圆角 8），标注「实验性」并在节内说明
+                   每项的实验原因。开关即时生效＋原子保存（契约 #5 同路）。 -->
+              <Border Style="{StaticResource SettingsCardStyle}" Margin="0">
+                <StackPanel>
+                  <TextBlock Text="实验性" Style="{StaticResource SectionTitleStyle}" />
+                  <Grid Background="Transparent">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="复盘界面 Markdown 阅读视图"
+                               Style="{StaticResource RowCaptionStyle}" />
+                    <CheckBox x:Name="ReviewMarkdownViewToggle"
+                              Grid.Column="1"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              AutomationProperties.Name="复盘界面 Markdown 阅读视图"
+                              Checked="ReviewMarkdownViewToggle_Checked"
+                              Unchecked="ReviewMarkdownViewToggle_Unchecked" />
+                  </Grid>
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="实验性功能，默认关闭。开启后复盘界面出现「阅读｜编辑」切换：阅读态把复盘内容按 Markdown 渲染成类 Obsidian 的只读视图（标题、列表、粗斜体、代码块、引用、链接等常用语法；链接点击后用浏览器打开，不加载远程图片；不支持的高级语法按原文显示）。默认关闭的原因：渲染子集与排版仍在打磨，编辑器形态（关闭时所见）保持为可靠基准。改动立即生效并自动保存，只影响呈现，不改变复盘的保存与合并行为。" />
+                </StackPanel>
+              </Border>
             </StackPanel>
 
             <StackPanel x:Name="DataPage" Visibility="Collapsed">

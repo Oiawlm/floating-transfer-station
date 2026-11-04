@@ -575,15 +575,39 @@
               <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <!-- 日期导航仅保留 ‹ › 一步切一天（原日期下拉对绝大多数用户只有一项，已移除；
-                 日期文本靠右对齐保持原下拉区域的位置语义）。 -->
+                 日期文本靠右对齐保持原下拉区域的位置语义）。
+                 左缘新增「阅读｜编辑」分段切换（实验性，默认关闭＝Collapsed，本格零占位、
+                 复盘表面与现状逐像素一致）；独占 Auto 列为后续工具栏增件（如日期跳转）
+                 留出并排结构——增件另起列，不挤占本控件。 -->
             <Grid Grid.Row="0" Margin="0,0,0,8">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
               </Grid.ColumnDefinitions>
-              <Button x:Name="ReviewPreviousButton"
+              <Border x:Name="ReviewModeSwitch"
                       Grid.Column="0"
+                      Style="{StaticResource ReviewModeSegmentBorderStyle}"
+                      Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton x:Name="ReviewReadingModeButton"
+                               GroupName="ReviewViewMode"
+                               Content="阅读"
+                               Style="{StaticResource ReviewModeSegmentStyle}"
+                               AutomationProperties.Name="切换到阅读视图"
+                               Checked="ReviewReadingModeButton_Checked" />
+                  <RadioButton x:Name="ReviewEditModeButton"
+                               GroupName="ReviewViewMode"
+                               Content="编辑"
+                               IsChecked="True"
+                               Style="{StaticResource ReviewModeSegmentStyle}"
+                               AutomationProperties.Name="切换到编辑视图"
+                               Checked="ReviewEditModeButton_Checked" />
+                </StackPanel>
+              </Border>
+              <Button x:Name="ReviewPreviousButton"
+                      Grid.Column="1"
                       Style="{StaticResource ThemedNavButtonStyle}"
                       ToolTip="上一天"
                       AutomationProperties.Name="上一天"
@@ -607,7 +631,7 @@
                       StrokeLineJoin="Round" />
               </Button>
               <Button x:Name="ReviewNextButton"
-                      Grid.Column="1"
+                      Grid.Column="2"
                       Style="{StaticResource ThemedNavButtonStyle}"
                       Margin="4,0,0,0"
                       ToolTip="下一天"
@@ -623,7 +647,7 @@
                       StrokeLineJoin="Round" />
               </Button>
               <TextBlock x:Name="ReviewDateState"
-                         Grid.Column="2"
+                         Grid.Column="3"
                          Margin="8,0,0,0"
                          HorizontalAlignment="Right"
                          VerticalAlignment="Center"
@@ -645,6 +669,18 @@
                  KeyDown="ReviewEditor_KeyDown"
                  LostKeyboardFocus="ReviewEditor_LostKeyboardFocus"
                  AutomationProperties.Name="每日复盘编辑器" />
+            <!-- 复盘 Markdown 阅读视图（实验性，默认关闭＝Collapsed，逐像素不影响现状）：
+                 只读 FlowDocument 渲染（排版走设计 token＋主题语义键，随浅深主题即时
+                 切换）；内容唯一来源＝编辑器文本（RefreshReviewReadingView 单点重建），
+                 编辑器仍是保存/防抖/合并/Esc 契约的唯一事实源。内部滚动条经窗级隐式
+                 瘦条样式与全 App 同源。W6 焦点视觉治理同款：阅读面非文本输入，键入
+                 焦点不画 Aero2 虚线框（键盘滚动可达性保留）。 -->
+            <FlowDocumentScrollViewer x:Name="ReviewReadingView"
+                                      Grid.Row="1"
+                                      Visibility="Collapsed"
+                                      Padding="4,0,4,0"
+                                      FocusVisualStyle="{x:Null}"
+                                      AutomationProperties.Name="每日复盘阅读视图" />
             <TextBlock x:Name="ReviewStatus"
                        Grid.Row="2"
                        Margin="2,8,2,0"

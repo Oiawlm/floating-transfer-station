@@ -55,6 +55,9 @@ public partial class MainWindow
         // 复盘空态随表面切换重评估（契约 #33 复盘扩展）：宿主刚可见/隐藏时按
         // 当前编辑内容定可见性；日期装载与输入触发另行驱动同一单点。
         UpdateReviewEmptyState();
+        // 阅读/编辑切换随表面切换重评估（实验性）：切换控件可见＝实验开关开∧复盘
+        // 激活；离开复盘表面时一并收起（阅读视图与编辑器互斥分发同源）。
+        UpdateReviewModeControls();
         if (isReview || isLauncher)
         {
             BatchPinButton.Visibility = Visibility.Collapsed;
@@ -141,6 +144,8 @@ public partial class MainWindow
             // 日期装载完成即重评估空态：切到有内容的日期隐藏、切到空日期回归
             //（装载期文本替换走 _reviewLoading 守卫，TextChanged 不触发，须显式驱动）。
             UpdateReviewEmptyState();
+            // 阅读视图随日期装载同步重建（阅读态激活时；否则空操作）。
+            RefreshReviewReadingView();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -242,6 +247,8 @@ public partial class MainWindow
         _reviewSaveTimer.Start();
         // 输入/清空立即重评估空态：第一个字符即刻隐藏（不等 700ms 自动保存）。
         UpdateReviewEmptyState();
+        // 文本变化驱动阅读视图同步（阅读态下文本只会被程序性替换；编辑态为空操作）。
+        RefreshReviewReadingView();
     }
 
     private async void ReviewPreviousButton_Click(object sender, RoutedEventArgs e) =>
@@ -311,6 +318,8 @@ public partial class MainWindow
                 ReviewStatus.Text = remote.Exists ? "已从文件刷新" : "文件已删除。";
                 // 外部清空/删除文件后空态回归（文本替换不走 TextChanged 更新点）。
                 UpdateReviewEmptyState();
+                // 外部变更同样驱动阅读视图重建（阅读态激活时；否则空操作）。
+                RefreshReviewReadingView();
                 return;
             }
 
@@ -328,6 +337,7 @@ public partial class MainWindow
                 _reviewDirty = false;
                 ReviewStatus.Text = "已载入文件版本";
                 UpdateReviewEmptyState();
+                RefreshReviewReadingView();
                 return;
             }
 
@@ -341,6 +351,7 @@ public partial class MainWindow
                 _reviewDirty = merged.Content != remote.Content || merged.HasConflicts;
                 ReviewStatus.Text = merged.HasConflicts ? "已合并，请整理冲突后保存" : "已合并，等待保存";
                 UpdateReviewEmptyState();
+                RefreshReviewReadingView();
             }
             else if (choice == MessageBoxResult.No)
             {
