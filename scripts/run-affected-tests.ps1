@@ -2,8 +2,8 @@
 # 豁免 → L1 例外表（覆写/缩圈，命中优先于一切派生）→ L1 全量表（真全局文件，逐条打印
 # [affected-full] 标记行）→ L2 约定派生（恒非零校验内联：命中 0 条即该规则失效、落 L3，
 # 绝不静默空选）→ L3 未知回退全量（理由＋消除指引）。
-# 语义唯一权威来源：docs/design-contracts.md 契约「受影响测试选区协议」（#32）；
-# 本头注与 CONTRIBUTING.md 只作引用，不在别处维护第二份语义副本。
+# 语义唯一权威来源：设计契约清单（维护者本地文档）契约「受影响测试选区协议」（#32）；
+# 本头注只作引用，不在别处维护第二份语义副本。
 # 变更集双模式：-Scope Edit（基线 HEAD，本次编辑反馈）/-Scope Integrate（merge-base
 # origin/main，整条分支集成，默认）；-Base 为原始基线覆盖（发行列车/回放用），与 -Scope
 # 同给报错。-ChangeSet 显式注入变更集（契约测试/历史回放）。
@@ -38,7 +38,7 @@ $coreTestsDir = Join-Path $repoRoot 'tests\FloatingTransferStation.Core.Tests'
 # ---- 豁免类：不参与构建产物且无契约断言的纯文档（白名单后缀；未知后缀不豁免）----
 $exemptDocExtensions = @('.md', '.markdown', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp')
 # 根目录被 LifecycleTests.ReleaseMetadata 断言覆盖的文档（改动必须跑契约测试，不豁免）。
-$assertedRootDocs = @('README.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'ROADMAP.md', 'LICENSE')
+$assertedRootDocs = @('README.md', 'CHANGELOG.md', 'ROADMAP.md', 'LICENSE')
 
 # ---- 变更集忽略清单（推导层目录前缀；与豁免类是两个语义）----
 # 初始为空：已知运行时产物已由 .gitignore 兜住（TestResults/.tools/artifacts 等）；
@@ -80,11 +80,11 @@ $overrides = @(
         'src/FloatingTransferStation/Services/SingleInstanceGuard.cs', 'src/FloatingTransferStation/Services/AppLifecycleService.cs',
         'src/FloatingTransferStation/Services/WindowsDataDirectorySettings.cs', 'src/FloatingTransferStation.Core/ProductIdentity.cs',
         'src/FloatingTransferStation/Views/SettingsWindow.xaml') },
-    # 公开发行材料（README/CONTRIBUTING/CHANGELOG/LICENSE/ROADMAP/version.txt 与 PR 模板）：
+    # 公开发行材料（README/CHANGELOG/LICENSE/ROADMAP/version.txt 与 PR 模板）：
     # LifecycleTests.ReleaseMetadata 以内容/存在断言锁定这些文件的用户契约与协议记载
     # （PR 模板无断言，归本区是保守归类：过程材料变更跑发行元数据契约测试）。
     @{ Name = 'PublicReleaseMaterials'; Filter = 'FullyQualifiedName~ReleaseMetadata'; Globs = @(
-        'README.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'LICENSE', 'ROADMAP.md', 'version.txt',
+        'README.md', 'CHANGELOG.md', 'LICENSE', 'ROADMAP.md', 'version.txt',
         '.github/PULL_REQUEST_TEMPLATE.md') },
     # 剪贴板与外部导入：采集/去重/容量/载荷/图片读取/拖放载荷/文本整理插件管线
     @{ Name = 'Clipboard'; Filter = 'FullyQualifiedName~Clipboard|FullyQualifiedName~ExternalDrop|FullyQualifiedName~WindowsDataImageReader'; Globs = @(

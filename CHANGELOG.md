@@ -4,6 +4,8 @@
 
 ## 未发布
 
+- 开发流程（公开仓库瘦身）：`CODE_OF_CONDUCT.md`、`CONTRIBUTING.md`、`docs/multi-window.md`、`docs/releasing.md`、`docs/design-contracts.md`、`docs/readme-style-guide.md` 六个内部流程文档撤出公开仓库（转维护者本地维护，内容不销毁）；README 删除「本地开发」「参与贡献」两段及对应目录锚点，`docs/README.md` 收敛为公开文档路由（usage/architecture/design/plugins/images）；仓库卫生白名单、受影响测试选择器（公开材料区与契约测试夹具）与相关脚本注释同步清理，公开面只留外部用户需要的内容。
+
 ## 1.66.2
 
 - 开发流程（多窗口并行效率，设计契约 #55）：复检三层分层化＋批量落轨——多窗口批次模式下执行窗口推送前强制集改走选择器快速档（`run-affected-tests.ps1 -Tier Fast`）：桌面 UI 测试套件区域显式标注交 CI 权威全量门，本地只跑 Core 基线与受影响测试的非桌面部分（零 UI 测试互斥体获取），并行窗口的复检不再在本机桌面套件上逐窗排队（N 窗＝0 次强制桌面运行；每窗 PR 在 GitHub 独立 runner 上并行全量，双 worktree 并发实测全程零互斥获取）；整批组合结果一次全量后落地、掉队者出局不拖批——批量落轨主选 GitHub 合并队列经 API 实测在本个人仓不可用（rulesets `merge_queue` 规则被拒），按契约 #55 回退门落 **D3 手工批 PR** 路径（`integration/<slug>` 预检分支＋批 PR 组合全量、原功能 PR 经批 PR 落地），`ci.yml` 预留 `merge_group` 触发与必需检查名「格式、测试与构建」契约锁定，仓库可用面扩展后可直接启用 D2；本机桌面套件降为可选早期信号，机器准入网关（契约 #53）原样保留为安全网；单窗口流式模式五命令口径不变。配套：选择器新增档位契约场景（57 场景全绿）、CI 工作流文件内容契约测试（`test-ci-merge-queue-contract.ps1`）、多窗口协议与贡献指南同步改写。

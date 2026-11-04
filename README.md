@@ -30,8 +30,6 @@
 - [📁 数据与卸载](#-数据与卸载)
 - [⚠️ 当前限制](#️-当前限制)
 - [🗺️ 路线图](#️-路线图)
-- [🛠️ 本地开发](#️-本地开发)
-- [🤝 参与贡献](#-参与贡献)
 - [📄 许可证](#-许可证)
 
 ## ✨ 功能特性
@@ -299,33 +297,6 @@
 ## 🗺️ 路线图
 
 分类管理（动态增删）、外部拖入激活方式与常驻模式等仍需逐项设计，完整说明见[路线图](ROADMAP.md)。
-
-## 🛠️ 本地开发
-
-```powershell
-& .\scripts\bootstrap-dotnet.ps1
-& .\.tools\dotnet\dotnet.exe restore FloatingTransferStation.slnx
-
-# 开发循环测试：按变更集四层判定序选受影响区域（约定派生优先＋例外表覆写＋未知回退；
-# Core.Tests 恒跑基线；纯文档变更自动跳过）。-Scope Edit 只看本次编辑，默认 Integrate＝整条分支。
-# 多窗口批次并行时同命令加 -Tier Fast：桌面 UI 测试区域显式交 CI 权威门，本地零互斥排队（见贡献指南）
-& .\scripts\run-affected-tests.ps1 -Scope Edit
-
-# 全量测试（发行打包与 CI 质量门使用；本地开发循环不要求）
-& .\.tools\dotnet\dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore
-```
-
-生成 Windows 安装包：
-
-```powershell
-& .\scripts\build-release.ps1
-```
-
-默认构建允许 `CHANGELOG.md` 中保留未发布记录；正式发布使用 `build-release.ps1 -ForRelease`，检查步骤见[发布指南](docs/releasing.md)。开发运行不会登记开机自启，自启项由安装器统一管理。版本变化见[更新记录](CHANGELOG.md)；更完整的改动规则见[贡献指南](CONTRIBUTING.md)，主要组件与数据流见[架构说明](docs/architecture.md)。
-
-## 🤝 参与贡献
-
-欢迎提交 Bug、使用反馈和 PR。新增主要交互、数据格式、安装/卸载范围或拖放契约前，请先开 Issue 对齐问题和边界，避免大家在不同假设上重复工作。
 
 ## 📄 许可证
 

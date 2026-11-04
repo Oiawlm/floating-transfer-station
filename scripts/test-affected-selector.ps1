@@ -5,7 +5,7 @@
 # 出处＝docs/research/DATA-AFFECTED-REPLAY-20261027.ps1（gitignored 本地档案，W1 审计
 # 产物；内联是干净 clone 上可运行的必要条件，-ReplayDataPath 可对档案做漂移核对）。
 # 与 test-bootstrap-*.ps1 同族的独立契约测试；点源复用选择器的数据与函数（单一事实源，无副本）。
-# 协议出处：docs/design-contracts.md 契约「受影响测试选区协议」（#32）；执行档位（Desktop/Fast，
+# 协议出处：设计契约清单（维护者本地文档）契约「受影响测试选区协议」（#32）；执行档位（Desktop/Fast，
 # 分层复检）场景矩阵见「分层复检档位」段，出处契约 #55。
 [CmdletBinding()]
 param(
@@ -55,7 +55,7 @@ $core = @(Get-TestInventory $coreTestsDir)
 # 与执行报告逐条收录）。可消灭类条目仍判 Full 的（R04/R07/R10/R11）均有 F2 队列/全量表
 # 保留理由，无无理由例外。
 $replayCases = @(
-    @{ Id = 'R01'; Files = @('CHANGELOG.md', 'CONTRIBUTING.md', 'docs/design-contracts.md', 'scripts/run-affected-tests.ps1', 'tests/FloatingTransferStation.Tests/LifecycleTests.ReleaseMetadata.cs')
+    @{ Id = 'R01'; Files = @('CHANGELOG.md', 'ROADMAP.md', 'docs/design-contracts.md', 'scripts/run-affected-tests.ps1', 'tests/FloatingTransferStation.Tests/LifecycleTests.ReleaseMetadata.cs')
        NewExpected = 'Affected'; ExpectedMode = 'Affected'; Deviation = $null
        Evidence = 'observations.md:48 + improvement-loop.md:86 + 5822adb(PR#182)' },
     @{ Id = 'R02'; Files = @('README.md', 'docs/design-contracts.md', 'docs/images/settings-ai-prompt-dark.png', 'docs/images/settings-ai-prompt-light.png', 'docs/usage.md', 'tests/FloatingTransferStation.Tests/SettingsWindowAiTests.cs')
@@ -68,7 +68,7 @@ $replayCases = @(
        NewExpected = 'Affected'; ExpectedMode = 'Full'
        Deviation = '主窗壳二件（MainWindow.xaml/.xaml.cs）按 F2 §三.A KEEP-FULL（58 交互族共享 harness 构造真实窗口，不可枚举）；C1/C2 面（BoardEmptyState partial、scripts 自噬）已消灭'
        Evidence = '2026-10-19-empty-state-settings-width-report.md:45 + f895fd0(PR#201) + 133d676' },
-    @{ Id = 'R05'; Files = @('.github/PULL_REQUEST_TEMPLATE.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'README.md', 'docs/design-contracts.md', 'scripts/run-affected-tests.ps1', 'scripts/test-affected-selector.ps1')
+    @{ Id = 'R05'; Files = @('.github/PULL_REQUEST_TEMPLATE.md', 'CHANGELOG.md', 'ROADMAP.md', 'README.md', 'docs/design-contracts.md', 'scripts/run-affected-tests.ps1', 'scripts/test-affected-selector.ps1')
        NewExpected = 'Affected'; ExpectedMode = 'Affected'; Deviation = $null
        Evidence = '2026-10-19-affected-test-scope-report.md:7 + a4fafbe(PR#199)' },
     @{ Id = 'R06'; Files = @('CHANGELOG.md', 'ROADMAP.md', 'docs/architecture.md', 'docs/design-contracts.md', 'tests/FloatingTransferStation.Tests/GlobalHotkeyInteractionTests.cs', 'tests/FloatingTransferStation.Tests/ImageInputLimitsTests.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.Search.cs', 'TestResults/trx-20261019-sample/result.trx')
@@ -169,7 +169,7 @@ Assert-Scenario '豁免边界：白名单后缀之外不豁免；根目录断言
     Assert-True (Test-ExemptDocument 'docs/images/a.png') 'docs 图片应豁免'
     Assert-True (-not (Test-ExemptDocument 'docs/tool.exe')) '未知后缀不得豁免'
     Assert-True (-not (Test-ExemptDocument 'README.md')) 'README 有契约断言，不豁免'
-    Assert-True (-not (Test-ExemptDocument 'CONTRIBUTING.md')) 'CONTRIBUTING 有契约断言，不豁免'
+    Assert-True (-not (Test-ExemptDocument 'ROADMAP.md')) 'ROADMAP 有契约断言，不豁免'
     Assert-True (Test-ExemptDocument 'NOTES.md') '根目录无断言覆盖的 .md 应豁免'
     $plan = Get-AffectedTestPlan @('README.md') $app $core
     Assert-True ($plan.Mode -eq 'Affected' -and $plan.Selected.Contains('PublicReleaseMaterials')) 'README 应命中 PublicReleaseMaterials 区域'
