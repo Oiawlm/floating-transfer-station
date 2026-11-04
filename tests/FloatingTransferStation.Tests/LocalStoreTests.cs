@@ -167,7 +167,7 @@ public sealed class LocalStoreTests
 
         Assert.AreEqual(string.Empty, loaded.CategoryName(BoardCategory.CustomerOriginal));
         Assert.AreEqual("参考", loaded.CategoryName(BoardCategory.Reference));
-        Assert.AreEqual("启动", loaded.CategoryName(BoardCategory.Prompt));
+        Assert.AreEqual("快捷启动", loaded.CategoryName(BoardCategory.Prompt));
         Assert.AreEqual("待分类", loaded.CategoryName(BoardCategory.Inbox));
     }
 
@@ -188,7 +188,7 @@ public sealed class LocalStoreTests
         var loaded = await new LocalStore(paths, new AtomicTextWriter()).LoadSettingsAsync();
 
         CollectionAssert.AreEqual(
-            new[] { "图片", "文本1", "启动", "待分类" },
+            new[] { "重要", "记录", "快捷启动", "待分类" },
             BoardCategoryCatalog.Ordered.Select(loaded.CategoryName).ToArray());
         if (hasLegacySettings)
         {

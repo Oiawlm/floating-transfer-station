@@ -6,7 +6,8 @@ namespace FloatingTransferStation.Tests;
 
 /// <summary>
 /// 快捷启动角色机制（#30，Issue #162）：CategoryRole 穷尽映射、枚举身份冻结
-/// （Prompt 保名保值）、默认名「启动」、序列化身份兼容（历史 JSON 样本读取
+/// （Prompt 保名保值）、默认名「快捷启动」（2026-11-03 W7 通用化，原「启动」，
+/// 存量快照由 CategoryNameMigration v2 映射）、序列化身份兼容（历史 JSON 样本读取
 /// /写回形态锁定）。SweepCategories 的角色化断言见 AutoCleanupScheduleTests。
 /// </summary>
 [TestClass]
@@ -47,7 +48,7 @@ public sealed partial class BoardCategoryCatalogTests
     [TestMethod]
     public void DisplayName_PromptDefaultsToQuickLaunch()
     {
-        Assert.AreEqual("启动", BoardCategoryCatalog.DisplayName(BoardCategory.Prompt));
+        Assert.AreEqual("快捷启动", BoardCategoryCatalog.DisplayName(BoardCategory.Prompt));
     }
 
     [TestMethod]

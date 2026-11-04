@@ -27,7 +27,7 @@ public sealed class QuickLaunchMigrationTests
 
         var outcome = await new QuickLaunchMigration(store, store).EnsureAsync(board, settings, preferences);
 
-        Assert.AreEqual("启动", outcome.Settings.CategoryName(BoardCategory.Prompt));
+        Assert.AreEqual("快捷启动", outcome.Settings.CategoryName(BoardCategory.Prompt));
         Assert.AreEqual(QuickLaunchMigration.CurrentVersion, outcome.Preferences.QuickLaunchMigrationVersion);
         Assert.IsFalse(File.Exists(paths.BoardFile), "空桶收编不写 board.json。");
         Assert.IsTrue(File.Exists(paths.SettingsFile));
@@ -66,7 +66,7 @@ public sealed class QuickLaunchMigrationTests
         var persisted = await store.LoadBoardAsync();
         Assert.AreEqual(0, persisted.Items.Count(item => item.Category == BoardCategory.Prompt));
         Assert.AreEqual(5, persisted.Items.Count(item => item.Category == BoardCategory.Inbox));
-        Assert.AreEqual("启动", outcome.Settings.CategoryName(BoardCategory.Prompt));
+        Assert.AreEqual("快捷启动", outcome.Settings.CategoryName(BoardCategory.Prompt));
     }
 
     [TestMethod]
@@ -80,7 +80,7 @@ public sealed class QuickLaunchMigrationTests
         var migrated = await new QuickLaunchMigration(store, store).EnsureAsync(
             board, settings, AppPreferences.Default);
 
-        Assert.AreEqual("启动", migrated.Settings.CategoryName(BoardCategory.Prompt), "一次性归位覆写自定义名（CHANGELOG 明示）。");
+        Assert.AreEqual("快捷启动", migrated.Settings.CategoryName(BoardCategory.Prompt), "一次性归位覆写自定义名（CHANGELOG 明示）。");
 
         // 戳 ≥1 后该键是合法用户改名存储：再改名不经迁移、重跑不覆写。
         var renamed = migrated.Settings.WithCategoryName(BoardCategory.Prompt, "快捷");
@@ -121,7 +121,7 @@ public sealed class QuickLaunchMigrationTests
         var retrying = CreateStore(directory);
         var retried = await new QuickLaunchMigration(retrying, retrying).EnsureAsync(board, settings, preferences);
         Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count, "下次启动重试成功收编。");
-        Assert.AreEqual("启动", retried.Settings.CategoryName(BoardCategory.Prompt));
+        Assert.AreEqual("快捷启动", retried.Settings.CategoryName(BoardCategory.Prompt));
     }
 
     [TestMethod]
@@ -165,7 +165,7 @@ public sealed class QuickLaunchMigrationTests
         var retrying = CreateStore(directory);
         var retried = await new QuickLaunchMigration(retrying, retrying).EnsureAsync(
             board, settings, AppPreferences.Default);
-        Assert.AreEqual("启动", retried.Settings.CategoryName(BoardCategory.Prompt));
+        Assert.AreEqual("快捷启动", retried.Settings.CategoryName(BoardCategory.Prompt));
         Assert.AreEqual(QuickLaunchMigration.CurrentVersion, retried.Preferences.QuickLaunchMigrationVersion);
     }
 
@@ -180,7 +180,7 @@ public sealed class QuickLaunchMigrationTests
         var outcome = await new QuickLaunchMigration(failing, failing).EnsureAsync(
             board, WindowSettings.Default, AppPreferences.Default);
 
-        Assert.AreEqual("启动", outcome.Settings.CategoryName(BoardCategory.Prompt), "名称已先落盘。");
+        Assert.AreEqual("快捷启动", outcome.Settings.CategoryName(BoardCategory.Prompt), "名称已先落盘。");
         Assert.AreEqual(
             QuickLaunchMigration.CurrentVersion,
             outcome.Preferences.QuickLaunchMigrationVersion,
@@ -218,7 +218,7 @@ public sealed class QuickLaunchMigrationTests
             "收编守恒：升级前卡片原位保留。");
         Assert.AreEqual(downgradeCard.Id, inboxAfterReupgrade[0], "降级期新卡按批内序收编在普通区顶部。");
         Assert.AreEqual(
-            "启动",
+            "快捷启动",
             reupgraded.Settings.CategoryName(BoardCategory.Prompt),
             "戳已 ≥1：名称不再重放覆写。");
     }

@@ -14,7 +14,7 @@ public sealed class BoardServiceTests
         Assert.IsNotNull(displayNameField);
         Assert.AreEqual("悬浮中转站", displayNameField.GetValue(null));
         CollectionAssert.AreEqual(
-            new[] { "图片", "文本1", "启动", "待分类" },
+            new[] { "重要", "记录", "快捷启动", "待分类" },
             BoardCategoryCatalog.Ordered.Select(BoardCategoryCatalog.DisplayName).ToArray());
     }
 
