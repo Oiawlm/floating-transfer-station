@@ -393,6 +393,162 @@ public sealed class BoardServiceTests
     }
 
     [TestMethod]
+    public void IsNoChangeMove_CoversEverySlotForSingleAndBatchDrags()
+    {
+        var board = new BoardService();
+        var e = board.AddText("E");
+        var d = board.AddText("D");
+        var c = board.AddText("C");
+        var b = board.AddText("B");
+        var a = board.AddText("A");
+
+        // 单卡 [a,b,c,d,e] 拖 c：NoChange 区＝{2,3}（上一张中线到下一张中线的整段）。
+        var single = new[] { false, false, true, true, false, false, false };
+        for (var index = 0; index <= 6; index++)
+        {
+            Assert.AreEqual(
+                single[index],
+                board.IsNoChangeMove([c.Id], BoardCategory.Inbox, index),
+                $"拖 c，目标槽 {index}");
+        }
+
+        // 尾部连续批 {d,e}：区内＝{3,4,5}（含末尾槽；越界的 6 被钳制到末尾槽同判）。
+        var trailing = new[] { false, false, false, true, true, true, true };
+        for (var index = 0; index <= 6; index++)
+        {
+            Assert.AreEqual(
+                trailing[index],
+                board.IsNoChangeMove([d.Id, e.Id], BoardCategory.Inbox, index),
+                $"拖 {{d,e}}，目标槽 {index}");
+        }
+
+        // 中部不连续批 {b,d}：任何落点都会改变顺序（c 的相对位置被拆），恒 false。
+        for (var index = 0; index <= 6; index++)
+        {
+            Assert.IsFalse(
+                board.IsNoChangeMove([b.Id, d.Id], BoardCategory.Inbox, index),
+                $"拖 {{b,d}}，目标槽 {index}");
+        }
+    }
+
+    [TestMethod]
+    public void IsNoChangeMove_RespectsPinnedRegionBoundaries()
+    {
+        var board = new BoardService();
+        var normalTwo = board.AddText("normal two");
+        var normalOne = board.AddText("normal one");
+        var pinnedTwo = board.AddText("pinned two");
+        var pinnedOne = board.AddText("pinned one");
+        board.SetPinnedMany([pinnedOne.Id, pinnedTwo.Id], true);
+
+        // 显示 [pinnedOne, pinnedTwo, normalOne, normalTwo]；逐卡逐槽的完整矩阵
+        //（含置顶钳制合法域之外的槽位＝恒 false）。
+        var expectations = new (Guid id, bool[] slots)[]
+        {
+            (pinnedOne.Id, new[] { true, true, false, false, false }),
+            (pinnedTwo.Id, new[] { false, true, true, false, false }),
+            (normalOne.Id, new[] { false, false, true, true, false }),
+            (normalTwo.Id, new[] { false, false, false, true, true }),
+        };
+        foreach (var (id, slots) in expectations)
+        {
+            for (var index = 0; index <= 4; index++)
+            {
+                Assert.AreEqual(
+                    slots[index],
+                    board.IsNoChangeMove([id], BoardCategory.Inbox, index),
+                    $"{board.FindItem(id)!.Text}，目标槽 {index}");
+            }
+        }
+    }
+
+    [TestMethod]
+    public void IsNoChangeMove_RejectsCrossCategoryAndUnresolvableBatches()
+    {
+        var board = new BoardService();
+        var inbox = board.AddText("inbox");
+        var prompt = board.AddText("prompt", BoardCategory.Prompt);
+
+        Assert.IsFalse(board.IsNoChangeMove([inbox.Id], BoardCategory.Prompt, 0), "跨分类必为真实移动。");
+        Assert.IsFalse(board.IsNoChangeMove([], BoardCategory.Inbox, 0), "空批。");
+        Assert.IsFalse(board.IsNoChangeMove([inbox.Id, inbox.Id], BoardCategory.Inbox, 0), "重复 Id。");
+        Assert.IsFalse(board.IsNoChangeMove([Guid.NewGuid()], BoardCategory.Inbox, 0), "未知条目。");
+        Assert.IsFalse(board.IsNoChangeMove([inbox.Id, prompt.Id], BoardCategory.Inbox, 0), "跨分类混合批。");
+        Assert.IsFalse(board.IsNoChangeMove([inbox.Id], (BoardCategory)999, 0), "未定义分类。");
+    }
+
+    [TestMethod]
+    public void IsNoChangeMove_AlignsWithMoveManyDispositionAcrossSweeps()
+    {
+        // 单一事实源守卫：谓词与 MoveMany 的 NoChange 判定在全槽位扫描下逐点一致
+        //（含越界钳制与非法域）；Changed 后用 Undo 还原，保证逐点独立。
+        foreach (var board in BuildNoChangeSweepBoards())
+        {
+            var ids = board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray();
+            foreach (var dragged in ids)
+            {
+                for (var index = -1; index <= ids.Length + 1; index++)
+                {
+                    var expected = board.MoveMany([dragged], BoardCategory.Inbox, index);
+                    if (expected.Changed)
+                    {
+                        board.Undo(expected);
+                    }
+
+                    Assert.AreEqual(
+                        BoardMoveDisposition.NoChange == expected.Disposition,
+                        board.IsNoChangeMove([dragged], BoardCategory.Inbox, index),
+                        $"拖 {dragged}，目标槽 {index}");
+                }
+            }
+        }
+
+        // 连续批逐槽对齐。
+        var batchBoard = new BoardService();
+        var bottom = batchBoard.AddText("bottom");
+        var middle = batchBoard.AddText("middle");
+        var top = batchBoard.AddText("top");
+        for (var index = -1; index <= 4; index++)
+        {
+            var expected = batchBoard.MoveMany([top.Id, middle.Id], BoardCategory.Inbox, index);
+            if (expected.Changed)
+            {
+                batchBoard.Undo(expected);
+            }
+
+            Assert.AreEqual(
+                BoardMoveDisposition.NoChange == expected.Disposition,
+                batchBoard.IsNoChangeMove([top.Id, middle.Id], BoardCategory.Inbox, index),
+                $"拖 {{top,middle}}，目标槽 {index}");
+        }
+
+        Assert.AreEqual(1, batchBoard.Items(BoardCategory.Inbox).Count(item => item.Id == bottom.Id));
+    }
+
+    private static IEnumerable<BoardService> BuildNoChangeSweepBoards()
+    {
+        var plain = new BoardService();
+        _ = plain.AddText("E");
+        _ = plain.AddText("D");
+        _ = plain.AddText("C");
+        _ = plain.AddText("B");
+        _ = plain.AddText("A");
+        yield return plain;
+
+        var pinnedMix = new BoardService();
+        var normalTwo = pinnedMix.AddText("normal two");
+        var normalOne = pinnedMix.AddText("normal one");
+        var pinnedTwo = pinnedMix.AddText("pinned two");
+        var pinnedOne = pinnedMix.AddText("pinned one");
+        pinnedMix.SetPinnedMany([pinnedOne.Id, pinnedTwo.Id], true);
+        yield return pinnedMix;
+
+        var singleton = new BoardService();
+        _ = singleton.AddText("only");
+        yield return singleton;
+    }
+
+    [TestMethod]
     public void RemoveCategory_ReturnsWholeCategoryAndRestoresExactOrder()
     {
         var board = new BoardService();
