@@ -89,6 +89,11 @@ public partial class MainWindow : Window
     private long _categoryDropTargetWithdrawVersion;
     private long _categoryDropTargetAssertTick;
     private int? _heldInsertionSlotIndex;
+    // 指示线显示真值（拖拽会话态，契约 #51 增补）：显/隐切换走「断言→撤离保持窗
+    // 复核→终清」单一状态机，与分类高亮同构——边缘往返不再产生硬切换脉冲。
+    private bool _insertionIndicatorShown;
+    private long _insertionIndicatorWithdrawVersion;
+    private long _insertionIndicatorAssertTick;
     private bool _isClosing;
     private bool _allowClose;
     private bool _globalHotkeyRegistered;

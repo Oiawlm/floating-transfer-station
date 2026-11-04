@@ -145,9 +145,6 @@ public sealed class BoardService
         }
 
         var context = ResolveBatch(itemIds);
-        var remaining = context.SourceBefore
-            .Where(item => !context.SelectedIds.Contains(item.Id))
-            .ToList();
         if (context.SourceCategory == targetCategory)
         {
             if (!IsSameCategoryTargetValid(context, targetIndex))
@@ -160,21 +157,14 @@ public sealed class BoardService
                     null);
             }
 
-            var preRemovalIndex = Math.Clamp(targetIndex, 0, context.SourceBefore.Length);
-            var removedBefore = context.SourceBefore
-                .Take(preRemovalIndex)
-                .Count(item => context.SelectedIds.Contains(item.Id));
-            var insertionIndex = Math.Clamp(
-                preRemovalIndex - removedBefore,
-                0,
-                remaining.Count);
-            var sourceAfter = remaining
-                .Take(insertionIndex)
-                .Concat(context.OrderedItems)
-                .Concat(remaining.Skip(insertionIndex))
-                .ToArray();
-            if (context.SourceBefore.Select(item => item.Id)
-                .SequenceEqual(sourceAfter.Select(item => item.Id)))
+            // NoChange/Changed 判定经 PlanSameCategoryMove 单一实现（与
+            // IsNoChangeMove 同源——指示线「同位不显示」与 Drop 落点共用同一谓词）。
+            var plan = PlanSameCategoryMove(
+                context.SourceBefore,
+                context.SelectedIds,
+                context.OrderedItems,
+                targetIndex);
+            if (plan.NoChange)
             {
                 return new BoardBatchMove(
                     BoardMoveDisposition.NoChange,
@@ -184,7 +174,7 @@ public sealed class BoardService
                     null);
             }
 
-            ReplaceCategory(context.SourceCategory, sourceAfter);
+            ReplaceCategory(context.SourceCategory, plan.SourceAfter);
             return new BoardBatchMove(
                 BoardMoveDisposition.Changed,
                 context.SourceCategory,
@@ -194,7 +184,9 @@ public sealed class BoardService
         }
 
         var targetBefore = _items[targetCategory].ToArray();
-        var sourceAfterCrossCategory = remaining.ToArray();
+        var sourceAfterCrossCategory = context.SourceBefore
+            .Where(item => !context.SelectedIds.Contains(item.Id))
+            .ToArray();
         var targetAfter = context.OrderedItems
             .Where(item => item.IsPinned)
             .Concat(targetBefore.Where(item => item.IsPinned))
@@ -283,6 +275,47 @@ public sealed class BoardService
             var context = ResolveBatch(itemIds);
             return context.SourceCategory != targetCategory ||
                 context.OrderedItems.Select(item => item.IsPinned).Distinct().Count() == 1;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (KeyNotFoundException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 同位判定（单一事实源，契约 #51 增补）：该落点对当前批量是否不改变分类内顺序
+    /// ——与 <see cref="MoveMany"/> 的 NoChange 判定共用 <see cref="PlanSameCategoryMove"/>
+    /// 同一实现（pre-removal 索引语义），指示线据此在整个 NoChange 区隐藏。
+    /// 跨分类（必为真实移动）、非法落点或无法解析的批量返回 false；批量拖动按整批判定。
+    /// </summary>
+    public bool IsNoChangeMove(
+        IReadOnlyCollection<Guid> itemIds,
+        BoardCategory targetCategory,
+        int targetIndex)
+    {
+        try
+        {
+            if (!BoardCategoryCatalog.IsDefined(targetCategory))
+            {
+                return false;
+            }
+
+            var context = ResolveBatch(itemIds);
+            if (context.SourceCategory != targetCategory ||
+                !IsSameCategoryTargetValid(context, targetIndex))
+            {
+                return false;
+            }
+
+            return PlanSameCategoryMove(
+                context.SourceBefore,
+                context.SelectedIds,
+                context.OrderedItems,
+                targetIndex).NoChange;
         }
         catch (ArgumentException)
         {
@@ -671,6 +704,37 @@ public sealed class BoardService
             ? clamped <= pinnedCount
             : clamped >= pinnedCount;
     }
+
+    /// <summary>
+    /// 同分类落点的纯规划：pre-removal 索引（移除被拖批之前的语义）换算为移除后的
+    /// 插入索引并给出结果序列与 NoChange 判定。MoveMany 的执行与 IsNoChangeMove 的
+    /// 谓词共用本实现，两处判定永不漂移。
+    /// </summary>
+    private static BoardSameCategoryPlan PlanSameCategoryMove(
+        BoardItem[] sourceBefore,
+        HashSet<Guid> selectedIds,
+        BoardItem[] orderedItems,
+        int targetIndex)
+    {
+        var remaining = sourceBefore
+            .Where(item => !selectedIds.Contains(item.Id))
+            .ToArray();
+        var preRemovalIndex = Math.Clamp(targetIndex, 0, sourceBefore.Length);
+        var removedBefore = sourceBefore
+            .Take(preRemovalIndex)
+            .Count(item => selectedIds.Contains(item.Id));
+        var insertionIndex = Math.Clamp(preRemovalIndex - removedBefore, 0, remaining.Length);
+        var sourceAfter = remaining
+            .Take(insertionIndex)
+            .Concat(orderedItems)
+            .Concat(remaining.Skip(insertionIndex))
+            .ToArray();
+        var noChange = sourceBefore.Select(item => item.Id)
+            .SequenceEqual(sourceAfter.Select(item => item.Id));
+        return new BoardSameCategoryPlan(sourceAfter, noChange);
+    }
+
+    private sealed record BoardSameCategoryPlan(BoardItem[] SourceAfter, bool NoChange);
 
     private static int IndexOf(IList<BoardItem> collection, Guid itemId)
     {
