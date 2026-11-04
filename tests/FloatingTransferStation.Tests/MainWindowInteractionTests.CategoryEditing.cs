@@ -56,7 +56,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void CategoryDefaultMarker_Evidence_BothThemes()
+    public void CategoryTab_DefaultMarkerEvidenceBothThemes()
     {
         // 2026-11-03 W7（Issue #280）：默认接收标记由字符「◎」改为描边靶心 Path——
         // 浅/深双主题渲染证据（默认标记落在待分类标签上＝默认接收分类 Inbox）。
