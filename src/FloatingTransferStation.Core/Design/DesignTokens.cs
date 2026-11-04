@@ -147,4 +147,11 @@ public static class DesignTokens
     public const double LauncherTilePitchPx = LauncherTileWidthPx + LauncherTileGutterPx;
     public const int LauncherTileMinColumns = 3;
     public const int LauncherTileMaxColumns = 6;
+    /// <summary>启动瓦片视口顶/底内衬（px，W6 顶排圆角裁切修复 2026-11-03，需求 8）：
+    /// 瓦片动画全为 RenderTransform（悬停上浮 −2、确认脉冲 1.06 放大上下各溢 ≈3），
+    /// 溢出越过滚动视口缘即被 ScrollContentPresenter 裁剪——首行/末行没有行间沟道
+    /// 缓冲，顶/底圆角被切（其余行有 8px 沟道吸收）。LauncherTilePanel 在内容顶/底
+    /// 各留此内衬（随内容滚动，恰在列表自然停位提供余量）；取值 ≥ 上浮 2＋脉冲 3＋
+    /// 描边余量，取整对齐沟道 8 的节奏。面板宽仍=视口（拉伸填充不变，#23/#30 不回退）。</summary>
+    public const int LauncherTileViewportInsetPx = 8;
 }

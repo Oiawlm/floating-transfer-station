@@ -273,6 +273,7 @@ $interactionTestPrefixes = @{
     'EdgeHide'               = @('EdgeHide')
     'EditingCommit'          = @('EditingCommit')
     'ExpandPipeline'         = @('ColdExpandImageCategory', 'ExpandImageCategory', 'ExpandWithSavedDeepOffset')
+    'FocusVisuals'           = @('FocusVisual')
     'LauncherDiscovery'      = @('Discovery')
     'HeaderIconMetrics'      = @('HeaderActionIcons')
     'InterfaceFont'          = @('FontEvidence')
@@ -306,6 +307,7 @@ $interactionTestPrefixes = @{
     'Updates'                = @('AutoUpdateCheckToggle', 'Evidence', 'UpdateButton', 'UpdateCheck')
     'VisualLifecycle'        = @('ActiveCategoryFeedback', 'BeginPanelDrag', 'BoardList', 'CardOperationColumns', 'CategoryFeedback', 'CategoryHover', 'CategorySwitch', 'CategoryTab', 'Close', 'Collapse', 'CollapsedCategoryHover', 'CollapsedHandle', 'CollapsedPlacement', 'CollapsedWindow', 'DisablingClientAreaAnimations', 'ExpandedCategoryHover', 'ExpandedPlacement', 'ExpandedRailReveal', 'ExternalRailPlacement', 'FailedFinalSave', 'Header', 'ImageCard', 'PanelContentAnimation', 'PinnedBoundary', 'RapidCollapsedCategoryHover', 'ResetAction', 'RootMouseEnter', 'StatusOverlay', 'TextCard', 'Topmost', 'WindowResources', 'WindowShell')
     'VisualTransitions'      = @('CollapseExit', 'PendingCollapse')
+    'W6Evidence'             = @('W6Evidence')
 }
 
 function Test-ExemptDocument([string]$file) {
