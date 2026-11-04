@@ -48,8 +48,6 @@ $AllowedRootEntries = @(
     '.github'
     '.gitignore'
     'CHANGELOG.md'
-    'CODE_OF_CONDUCT.md'
-    'CONTRIBUTING.md'
     'Directory.Build.props'
     'FloatingTransferStation.slnx'
     'LICENSE'
@@ -324,11 +322,8 @@ $ForbiddenLocalPathBaseline = @{
     'CHANGELOG.md'                                                = 11
     'ROADMAP.md'                                                  = 4
     'docs/README.md'                                              = 1
-    'docs/design-contracts.md'                                    = 28
     'docs/design.md'                                              = 1
     'docs/images/README.md'                                       = 1
-    'docs/multi-window.md'                                        = 1
-    'docs/releasing.md'                                           = 1
     'docs/usage.md'                                               = 1
     'scripts/run-affected-tests.ps1'                              = 1
     'scripts/test-affected-selector.ps1'                          = 1

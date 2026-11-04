@@ -19,7 +19,7 @@ public static class CardGestureZones
     /// <summary>
     /// 右半操作按钮的 CommandParameter 标记（XAML 与手势层共用单一来源）：
     /// 手势层按压会话据此把按钮命中分类为独立意图（区别于右半区域的
-    /// 选择/复制手势）；操作按钮的可见性矩阵见 docs/design-contracts.md。
+    /// 选择/复制手势）；操作按钮的可见性矩阵见设计契约清单（维护者本地文档）。
     /// </summary>
     public const string TogglePinCommand = "TogglePin";
 

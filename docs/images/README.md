@@ -121,4 +121,4 @@ ffprobe -v error -select_streams v:0 -show_entries stream=width,height,avg_frame
 
 总量目标 ≤11 MB、硬上限 12 MB（当前约 2.5 MB）。单项：hero ≤2.5 MB、面板 GIF ≤1.5 MB、静态标注图 ≤200 KB、双联 ≤300 KB。降级顺序（原速基准资产除外）：缩时长 → 缩宽度 → 降帧率（≥10fps）→ 改静态图 → 删除（仅限低优先级资产）。
 
-视觉规划的通用方法论以公开社区惯例为准，入口见 [README 风格指南](../readme-style-guide.md) 文末；项目资产构成与再生方式以本台账为准。
+视觉规划的通用方法论以公开社区惯例为准；项目资产构成与再生方式以本台账为准。

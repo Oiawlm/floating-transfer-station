@@ -1125,7 +1125,7 @@
     </Border>
   </ControlTemplate>
 
-  <!-- 卡片操作按钮可见性状态矩阵（契约 #19，唯一权威=docs/design-contracts.md）：
+  <!-- 卡片操作按钮可见性状态矩阵（契约 #19，唯一权威=设计契约清单，维护者本地维护）：
        信号 = (悬停 IsMouseOver, 选中 IsSelected, 置顶 IsPinned)。
        置顶钮：可见/可命中 = IsPinned ∨ (悬停 ∧ 未选中)；
                选中时换纯展示徽章模板并以次文字色呈现（点击由
