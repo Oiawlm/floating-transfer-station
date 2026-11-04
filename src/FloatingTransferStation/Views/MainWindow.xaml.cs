@@ -142,7 +142,8 @@ public partial class MainWindow : Window
         IUpdateService? updateService = null,
         ILauncherStore? launcherStore = null,
         AppLauncher? appLauncher = null,
-        ILauncherDiscoveryStore? launcherDiscoveryStore = null)
+        ILauncherDiscoveryStore? launcherDiscoveryStore = null,
+        Func<DateTimeOffset>? updateClock = null)
     {
         InitializeComponent();
         _preferences = preferences ?? AppPreferences.Default;
@@ -158,6 +159,14 @@ public partial class MainWindow : Window
         // 挂假 HttpMessageHandler 客户端的编排器（全离线）。
         _aiTextOrganizer = aiTextOrganizer ?? new AiTextOrganizer(_deepSeekClient);
         _updateService = updateService ?? new UpdateService();
+        // 更新调度时钟可注入（契约 #26 修订：空闲触发的时间抽象，测试注入假时钟）；
+        // 未注入时用真实时钟（与 updateService 同法：生产兜底、测试注入）。
+        _updateClock = updateClock ?? (() => DateTimeOffset.Now);
+        _updateScheduler = new UpdateCheckScheduler(
+            UpdateFirstCheckDelay,
+            UpdateCheckInterval,
+            UpdateIdleCheckInterval,
+            _updateClock);
         _operationGate = operationGate;
         _dataDirectoryChangeService = dataDirectoryChangeService;
         _dataDirectory = dataDirectory ?? string.Empty;
@@ -363,7 +372,8 @@ public partial class MainWindow : Window
         ReassertTopmost();
         _topmostTimer.Start();
         _autoCleanupCheckTimer.Start();
-        // 自动检查更新（默认开）：启动 30 秒后首检 + 每 24 小时一次（契约 #26）。
+        // 自动检查更新（默认开）：30 秒首检 + 24 小时周期 + 2 小时交互空闲，三触发
+        // 统一调度（契约 #26 修订，Issue #275）。
         ApplyUpdateCheckPreference(_preferences.AutoUpdateCheckEnabled);
     }
 

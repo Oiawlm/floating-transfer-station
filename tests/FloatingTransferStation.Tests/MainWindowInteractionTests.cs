@@ -24,7 +24,8 @@ public sealed partial class MainWindowInteractionTests
         DefaultCaptureCategoryState? defaultCaptureCategory = null,
         IUpdateService? updateService = null,
         IPreferencesStore? preferencesStore = null,
-        PluginCatalog? pluginCatalog = null)
+        PluginCatalog? pluginCatalog = null,
+        Func<DateTimeOffset>? updateClock = null)
     {
         defaultCaptureCategory ??= new DefaultCaptureCategoryState();
         var paths = AppPaths.ForTests(directory.Root);
@@ -37,7 +38,8 @@ public sealed partial class MainWindowInteractionTests
             new ImageNormalizer(store.ImagesDirectory),
             updateService: updateService,
             preferencesStore: preferencesStore,
-            pluginCatalog: pluginCatalog);
+            pluginCatalog: pluginCatalog,
+            updateClock: updateClock);
     }
 
     private static MainWindow CreateWindow(
@@ -78,7 +80,8 @@ public sealed partial class MainWindowInteractionTests
         DataDirectoryChangeService? dataDirectoryChangeService = null,
         ISecretProtector? secretProtector = null,
         DeepSeekClient? deepSeekClient = null,
-        AiTextOrganizer? aiTextOrganizer = null)
+        AiTextOrganizer? aiTextOrganizer = null,
+        Func<DateTimeOffset>? updateClock = null)
     {
         defaultCaptureCategory ??= new DefaultCaptureCategoryState();
         // harness 密封缺省②（契约 #53）：未显式注入更新服务时缺省用无网络假件（恒无更新），
@@ -126,7 +129,8 @@ public sealed partial class MainWindowInteractionTests
             dataDirectoryChangeService: dataDirectoryChangeService,
             secretProtector: secretProtector,
             deepSeekClient: deepSeekClient,
-            aiTextOrganizer: aiTextOrganizer);
+            aiTextOrganizer: aiTextOrganizer,
+            updateClock: updateClock);
         // harness 密封缺省①（契约 #53）：真实剪贴板写缺省＝响亮失败 stub——未显式声明写
         // 意图的测试一旦走到 WriteClipboardData 即失败并给可读原因（产品侧捕获子句只接
         // COM/External/InvalidOperation，AssertFailedException 穿透直达测试）。既有显式
