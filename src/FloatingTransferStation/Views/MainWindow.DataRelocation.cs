@@ -103,42 +103,4 @@ public partial class MainWindow
 
         return result;
     }
-
-    /// <summary>当前生效插件目录（覆盖或默认），供设置窗展示。</summary>
-    public string EffectivePluginsDirectory =>
-        _pluginCatalog?.UserPluginsDirectory ?? AppPaths.FromDataDirectory(_dataDirectory).PluginsDirectory;
-
-    /// <summary>插件目录是否为默认（数据目录下 plugins）。</summary>
-    public bool PluginsDirectoryIsDefault =>
-        string.Equals(
-            EffectivePluginsDirectory,
-            AppPaths.FromDataDirectory(_dataDirectory).PluginsDirectory,
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-
-    /// <summary>
-    /// 保存插件目录偏好（null = 恢复默认）：走既有偏好原子持久化，重启后生效；
-    /// 目录落在数据目录之内或非法时拒绝并返回原因。
-    /// </summary>
-    public Task<string?> ApplyPluginsDirectoryAsync(string? directoryOverride)
-    {
-        if (directoryOverride is not null)
-        {
-            var probe = AppPaths.FromDataDirectory(_dataDirectory);
-            var (paths, warning) = AppPaths.ResolvePluginsDirectoryOverride(probe, directoryOverride);
-            if (warning is not null)
-            {
-                return Task.FromResult<string?>(warning);
-            }
-
-            directoryOverride = string.Equals(
-                paths.PluginsDirectory,
-                probe.PluginsDirectory,
-                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
-                ? null
-                : paths.PluginsDirectory;
-        }
-
-        ApplyPreferences(_preferences with { PluginsDirectoryOverride = directoryOverride });
-        return Task.FromResult<string?>(null);
-    }
 }

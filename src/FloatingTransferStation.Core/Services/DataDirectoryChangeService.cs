@@ -23,12 +23,21 @@ public sealed record DataDirectoryChangeResult(
     public static DataDirectoryChangeResult Failed(string error) => new(false, error);
 }
 
+/// <summary>数据目录登记写入的抽象，供应用内搬迁编排注入替身测试注册表失败路径。</summary>
+public interface IDataDirectoryRegistration
+{
+    string? ReadDataDirectory();
+
+    bool TryCommit(string dataDirectory, string dataParentDirectory);
+}
+
 /// <summary>
-/// 应用内数据目录搬迁编排：与安装器 PrepareDataDirectoryMigration 同一协议——
-/// 校验（形状/探针/卷空间/目标不存在）→ 暂存复制 → 校验 → 同卷原子发布 →
-/// 原子更新 DataDirectory/DataParentDirectory 登记 → 写延迟清理标记 →
-/// 以 --relocated 起子进程 → 旧实例退出。发布前任一步失败：清暂存、恢复运行、
-/// 源目录与登记不动；登记成功后标记/重启失败不再回滚（登记已指向新目录），
+/// 应用内数据目录搬迁编排（设置内变更与启动归一共用）：与安装器
+/// PrepareDataDirectoryMigration 同一协议——校验（形状/探针/卷空间/目标可用）→
+/// 暂存复制 → 校验 → 同卷原子发布 → 原子更新 DataDirectory/DataParentDirectory
+/// 登记 → 写延迟清理标记 → 以 --relocated 起子进程 → 旧实例退出。发布前任一步
+/// 失败：清暂存、恢复运行、源目录与登记不动（就位迁移发布中断且恢复失败时保留
+/// 暂存活副本并提示重试）；登记成功后标记/重启失败不再回滚（登记已指向新目录），
 /// 重启失败直接退出并提示手动启动。
 /// </summary>
 public sealed class DataDirectoryChangeService
@@ -112,6 +121,14 @@ public sealed class DataDirectoryChangeService
             quiesce.Resume();
             return DataDirectoryChangeResult.Failed("已取消迁移，原目录未做任何改动。");
         }
+        catch (DataDirectoryRelocationException exception) when (
+            exception.Reason == DataDirectoryRelocationRefusal.PublishRollbackFailed)
+        {
+            // 就位迁移发布中断且自动恢复失败：旧根已让位、暂存副本完好——绝不能
+            // 丢弃暂存（那是数据的活副本），登记未动，保旧提示等待下次启动重试。
+            quiesce.Resume();
+            return DataDirectoryChangeResult.Failed(exception.Message);
+        }
         catch (DataDirectoryRelocationException exception)
         {
             _relocator.Discard(plan);
@@ -128,7 +145,10 @@ public sealed class DataDirectoryChangeService
         }
 
         if (!await RelocationCleanupMarker.TryWriteAsync(
-                plan.TargetDataDirectory, plan.SourceDataDirectory, _writer, cancellationToken).ConfigureAwait(true))
+                plan.TargetDataDirectory,
+                DataDirectoryRelocator.GetRelocationCleanupTarget(plan),
+                _writer,
+                cancellationToken).ConfigureAwait(true))
         {
             RollbackPublishedTarget(plan);
             _relocator.Discard(plan);
@@ -151,9 +171,12 @@ public sealed class DataDirectoryChangeService
         return new DataDirectoryChangeResult(true, null, plan);
     }
 
-    /// <summary>登记失败/标记失败的撤销：按形状守卫删除刚发布的目录（仅旧形状会连带移除空的「悬浮中转站」中间层）。</summary>
+    /// <summary>
+    /// 登记失败/标记失败的撤销：按形状守卫删除刚发布的目录（仅旧形状会连带移除
+    /// 空的「悬浮中转站」中间层）；就位迁移把让位副本原路移回，源目录恢复原状。
+    /// </summary>
     private void RollbackPublishedTarget(DataDirectoryRelocationPlan plan) =>
-        DataDirectoryRelocator.TryDeleteManagedDataDirectory(plan.TargetDataDirectory, out _);
+        DataDirectoryRelocator.TryRollbackPublish(plan, out _);
 
     private bool TrySpawnRelaunch()
     {

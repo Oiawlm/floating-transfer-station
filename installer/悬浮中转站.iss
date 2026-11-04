@@ -88,8 +88,8 @@ const
   DataParentDirectoryRegistryValue = 'DataParentDirectory';
   InstallDirectoryRegistryValue = 'InstallDirectory';
   InstallRegistryKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{9F0E0B0F-4E4F-47C2-9E63-56847E509D50}_is1';
-  ManagedDataParentLeaf = '悬浮中转站';
-  ManagedDataLeaf = 'Data';
+  ManagedRootLeaf = '悬浮中转站';
+  LegacyDataLeaf = 'Data';
   ErrorFileNotFound = 2;
   ErrorPathNotFound = 3;
   ErrorNoMoreFiles = 18;
@@ -231,15 +231,21 @@ end;
 
 function BuildDataDirectory(const ParentDirectory: String): String;
 begin
-  // 新形状（直下形状，契约 #47）：Data 直下于用户所选目录。
-  Result := AddBackslash(NormalizeDirectory(ParentDirectory)) + ManagedDataLeaf;
+  // 唯一受管形状（数据目录模型统一）：<所选>/悬浮中转站——文件夹本身即数据根。
+  Result := AddBackslash(NormalizeDirectory(ParentDirectory)) + ManagedRootLeaf;
+end;
+
+function BuildDirectLegacyDataDirectory(const ParentDirectory: String): String;
+begin
+  // 旧直下形状（待迁移旧形，仅存量登记读取）：<所选>/Data。
+  Result := AddBackslash(NormalizeDirectory(ParentDirectory)) + LegacyDataLeaf;
 end;
 
 function BuildLegacyDataDirectory(const ParentDirectory: String): String;
 begin
-  // 旧形状（嵌套形状，仅存量登记继续有效）：<所选>/悬浮中转站/Data。
+  // 旧嵌套形状（待迁移旧形，仅存量登记读取）：<所选>/悬浮中转站/Data。
   Result := AddBackslash(NormalizeDirectory(ParentDirectory)) +
-    ManagedDataParentLeaf + '\' + ManagedDataLeaf;
+    ManagedRootLeaf + '\' + LegacyDataLeaf;
 end;
 
 function GetManagedDataParent(const DataDirectory: String): String;
@@ -252,24 +258,38 @@ function IsLegacyManagedDataDirectory(const DataDirectory: String): Boolean;
 var
   Normalized: String;
 begin
+  // 两个历史形状（待迁移旧形）任一：叶子恰为 Data（父是否「悬浮中转站」中间层
+  // 区分直下/嵌套，不影响「旧形」判定）。
   Result := False;
   if not IsFullyQualifiedPath(DataDirectory) then
     Exit;
   Normalized := NormalizeDirectory(DataDirectory);
-  if CompareText(ExtractFileName(Normalized), ManagedDataLeaf) <> 0 then
+  if CompareText(ExtractFileName(Normalized), LegacyDataLeaf) <> 0 then
     Exit;
+  Result := True;
+end;
+
+function IsLegacyNestedDataDirectory(const DataDirectory: String): Boolean;
+var
+  Normalized: String;
+begin
+  // 旧嵌套形状判别：Data 直接父目录的叶子名恰为「悬浮中转站」中间层。
+  Result := False;
+  if not IsLegacyManagedDataDirectory(DataDirectory) then
+    Exit;
+  Normalized := NormalizeDirectory(DataDirectory);
   Result := CompareText(ExtractFileName(GetManagedDataParent(Normalized)),
-    ManagedDataParentLeaf) = 0;
+    ManagedRootLeaf) = 0;
 end;
 
 function GetDataParentDirectory(const DataDirectory: String): String;
 var
   DataParent: String;
 begin
-  // 用户所选目录（登记 DataParentDirectory 的语义，两形状同义）：
-  // 新形状剥掉 Data 即得；旧形状还要再剥掉「悬浮中转站」中间层。
+  // 用户所选目录（登记 DataParentDirectory 的语义，三形状同义）：受管形状剥掉
+  // 「悬浮中转站」叶子；旧直下形状剥掉 Data；旧嵌套形状还要再剥掉中间层。
   DataParent := GetManagedDataParent(DataDirectory);
-  if CompareText(ExtractFileName(DataParent), ManagedDataParentLeaf) = 0 then
+  if CompareText(ExtractFileName(DataParent), ManagedRootLeaf) = 0 then
     Result := RemoveBackslashUnlessRoot(ExtractFilePath(DataParent))
   else
     Result := DataParent;
@@ -300,20 +320,32 @@ var
   DataParent: String;
   ParentDirectory: String;
 begin
-  // 双形状判定（契约 #47），与应用侧 DataDirectorySettings.NormalizeManagedDataDirectory
-  // 同构：叶子恰为 Data；判别符＝Data 直接父目录叶子名恰为「悬浮中转站」。
+  // 三形状判定（与应用侧 DataDirectorySettings 同构）：受管形状叶子恰为
+  // 「悬浮中转站」（数据根本身）；两个旧形状（待迁移旧形）叶子恰为 Data，
+  // 仅存量登记继续有效，父是否「悬浮中转站」中间层区分嵌套/直下。
   Result := False;
   if not IsFullyQualifiedPath(Value) then
     Exit;
 
   Normalized := NormalizeDirectory(Value);
-  if CompareText(ExtractFileName(Normalized), ManagedDataLeaf) <> 0 then
+  if CompareText(ExtractFileName(Normalized), ManagedRootLeaf) = 0 then
+  begin
+    // 受管形状：<所选> 不能是盘符/共享根（C:\悬浮中转站 拒绝）。
+    DataParent := GetManagedDataParent(Normalized);
+    if IsRootDirectory(DataParent) then
+      Exit;
+    Result := (DataParent <> '') and
+      (CompareText(Normalized, BuildDataDirectory(DataParent)) = 0);
+    Exit;
+  end;
+
+  if CompareText(ExtractFileName(Normalized), LegacyDataLeaf) <> 0 then
     Exit;
 
   DataParent := GetManagedDataParent(Normalized);
-  if CompareText(ExtractFileName(DataParent), ManagedDataParentLeaf) = 0 then
+  if CompareText(ExtractFileName(DataParent), ManagedRootLeaf) = 0 then
   begin
-    // 旧形状（嵌套形状）：中间层的上级不能是盘符/共享根。
+    // 旧嵌套形状：所选目录（中间层的上级）不能是盘符/共享根。
     ParentDirectory := GetDataParentDirectory(Normalized);
     if IsRootDirectory(ParentDirectory) then
       Exit;
@@ -322,17 +354,19 @@ begin
   end
   else
   begin
-    // 新形状（直下形状）：Data 直下于用户所选目录，所选目录不能是根。
+    // 旧直下形状：所选目录不能是根。
     if IsRootDirectory(DataParent) then
       Exit;
     Result := (DataParent <> '') and
-      (CompareText(Normalized, BuildDataDirectory(DataParent)) = 0);
+      (CompareText(Normalized, BuildDirectLegacyDataDirectory(DataParent)) = 0);
   end;
 end;
 
 function GetLegacyDataDirectory: String;
 begin
-  Result := ExpandConstant('{localappdata}\悬浮中转站\Data');
+  // 无登记时的默认数据根（与应用侧 AppPaths.DefaultDataDirectory 同义）：
+  // 以 LocalAppData 为「所选目录」的同一形状。
+  Result := ExpandConstant('{localappdata}\') + ManagedRootLeaf;
 end;
 
 function ReadExistingDataDirectory: String;
@@ -362,7 +396,8 @@ var
   ParentDirectory: String;
 begin
   ParentDirectory := NormalizeDirectory(DataDirectoryPage.Values[0]);
-  // 旧形状存量登记＋用户保持原父目录：沿用旧形状路径，绝不自动搬迁（契约 #47）。
+  // 旧形状存量登记＋用户保持原父目录：沿用旧登记，安装器绝不自动搬迁——应用
+  // 下次启动时自行归一到 <同父>/悬浮中转站（唯一受管形状）。
   if IsLegacyManagedDataDirectory(ExistingDataDirectory) and
     (CompareText(ParentDirectory, NormalizeDirectory(ExistingDataParentDirectory)) = 0) then
     Result := ExistingDataDirectory
@@ -567,9 +602,10 @@ begin
 
   Normalized := NormalizeDirectory(DataDirectory);
   Result := DelTree(Normalized, True, True, True);
-  // 仅旧形状删除后尝试移除空的「悬浮中转站」中间层；新形状（契约 #47）绝不
-  // 触碰用户所选父目录——哪怕已空。
-  if Result and IsLegacyManagedDataDirectory(Normalized) then
+  // 删除范围：受管形状只删「悬浮中转站」数据根本身，旧直下形状只删 Data——
+  // 两者绝不触碰用户所选父目录（哪怕已空）；仅旧嵌套形状删除后尝试移除空的
+  // 「悬浮中转站」中间层（应用创建）。
+  if Result and IsLegacyNestedDataDirectory(Normalized) then
     RemoveDir(GetManagedDataParent(Normalized));
 end;
 
@@ -717,7 +753,7 @@ begin
   DataDirectoryPage := CreateInputDirPage(wpSelectDir,
     '内容存储位置',
     '选择图片、文字和设置的存储文件夹',
-    '悬浮中转站会在所选文件夹中直接创建并管理“Data”子文件夹；保持原有位置不变则不会搬迁数据。点击“下一步”继续。',
+    '悬浮中转站会在所选文件夹中创建并管理「悬浮中转站」文件夹（全部数据与插件都在里面）；保持原有位置不变则不会搬迁数据。点击“下一步”继续。',
     False,
     SetupMessage(msgNewFolderName));
   DataDirectoryPage.Add('存储文件夹：');

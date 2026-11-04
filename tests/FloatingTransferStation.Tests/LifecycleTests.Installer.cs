@@ -384,43 +384,48 @@ public sealed partial class LifecycleTests
 
     [TestMethod]
     [TestCategory("Adversarial")]
-    public void Installer_ManagedDataDirectoryFollowsDualShapeContract()
+    public void Installer_ManagedDataDirectoryFollowsUnifiedShapeContract()
     {
-        // 契约 #47：双形状并存（新 <所选>/Data＋旧嵌套只读兼容）、存量不自动搬迁、
-        // 新形状卸载绝不触碰用户所选父目录。
+        // 数据目录模型统一（W3，2026-11-05）：唯一受管形状＝<所选>/悬浮中转站（数据根
+        // 本身）；两个旧形状（<所选>/Data、<所选>/悬浮中转站/Data）只作待迁移旧形读取；
+        // 安装器对新登记一律构造受管形状，旧形状同父保持时沿用旧登记（应用启动自行归一）；
+        // 卸载删除范围：受管形状只删数据根，旧直下形状只删 Data，仅旧嵌套形状移除空中间层。
         var installer = File.ReadAllText(Directory.GetFiles(Path.Combine(FindRepositoryRoot(), "installer"), "*.iss").Single());
 
         var buildStart = installer.IndexOf("function BuildDataDirectory", StringComparison.Ordinal);
-        var build = installer[buildStart..installer.IndexOf("function BuildLegacyDataDirectory", buildStart, StringComparison.Ordinal)];
+        var build = installer[buildStart..installer.IndexOf("function BuildDirectLegacyDataDirectory", buildStart, StringComparison.Ordinal)];
         Assert.IsFalse(
-            build.Contains("ManagedDataParentLeaf", StringComparison.Ordinal),
-            "新选择必须构造直下形状 <所选>/Data，不得再造「悬浮中转站」中间层。");
+            build.Contains("LegacyDataLeaf", StringComparison.Ordinal),
+            "新选择必须构造受管形状 <所选>/悬浮中转站（数据根本身），不得再造 Data 层。");
+        StringAssert.Contains(build, "ManagedRootLeaf");
+        StringAssert.Contains(installer, "function BuildDirectLegacyDataDirectory");
         StringAssert.Contains(installer, "function BuildLegacyDataDirectory");
         StringAssert.Contains(installer, "function IsLegacyManagedDataDirectory");
+        StringAssert.Contains(installer, "function IsLegacyNestedDataDirectory");
 
         var isManagedStart = installer.IndexOf("function IsManagedDataDirectory", StringComparison.Ordinal);
         var isManaged = installer[
             isManagedStart..installer.IndexOf("function GetLegacyDataDirectory", isManagedStart, StringComparison.Ordinal)];
         StringAssert.Contains(
             isManaged,
-            "if CompareText(ExtractFileName(DataParent), ManagedDataParentLeaf) = 0 then",
-            "形状判别符必须是 Data 直接父目录的叶子名恰为「悬浮中转站」。");
+            "if CompareText(ExtractFileName(DataParent), ManagedRootLeaf) = 0 then",
+            "旧形状判别符必须是 Data 直接父目录的叶子名恰为「悬浮中转站」（区分嵌套/直下）。");
         StringAssert.Contains(
             isManaged,
             "if IsRootDirectory(DataParent) then",
-            "新形状必须拒绝 Data 直下盘符/共享根（如 D:\\Data）。");
+            "受管形状与旧直下形状必须拒绝直下盘符/共享根（如 C:\\悬浮中转站、D:\\Data）。");
         StringAssert.Contains(
             isManaged,
             "if IsRootDirectory(ParentDirectory) then",
-            "旧形状必须拒绝中间层直下盘符/共享根。");
+            "旧嵌套形状必须拒绝中间层直下盘符/共享根。");
 
         var deleteStart = installer.IndexOf("function DeleteManagedDataDirectory", StringComparison.Ordinal);
         var delete = installer[
             deleteStart..installer.IndexOf("function IsMissingManagedDataDirectory", deleteStart, StringComparison.Ordinal)];
         StringAssert.Contains(
             delete,
-            "if Result and IsLegacyManagedDataDirectory(Normalized) then",
-            "删除后尝试移除上层目录仅限旧形状；新形状绝不触碰用户所选父目录。");
+            "if Result and IsLegacyNestedDataDirectory(Normalized) then",
+            "删除后尝试移除上层目录仅限旧嵌套形状的空中间层；受管形状与旧直下形状绝不触碰用户所选父目录。");
 
         var getSelectedStart = installer.IndexOf("function GetSelectedDataDirectory", StringComparison.Ordinal);
         var getSelected = installer[
@@ -428,13 +433,13 @@ public sealed partial class LifecycleTests
         StringAssert.Contains(
             getSelected,
             "IsLegacyManagedDataDirectory(ExistingDataDirectory)",
-            "旧形状登记＋保持原父目录时必须沿用旧形状路径，绝不自动搬迁。");
+            "旧形状登记＋保持原父目录时必须沿用旧登记，安装器绝不自动搬迁——应用启动自行归一。");
 
         var prepareStart = installer.IndexOf("function PrepareDataDirectoryMigration", StringComparison.Ordinal);
         var prepare = installer[
             prepareStart..installer.IndexOf("function PrepareToInstall", prepareStart, StringComparison.Ordinal)];
         Assert.IsFalse(
             prepare.Contains("Refusing to use a pre-existing managed data parent", StringComparison.Ordinal),
-            "新选目录可预先存在且含其他内容（契约 #47），不得以「受管父已存在」拒绝。");
+            "新选目录可预先存在且含其他内容，不得以「受管父已存在」拒绝。");
     }
 }

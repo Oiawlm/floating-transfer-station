@@ -119,31 +119,38 @@ public sealed class AppPreferencesTests
     }
 
     [TestMethod]
-    public void Default_UsesDefaultPluginsDirectory()
+    public void OlderJson_WithRemovedPluginsDirectoryOverride_IgnoredAndNotWrittenBack()
     {
-        Assert.IsNull(AppPreferences.Default.PluginsDirectoryOverride);
-    }
-
-    [TestMethod]
-    public void JsonRoundTrip_PreservesPluginsDirectoryOverride()
-    {
-        var preferences = new AppPreferences(PluginsDirectoryOverride: @"D:\MyPlugins");
-
+        // 数据目录模型统一移除了 PluginsDirectoryOverride（插件目录结构性内嵌为
+        // 数据根 plugins）：旧 preferences.json 残留该键时按未知成员忽略，不抛错、
+        // 不回落任何语义；再落盘不得写回。迁移期对旧键的读取在
+        // StartupDataDirectoryMigration 内按原始 JSON 单点处理，不复活本字段。
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
         var restored = JsonSerializer.Deserialize<AppPreferences>(
-            JsonSerializer.Serialize(preferences));
+            """{"themeMode":"Dark","animationsEnabled":true,"pluginsDirectoryOverride":"D:\\MyPlugins","copySelectionWithCtrlCEnabled":true}""",
+            storeOptions);
 
-        Assert.AreEqual(preferences, restored);
-        Assert.AreEqual(@"D:\MyPlugins", restored!.PluginsDirectoryOverride);
+        Assert.IsNotNull(restored);
+        Assert.AreEqual(ThemePreference.Dark, restored.ThemeMode);
+        Assert.IsTrue(restored.AnimationsEnabled);
+        var saved = JsonSerializer.Serialize(restored, storeOptions);
+        Assert.IsFalse(
+            saved.Contains("pluginsDirectoryOverride", StringComparison.OrdinalIgnoreCase),
+            "再落盘不得写回已移除的插件目录覆盖字段。");
     }
 
     [TestMethod]
-    public void OlderJson_WithoutPluginsDirectoryField_FallsBackToDefault()
+    public void OlderJson_WithoutPluginsDirectoryField_LoadsNormally()
     {
         var restored = JsonSerializer.Deserialize<AppPreferences>(
             """{"ThemeMode":0,"AnimationsEnabled":true}""");
 
         Assert.IsNotNull(restored);
-        Assert.IsNull(restored.PluginsDirectoryOverride, "旧版 preferences.json 缺字段时必须回落到默认插件目录。");
+        Assert.AreEqual(ThemePreference.FollowSystem, restored.ThemeMode);
     }
 
     [TestMethod]

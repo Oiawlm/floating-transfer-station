@@ -1,5 +1,11 @@
 namespace FloatingTransferStation.Services;
 
+/// <summary>
+/// 数据根内全部受管路径的单一布局来源：数据文件直接放在数据根
+/// <c>&lt;所选&gt;/悬浮中转站</c> 里，插件目录结构性内嵌为 <c>数据根/plugins</c>
+/// （无独立调整能力）。默认位置（无登记）＝<c>%LocalAppData%\悬浮中转站\</c>，
+/// 即以 LocalAppData 为「所选目录」的同一形状。
+/// </summary>
 public sealed record AppPaths(
     string DataDirectory,
     string BoardFile,
@@ -15,13 +21,16 @@ public sealed record AppPaths(
 {
     public static AppPaths CreateDefault(IDataDirectorySettings? settings = null)
     {
-        var configured = DataDirectorySettings.NormalizeManagedDataDirectory(settings?.ReadDataDirectory());
-        var dataDirectory = configured ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            ProductIdentity.DisplayName,
-            "Data");
-        return FromDataDirectory(dataDirectory);
+        // 登记读取按「受管形状优先、两个旧形状待迁移接受」统一解析：旧形登记在
+        // 启动迁移失败时保旧运行，因此这里不能只认受管形状。
+        var configured = DataDirectorySettings.NormalizeRegisteredDataDirectory(settings?.ReadDataDirectory());
+        return FromDataDirectory(configured ?? DefaultDataDirectory());
     }
+
+    /// <summary>默认数据根：以 LocalAppData 为「所选目录」的同一形状。</summary>
+    public static string DefaultDataDirectory() => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        ProductIdentity.DisplayName);
 
     public static AppPaths ForTests(string dataDirectory) => FromDataDirectory(dataDirectory);
 
@@ -37,52 +46,4 @@ public sealed record AppPaths(
         Path.Combine(dataDirectory, "launchers.json"),
         Path.Combine(dataDirectory, "launcher-icons"),
         Path.Combine(dataDirectory, "launcher-discoveries.json"));
-
-    /// <summary>
-    /// 应用插件目录偏好的单一解析规则：null/空白或等于默认 → 默认（数据目录下 plugins）；
-    /// 非完整限定路径、设备路径或落在当前数据目录之内（含 Data 形状内部）→ 回退默认并
-    /// 返回告警文案（插件目录不能随受管数据目录一起被搬迁/清理误伤）；其余覆盖为用户目录。
-    /// 只改 PluginsDirectory；PluginStateFile（启用状态）按 record 语义仍留在数据目录。
-    /// </summary>
-    public static (AppPaths Paths, string? Warning) ResolvePluginsDirectoryOverride(
-        AppPaths paths,
-        string? pluginsDirectoryOverride)
-    {
-        if (string.IsNullOrWhiteSpace(pluginsDirectoryOverride))
-        {
-            return (paths, null);
-        }
-
-        string normalized;
-        try
-        {
-            if (!Path.IsPathFullyQualified(pluginsDirectoryOverride))
-            {
-                return (paths, $"插件目录必须是完整路径，已回退默认：{pluginsDirectoryOverride}");
-            }
-
-            normalized = Path.GetFullPath(pluginsDirectoryOverride).TrimEnd(Path.DirectorySeparatorChar);
-        }
-        catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
-        {
-            return (paths, $"插件目录无效，已回退默认：{pluginsDirectoryOverride}");
-        }
-
-        var comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-        if (string.Equals(normalized, paths.PluginsDirectory, comparison))
-        {
-            // 默认目录本身就在数据目录之内：与默认同一路径的覆盖没有额外语义，
-            // 先于“数据目录之内”判定，按默认处理（含大小写差异）。
-            return (paths, null);
-        }
-
-        if (DataDirectorySettings.IsPathWithin(normalized, paths.DataDirectory, comparison))
-        {
-            return (paths, "插件目录不能位于数据目录之内，已回退默认。");
-        }
-
-        return (paths with { PluginsDirectory = normalized }, null);
-    }
 }

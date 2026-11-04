@@ -1268,7 +1268,7 @@ public partial class SettingsWindow : Window
 
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = "选择内容存储文件夹（将在其中直接创建 Data）"
+            Title = "选择内容存储文件夹（将在其中创建「悬浮中转站」文件夹）"
         };
         if (dialog.ShowDialog(this) != true || string.IsNullOrWhiteSpace(dialog.FolderName))
         {
@@ -1368,14 +1368,13 @@ public partial class SettingsWindow : Window
         {
             PluginDirectoryText.Text = string.Empty;
             OpenPluginDirectoryButton.Visibility = Visibility.Collapsed;
-            ChangePluginDirectoryButton.Visibility = Visibility.Collapsed;
-            ResetPluginDirectoryButton.Visibility = Visibility.Collapsed;
             PluginDirectoryNoteText.Visibility = Visibility.Collapsed;
             PluginHelpText.Text = "插件系统在本次运行中不可用。";
             return;
         }
 
-        RefreshPluginDirectoryDisplay();
+        // 插件目录结构性内嵌为数据根 plugins（随数据目录一起移动），只读展示。
+        PluginDirectoryText.Text = catalog.UserPluginsDirectory;
         foreach (var entry in catalog.Entries)
         {
             PluginListPanel.Children.Add(CreatePluginRow(entry));
@@ -1388,47 +1387,6 @@ public partial class SettingsWindow : Window
         }
 
         PluginHelpText.Text = "插件默认关闭；启用后立即生效并自动保存。放入用户目录的同名插件会覆盖内建版本。";
-    }
-
-    private void RefreshPluginDirectoryDisplay()
-    {
-        PluginDirectoryText.Text = _host.EffectivePluginsDirectory;
-        PluginDirectoryNoteText.Text = _host.PluginsDirectoryIsDefault
-            ? "当前使用默认插件目录（数据目录下 plugins）；更改后重启生效，启用状态仍保存在数据目录。"
-            : "自定义插件目录；更改后重启生效，启用状态仍保存在数据目录。";
-    }
-
-    private async void ChangePluginDirectoryButton_Click(object sender, RoutedEventArgs e)
-    {
-        e.Handled = true;
-        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "选择插件文件夹" };
-        if (dialog.ShowDialog(this) != true || string.IsNullOrWhiteSpace(dialog.FolderName))
-        {
-            return;
-        }
-
-        await ApplyPluginsDirectoryAsync(dialog.FolderName);
-    }
-
-    private async void ResetPluginDirectoryButton_Click(object sender, RoutedEventArgs e)
-    {
-        e.Handled = true;
-        await ApplyPluginsDirectoryAsync(null);
-    }
-
-    private async Task ApplyPluginsDirectoryAsync(string? directoryOverride)
-    {
-        var error = await _host.ApplyPluginsDirectoryAsync(directoryOverride);
-        if (error is not null)
-        {
-            PluginStatusText.Text = error;
-            PluginStatusText.Visibility = Visibility.Visible;
-            return;
-        }
-
-        PluginStatusText.Text = string.Empty;
-        PluginStatusText.Visibility = Visibility.Collapsed;
-        RefreshPluginDirectoryDisplay();
     }
 
     private Border CreatePluginRow(PluginEntry entry)
