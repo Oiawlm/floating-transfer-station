@@ -259,6 +259,7 @@ $interactionTestPrefixes = @{
     'CardGestures'           = @('CardGestures')
     'CardHalves'             = @('CardHalves')
     'CardNote'               = @('CardNote', 'CardOperationAvoidance', 'CardOperationMatrix')
+    'TextDelivery'           = @('TextDelivery')
     'CardOperationAvoidance' = @('CardOperationStrip', 'CardText', 'CardTextReservedInset')
     'CardRendering'          = @('BatchStructuralChange', 'BoardList', 'CardTemplate', 'CardText', 'CardThumbnail')
     'CategoryEditing'        = @('CategoryNameEditing', 'CategoryNameEditor', 'CategoryNameSave', 'CategoryNameSaveFailure', 'CategoryTab', 'CategoryTabLabelAndEditor', 'F2Rename')

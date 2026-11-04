@@ -13,16 +13,19 @@ namespace FloatingTransferStation.Tests;
 /// <summary>
 /// 卡片操作按钮状态矩阵与单卡删除按钮（1.24.0，契约 #19）的锁定测试。
 /// 矩阵信号 = (悬停 IsMouseOver, 选中 IsSelected, 置顶 IsPinned)：
-/// - 未选中+悬停：选择/置顶/删除三钮显示可点（删除只删本卡）；
+/// - 未选中+悬停：选择/置顶/删除三钮显示可点（删除双语义，2026-11-03 需求 1：
+///   左键＝可撤销只删本卡，右键＝永久删除不可撤销）；
 /// - 未选中+未悬停：仅已置顶的置顶钮常显可点（=取消置顶），其余隐藏；
 /// - 选中（无论悬停）：选择钮常显可点；置顶钮未置顶隐藏、已置顶常显禁用
 ///   （纯状态徽章，点击不改置顶、不改选中）；删除钮一律隐藏。
-/// 单卡删除走既有删除管线（撤销栈、原子持久化、失败恢复），不改选择集合、
-/// 不滚动列表；指针路径一律 Win32 消息直驱（契约 #13），按钮可见性断言读
+/// 单卡删除（两键）走同一条既有删除管线（原子持久化、失败恢复），不改选择
+/// 集合、不滚动列表；指针路径一律 Win32 消息直驱（契约 #13），按钮可见性断言读
 /// FadeAnimation.IsActive 与 IsHitTestVisible（淡入只改 Opacity 不改命中）。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
+    private const int MkRbutton = 0x0002;
+
     private static ButtonBase CardOperationButton(ListBoxItem container, string commandParameter) =>
         FindDescendants<ButtonBase>(container).Single(button =>
             Equals(button.CommandParameter, commandParameter));
@@ -215,7 +218,10 @@ public sealed partial class MainWindowInteractionTests
                     TimeSpan.FromMilliseconds(DesignTokens.FadeVisibilityMs + 60));
                 Assert.AreEqual(1d, plainDelete.Opacity, 0.01, "淡入完成后删除钮必须完全可见。");
                 Assert.IsTrue(FadeAnimation.GetIsActive(plainPin), "未选中卡片悬停时置顶钮必须淡入。");
-                Assert.AreEqual("删除", plainDelete.ToolTip, "删除钮 ToolTip 必须为「删除」。");
+                Assert.AreEqual(
+                    "删除（左键可撤销，右键永久）",
+                    plainDelete.ToolTip,
+                    "删除钮 ToolTip 必须标明双语义（2026-11-03 需求 1）。");
 
                 // 移开光标：未选中卡片全部按钮回落隐藏。
                 MoveRealCursorAwayFromWindow(window);
@@ -486,8 +492,11 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
+    // 注意：保持同步方法（public void）——异步 STATestMethod 的阻塞等待不泵
+    // 消息，await 派遣器亲和任务会 STA 死锁（2026-11-04 实测 45+ 分钟自旋）；
+    // 需要等待异步落盘/撤销的场合用泵循环与 InvokePrivateTask（既有先例）。
     [STATestMethod]
-    public void CardDeleteButton_PressSlideOffCancelsAndRightClickInStripCopies()
+    public void CardDeleteButton_PressSlideOffCancelsAndRightClickOnButtonDeletesPermanently()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -623,27 +632,225 @@ public sealed partial class MainWindowInteractionTests
                     board.Items(BoardCategory.Inbox).Any(candidate => candidate.Id == item.Id),
                     "按住删除钮滑离释放必须取消删除意图。");
 
-                // 操作条内（删除钮正上方）右键＝toggle 选择（手势交换，Issue #216）：
-                // 不复制、不删除、不改既有选择之外的状态。delivered 若非 null，
+                // 删除钮（正上方）右键＝永久删除该单卡（2026-11-03 需求 1，契约
+                // #19 双语义；取代旧「操作条内右键＝toggle 选择」语义）：不复制、
+                // 不可撤销（Ctrl+Z 无恢复）、不改选择集合。delivered 若非 null，
                 // DIAG 携带手势会话现场（zone/拖拽态/修饰键）供归因（台账 A5 的
                 // 残余观测项：修复后满载 47 轮 1 红未存日志，复现时凭此定位）。
                 ClickRealRightAt(window, container, deletePoint);
                 Assert.IsNull(
                     delivered,
-                    "操作条内右键不得复制。" +
+                    "删除钮右键不得复制。" +
                     $"DIAG pressZone={GetPrivateField<object>(window, "_pressZone")} " +
                     $"dragThresholdCrossed={GetPrivateField<bool>(window, "_dragThresholdCrossed")} " +
                     $"modifiers={Keyboard.Modifiers} " +
-                    $"deleteBtnHitNow={ContainerPointHitsOperationButton(window, container, deletePoint, CardGestureZones.DeleteCardCommand)} " +
                     $"lastClick={DescribeLastCardClick(window)}");
-                Assert.IsTrue(
+
+                // 删除是异步落盘（操作门＋原子保存）：泵到卡片从板上消失。
+                var deleteDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+                while (board.Items(BoardCategory.Inbox).Any(candidate => candidate.Id == item.Id) &&
+                       DateTime.UtcNow < deleteDeadline)
+                {
+                    PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+                }
+
+                Assert.IsFalse(
                     board.Items(BoardCategory.Inbox).Any(candidate => candidate.Id == item.Id),
-                    "右键选择不得删除卡片。");
+                    "删除钮右键必须永久删除该卡。");
                 var list = (ListBox)window.FindName("BoardList");
                 CollectionAssert.AreEquivalent(
-                    new[] { item },
+                    Array.Empty<BoardItem>(),
                     list.SelectedItems.Cast<BoardItem>().ToArray(),
-                    "操作条内右键必须 toggle 选中该卡。");
+                    "永久删除不得改变选择集合。");
+
+                // 等删除管线完全收尾：状态条「已永久删除」在门内任务完成之后落笔
+                //（此刻撤销门已释放）——未收尾就撤销会撞门竞争，续体跑线程池触发
+                // 跨线程 UI 异常（2026-11-04 全量实测）。
+                var statusDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+                var statusModel = (MainWindowViewModel)window.DataContext;
+                while (statusModel.StatusText != "已永久删除 1 项（不可撤销）" &&
+                       DateTime.UtcNow < statusDeadline)
+                {
+                    PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+                }
+
+                Assert.AreEqual(
+                    "已永久删除 1 项（不可撤销）",
+                    statusModel.StatusText,
+                    "永久删除完成后状态条必须明确不可撤销。");
+
+                // Ctrl+Z 不得恢复永久删除的卡（撤销栈无此批——空栈提示）。撤销入口
+                // 经 InvokePrivateTask 泵等待（与既有撤销用例同一驱动方式）。
+                InvokePrivateTask(window, "UndoLastFromPanelAsync");
+                Assert.IsFalse(
+                    board.Items(BoardCategory.Inbox).Any(candidate => candidate.Id == item.Id),
+                    "永久删除不得被 Ctrl+Z 恢复。");
+                Assert.AreEqual(
+                    "没有可撤销的操作。",
+                    ((MainWindowViewModel)window.DataContext).StatusText,
+                    "空撤销栈必须提示无操作（永久删除不进栈）。");
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>
+    /// 右键永久删除图片卡：卡片消失且图片文件立即清理（2026-11-03 需求 1）——
+    /// 与可撤销删除的「图片保留到批次驱逐」相对，永久删除不进撤销栈、无保留
+    /// 副本的必要，保存成功后立即删除文件。同步方法（异步 STATestMethod 的
+    /// 阻塞等待不泵消息，见上用例注释）。
+    /// </summary>
+    [STATestMethod]
+    public void CardDeleteButton_RightClickOnImageCardCleansImageFileImmediately()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var image = AddImageCard(directory, board, "right-click-delete.png");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            // 压制工具提示（与滑离取消用例同因：提示 Popup 会闪断操作钮命中）。
+            window.SetValue(ToolTipService.InitialShowDelayProperty, int.MaxValue);
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, image);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var deletePoint = ButtonCenterIn(container, CardGestureZones.DeleteCardCommand);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                HoverRealUntil(window, container, deletePoint, () => container.IsMouseOver);
+                var deleteHitVerified = false;
+                for (var attempt = 0; attempt < 3 && !deleteHitVerified; attempt++)
+                {
+                    deletePoint = ButtonCenterIn(container, CardGestureZones.DeleteCardCommand);
+                    deleteHitVerified = ContainerPointHitsOperationButton(
+                        window, container, deletePoint, CardGestureZones.DeleteCardCommand);
+                    if (!deleteHitVerified)
+                    {
+                        CompleteLayout(window);
+                    }
+                }
+
+                Assert.IsTrue(
+                    deleteHitVerified,
+                    "前置：删除钮按下点必须命中钮本体。");
+
+                ClickRealRightAt(window, container, deletePoint);
+
+                var deleteDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+                while (board.Items(BoardCategory.Inbox).Any(candidate => candidate.Id == image.Id) &&
+                       DateTime.UtcNow < deleteDeadline)
+                {
+                    PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+                }
+
+                Assert.IsFalse(
+                    board.Items(BoardCategory.Inbox).Any(candidate => candidate.Id == image.Id),
+                    "删除钮右键必须永久删除图片卡。");
+                Assert.IsFalse(
+                    File.Exists(image.ImageAbsolutePath),
+                    "永久删除的图片文件必须立即清理（不进撤销栈则无保留副本的必要）。");
+            }
+            finally
+            {
+                RestoreCursorPosition(savedCursor);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>
+    /// 删除钮右键滑离取消（镜像左键按钮会话语义）：按住删除钮右键后滑离按钮
+    /// 抬键——取消永久删除意图，不删除、不落入卡面选择手势（吞掉）。
+    /// </summary>
+    [STATestMethod]
+    public void CardDeleteButton_RightClickSlideOffCancelsPermanentDelete()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var item = board.AddText("右键滑离取消", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            window.SetValue(ToolTipService.InitialShowDelayProperty, int.MaxValue);
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var container = ContainerOf(window, item);
+            window.Topmost = true;
+            CompleteLayout(window);
+            var deletePoint = ButtonCenterIn(container, CardGestureZones.DeleteCardCommand);
+            var savedCursor = SaveCursorPosition();
+
+            try
+            {
+                HoverRealUntil(window, container, deletePoint, () => container.IsMouseOver);
+                var deleteHitVerified = false;
+                for (var attempt = 0; attempt < 3 && !deleteHitVerified; attempt++)
+                {
+                    deletePoint = ButtonCenterIn(container, CardGestureZones.DeleteCardCommand);
+                    deleteHitVerified = ContainerPointHitsOperationButton(
+                        window, container, deletePoint, CardGestureZones.DeleteCardCommand);
+                    if (!deleteHitVerified)
+                    {
+                        CompleteLayout(window);
+                    }
+                }
+
+                Assert.IsTrue(
+                    deleteHitVerified,
+                    "前置：删除钮按下点必须命中钮本体。");
+
+                // 右键按下在删除钮上 → 滑离（携带 MK_RBUTTON 的位移消息）→
+                // 抬键在卡片左半：意图取消，整击吞掉。
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                var downScreen = container.PointToScreen(deletePoint);
+                var downClient = new NativePoint((int)Math.Round(downScreen.X), (int)Math.Round(downScreen.Y));
+                Assert.IsTrue(ScreenToClient(hwnd, ref downClient), "屏幕点到客户区换算必须成功。");
+                var awayPoint = new Point(24, container.ActualHeight / 2);
+                var awayScreen = container.PointToScreen(awayPoint);
+                var awayClient = new NativePoint((int)Math.Round(awayScreen.X), (int)Math.Round(awayScreen.Y));
+                Assert.IsTrue(ScreenToClient(hwnd, ref awayClient), "滑离点客户区换算必须成功。");
+                Assert.IsTrue(
+                    PostMessage(hwnd, WmRightButtonDown, MkRbutton, MakeLParam(downClient.X, downClient.Y)),
+                    "投递右键按下消息失败。");
+                Assert.IsTrue(
+                    SetCursorPos((int)Math.Round(awayScreen.X), (int)Math.Round(awayScreen.Y)),
+                    "真实光标必须可滑离。");
+                Assert.IsTrue(
+                    PostMessage(hwnd, WmMousemove, MkRbutton, MakeLParam(awayClient.X, awayClient.Y)),
+                    "投递滑离位移消息失败。");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+                Assert.IsTrue(
+                    PostMessage(hwnd, WmRightButtonUp, 0, MakeLParam(awayClient.X, awayClient.Y)),
+                    "投递滑离抬起消息失败。");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+
+                Assert.IsTrue(
+                    board.Items(BoardCategory.Inbox).Any(candidate => candidate.Id == item.Id),
+                    "按住删除钮右键滑离释放必须取消永久删除意图。");
+                var list = (ListBox)window.FindName("BoardList");
+                CollectionAssert.AreEquivalent(
+                    Array.Empty<BoardItem>(),
+                    list.SelectedItems.Cast<BoardItem>().ToArray(),
+                    "滑离取消的右键不得落入卡面选择手势（整击吞掉）。");
             }
             finally
             {

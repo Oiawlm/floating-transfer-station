@@ -67,6 +67,7 @@ public partial class MainWindow : Window
     private readonly IGlobalHotkeySource _globalHotkeySource;
     private readonly ISecretProtector _secretProtector;
     private readonly DeepSeekClient _deepSeekClient;
+    private readonly InputDeliveryService _inputDelivery;
     private readonly BoardOperationGate? _operationGate;
     private readonly DataDirectoryChangeService? _dataDirectoryChangeService;
     private readonly string _dataDirectory;
@@ -137,7 +138,8 @@ public partial class MainWindow : Window
         IUpdateService? updateService = null,
         ILauncherStore? launcherStore = null,
         AppLauncher? appLauncher = null,
-        ILauncherDiscoveryStore? launcherDiscoveryStore = null)
+        ILauncherDiscoveryStore? launcherDiscoveryStore = null,
+        InputDeliveryService? inputDelivery = null)
     {
         InitializeComponent();
         _preferences = preferences ?? AppPreferences.Default;
@@ -149,6 +151,9 @@ public partial class MainWindow : Window
         // 未注入时用真实实现兜底（与 _startupManager/_globalHotkeySource 同法）。
         _secretProtector = secretProtector ?? new DpapiSecretProtector();
         _deepSeekClient = deepSeekClient ?? new DeepSeekClient();
+        // 输入送达（需求 6）：可注入（测试传假 Win32 接缝）；未注入时用真实实现兜底
+        //（与 _startupManager/_globalHotkeySource 同法）。
+        _inputDelivery = inputDelivery ?? new InputDeliveryService();
         // AI 整理编排（1.41.0）复用同一客户端实例；组合根显式装配，测试可注入
         // 挂假 HttpMessageHandler 客户端的编排器（全离线）。
         _aiTextOrganizer = aiTextOrganizer ?? new AiTextOrganizer(_deepSeekClient);

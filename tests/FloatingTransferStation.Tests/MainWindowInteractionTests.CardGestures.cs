@@ -309,9 +309,10 @@ public sealed partial class MainWindowInteractionTests
 
             try
             {
-                // 预热一击（打在左半，无选择语义）让几何定稿，并把光标带到
-                // 窗口上（真实位移保证悬停事件生成）。
-                ClickRealAt(window, container, new Point(24, container.ActualHeight / 2));
+                // 预热悬停（左半，无点击语义）让几何定稿，并把光标带到窗口上
+                //（真实位移保证悬停事件生成）。2026-11-03 起左半裸单击会调度
+                // 「送达」（需求 6），预热不得用点击——否则送达状态会写进状态条。
+                HoverRealAt(window, container, new Point(24, container.ActualHeight / 2), settleMilliseconds: 0);
                 PumpDispatcherFor(
                     window.Dispatcher,
                     TimeSpan.FromMilliseconds(GetDoubleClickTime() + 100));
@@ -385,10 +386,10 @@ public sealed partial class MainWindowInteractionTests
 
             try
             {
-                // 预热一击（打在右半，无选择语义的左键复制不发生——不注入
-                // ClipboardWriterOverride 即无副作用）让几何定稿，并把光标带到
-                // 窗口上（真实位移保证悬停事件生成）。
-                ClickRealAt(window, container, new Point(24, container.ActualHeight / 2));
+                // 预热悬停（无点击语义）让几何定稿，并把光标带到窗口上（真实
+                // 位移保证悬停事件生成）。2026-11-03 起左半裸单击会调度「送达」
+                //（需求 6），预热不得用点击——否则送达状态会写进状态条。
+                HoverRealAt(window, container, new Point(24, container.ActualHeight / 2), settleMilliseconds: 0);
                 PumpDispatcherFor(
                     window.Dispatcher,
                     TimeSpan.FromMilliseconds(GetDoubleClickTime() + 100));

@@ -77,6 +77,60 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetCursorPos(out Point point);
 
+    // ---- 输入送达（2026-11-03 需求 6：左半裸单击把卡片文字送进外部输入框）----
+    // 普适通道：剪贴板＋焦点还原＋模拟 Ctrl+V，禁止按进程名/窗口类适配具体软件。
+
+    [DllImport("user32.dll")]
+    internal static extern nint GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool IsWindow(nint hwnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetForegroundWindow(nint hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(nint hwnd, out uint processId);
+
+    /// <summary>窗口句柄是否属于本进程（送达目标捕获排除自身面板）。</summary>
+    internal static bool IsOwnProcessWindow(nint hwnd) =>
+        GetWindowThreadProcessId(hwnd, out var processId) != 0 && processId == Environment.ProcessId;
+
+    internal const uint VkControl = 0x11;
+    internal const uint VkV = 0x56;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct KeyboardInput
+    {
+        public uint VirtualKey;
+        public uint ScanCode;
+        public uint Flags;
+        public uint Time;
+        public nint ExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    internal struct InputUnion
+    {
+        [FieldOffset(0)]
+        public KeyboardInput Keyboard;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct Input
+    {
+        public uint Type;
+        public InputUnion Union;
+
+        public const uint KeyboardType = 1;
+        public const uint KeyEventFKeyUp = 0x0002;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern uint SendInput(uint inputCount, Input[] inputs, int inputSize);
+
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetWindowRect(nint hwnd, out NativeRect rectangle);

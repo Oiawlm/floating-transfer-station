@@ -24,7 +24,8 @@ public sealed partial class MainWindowInteractionTests
         DefaultCaptureCategoryState? defaultCaptureCategory = null,
         IUpdateService? updateService = null,
         IPreferencesStore? preferencesStore = null,
-        PluginCatalog? pluginCatalog = null)
+        PluginCatalog? pluginCatalog = null,
+        InputDeliveryService? inputDelivery = null)
     {
         defaultCaptureCategory ??= new DefaultCaptureCategoryState();
         var paths = AppPaths.ForTests(directory.Root);
@@ -37,7 +38,8 @@ public sealed partial class MainWindowInteractionTests
             new ImageNormalizer(store.ImagesDirectory),
             updateService: updateService,
             preferencesStore: preferencesStore,
-            pluginCatalog: pluginCatalog);
+            pluginCatalog: pluginCatalog,
+            inputDelivery: inputDelivery);
     }
 
     private static MainWindow CreateWindow(
@@ -78,7 +80,8 @@ public sealed partial class MainWindowInteractionTests
         DataDirectoryChangeService? dataDirectoryChangeService = null,
         ISecretProtector? secretProtector = null,
         DeepSeekClient? deepSeekClient = null,
-        AiTextOrganizer? aiTextOrganizer = null)
+        AiTextOrganizer? aiTextOrganizer = null,
+        InputDeliveryService? inputDelivery = null)
     {
         defaultCaptureCategory ??= new DefaultCaptureCategoryState();
         // harness 密封缺省②（契约 #53）：未显式注入更新服务时缺省用无网络假件（恒无更新），
@@ -126,13 +129,114 @@ public sealed partial class MainWindowInteractionTests
             dataDirectoryChangeService: dataDirectoryChangeService,
             secretProtector: secretProtector,
             deepSeekClient: deepSeekClient,
-            aiTextOrganizer: aiTextOrganizer);
+            aiTextOrganizer: aiTextOrganizer,
+            // harness 密封缺省③（需求 6）：输入送达的 Win32 接缝缺省＝静默假件——
+            // 未显式注入送达服务的测试一旦触发左半裸单击送达，不触碰真实剪贴板/
+            // 前台/SendInput（送达序列全假件、恒成功）。断言送达语义的测试注入
+            // 自己的假件断言序列。
+            inputDelivery: inputDelivery ?? new InputDeliveryService(new SilentInputDeliveryNative()));
         // harness 密封缺省①（契约 #53）：真实剪贴板写缺省＝响亮失败 stub——未显式声明写
         // 意图的测试一旦走到 WriteClipboardData 即失败并给可读原因（产品侧捕获子句只接
         // COM/External/InvalidOperation，AssertFailedException 穿透直达测试）。既有显式
         // 设置 ClipboardWriterOverride 的测试在测试体内覆写本缺省，零改动。
         window.ClipboardWriterOverride ??= RejectUndeclaredRealClipboardWrite;
         return window;
+    }
+
+    /// <summary>harness 密封缺省③（需求 6）：输入送达 Win32 接缝的静默假件。
+    /// 前台窗口恒为「一个外部假窗口」（IsWindow=true、非本进程），送达序列的
+    /// 剪贴板/焦点/按键注入全部内存假件、恒成功——测试触发送达不产生任何
+    /// 系统级副作用。送达语义断言用各自的假件，本假件只兜既有测试的顺路触发。</summary>
+    private sealed class SilentInputDeliveryNative : IInputDeliveryNative
+    {
+        public static readonly nint ForeignTargetWindow = new(0x12345678);
+
+        public nint GetForegroundWindow() => ForeignTargetWindow;
+
+        public bool IsWindow(nint hwnd) => hwnd == ForeignTargetWindow;
+
+        public bool IsOwnProcessWindow(nint hwnd) => false;
+
+        public bool SetForegroundWindow(nint hwnd) => true;
+
+        public bool SendControlV() => true;
+
+        public IDataObject? GetClipboard() => null;
+
+        public bool WriteClipboard(IDataObject data) => true;
+
+        public bool SetClipboard(IDataObject data) => true;
+
+        public Task DelayAsync(TimeSpan delay) => Task.CompletedTask;
+    }
+
+    /// <summary>送达语义断言用记录假件：恒定外部目标窗口、全操作成功、逐调用
+    /// 记录序列与负载/备份引用（焦点/注入/剪贴板写可按需注入失败）。</summary>
+    private sealed class RecordingInputDeliveryNative : IInputDeliveryNative
+    {
+        public static readonly nint ForeignWindow = new(0x13572468);
+
+        public List<string> Calls { get; } = [];
+
+        public IDataObject? WrittenPayload { get; private set; }
+
+        public IDataObject? RestoredBackup { get; private set; }
+
+        public IDataObject? BackupToReturn { get; set; } = new DataObject("原剪贴板内容");
+
+        public bool SetForegroundResult { get; set; } = true;
+
+        public bool SendResult { get; set; } = true;
+
+        public bool WriteResult { get; set; } = true;
+
+        public nint GetForegroundWindow()
+        {
+            Calls.Add("get-foreground");
+            return ForeignWindow;
+        }
+
+        public bool IsWindow(nint hwnd) => hwnd == ForeignWindow;
+
+        public bool IsOwnProcessWindow(nint hwnd) => false;
+
+        public bool SetForegroundWindow(nint hwnd)
+        {
+            Calls.Add("set-foreground");
+            return SetForegroundResult;
+        }
+
+        public bool SendControlV()
+        {
+            Calls.Add("send-ctrl-v");
+            return SendResult;
+        }
+
+        public IDataObject? GetClipboard()
+        {
+            Calls.Add("get-clipboard");
+            return BackupToReturn;
+        }
+
+        public bool WriteClipboard(IDataObject data)
+        {
+            Calls.Add("write-clipboard");
+            WrittenPayload = data;
+            return WriteResult;
+        }
+
+        public bool SetClipboard(IDataObject data)
+        {
+            Calls.Add("set-clipboard");
+            RestoredBackup = data;
+            return true;
+        }
+
+        public Task DelayAsync(TimeSpan delay)
+        {
+            Calls.Add("delay");
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>密封缺省①的响亮失败 stub：真实剪贴板写必须显式声明（捕获 override）。</summary>
