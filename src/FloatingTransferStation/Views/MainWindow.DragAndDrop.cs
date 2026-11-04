@@ -39,8 +39,10 @@ public partial class MainWindow : Window
         }
 
         _dragThresholdCrossed = true;
-        // 拖拽不是点击：双击痕迹一并作废，拖拽结束后的快速连击按独立单击判定。
+        // 拖拽不是点击：双击痕迹一并作废，拖拽结束后的快速连击按独立单击判定；
+        // 挂起的左半裸单击送达同样取消（拖出优先于送达，需求 6）。
         _lastCardClick = null;
+        CancelPendingTextDelivery();
         try
         {
             BeginPanelDrag();

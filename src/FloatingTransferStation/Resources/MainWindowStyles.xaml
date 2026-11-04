@@ -1112,9 +1112,10 @@
     </Style.Triggers>
   </Style>
 
-  <!-- 删除钮（1.24.0 新增）：可见/可命中 = 悬停 ∧ 未选中——仅未选中卡片悬停时
-       淡入，选中卡片一律隐藏（含悬停时），删除走单卡撤销管线；语义实现见
-       MainWindow.CardGestures 的 OperationsDelete 会话与 DeleteSingleCardAsync。 -->
+  <!-- 删除钮（1.24.0 新增；2026-11-03 双语义）：可见/可命中 = 悬停 ∧ 未选中——
+       仅未选中卡片悬停时淡入，选中卡片一律隐藏（含悬停时）。左键＝可撤销单卡删除
+       （手势层 OperationsDelete 会话 → DeleteSingleCardAsync）；右键＝永久删除
+       （ClipboardDelivery 右键按压会话 → DeleteSingleCardPermanentlyAsync，不可撤销）。 -->
   <Style x:Key="DeleteButtonStyle" TargetType="Button">
     <Setter Property="Width" Value="30" />
     <Setter Property="Height" Value="30" />
@@ -1128,7 +1129,7 @@
     <Setter Property="Padding" Value="6" />
     <Setter Property="Focusable" Value="False" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-    <Setter Property="ToolTip" Value="删除" />
+    <Setter Property="ToolTip" Value="删除（左键可撤销，右键永久）" />
     <Setter Property="Template" Value="{StaticResource CardIconButtonTemplate}" />
     <Setter Property="views:FadeAnimation.IsActive" Value="False" />
     <Setter Property="views:FadeAnimation.AnimationsEnabled"
@@ -1931,7 +1932,7 @@
                           Style="{StaticResource DeleteButtonStyle}"
                           Tag="{Binding}"
                           CommandParameter="{x:Static views:CardGestureZones.DeleteCardCommand}"
-                          AutomationProperties.Name="删除">
+                          AutomationProperties.Name="删除（左键可撤销，右键永久）">
                     <Viewbox Width="16" Height="16">
                       <Path Data="M8.5,4 L11.5,4 C11.5,3.17157 10.8284,2.5 10,2.5 C9.17157,2.5 8.5,3.17157 8.5,4 Z M7.5,4 C7.5,2.61929 8.61929,1.5 10,1.5 C11.3807,1.5 12.5,2.61929 12.5,4 L17.5,4 C17.7761,4 18,4.22386 18,4.5 C18,4.77614 17.7761,5 17.5,5 L16.4456,5 L15.2521,15.3439 C15.0774,16.8576 13.7957,18 12.2719,18 L7.72813,18 C6.20431,18 4.92256,16.8576 4.7479,15.3439 L3.55437,5 L2.5,5 C2.22386,5 2,4.77614 2,4.5 C2,4.22386 2.22386,4 2.5,4 L7.5,4 Z M5.74131,15.2292 C5.85775,16.2384 6.71225,17 7.72813,17 L12.2719,17 C13.2878,17 14.1422,16.2384 14.2587,15.2292 L15.439,5 L4.56101,5 Z M8.5,7.5 C8.77614,7.5 9,7.72386 9,8 L9,14 C9,14.2761 8.77614,14.5 8.5,14.5 C8.22386,14.5 8,14.2761 8,14 L8,8 C8,7.72386 8.22386,7.5 8.5,7.5 Z M12,8 C12,7.72386 11.7761,7.5 11.5,7.5 C11.2239,7.5 11,7.72386 11,8 L11,14 C11,14.2239 11.2239,14.5 11.5,14.5 C11.7761,14.5 12,14.2761 12,14 L12,8 Z"
                             Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"

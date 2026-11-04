@@ -18,6 +18,21 @@ public enum BoardPinResult
     Failed
 }
 
+/// <summary>
+/// 删除的可撤销性（2026-11-03 需求 1：单卡删除钮右键＝永久删除）。同一条
+/// 删除管线的单一切换点：可撤销删除保存成功后进撤销栈（图片文件按批次生命
+/// 周期清理）；永久删除不记撤销批，图片文件在保存成功后立即清理（复用撤销
+/// 批驱逐时的同一段清理实现）。保存失败两条路径同样整批回滚。
+/// </summary>
+public enum BoardDeleteMode
+{
+    /// <summary>可撤销（默认，既有全部删除路径）：记撤销批，Ctrl+Z 锚点插回。</summary>
+    Undoable,
+
+    /// <summary>永久：不记撤销批（Ctrl+Z 不可恢复），图片文件立即清理。</summary>
+    Permanent
+}
+
 public sealed class BoardMutationService
 {
     private const int MaxUndoableBatches = 20;
@@ -147,10 +162,23 @@ public sealed class BoardMutationService
     public Task<bool> DeleteAsync(
         Guid itemId,
         CancellationToken cancellationToken = default) =>
-        DeleteManyAsync([itemId], cancellationToken);
+        DeleteManyAsync([itemId], BoardDeleteMode.Undoable, cancellationToken);
 
     public Task<bool> DeleteManyAsync(
         IReadOnlyCollection<Guid> itemIds,
+        CancellationToken cancellationToken = default) =>
+        DeleteManyAsync(itemIds, BoardDeleteMode.Undoable, cancellationToken);
+
+    /// <summary>
+    /// 统一删除路径（<see cref="BoardDeleteMode"/> 为单一切换点，不另造平行管线）：
+    /// 移除→原子保存→失败整批回滚全路径共用；保存成功后按模式分流——可撤销删除
+    /// 记撤销批（图片文件按批次生命周期清理），永久删除不记批、立即清理图片文件
+    ///（复用撤销批驱逐时的同一段 <see cref="DeleteImagesBestEffort"/> 实现）。
+    /// 返回语义与既有删除一致：条目不存在返回 false，保存失败返回 false 并已回滚。
+    /// </summary>
+    public Task<bool> DeleteManyAsync(
+        IReadOnlyCollection<Guid> itemIds,
+        BoardDeleteMode mode,
         CancellationToken cancellationToken = default) =>
         _operationGate.RunAsync(async () =>
         {
@@ -176,7 +204,15 @@ public sealed class BoardMutationService
                 throw;
             }
 
-            RecordUndoableDelete(removed);
+            if (mode == BoardDeleteMode.Permanent)
+            {
+                DeleteImagesBestEffort(removed);
+            }
+            else
+            {
+                RecordUndoableDelete(removed);
+            }
+
             return true;
         }, cancellationToken);
 

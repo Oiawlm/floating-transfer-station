@@ -338,6 +338,9 @@ public partial class MainWindow : Window
         StopPanelContentAnimation();
         _collapseTimer.Stop();
         _panelState.EnterSurface();
+        // 指针入场时刻捕获外部前台窗口为送达目标快照（需求 6）：入场时面板尚未
+        // 被任何点击激活，前台＝用户刚才打字的窗口。按压时刻会再刷新一次。
+        _inputDelivery.CaptureForegroundTarget();
     }
 
     private void Root_MouseLeave(object sender, MouseEventArgs e)
