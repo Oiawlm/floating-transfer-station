@@ -110,6 +110,94 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void CategoryTab_RailLabelEvidenceBothThemes()
+    {
+        // 2026-11-04 轨道宽度回归修复证据（设计契约 #54）：轨道宽＝内容无关结构
+        // 常量、标签两字/行自适应——{收起把手, 展开轨道}×{浅色, 深色}×
+        // {默认名集, 6 字自定义名} 八宫格矩阵：「快捷启动」快捷/启动 两行居中、
+        // 「重要/记录」单行、6 字名至多 3 行无截断、轨道不为内容加宽。
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_TAB_RAIL_EVIDENCE_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_TAB_RAIL_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        CaptureRailLabelEvidence(
+            WindowSettings.Default,
+            "default-names",
+            "默认名集");
+        CaptureRailLabelEvidence(
+            new WindowSettings(
+                WindowSettings.Default.PanelWidth,
+                WindowSettings.Default.WindowHeight,
+                WindowSettings.Default.Top,
+                new Dictionary<BoardCategory, string> { [BoardCategory.Inbox] = "剪贴板收藏夹" }),
+            "custom-six-char-name",
+            "6 字自定义名（待分类＝剪贴板收藏夹）");
+    }
+
+    private void CaptureRailLabelEvidence(WindowSettings settings, string fileSuffix, string variantName)
+    {
+        using var directory = new TestDirectory();
+        var state = new DefaultCaptureCategoryState();
+        var window = CreateWindow(
+            new BoardService(),
+            new RecordingBoardStore(directory.Root),
+            settings,
+            state);
+
+        try
+        {
+            window.Show();
+            window.Topmost = true;
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            // 收起把手：窗口默认收起态，宽＝轨道结构常量（内容无关，不随名长变化）。
+            Assert.IsFalse(viewModel.IsPanelExpanded, $"{variantName} 前置：窗口默认收起。");
+            Assert.IsTrue(viewModel.IsCollapsedCategoryHandleVisible, $"{variantName} 前置：把手在场。");
+            Assert.AreEqual(
+                WindowSettings.TabWidth, window.Width, 0.5,
+                $"{variantName} 前置：收起宽＝轨道结构常量。");
+            DesignThemeManager.Apply(window, DesignTheme.Light);
+            CompleteLayout(window);
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                $"handle-light-{fileSuffix}.png",
+                "FTS_TAB_RAIL_EVIDENCE_DIR");
+            DesignThemeManager.Apply(window, DesignTheme.Dark);
+            CompleteLayout(window);
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                $"handle-dark-{fileSuffix}.png",
+                "FTS_TAB_RAIL_EVIDENCE_DIR");
+
+            // 展开轨道：宽＝面板＋轨道结构常量，四标签两字/行自适应居中。
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            Assert.AreEqual(
+                settings.PanelWidth + WindowSettings.TabWidth, window.Width, 0.5,
+                $"{variantName} 前置：展开宽＝面板＋轨道结构常量。");
+            DesignThemeManager.Apply(window, DesignTheme.Light);
+            CompleteLayout(window);
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                $"rail-light-{fileSuffix}.png",
+                "FTS_TAB_RAIL_EVIDENCE_DIR");
+            DesignThemeManager.Apply(window, DesignTheme.Dark);
+            CompleteLayout(window);
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                $"rail-dark-{fileSuffix}.png",
+                "FTS_TAB_RAIL_EVIDENCE_DIR");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void CategoryTabLabelAndEditor_LockDisplayTextFormattingForCrispSmallText()
     {
         using var directory = new TestDirectory();
@@ -133,6 +221,69 @@ public sealed partial class MainWindowInteractionTests
                 Assert.IsNotNull(rendering, $"{styleKey} 必须显式设置文本渲染模式。");
                 Assert.AreEqual(System.Windows.Media.TextRenderingMode.ClearType, rendering.Value);
             }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CategoryTab_RailLabelRendersTwoCharactersPerLineAdaptively()
+    {
+        // 设计契约 #54（2026-11-04 回归修复）：标签＝两字宽文本列（30 DIP）＋
+        // Wrap 自然两字/行——「快捷启动」快捷/启动 两行居中、「重要/记录」单行、
+        // 6 字名至多 3 行无截断（全文仍在 Text 中）；改名编辑器收窄至嵌套可用宽
+        // 36（58 轨道内容宽 46−Margin 5×2），无溢出。
+        using var directory = new TestDirectory();
+        var state = new DefaultCaptureCategoryState();
+        var window = CreateWindow(directory, new BoardService(), state);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var labelStyle = (Style)window.FindResource("CategoryLabelTextStyle");
+            TextBlock LabelOf(CategoryViewModel category)
+            {
+                var tab = FindCategoryTab(window, category);
+                return FindDescendants<TextBlock>(tab)
+                    .Single(candidate => ReferenceEquals(candidate.Style, labelStyle));
+            }
+
+            var prompt = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.Prompt);
+            var content = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.CustomerOriginal);
+            var promptLabel = LabelOf(prompt);
+            Assert.AreEqual("快捷启动", promptLabel.Text, "两字/行＝纯布局约束，文本零手术。");
+            Assert.AreEqual(30d, promptLabel.Width, "文本列＝两字宽结构档 30。");
+            // 行数以「单行参照高」自标定（TextBlock 无公开行数 API）：两字名＝单行基准。
+            var contentLabel = LabelOf(content);
+            Assert.AreEqual("重要", contentLabel.Text);
+            var singleLineHeight = contentLabel.ActualHeight;
+            Assert.IsTrue(singleLineHeight > 0, "单行参照标签必须已完成布局。");
+            Assert.AreEqual(
+                2 * singleLineHeight, promptLabel.ActualHeight, 2d,
+                "四字默认名＝快捷/启动 两行。");
+
+            prompt.ApplyDisplayName("剪贴板收藏夹");
+            CompleteLayout(window);
+            var sixCharLabel = LabelOf(prompt);
+            Assert.AreEqual("剪贴板收藏夹", sixCharLabel.Text, "无截断：全文保留在文本里。");
+            Assert.AreEqual(
+                3 * singleLineHeight, sixCharLabel.ActualHeight, 2d,
+                "6 字名＝恰 3 行（两字/行的上限）。");
+
+            prompt.BeginNameEdit();
+            CompleteLayout(window);
+            var editor = FindDescendants<TextBox>(FindCategoryTab(window, prompt)).Single();
+            Assert.IsTrue(editor.IsVisible);
+            Assert.AreEqual(36d, editor.Width, "编辑器＝嵌套可用宽 36（内容宽 46−Margin 10）。");
+            Assert.IsLessThanOrEqualTo(46d, editor.Width + editor.Margin.Left + editor.Margin.Right, "编辑器足迹不得溢出标签内容宽。");
+            prompt.CancelNameEdit();
         }
         finally
         {

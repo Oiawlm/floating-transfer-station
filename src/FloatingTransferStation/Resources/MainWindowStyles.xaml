@@ -670,6 +670,12 @@
     <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
     <Setter Property="FontFamily" Value="{DynamicResource InterfaceFontFamily}" />
     <Setter Property="FontSize" Value="12" />
+    <!-- 两字宽文本列（2026-11-04 回归修复，设计契约 #54）：轨道宽 58 是内容无关
+         的结构常量、禁止为内容加宽，标签以 30 DIP 文本列＋既有 Wrap 自然两字/行
+         （2 字 24≤30＜3 字 36，激活态 SemiBold 不改 CJK 字距）——「快捷启动」＝
+         快捷/启动 两行居中、「重要/记录」单行、6 字名至多 3 行无截断；纯布局
+         约束，无按长度特判的转换器或代码分支。 -->
+    <Setter Property="Width" Value="30" />
     <Setter Property="FontWeight" Value="Normal" />
     <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
     <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
@@ -691,7 +697,10 @@
 
   <Style x:Key="CategoryNameEditorStyle" TargetType="TextBox">
     <Setter Property="Visibility" Value="Collapsed" />
-    <Setter Property="Width" Value="48" />
+    <!-- 36＝58 轨道内容宽 46−自身 Margin 5×2（2026-11-04 契约 #54 连带修复）：
+         Width 48 在 66 轨道即溢出嵌套可用宽 4 DIP（1.66.0 出厂缺陷，被加宽掩盖），
+         收窄至嵌套可用宽消除溢出；1–6 字名（上限 6）在 36 内可读可编辑。 -->
+    <Setter Property="Width" Value="36" />
     <Setter Property="Height" Value="28" />
     <Setter Property="Margin" Value="5" />
     <Setter Property="Padding" Value="1" />
