@@ -98,6 +98,33 @@ internal static class NativeMethods
     internal static bool IsOwnProcessWindow(nint hwnd) =>
         GetWindowThreadProcessId(hwnd, out var processId) != 0 && processId == Environment.ProcessId;
 
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct GuiThreadInfo
+    {
+        public int Size;
+        public int Flags;
+        public nint ActiveWindow;
+        public nint FocusWindow;
+        public nint CaptureWindow;
+        public nint MenuOwnerWindow;
+        public nint MoveSizeWindow;
+        public nint CaretWindow;
+        public NativeRect CaretRectangle;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetGUIThreadInfo(int threadId, ref GuiThreadInfo info);
+
+    /// <summary>前台线程的焦点窗口句柄（0＝前台尚无焦点：目标未处理完激活）。
+    /// 送达注入的就绪谓词之一：焦点未就绪时注入虽会入队迟到，但粘贴稳定期
+    /// 起算过早会与目标延迟读取竞态（W1 D4 修复后验证实测）。</summary>
+    internal static nint GetForegroundFocusWindow()
+    {
+        var info = new GuiThreadInfo { Size = System.Runtime.InteropServices.Marshal.SizeOf<GuiThreadInfo>() };
+        return GetGUIThreadInfo(0, ref info) ? info.FocusWindow : 0;
+    }
+
     internal const uint VkControl = 0x11;
     internal const uint VkV = 0x56;
 
