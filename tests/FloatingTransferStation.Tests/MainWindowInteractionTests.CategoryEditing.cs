@@ -42,8 +42,8 @@ public sealed partial class MainWindowInteractionTests
                 .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
             var markerData = marker.Data.ToString();
             StringAssert.Contains(markerData, "A8,8");
-            StringAssert.DoesNotContain(markerData, "A5,5");
-            StringAssert.DoesNotContain(markerData, "A1.5,1.5");
+            Assert.IsFalse(markerData.Contains("A5,5"), "单圆环不得再含旧靶心中圈。");
+            Assert.IsFalse(markerData.Contains("A1.5,1.5"), "单圆环不得再含旧靶心中心点。");
             Assert.AreEqual(1.25d, marker.StrokeThickness);
             Assert.AreEqual(10d, marker.Width);
             Assert.AreEqual(10d, marker.Height);
