@@ -104,7 +104,38 @@ internal sealed class Win32InputDeliveryNative : IInputDeliveryNative
     {
         try
         {
-            return Clipboard.GetDataObject();
+            if (Clipboard.GetDataObject() is not { } current)
+            {
+                return null;
+            }
+
+            // 系统剪贴板返回的数据对象视图不能整体回写（SetDataObject 回写实测
+            // 得到空剪贴板——延迟渲染视图不随对象迁移，2026-11-04 实测）。备份
+            // 必须物化：把送达通道可能覆盖的常用格式复制进新的 DataObject。
+            var snapshot = new DataObject();
+            var hasAny = false;
+            if (current.GetDataPresent(DataFormats.UnicodeText) &&
+                current.GetData(DataFormats.UnicodeText) is string text)
+            {
+                snapshot.SetText(text);
+                hasAny = true;
+            }
+
+            if (current.GetDataPresent(DataFormats.FileDrop) &&
+                current.GetData(DataFormats.FileDrop) is string[] files)
+            {
+                snapshot.SetFileDropList([.. files]);
+                hasAny = true;
+            }
+
+            if (current.GetDataPresent(DataFormats.Bitmap) &&
+                current.GetData(DataFormats.Bitmap) is System.Windows.Media.Imaging.BitmapSource bitmap)
+            {
+                snapshot.SetImage(bitmap);
+                hasAny = true;
+            }
+
+            return hasAny ? snapshot : null;
         }
         catch (Exception exception) when (
             exception is COMException or ExternalException or InvalidOperationException)

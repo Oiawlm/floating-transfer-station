@@ -111,9 +111,27 @@ internal static class NativeMethods
         public nint ExtraInfo;
     }
 
+    /// <summary>鼠标输入成员：仅用于把 Input 联合体撑到 Win32 INPUT 的真实尺寸
+    ///（x64＝40 字节，最大成员 MOUSEINPUT 决定联合体大小）。若联合体只含
+    /// KeyboardInput，Marshal.SizeOf 会得到 32≠40，SendInput 直接以
+    /// ERROR_INVALID_PARAMETER(87) 拒绝全部注入（2026-11-04 实测）。</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MouseInput
+    {
+        public int DeltaX;
+        public int DeltaY;
+        public uint MouseData;
+        public uint Flags;
+        public uint Time;
+        public nint ExtraInfo;
+    }
+
     [StructLayout(LayoutKind.Explicit)]
     internal struct InputUnion
     {
+        [FieldOffset(0)]
+        public MouseInput Mouse;
+
         [FieldOffset(0)]
         public KeyboardInput Keyboard;
     }
