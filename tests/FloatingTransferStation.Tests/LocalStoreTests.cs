@@ -9,13 +9,12 @@ namespace FloatingTransferStation.Tests;
 public sealed class LocalStoreTests
 {
     [TestMethod]
-    public void AppPaths_UnregisteredDirectoryFallsBackToLegacyDefault()
+    public void AppPaths_UnregisteredDirectoryFallsBackToDefaultPosition()
     {
         var paths = AppPaths.CreateDefault(new FakeDataDirectorySettings(null));
         var expectedDataDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "悬浮中转站",
-            "Data");
+            "悬浮中转站");
 
         Assert.AreEqual(expectedDataDirectory, paths.DataDirectory);
         Assert.AreEqual(Path.Combine(expectedDataDirectory, "board.json"), paths.BoardFile);
@@ -24,9 +23,9 @@ public sealed class LocalStoreTests
     }
 
     [TestMethod]
-    public void AppPaths_RegisteredManagedDirectoryOverridesLegacyDefault()
+    public void AppPaths_RegisteredManagedDirectoryOverridesDefaultPosition()
     {
-        var registered = Path.Combine(@"D:\资料", ProductIdentity.DisplayName, "Data");
+        var registered = Path.Combine(@"D:\资料", ProductIdentity.DisplayName);
         var paths = AppPaths.CreateDefault(new FakeDataDirectorySettings(registered));
 
         Assert.AreEqual(registered, paths.DataDirectory);
@@ -36,42 +35,41 @@ public sealed class LocalStoreTests
     }
 
     [TestMethod]
-    public void AppPaths_EmptyRegisteredDirectoryFallsBackToLegacyDefault()
+    public void AppPaths_EmptyRegisteredDirectoryFallsBackToDefaultPosition()
     {
-        AssertFallsBackToLegacyDefault("   ");
+        AssertFallsBackToDefaultPosition("   ");
     }
 
     [TestMethod]
-    public void AppPaths_InvalidRegisteredDirectoryFallsBackToLegacyDefault()
+    public void AppPaths_InvalidRegisteredDirectoryFallsBackToDefaultPosition()
     {
-        AssertFallsBackToLegacyDefault("\0");
+        AssertFallsBackToDefaultPosition("\0");
     }
 
     [TestMethod]
-    public void AppPaths_UnmanagedRegisteredDirectoryFallsBackToLegacyDefault()
+    public void AppPaths_UnmanagedRegisteredDirectoryFallsBackToDefaultPosition()
     {
-        AssertFallsBackToLegacyDefault(@"D:\资料\其他软件");
+        AssertFallsBackToDefaultPosition(@"D:\资料\其他软件");
     }
 
     [TestMethod]
-    public void AppPaths_RelativeRegisteredDirectoryFallsBackToLegacyDefault()
+    public void AppPaths_RelativeRegisteredDirectoryFallsBackToDefaultPosition()
     {
-        AssertFallsBackToLegacyDefault(Path.Combine(ProductIdentity.DisplayName, "Data"));
+        AssertFallsBackToDefaultPosition(Path.Combine(ProductIdentity.DisplayName, "Data"));
     }
 
     [TestMethod]
-    public void AppPaths_DriveRelativeRegisteredDirectoryFallsBackToLegacyDefault()
+    public void AppPaths_DriveRelativeRegisteredDirectoryFallsBackToDefaultPosition()
     {
-        AssertFallsBackToLegacyDefault($"D:{ProductIdentity.DisplayName}\\Data");
+        AssertFallsBackToDefaultPosition($"D:{ProductIdentity.DisplayName}\\Data");
     }
 
-    private static void AssertFallsBackToLegacyDefault(string? candidate)
+    private static void AssertFallsBackToDefaultPosition(string? candidate)
     {
         var paths = AppPaths.CreateDefault(new FakeDataDirectorySettings(candidate));
         var expected = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            ProductIdentity.DisplayName,
-            "Data");
+            ProductIdentity.DisplayName);
 
         Assert.AreEqual(expected, paths.DataDirectory);
     }

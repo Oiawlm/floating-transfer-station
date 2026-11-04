@@ -111,7 +111,7 @@ public sealed class PortableLocalStoreTests
     {
         var expected = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            ProductIdentity.DisplayName, "Data");
+            ProductIdentity.DisplayName);
 
         Assert.AreEqual(expected, AppPaths.CreateDefault().DataDirectory);
     }

@@ -102,7 +102,7 @@ public sealed class DataDirectoryChangeServiceTests
         Assert.AreEqual(1, quiesce.ResumeCount, "失败必须恢复运行。");
         Assert.IsFalse(quiesce.PreparedForExit);
         Assert.IsTrue(File.Exists(Path.Combine(source, "board.json")), "源目录必须完好。");
-        Assert.IsFalse(Directory.Exists(Path.Combine(_root, "next", "Data")), "已发布目录必须按形状守卫删除。");
+        Assert.IsFalse(Directory.Exists(Path.Combine(_root, "next", "悬浮中转站")), "已发布目录必须按形状守卫删除。");
     }
 
     [TestMethod]
@@ -116,7 +116,7 @@ public sealed class DataDirectoryChangeServiceTests
         var service = new DataDirectoryChangeService(
             new DataDirectoryRelocator(),
             registration,
-            new BlockingMarkerWriter(Path.Combine(parent, "Data")),
+            new BlockingMarkerWriter(Path.Combine(parent, "悬浮中转站")),
             static () => @"C:\fts-test-app.exe",
             static _ => true);
 
@@ -128,7 +128,7 @@ public sealed class DataDirectoryChangeServiceTests
         Assert.AreEqual(
             (Path.Combine(_root, "old", "悬浮中转站", "Data"), Path.Combine(_root, "old")),
             registration.Commits[^1]);
-        Assert.IsFalse(Directory.Exists(Path.Combine(parent, "Data")), "发布目录必须回滚删除。");
+        Assert.IsFalse(Directory.Exists(Path.Combine(parent, "悬浮中转站")), "发布目录必须回滚删除。");
         Assert.IsTrue(File.Exists(Path.Combine(source, "board.json")));
     }
 
@@ -146,9 +146,9 @@ public sealed class DataDirectoryChangeServiceTests
         Assert.IsTrue(result.ExitApplication, "登记已指向新目录：直接退出，提示手动启动。");
         StringAssert.Contains(result.Error, "自动重启失败");
         Assert.AreEqual(1, registration.Commits.Count, "重启失败不回滚登记。");
-        Assert.AreEqual((Path.Combine(parent, "Data"), parent), registration.Commits[0]);
+        Assert.AreEqual((Path.Combine(parent, "悬浮中转站"), parent), registration.Commits[0]);
         Assert.IsTrue(quiesce.PreparedForExit);
-        Assert.IsTrue(File.Exists(Path.Combine(parent, "Data", "board.json")), "新目录内容必须就位。");
+        Assert.IsTrue(File.Exists(Path.Combine(parent, "悬浮中转站", "board.json")), "新目录内容必须就位。");
         Assert.AreEqual(0, quiesce.ResumeCount);
     }
 
@@ -175,8 +175,8 @@ public sealed class DataDirectoryChangeServiceTests
 
         Assert.IsTrue(result.ExitApplication);
         Assert.IsNull(result.Error);
-        Assert.AreEqual((Path.Combine(parent, "Data"), parent), registration.Commits[0]);
-        Assert.IsTrue(File.Exists(Path.Combine(parent, "Data", RelocationCleanupMarker.FileName)));
+        Assert.AreEqual((Path.Combine(parent, "悬浮中转站"), parent), registration.Commits[0]);
+        Assert.IsTrue(File.Exists(Path.Combine(parent, "悬浮中转站", RelocationCleanupMarker.FileName)));
         Assert.IsNotNull(spawned);
         Assert.AreEqual(DataDirectoryChangeService.RelaunchArgument, spawned!.Arguments);
         Assert.AreEqual(0, quiesce.ResumeCount);
@@ -188,8 +188,9 @@ public sealed class DataDirectoryChangeServiceTests
     [TestMethod]
     public async Task ChangeAsync_PlanRefusalFailsWithoutQuiesce()
     {
-        // 新形状源重选同父目录＝不变路径拒绝；旧形状源同父目录是显式迁移（契约 #47）。
-        var source = Path.Combine(_root, "cur", "Data");
+        // 受管形状源重选同父目录＝不变路径拒绝；旧形状源同父目录是归一迁移
+        //（数据目录模型统一），不再是拒绝路径。
+        var source = Path.Combine(_root, "cur", "悬浮中转站");
         Directory.CreateDirectory(source);
         File.WriteAllText(Path.Combine(source, "board.json"), "{}");
         var service = CreateService(new FakeRegistration(true), static _ => true);

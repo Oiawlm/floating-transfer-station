@@ -47,7 +47,7 @@ function ConvertTo-PascalString([string]$Value) {
 $source = Get-Content -LiteralPath $installerScript -Raw -Encoding UTF8
 $constantSource = @()
 $managedLeaves = @{}
-foreach ($name in @('ManagedDataParentLeaf', 'ManagedDataLeaf')) {
+foreach ($name in @('ManagedRootLeaf', 'LegacyDataLeaf')) {
     $matches = [regex]::Matches($source, "(?m)^[ \t]*$name[ \t]*=[ \t]*'((?:[^'\r\n]|'')*)';[ \t]*\r?$")
     if ($matches.Count -ne 1) {
         throw "Expected exactly one literal $name constant."
@@ -63,8 +63,9 @@ foreach ($name in @('ManagedDataParentLeaf', 'ManagedDataLeaf')) {
 
 $functionSource = foreach ($name in @(
     'IsExtendedDevicePath', 'IsFullyQualifiedPath', 'NormalizeDirectory',
-    'IsRootDirectory', 'BuildDataDirectory', 'BuildLegacyDataDirectory',
-    'GetManagedDataParent', 'IsLegacyManagedDataDirectory', 'GetDataParentDirectory',
+    'IsRootDirectory', 'BuildDataDirectory', 'BuildDirectLegacyDataDirectory',
+    'BuildLegacyDataDirectory', 'GetManagedDataParent',
+    'IsLegacyManagedDataDirectory', 'IsLegacyNestedDataDirectory', 'GetDataParentDirectory',
     'IsManagedDataDirectory', 'DeleteManagedDataDirectory',
     'IsMissingManagedDataDirectory'
 )) {
@@ -115,48 +116,58 @@ try {
     [System.IO.Directory]::CreateDirectory($runtimeTemp) | Out-Null
     $env:TEMP = $runtimeTemp
     $env:TMP = $runtimeTemp
-    $parentLeaf = $managedLeaves.ManagedDataParentLeaf
-    $dataLeaf = $managedLeaves.ManagedDataLeaf
-    $managedSuffix = "$parentLeaf\$dataLeaf"
+    $rootLeaf = $managedLeaves.ManagedRootLeaf
+    $dataLeaf = $managedLeaves.LegacyDataLeaf
+    $nestedSuffix = "store\$rootLeaf\$dataLeaf"
     $directSuffix = "myparent\$dataLeaf"
+    $rootSuffix = "myparent\$rootLeaf"
     $cases = @(
-        @{ Name = 'siblings'; RelativePath = "cases\siblings\$managedSuffix"; Expected = 'True' }
-        @{ Name = 'empty-parent'; RelativePath = "cases\empty-parent\$managedSuffix"; Expected = 'True' }
-        @{ Name = 'normalized'; RelativePath = "cases\normalized\$managedSuffix\..\$dataLeaf\"; Expected = 'True' }
-        # 契约 #47 新形状（直下）：只删 Data，用户所选父目录（myparent）与同级内容必留。
-        @{ Name = 'direct-shape'; RelativePath = "cases\direct-shape\$directSuffix"; Expected = 'True' }
-        @{ Name = 'unmanaged-leaf'; RelativePath = "cases\unmanaged-leaf\$parentLeaf\Other"; Expected = 'False' }
+        # 受管形状（数据目录模型统一）：只删「悬浮中转站」数据根本身，用户所选
+        # 父目录（myparent）与同级内容必留。
+        @{ Name = 'managed-root'; RelativePath = "cases\managed-root\$rootSuffix"; Expected = 'True' }
+        # 旧直下形状（待迁移旧形）：只删 Data，用户所选父目录（myparent）必留。
+        @{ Name = 'legacy-direct'; RelativePath = "cases\legacy-direct\$directSuffix"; Expected = 'True' }
+        # 旧嵌套形状（中间层含其他内容）：删 Data，中间层与同级内容必留。
+        @{ Name = 'siblings'; RelativePath = "cases\siblings\$nestedSuffix"; Expected = 'True' }
+        # 旧嵌套形状（中间层只有 Data）：删 Data 后移除空中间层。
+        @{ Name = 'empty-parent'; RelativePath = "cases\empty-parent\$nestedSuffix"; Expected = 'True' }
+        @{ Name = 'normalized'; RelativePath = "cases\normalized\$nestedSuffix\..\$dataLeaf\"; Expected = 'True' }
+        @{ Name = 'unmanaged-leaf'; RelativePath = "cases\unmanaged-leaf\store\Other"; Expected = 'False' }
         # DelTree reports False for a missing target; do not add a new success
         # contract for absence. The sibling still must survive this call.
-        @{ Name = 'missing-data'; RelativePath = "cases\missing-data\$managedSuffix"; Expected = 'False' }
+        @{ Name = 'missing-data'; RelativePath = "cases\missing-data\$nestedSuffix"; Expected = 'False' }
     )
     $preservedFiles = @(
         'fixture.marker'
-        "cases\siblings\$parentLeaf\user-notes.txt"
-        "cases\siblings\$parentLeaf\app.exe"
-        "cases\siblings\$parentLeaf\UnrelatedFiles\keep.txt"
+        'cases\managed-root\myparent\keep.txt'
+        'cases\managed-root\outer-sentinel.txt'
+        'cases\legacy-direct\myparent\keep.txt'
+        'cases\legacy-direct\outer-sentinel.txt'
+        "cases\siblings\$rootLeaf\user-notes.txt"
+        "cases\siblings\$rootLeaf\app.exe"
+        "cases\siblings\$rootLeaf\UnrelatedFiles\keep.txt"
         'cases\siblings\outer-sentinel.txt'
         'cases\empty-parent\outer-sentinel.txt'
-        "cases\normalized\$parentLeaf\keep.txt"
-        'cases\direct-shape\myparent\keep.txt'
-        'cases\direct-shape\outer-sentinel.txt'
-        "cases\unmanaged-leaf\$parentLeaf\Other\keep.txt"
-        "cases\unmanaged-leaf\$managedSuffix\board.json"
-        "cases\missing-data\$parentLeaf\keep.txt"
-        "cases\uninstall-locked\$managedSuffix\locked.txt"
-        "cases\uninstall-stale\$managedSuffix\board.json"
-        "cases\uninstall-not-directory\$managedSuffix"
+        "cases\normalized\$rootLeaf\keep.txt"
+        "cases\unmanaged-leaf\store\Other\keep.txt"
+        "cases\unmanaged-leaf\$nestedSuffix\board.json"
+        "cases\missing-data\$rootLeaf\keep.txt"
+        "cases\uninstall-locked\$nestedSuffix\locked.txt"
+        "cases\uninstall-stale\$nestedSuffix\board.json"
+        "cases\uninstall-not-directory\$nestedSuffix"
         'cases\uninstall-new\myparent\keep.txt'
     )
     $managedFiles = @(
-        "cases\siblings\$managedSuffix\board.json"
-        "cases\siblings\$managedSuffix\Images\image.bin"
-        "cases\empty-parent\$managedSuffix\Images\image.bin"
-        "cases\normalized\$managedSuffix\board.json"
-        "cases\direct-shape\$directSuffix\board.json"
-        "cases\direct-shape\$directSuffix\Images\image.bin"
-        "cases\uninstall-current\$managedSuffix\board.json"
-        "cases\uninstall-new\$directSuffix\board.json"
+        "cases\managed-root\$rootSuffix\board.json"
+        "cases\managed-root\$rootSuffix\Images\image.bin"
+        "cases\legacy-direct\$directSuffix\board.json"
+        "cases\legacy-direct\$directSuffix\Images\image.bin"
+        "cases\siblings\$nestedSuffix\board.json"
+        "cases\siblings\$nestedSuffix\Images\image.bin"
+        "cases\empty-parent\$nestedSuffix\Images\image.bin"
+        "cases\normalized\$nestedSuffix\board.json"
+        "cases\uninstall-current\$nestedSuffix\board.json"
+        "cases\uninstall-new\$rootSuffix\board.json"
     )
     foreach ($relativePath in ($preservedFiles + $managedFiles)) {
         $path = Assert-ChildPath (Join-Path $fixtureRoot $relativePath) $fixtureRoot
@@ -311,16 +322,16 @@ begin
 end;
 
 procedure RunUninstallCase(const Name: String; const IsCurrent: Boolean;
-  const UseDirectShape: Boolean);
+  const UseRootShape: Boolean);
 var
   Initialized: Boolean;
 begin
-  if UseDirectShape then
+  if UseRootShape then
     RegisteredDataDirectory := AddBackslash(FixtureRoot) + 'cases\' + Name + '\myparent\' +
-      ManagedDataLeaf
+      ManagedRootLeaf
   else
-    RegisteredDataDirectory := AddBackslash(FixtureRoot) + 'cases\' + Name + '\' +
-      ManagedDataParentLeaf + '\' + ManagedDataLeaf;
+    RegisteredDataDirectory := AddBackslash(FixtureRoot) + 'cases\' + Name + '\store\' +
+      ManagedRootLeaf + '\' + LegacyDataLeaf;
   RequireFixtureTarget(RegisteredDataDirectory);
   RegisteredInstallDirectory := AddBackslash(FixtureRoot) + 'current-app';
   FixtureAppDirectory := RegisteredInstallDirectory;
@@ -396,7 +407,7 @@ end;
     }
 
     $testExecutable = Assert-ChildPath (Join-Path $fixtureRoot 'cleanup-behavior.exe') $fixtureRoot
-    $lockedPath = Join-Path $fixtureRoot "cases\uninstall-locked\$managedSuffix\locked.txt"
+    $lockedPath = Join-Path $fixtureRoot "cases\uninstall-locked\$nestedSuffix\locked.txt"
     $lockedStream = [IO.File]::Open($lockedPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     $processInfo = [Diagnostics.ProcessStartInfo]::new()
     $processInfo.FileName = $testExecutable
@@ -459,15 +470,18 @@ end;
         Record-Assertion $preserved "preserved unchanged: $relativePath"
     }
     foreach ($relativePath in @(
-        "cases\siblings\$managedSuffix", "cases\empty-parent\$parentLeaf",
-        "cases\normalized\$managedSuffix", "cases\missing-data\$managedSuffix",
-        "cases\direct-shape\$directSuffix", "cases\uninstall-current\$managedSuffix",
-        "cases\uninstall-new\$directSuffix"
+        "cases\managed-root\$rootSuffix", "cases\legacy-direct\$directSuffix",
+        "cases\siblings\$nestedSuffix", "cases\empty-parent\store\$rootLeaf",
+        "cases\normalized\$nestedSuffix", "cases\missing-data\$nestedSuffix",
+        "cases\uninstall-current\$nestedSuffix", "cases\uninstall-new\$rootSuffix"
     )) {
         Record-Assertion (-not (Test-Path -LiteralPath (Join-Path $fixtureRoot $relativePath))) `
             "removed or absent: $relativePath"
     }
-    foreach ($relativePath in @('cases\direct-shape\myparent', 'cases\uninstall-new\myparent')) {
+    foreach ($relativePath in @(
+        'cases\managed-root\myparent', 'cases\legacy-direct\myparent',
+        'cases\uninstall-new\myparent'
+    )) {
         Record-Assertion (Test-Path -LiteralPath (Join-Path $fixtureRoot $relativePath) -PathType Container) `
             "user-selected parent must survive (contract 47): $relativePath"
     }

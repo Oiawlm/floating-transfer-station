@@ -54,6 +54,31 @@ public partial class App : Application
                 return;
             }
 
+            // 启动数据根归一（预览实例绝不触碰已安装数据）：旧形状登记经既有原子
+            // 管线迁到同父「悬浮中转站」文件夹；失败保旧运行＋状态条告警。
+            // 成功路径与设置内手动变更同路（--relocated 拉起新实例，本实例退出）。
+            var isPreviewInstance = !string.IsNullOrWhiteSpace(previewDataDirectory);
+            StartupDataDirectoryMigrationResult? startupMigration = null;
+            if (!isPreviewInstance)
+            {
+                startupMigration = await StartupDataDirectoryMigration.TryMigrateAsync(
+                    new WindowsDataDirectorySettings());
+                if (startupMigration.ExitApplication)
+                {
+                    if (startupMigration.Warning is not null)
+                    {
+                        MessageBox.Show(
+                            startupMigration.Warning,
+                            ProductIdentity.DisplayName,
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information);
+                    }
+
+                    Shutdown();
+                    return;
+                }
+            }
+
             var paths = string.IsNullOrWhiteSpace(previewDataDirectory)
                 ? AppPaths.CreateDefault(new WindowsDataDirectorySettings())
                 : AppPaths.ForTests(previewDataDirectory);
@@ -65,18 +90,10 @@ public partial class App : Application
                     : DesignTheme.Light;
             }
 
-            // 装配方向（无循环依赖）：注册表数据目录 → preferences.json → 插件目录覆盖。
-            // 偏好存放在数据目录内，插件目录真相跟随偏好而非登记，故先读偏好再建目录树。
+            // 装配方向（无循环依赖）：注册表数据目录 → preferences.json。插件目录
+            // 结构性内嵌为数据根 plugins，无独立偏好，随数据目录一起移动。
             var store = new LocalStore(paths, new AtomicTextWriter());
             var preferences = await store.LoadPreferencesAsync();
-            var (effectivePaths, pluginsDirectoryWarning) = AppPaths.ResolvePluginsDirectoryOverride(
-                paths,
-                preferences.PluginsDirectoryOverride);
-            paths = effectivePaths;
-            if (pluginsDirectoryWarning is not null)
-            {
-                preferences = preferences with { PluginsDirectoryOverride = null };
-            }
 
             var board = new BoardService();
             var normalizer = new ImageNormalizer(paths.ImagesDirectory);
@@ -135,9 +152,9 @@ public partial class App : Application
                 dataDirectory: paths.DataDirectory,
                 pluginCatalog: pluginCatalog,
                 operationGate: boardOperationGate,
-                dataDirectoryChangeService: string.IsNullOrWhiteSpace(previewDataDirectory)
-                    ? DataDirectoryChangeService.CreateDefault(new WindowsDataDirectorySettings())
-                    : null,
+                dataDirectoryChangeService: isPreviewInstance
+                    ? null
+                    : DataDirectoryChangeService.CreateDefault(new WindowsDataDirectorySettings()),
                 secretProtector: secretProtector,
                 deepSeekClient: deepSeekClient,
                 aiTextOrganizer: aiTextOrganizer,
@@ -150,9 +167,9 @@ public partial class App : Application
             // 先显示收起态窗口：分类轨只依赖已装载的偏好与设置，板面数据转入
             // 后台装载，大数据量不再拖住启动到可见的时间（见 LoadBoardInBackgroundAsync）。
             window.Show();
-            if (pluginsDirectoryWarning is not null)
+            if (startupMigration?.Warning is { } migrationWarning)
             {
-                window.ShowStatus(pluginsDirectoryWarning);
+                window.ShowStatus(migrationWarning);
             }
 
             _ = LoadBoardInBackgroundAsync(

@@ -16,7 +16,9 @@ public sealed class WindowsDataDirectorySettings : IDataDirectorySettings, IData
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(ProductIdentity.SettingsRegistryKey);
-            return DataDirectorySettings.NormalizeManagedDataDirectory(
+            // 统一入口：受管形状优先、两个旧形状作为「待迁移旧形」接受——旧形登记
+            // 在启动归一失败时保旧运行，读取不能只认受管形状。
+            return DataDirectorySettings.NormalizeRegisteredDataDirectory(
                 key?.GetValue(ProductIdentity.DataDirectoryRegistryValue) as string);
         }
         catch (Exception exception) when (
@@ -86,12 +88,4 @@ public sealed class WindowsDataDirectorySettings : IDataDirectorySettings, IData
             // 回滚尽力而为：登记不完整时下一次读取按形状校验回退，不会指错目录。
         }
     }
-}
-
-/// <summary>数据目录登记写入的抽象，供应用内搬迁编排注入替身测试注册表失败路径。</summary>
-public interface IDataDirectoryRegistration
-{
-    string? ReadDataDirectory();
-
-    bool TryCommit(string dataDirectory, string dataParentDirectory);
 }

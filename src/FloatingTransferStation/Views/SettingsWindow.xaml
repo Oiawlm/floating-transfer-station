@@ -749,7 +749,7 @@
                             Click="OpenDataDirectoryButton_Click" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="更改时选择一个文件夹，将在其中直接创建并管理「Data」子文件夹（既有位置不受影响，可继续使用或随时迁往新位置）；内容完整迁移并登记后应用自动重启，旧目录在下次启动确认安全后清理。" />
+                             Text="更改时选择一个文件夹，将在其中创建并管理「悬浮中转站」文件夹（全部数据与插件都在里面）；内容完整迁移并登记后应用自动重启，旧目录在下次启动确认安全后清理。" />
                   <TextBlock x:Name="DataDirectoryStatusText"
                              Style="{StaticResource NoteCaptionStyle}"
                              Foreground="{DynamicResource DangerBrush}"
@@ -772,33 +772,14 @@
                       <ColumnDefinition Width="*" />
                       <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="Auto" />
-                      <ColumnDefinition Width="Auto" />
-                      <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="PluginDirectoryText"
-                             Grid.Column="0"
                              Style="{StaticResource ReadOnlyPathBoxStyle}"
                              Margin="0,0,8,0"
                              VerticalAlignment="Center"
                              AutomationProperties.Name="插件目录" />
-                    <Button x:Name="ChangePluginDirectoryButton"
-                            Grid.Column="1"
-                            Style="{StaticResource ThemedActionButtonStyle}"
-                            Content="更改…"
-                            Margin="0,0,8,0"
-                            ToolTip="更改插件目录"
-                            AutomationProperties.Name="更改插件目录"
-                            Click="ChangePluginDirectoryButton_Click" />
-                    <Button x:Name="ResetPluginDirectoryButton"
-                            Grid.Column="2"
-                            Style="{StaticResource ThemedActionButtonStyle}"
-                            Content="恢复默认"
-                            Margin="0,0,8,0"
-                            ToolTip="恢复默认插件目录（数据目录下 plugins）"
-                            AutomationProperties.Name="恢复默认插件目录"
-                            Click="ResetPluginDirectoryButton_Click" />
                     <Button x:Name="RescanPluginsButton"
-                            Grid.Column="3"
+                            Grid.Column="1"
                             Style="{StaticResource ThemedActionButtonStyle}"
                             Content="重新扫描"
                             Margin="0,0,8,0"
@@ -806,7 +787,7 @@
                             AutomationProperties.Name="重新扫描插件"
                             Click="RescanPluginsButton_Click" />
                     <Button x:Name="OpenPluginDirectoryButton"
-                            Grid.Column="4"
+                            Grid.Column="2"
                             Style="{StaticResource ThemedActionButtonStyle}"
                             Content="打开"
                             ToolTip="在资源管理器中打开插件目录"
@@ -815,7 +796,7 @@
                   </Grid>
                   <TextBlock x:Name="PluginDirectoryNoteText"
                              Style="{StaticResource NoteCaptionStyle}"
-                             Text="插件目录可改为任意文件夹，保存后重启生效；插件的启用状态仍保存在数据目录。" />
+                             Text="插件目录位于数据目录内，随数据目录一起移动；插件的启用状态也保存在数据目录。" />
                 </StackPanel>
               </Border>
             </StackPanel>
