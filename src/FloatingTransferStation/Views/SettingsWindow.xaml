@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:design="clr-namespace:FloatingTransferStation.Design;assembly=FloatingTransferStation.Core"
+        xmlns:views="clr-namespace:FloatingTransferStation.Views"
         Title="设置"
         Topmost="True"
         ShowInTaskbar="False"
@@ -190,6 +191,49 @@
         <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
         <Setter Property="Height" Value="34" />
+      </Style>
+
+      <!-- 页脚联系方式小按钮（W5 2026-11-05）：动作按钮的紧凑文字形态，
+           反馈态（已复制/复制失败）由代码后置换 Content 承载，轻档动效走
+           FadeAnimation.IsActive 交叉淡入（同既有悬停语言）。 -->
+      <Style x:Key="FooterCopyButtonStyle" TargetType="Button" BasedOn="{StaticResource ThemedActionButtonStyle}">
+        <Setter Property="Height" Value="22" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="MinWidth" Value="56" />
+      </Style>
+
+      <!-- 页脚二维码缩略图（W5 2026-11-05）：白底静区是二维码可扫的结构要求
+           （主题不变量，非调色板颜色），控件级圆角＋既有描边/悬停语言；
+           单击弹设置窗内放大层（不新建窗口）。 -->
+      <Style x:Key="WeChatQrThumbStyle" TargetType="Button">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="AutomationProperties.Name" Value="放大微信二维码" />
+        <Setter Property="ToolTip" Value="单击放大微信二维码" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="Button">
+              <Border x:Name="Surface"
+                      Background="White"
+                      BorderBrush="{DynamicResource BorderBrush}"
+                      BorderThickness="1"
+                      CornerRadius="{StaticResource ControlCornerRadius}"
+                      Padding="3">
+                <ContentPresenter />
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource HoverBorderBrush}" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                  <Setter TargetName="Surface" Property="Opacity" Value="0.85" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
       </Style>
 
       <!-- 密码输入框（AI 设置的 API Key 行）：与 ThemedTextBoxStyle 同法的纯 Setter 版，
@@ -927,18 +971,48 @@
         </ScrollViewer>
       </Grid>
 
-      <!-- 页脚（契约 #24）：关于 + 退出，非导航项。 -->
-      <Border Grid.Row="2" Background="{DynamicResource HeaderBrush}">
+      <!-- 页脚（契约 #24）：关于 + 退出，非导航项。关于区含联系方式行（W5
+           2026-11-05）：微信号文本与二维码位图均由代码后置从 ProductIdentity
+           单一来源赋值（XAML 零字面量副本）。 -->
+      <Border x:Name="SettingsFooter"
+              Grid.Row="2"
+              Background="{DynamicResource HeaderBrush}">
         <Grid Margin="16,10,16,12">
-          <StackPanel VerticalAlignment="Center">
-            <TextBlock Foreground="{DynamicResource PrimaryTextBrush}" FontSize="13">
-              <Run x:Name="AppNameRun" FontWeight="SemiBold" /><Run Text="  " /><Run x:Name="VersionRun" Foreground="{DynamicResource SecondaryTextBrush}" />
-            </TextBlock>
-            <TextBlock FontSize="12" Margin="0,2,0,0">
-              <Hyperlink x:Name="RepoLink"
-                         Foreground="{DynamicResource AccentBrush}"
-                         RequestNavigate="RepoLink_RequestNavigate">GitHub 仓库与更新记录</Hyperlink>
-            </TextBlock>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <Button x:Name="WeChatQrButton"
+                    Style="{StaticResource WeChatQrThumbStyle}"
+                    Margin="0,0,12,0"
+                    VerticalAlignment="Center"
+                    Click="WeChatQrButton_Click">
+              <Image x:Name="WeChatQrThumb"
+                     Width="60"
+                     Height="60"
+                     RenderOptions.BitmapScalingMode="HighQuality"
+                     AutomationProperties.Name="微信二维码缩略图" />
+            </Button>
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Foreground="{DynamicResource PrimaryTextBrush}" FontSize="13">
+                <Run x:Name="AppNameRun" FontWeight="SemiBold" /><Run Text="  " /><Run x:Name="VersionRun" Foreground="{DynamicResource SecondaryTextBrush}" />
+              </TextBlock>
+              <TextBlock FontSize="12" Margin="0,2,0,0">
+                <Hyperlink x:Name="RepoLink"
+                           Foreground="{DynamicResource AccentBrush}"
+                           RequestNavigate="RepoLink_RequestNavigate">GitHub 仓库与更新记录</Hyperlink>
+              </TextBlock>
+              <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                <TextBlock FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource SecondaryTextBrush}">
+                  <Run Text="微信：" /><Run x:Name="WeChatIdRun" Foreground="{DynamicResource PrimaryTextBrush}" FontWeight="SemiBold" />
+                </TextBlock>
+                <Button x:Name="WeChatCopyButton"
+                        Style="{StaticResource FooterCopyButtonStyle}"
+                        Margin="8,0,0,0"
+                        VerticalAlignment="Center"
+                        Content="复制"
+                        ToolTip="复制微信号到剪贴板"
+                        AutomationProperties.Name="复制微信号"
+                        Click="WeChatCopyButton_Click" />
+              </StackPanel>
+            </StackPanel>
           </StackPanel>
           <Button x:Name="ExitButton"
                   Style="{StaticResource ExitButtonStyle}"
@@ -955,6 +1029,67 @@
       <Border Grid.RowSpan="3"
               Panel.ZIndex="10"
               Style="{StaticResource SettingsShellOutlineStyle}" />
+
+      <!-- 微信二维码放大层（W5 2026-11-05）：设置窗内遮罩层（不新建窗口），
+           遮罩用既有 WindowShellBrush 键（零新配色）；单击遮罩或图片本体关闭
+           （MouseLeftButtonUp 冒泡到本 Grid），复制按钮是独立职责入口不关闭；
+           显隐走 FadeAnimation 统一管理（轻档 83ms，动效关闭立即切换），
+           Esc 关层优先于关窗（见 SettingsWindow_PreviewKeyDown）。 -->
+      <Grid x:Name="WeChatQrOverlay"
+            Grid.RowSpan="3"
+            Panel.ZIndex="20"
+            Background="{DynamicResource WindowShellBrush}"
+            Visibility="Collapsed"
+            Opacity="0"
+            views:FadeAnimation.ManageVisibility="True"
+            views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FastDurationMs}"
+            MouseLeftButtonUp="WeChatQrOverlay_MouseLeftButtonUp">
+        <Border HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Background="{DynamicResource CardBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="20,16">
+          <StackPanel>
+            <TextBlock Text="微信扫一扫，加个好友"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource PrimaryTextBrush}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,10" />
+            <Border Background="White"
+                    CornerRadius="4"
+                    Padding="6">
+              <Image x:Name="WeChatQrLarge"
+                     Width="300"
+                     Height="300"
+                     RenderOptions.BitmapScalingMode="HighQuality"
+                     AutomationProperties.Name="微信二维码放大图" />
+            </Border>
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        Margin="0,12,0,0">
+              <TextBlock FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource SecondaryTextBrush}">
+                <Run Text="微信：" /><Run x:Name="WeChatIdLargeRun" Foreground="{DynamicResource PrimaryTextBrush}" FontWeight="SemiBold" />
+              </TextBlock>
+              <Button x:Name="WeChatCopyLargeButton"
+                      Style="{StaticResource FooterCopyButtonStyle}"
+                      Margin="8,0,0,0"
+                      VerticalAlignment="Center"
+                      Content="复制"
+                      ToolTip="复制微信号到剪贴板"
+                      AutomationProperties.Name="复制微信号"
+                      Click="WeChatCopyButton_Click" />
+            </StackPanel>
+            <TextBlock Text="扫码或加好友时请注明来意"
+                       FontSize="12"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       HorizontalAlignment="Center"
+                       Margin="0,6,0,0" />
+          </StackPanel>
+        </Border>
+      </Grid>
     </Grid>
   </Border>
 </Window>

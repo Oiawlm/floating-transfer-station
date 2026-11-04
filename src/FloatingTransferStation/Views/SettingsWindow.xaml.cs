@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Controls;
@@ -9,7 +10,9 @@ using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
+using System.Windows.Threading;
 using FloatingTransferStation;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
@@ -29,6 +32,21 @@ public partial class SettingsWindow : Window
     private bool _isChangingDataDirectory;
     private bool _isDeepSeekKeyVisible;
     private bool _isTestingDeepSeekConnection;
+
+    // ---- 页脚关于区联系方式（W5 2026-11-05）----
+
+    private const string WeChatCopyButtonText = "复制";
+    private const string WeChatCopiedButtonText = "已复制";
+    private const string WeChatCopyFailedButtonText = "复制失败";
+    private static readonly TimeSpan WeChatCopyFeedbackRevertDelay = TimeSpan.FromSeconds(1.6);
+
+    private DispatcherTimer? _wechatCopyFeedbackTimer;
+
+    /// <summary>
+    /// 剪贴板写入缝（同 MainWindow.ClipboardDelivery 约定）：测试注入捕获
+    /// 函数以断言负载，不触碰系统剪贴板；null 时走真实 Clipboard.SetDataObject。
+    /// </summary>
+    internal Func<DataObject, bool>? ClipboardWriterOverride { get; set; }
 
     public SettingsWindow(ISettingsHost host)
     {
@@ -160,6 +178,20 @@ public partial class SettingsWindow : Window
         // repo 地址单一来源（契约 #26）：页脚链接与更新服务共用 ProductIdentity 常量，
         // XAML 不再维护字面量。
         RepoLink.NavigateUri = new Uri(ProductIdentity.GitHubRepoHtmlUrl);
+        // 联系方式同一口径（W5 2026-11-05）：微信号文本两处视图与二维码位图
+        //（页脚缩略图＋放大层共用同一冻结实例）全部取自 ProductIdentity。
+        WeChatIdRun.Text = ProductIdentity.WeChatId;
+        WeChatIdLargeRun.Text = ProductIdentity.WeChatId;
+        // 二维码位图用「pack 绝对 URI＋显式程序集限定」加载：程序集名（悬浮中转站）
+        // 从承载程序集运行时推导（不硬编码第二份），路径唯一来源 ProductIdentity；
+        // 显式限定使设置窗在应用进程与测试宿主（入口非本程序集）下同样可解析——
+        // 相对 URI 在纯代码路径会被当文件路径解析（实测渲染期失败即把 Source 置空）。
+        var weChatQrSource = new BitmapImage(new Uri(
+            $"pack://application:,,,/{typeof(SettingsWindow).Assembly.GetName().Name};component{ProductIdentity.WeChatQrResourcePath}",
+            UriKind.Absolute));
+        weChatQrSource.Freeze();
+        WeChatQrThumb.Source = weChatQrSource;
+        WeChatQrLarge.Source = weChatQrSource;
         PopulatePluginSection();
         PopulateCategoryOrderSection();
         Owner = host.HostWindow;
@@ -178,6 +210,81 @@ public partial class SettingsWindow : Window
         DwmWindowEffects.UpdateImmersiveDarkMode(
             new System.Windows.Interop.WindowInteropHelper(this).Handle,
             theme == DesignTheme.Dark);
+    }
+
+    // ---- 页脚关于区联系方式（W5 2026-11-05）：微信号展示、复制、二维码放大层 ----
+
+    private void WeChatQrButton_Click(object sender, RoutedEventArgs e) => ShowWeChatQrOverlay();
+
+    private void WeChatQrOverlay_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        // 单击遮罩或卡片非按钮区域＝关闭（复制按钮的按下/抬起被 Button 消费，
+        // 不会冒泡到这里）；关闭同样走 FadeAnimation 统一显隐管理。
+        e.Handled = true;
+        HideWeChatQrOverlay();
+    }
+
+    private void ShowWeChatQrOverlay()
+    {
+        FadeAnimation.SetAnimationsEnabled(WeChatQrOverlay, _host.CurrentPreferences.AnimationsEnabled);
+        FadeAnimation.SetIsActive(WeChatQrOverlay, true);
+    }
+
+    private void HideWeChatQrOverlay()
+    {
+        FadeAnimation.SetAnimationsEnabled(WeChatQrOverlay, _host.CurrentPreferences.AnimationsEnabled);
+        FadeAnimation.SetIsActive(WeChatQrOverlay, false);
+    }
+
+    /// <summary>页脚与放大层共用同一复制入口：经写入缝落剪贴板，就地轻量反馈。</summary>
+    private void WeChatCopyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button copyButton)
+        {
+            return;
+        }
+
+        ShowWeChatCopyFeedback(copyButton, WriteWeChatIdToClipboard());
+    }
+
+    private bool WriteWeChatIdToClipboard()
+    {
+        try
+        {
+            var data = new DataObject(DataFormats.UnicodeText, ProductIdentity.WeChatId);
+            if (ClipboardWriterOverride is { } writer)
+            {
+                return writer(data);
+            }
+
+            Clipboard.SetDataObject(data, true);
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is COMException or ExternalException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 复制反馈（轻档）：按钮短文案瞬时翻转（已复制/复制失败），延迟复位；
+    /// 计时器复位路径可被下一次点击覆盖，不产生并发复位。
+    /// </summary>
+    private void ShowWeChatCopyFeedback(Button copyButton, bool succeeded)
+    {
+        copyButton.Content = succeeded ? WeChatCopiedButtonText : WeChatCopyFailedButtonText;
+        _wechatCopyFeedbackTimer?.Stop();
+        _wechatCopyFeedbackTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = WeChatCopyFeedbackRevertDelay
+        };
+        _wechatCopyFeedbackTimer.Tick += (_, _) =>
+        {
+            _wechatCopyFeedbackTimer.Stop();
+            copyButton.Content = WeChatCopyButtonText;
+        };
+        _wechatCopyFeedbackTimer.Start();
     }
 
     // ---- 双栏导航（契约 #24，Issue #106）----
@@ -502,6 +609,15 @@ public partial class SettingsWindow : Window
             // 拖拽会话中的 Esc 属「标签顺序」节：回弹原序不提交，优先于关窗路径消费。
             e.Handled = true;
             CancelCategoryOrderDrag();
+            return;
+        }
+
+        if (e.Key == Key.Escape && WeChatQrOverlay.Visibility == Visibility.Visible)
+        {
+            // 二维码放大层打开时的 Esc 只关层（与「单击任意处关闭」同语义），
+            // 不顺带关闭设置窗。
+            e.Handled = true;
+            HideWeChatQrOverlay();
             return;
         }
 

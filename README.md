@@ -29,6 +29,7 @@
 - [🖼️ 界面一览](#️-界面一览)
 - [📁 数据与卸载](#-数据与卸载)
 - [⚠️ 当前限制](#️-当前限制)
+- [💬 联系与反馈](#-联系与反馈)
 - [🗺️ 路线图](#️-路线图)
 - [📄 许可证](#-许可证)
 
@@ -69,7 +70,12 @@
 本地 Windows 构建产物使用中文名，GitHub Release 为了稳定下载链接使用上面的英文文件名。Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自动生成的源码包。
 
 > [!NOTE]
-> 安装包未经代码签名，首次运行时 Windows SmartScreen 可能提示「Windows 已保护你的电脑」——点击「更多信息」后选择「仍要运行」。运行安装程序更新版本后，开机自启会重新开启，可在设置中再次关闭。
+> 安装包未经代码签名，首次运行时 Windows SmartScreen 可能提示「Windows 已保护你的电脑」。这时逐步操作即可继续安装：
+>
+> 1. 在提示框中单击「更多信息」。
+> 2. 单击「仍要运行」，安装程序随即启动。
+>
+> 运行安装程序更新版本后，开机自启会重新开启，可在设置中再次关闭。
 
 ## 🚀 常用操作速查
 
@@ -293,6 +299,12 @@
 - 图片分类反馈稍晚、微信复制图片偶发生成两份，属于低优先级现场观察，自动测试环境未能稳定复现。
 
 遇到问题可以提交 [Bug 报告](https://github.com/Oiawlm/floating-transfer-station/issues/new?template=bug_report.yml)，有新想法可以提交 [功能建议](https://github.com/Oiawlm/floating-transfer-station/issues/new?template=feature_request.yml)。
+
+## 💬 联系与反馈
+
+也可以直接联系开发者：微信号 `niubizhe_gengzhudong`（扫码或加好友时请注明来意），或在 [GitHub Issues](https://github.com/Oiawlm/floating-transfer-station/issues) 留言。设置窗口页脚的「关于」区同样可以扫码与一键复制微信号。
+
+<p align="center"><img src="docs/images/wechat-qr.png" width="200" alt="开发者微信二维码：扫码加好友时请注明来意"></p>
 
 ## 🗺️ 路线图
 
