@@ -18,7 +18,8 @@ public sealed record QuickLaunchOutcome(WindowSettings Settings, AppPreferences 
 /// 装载期必为 Inbox），纵深守卫落在 Set 的角色校验与 MainWindowViewModel 构造的
 /// 装载期修复，无磁盘动作。
 /// 阶段 3 名称归位（版本戳门控的一次性事件）：QuickLaunchMigrationVersion &lt; 1 →
-/// 名称覆写「启动」（settings.json）+ 版本戳（preferences.json），各自原子保存；
+/// 名称覆写目录默认名（settings.json；2026-11-03 W7 起为「快捷启动」，存量「启动」
+/// 由 CategoryNameMigration v2 映射）+ 版本戳（preferences.json），各自原子保存；
 /// 失败非致命：显示名暂为旧名（角色不受影响），下次启动重试。
 /// 幂等防降级泄漏：每次启动执行阶段 1 收编（降级期旧版写入 Prompt 的新卡在再升级
 /// 时再收编），版本戳只门控阶段 3 的一次性名称归位——戳 ≥1 后

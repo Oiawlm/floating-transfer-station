@@ -130,7 +130,7 @@
 
 *一次复制三张图，按来源顺序入库*
 
-<img src="docs/images/drag-into-category.gif" width="680" alt="演示：把资源管理器中的图片拖到面板的「图片」分类标签上，内容进入该分类">
+<img src="docs/images/drag-into-category.gif" width="680" alt="演示：把资源管理器中的图片拖到面板的「重要」分类标签上，内容进入该分类">
 
 *拖到指定分类标签，内容进入该分类*
 

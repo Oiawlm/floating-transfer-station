@@ -36,11 +36,14 @@ public static class BoardCategoryCatalog
             BoardCategory.Inbox
         });
 
+    // 默认显示名（2026-11-03 用户需求，W7 通用化定案）：图片→「重要」、文本1（维护者
+    // 本机曾自定义「复盘」）→「记录」、启动→「快捷启动」、待分类不变；存量快照由
+    // CategoryNameMigration v2 映射。枚举成员名与数值仍冻结（序列化身份不变）。
     public static string DisplayName(BoardCategory category) => category switch
     {
-        BoardCategory.CustomerOriginal => "图片",
-        BoardCategory.Reference => "文本1",
-        BoardCategory.Prompt => "启动",
+        BoardCategory.CustomerOriginal => "重要",
+        BoardCategory.Reference => "记录",
+        BoardCategory.Prompt => "快捷启动",
         BoardCategory.Inbox => "待分类",
         _ => throw new ArgumentOutOfRangeException(nameof(category), category, null)
     };

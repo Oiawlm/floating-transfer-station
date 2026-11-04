@@ -1874,7 +1874,7 @@ public sealed partial class MainWindowInteractionTests
                 "quicklaunch-migration-after.png",
                 "FTS_QUICKLAUNCH_MIGRATION_EVIDENCE_DIR");
 
-            Assert.AreEqual("启动", outcome.Settings.CategoryName(BoardCategory.Prompt));
+            Assert.AreEqual("快捷启动", outcome.Settings.CategoryName(BoardCategory.Prompt));
             Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count, "迁移后 Prompt 桶清空。");
             Assert.AreEqual(3, board.Items(BoardCategory.Inbox).Count, "收编守恒（存量 2 + 待分类 1）。");
         }

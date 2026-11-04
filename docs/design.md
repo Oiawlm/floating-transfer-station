@@ -122,7 +122,7 @@
 | TileHoverLiftPx | -2 | 启动瓦片悬停抬升位移（#30；区别于卡片 LiftedOffsetPx -1） |
 | LauncherTileViewportInsetPx | 8 | 启动瓦片视口顶/底内衬（W6 顶排圆角裁切修复 2026-11-03）：吸收悬停上浮 −2 与确认脉冲 1.06 上下各溢 ≈3 的 RenderTransform 溢出，护住首/末行圆角——内衬随内容滚动，恰在列表自然停位（停顶/停底）提供余量；面板拉伸填充几何不变 |
 
-结构性尺寸（轨道宽 58、面板宽 310–640、最小窗高 360 等）不属于设计 token，权威来源是 Core 的 `WindowSettings`。
+结构性尺寸（轨道宽 66、面板宽 310–640、最小窗高 360 等）不属于设计 token，权威来源是 Core 的 `WindowSettings`。
 
 ## 五·B、层级（Elevation）
 

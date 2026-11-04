@@ -251,9 +251,11 @@ public sealed partial class MainWindowInteractionTests
             foreach (var category in viewModel.Categories)
             {
                 var tab = FindCategoryTab(window, category);
-                var marker = FindDescendants<TextBlock>(tab)
+                // 2026-11-03 W7（Issue #280）：标记改为描边靶心 Path（原字符「◎」）。
+                var marker = FindDescendants<System.Windows.Shapes.Path>(tab)
                     .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
-                Assert.AreEqual("◎", marker.Text);
+                StringAssert.Contains(marker.Data.ToString(), "A8.75,8.75");
+                Assert.AreEqual(1.5d, marker.StrokeThickness);
                 Assert.AreEqual(category.IsDefaultCapture ? 1d : 0d, marker.Opacity);
             }
         }
@@ -659,7 +661,7 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(0, viewModel.Categories.Count(category => category.IsActive));
             var defaultMarkerStyle = (Style)window.FindResource("CategoryDefaultMarkerStyle");
             var activeLayerStyle = (Style)window.FindResource("CategoryActiveLayerStyle");
-            var defaultMarker = FindDescendants<TextBlock>(collapsedHandle)
+            var defaultMarker = FindDescendants<System.Windows.Shapes.Path>(collapsedHandle)
                 .Single(candidate => ReferenceEquals(candidate.Style, defaultMarkerStyle));
             var activeLayer = FindDescendants<Border>(collapsedHandle)
                 .Single(candidate => ReferenceEquals(candidate.Style, activeLayerStyle));

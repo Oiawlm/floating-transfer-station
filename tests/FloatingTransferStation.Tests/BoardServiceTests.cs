@@ -14,7 +14,7 @@ public sealed class BoardServiceTests
         Assert.IsNotNull(displayNameField);
         Assert.AreEqual("悬浮中转站", displayNameField.GetValue(null));
         CollectionAssert.AreEqual(
-            new[] { "图片", "文本1", "启动", "待分类" },
+            new[] { "重要", "记录", "快捷启动", "待分类" },
             BoardCategoryCatalog.Ordered.Select(BoardCategoryCatalog.DisplayName).ToArray());
     }
 
@@ -615,7 +615,7 @@ public sealed class BoardServiceTests
     {
         var normalized = new WindowSettings(900, 900, -20).Normalize(500, 400);
 
-        Assert.AreEqual(442, normalized.PanelWidth);
+        Assert.AreEqual(500 - WindowSettings.TabWidth, normalized.PanelWidth);
         Assert.AreEqual(400, normalized.WindowHeight);
         Assert.AreEqual(0, normalized.Top);
     }

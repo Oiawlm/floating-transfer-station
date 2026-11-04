@@ -112,8 +112,11 @@
             <Border Style="{StaticResource CategoryActiveLayerStyle}" />
             <Border Style="{StaticResource CategoryDropTargetLayerStyle}" />
             <Border Style="{StaticResource CategoryActiveMarkerStyle}" />
-            <TextBlock Text="◎"
-                       Style="{StaticResource CategoryDefaultMarkerStyle}" />
+            <!-- 默认接收分类标记（2026-11-03 W7 重设计，Issue #280）：原字体字符「◎」
+                 辨识度低（字体回退时显示不清），改 fluentui 同族描边靶心 Path——
+                 14.5×14.5 + 1.5 描边（与头部按钮图标同规范），语义「内容收集落点」。 -->
+            <Path Style="{StaticResource CategoryDefaultMarkerStyle}"
+                  Data="M3.25,12 A8.75,8.75 0 1 1 20.75,12 A8.75,8.75 0 1 1 3.25,12 M7,12 A5,5 0 1 1 17,12 A5,5 0 1 1 7,12 M10.5,12 A1.5,1.5 0 1 1 13.5,12 A1.5,1.5 0 1 1 10.5,12" />
             <TextBlock Text="{Binding DisplayName}"
                        Style="{StaticResource CategoryLabelTextStyle}" />
             <TextBox Text="{Binding DraftName, UpdateSourceTrigger=Explicit}"
@@ -135,7 +138,9 @@
     <Grid x:Name="LayoutRoot" Background="Transparent">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
-        <ColumnDefinition Width="58" />
+        <!-- 轨道列宽＝WindowSettings.TabWidth 的 XAML 镜像（GridLength 无法 x:Static
+             直引 double；镜像由 WindowControllerTests「rail.Width==TabWidth」互锁）。 -->
+        <ColumnDefinition Width="66" />
       </Grid.ColumnDefinitions>
 
       <Grid x:Name="PanelContentHost"
@@ -761,7 +766,7 @@
 
         <!-- 快捷启动表面（#30 修订 2026-10-18，Issue #186）：瓦片网格宿主，与 BoardList
              同格互斥（UpdatePanelSurface 三态分发）。工具行 40 DIP（右：＋添加；对齐
-             图片/待分类卡片范式后无编辑模式——改名/删除/拖拽由瓦片常态手势承载）；
+             重要/待分类卡片范式后无编辑模式——改名/删除/拖拽由瓦片常态手势承载）；
              内容区为空态或瓦片网格；文件拖入分流与放置态（2px accent 描边 + 8% 填充
              + 「松开以添加」）。 -->
         <Border x:Name="LauncherContentHost"

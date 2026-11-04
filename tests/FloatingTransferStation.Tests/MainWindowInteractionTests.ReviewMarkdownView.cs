@@ -31,7 +31,9 @@ public sealed partial class MainWindowInteractionTests
         var settings = WindowSettings.Default with
         {
             ReviewMigrationVersion = DailyReviewMigration.CurrentVersion,
-            CategoryNames = WindowSettings.Default.WithCategoryName(BoardCategory.Reference, "复盘").CategoryNames
+            // W7 统一（集成窗口）：Reference 分类显式名用新默认「记录」——
+            // 旧默认名「复盘」已成 v2 迁移的 legacy 映射键，不再作夹具引用。
+            CategoryNames = WindowSettings.Default.WithCategoryName(BoardCategory.Reference, "记录").CategoryNames
         };
         var window = CreateWindow(
             new BoardService(),

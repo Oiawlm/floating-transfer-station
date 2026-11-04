@@ -35,12 +35,73 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(customer.IsEditingName);
             Assert.IsTrue(FindDescendants<TextBox>(customerTab).Single().IsVisible);
             var markerStyle = (Style)window.FindResource("CategoryDefaultMarkerStyle");
-            var marker = FindDescendants<TextBlock>(customerTab)
+            // 2026-11-03 W7（Issue #280）：标记由字体字符「◎」改为 fluentui 同族描边
+            // 靶心 Path——锁定几何与描边档（14.5×14.5 + 1.5），杜绝字体回退歧义。
+            var marker = FindDescendants<System.Windows.Shapes.Path>(customerTab)
                 .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
-            Assert.AreEqual("◎", marker.Text);
+            StringAssert.Contains(marker.Data.ToString(), "A8.75,8.75");
+            StringAssert.Contains(marker.Data.ToString(), "A5,5");
+            StringAssert.Contains(marker.Data.ToString(), "A1.5,1.5");
+            Assert.AreEqual(1.5d, marker.StrokeThickness);
+            Assert.AreEqual(14.5d, marker.Width);
+            Assert.AreEqual(14.5d, marker.Height);
             Assert.AreEqual(customer.IsDefaultCapture ? 1d : 0d, marker.Opacity);
             Assert.IsTrue(
                 Panel.GetZIndex(marker) > Panel.GetZIndex(FindDescendants<TextBox>(customerTab).Single()));
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CategoryTab_DefaultMarkerEvidenceBothThemes()
+    {
+        // 2026-11-03 W7（Issue #280）：默认接收标记由字符「◎」改为描边靶心 Path——
+        // 浅/深双主题渲染证据（默认标记落在待分类标签上＝默认接收分类 Inbox）。
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_DEFAULT_MARKER_EVIDENCE_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_DEFAULT_MARKER_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        using var directory = new TestDirectory();
+        var state = new DefaultCaptureCategoryState();
+        var window = CreateWindow(directory, new BoardService(), state);
+
+        try
+        {
+            window.Show();
+            window.Topmost = true;
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            Assert.AreEqual(BoardCategory.Inbox, viewModel.DefaultCapturePanel!.Category, "前置：默认接收＝待分类。");
+
+            var markerStyle = (Style)window.FindResource("CategoryDefaultMarkerStyle");
+            System.Windows.Shapes.Path MarkerOf(FloatingTransferStation.Views.MainWindow owner, CategoryViewModel category)
+            {
+                var tab = FindCategoryTab(owner, category);
+                return FindDescendants<System.Windows.Shapes.Path>(tab)
+                    .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
+            }
+
+            DesignThemeManager.Apply(window, DesignTheme.Light);
+            CompleteLayout(window);
+            Assert.AreEqual(1d, MarkerOf(window, viewModel.DefaultCapturePanel!).Opacity, "前置：浅色主题默认接收标记在场。");
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "default-marker-light.png",
+                "FTS_DEFAULT_MARKER_EVIDENCE_DIR");
+
+            DesignThemeManager.Apply(window, DesignTheme.Dark);
+            CompleteLayout(window);
+            Assert.AreEqual(1d, MarkerOf(window, viewModel.DefaultCapturePanel!).Opacity, "前置：深色主题默认接收标记在场。");
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "default-marker-dark.png",
+                "FTS_DEFAULT_MARKER_EVIDENCE_DIR");
         }
         finally
         {
@@ -148,7 +209,7 @@ public sealed partial class MainWindowInteractionTests
 
             InvokePrivateTask(window, "SaveCategoryNameAsync", customer, "客户");
 
-            Assert.AreEqual("图片", customer.DisplayName);
+            Assert.AreEqual("重要", customer.DisplayName);
             Assert.AreEqual("分类名称未保存，已恢复原名称。", viewModel.StatusText);
             Assert.IsTrue(customer.IsDefaultCapture);
             Assert.AreEqual(BoardCategory.CustomerOriginal, state.Current);
@@ -195,7 +256,7 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.IsTrue(viewModel.IsPanelExpanded);
             Assert.IsTrue(customer.IsEditingName);
-            Assert.AreEqual("图片", customer.DisplayName);
+            Assert.AreEqual("重要", customer.DisplayName);
             Assert.AreEqual("T", customer.DraftName);
             Assert.IsNull(store.LastSavedSettings);
         }
@@ -237,7 +298,7 @@ public sealed partial class MainWindowInteractionTests
             editor.CaretIndex = editor.Text.Length;
             CompleteLayout(window);
 
-            Assert.AreEqual("图片", customer.DraftName);
+            Assert.AreEqual("重要", customer.DraftName);
             Assert.AreEqual(editor.Text.Length, editor.CaretIndex);
 
             InvokePrivate(window, "CommitCategoryNameEdit", customer, editor.Text);
@@ -343,7 +404,7 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.IsFalse(enter.Handled);
             Assert.IsTrue(customer.IsEditingName);
-            Assert.AreEqual("图片", customer.DisplayName);
+            Assert.AreEqual("重要", customer.DisplayName);
             Assert.IsNull(store.LastSavedSettings);
         }
         finally
