@@ -111,4 +111,54 @@ public sealed partial class LifecycleTests
             settingsWindow.Contains("github.com", StringComparison.OrdinalIgnoreCase),
             "SettingsWindow.xaml must not embed the repository URL literal; it is assigned from ProductIdentity in code-behind.");
     }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
+    public void WeChatContact_IsSingleSourcedFromProductIdentity()
+    {
+        // 联系方式单一来源（2026-11-05，W5）：微信号唯一声明点是 ProductIdentity.WeChatId；
+        // 应用内（src/ 的 C# 与 XAML）不得出现字面量副本——页脚与放大层经代码后置
+        // 从 ProductIdentity 赋值（同 #26 repo 地址口径）。README「联系与反馈」段是
+        // 对外发布面（数据即内容，无法绑定常量），展示值与二维码资产引用必须与
+        // 单一来源一致，由本测试互锁。
+        var repositoryRoot = FindRepositoryRoot();
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(
+                     Path.Combine(repositoryRoot, "src"), "*.*", SearchOption.AllDirectories))
+        {
+            var extension = Path.GetExtension(file);
+            if (!string.Equals(extension, ".cs", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(extension, ".xaml", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (string.Equals(Path.GetFileName(file), "ProductIdentity.cs", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (File.ReadAllText(file).Contains(ProductIdentity.WeChatId, StringComparison.Ordinal))
+            {
+                offenders.Add(Path.GetRelativePath(repositoryRoot, file));
+            }
+        }
+
+        Assert.AreEqual(
+            0,
+            offenders.Count,
+            $"src/ 内不得出现微信号字面量副本（单一来源 ProductIdentity.WeChatId）：{string.Join("; ", offenders)}");
+        var readme = File.ReadAllText(Path.Combine(repositoryRoot, "README.md"));
+        StringAssert.Contains(
+            readme,
+            ProductIdentity.WeChatId,
+            "README「联系与反馈」段必须展示与 ProductIdentity 一致的微信号。");
+        StringAssert.Contains(
+            readme,
+            "docs/images/wechat-qr.png",
+            "README 必须引用仓库内微信二维码资产。");
+        Assert.IsTrue(
+            File.Exists(Path.Combine(repositoryRoot, "docs", "images", "wechat-qr.png")),
+            "README 引用的微信二维码资产必须入库。");
+    }
 }
