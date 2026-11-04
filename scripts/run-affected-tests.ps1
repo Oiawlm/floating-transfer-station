@@ -7,6 +7,11 @@
 # 变更集双模式：-Scope Edit（基线 HEAD，本次编辑反馈）/-Scope Integrate（merge-base
 # origin/main，整条分支集成，默认）；-Base 为原始基线覆盖（发行列车/回放用），与 -Scope
 # 同给报错。-ChangeSet 显式注入变更集（契约测试/历史回放）。
+# 执行档位双档（2026-11-04 分层复检，契约 #55）：-Tier Desktop（默认，流式/单窗口——
+# 桌面套件区域本地跑，现行口径）/-Tier Fast（批次/多窗口快速档——桌面套件区域
+# ＝App.Tests 装载面显式交 CI quality 权威门，本地强制集零 UiTests 互斥获取；
+# Core.* 区域裁到 Core.Tests 工程本地跑其 Core 部分）。档位是判定序之上的执行层选择，
+# 不改四层判定序与空选集/未知回退全量语义（契约 #32 不降）。
 # Core.Tests 整项目恒跑（强制基线）；除 -Full/回退外不运行 solution 级无 filter 的全量测试。
 # 点源加载（先 $FTS_SELECTOR_DEFINE_ONLY=$true 再 . 本文件）只定义数据与函数，供契约测试复用。
 [CmdletBinding()]
@@ -18,6 +23,8 @@ param(
     [switch]$Full,
     [switch]$Explain,
     [string[]]$ChangeSet,
+    [ValidateSet('Desktop', 'Fast')]
+    [string]$Tier = 'Desktop',
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
     [string]$DotnetPath
@@ -194,7 +201,14 @@ $overrides = @(
     # 由本契约测试脚本承接（Kind=Script：Core 基线后子进程运行，非 0 退出＝失败；
     # 恒非零语义＝契约测试自身 0 场景即 exit 1）。
     @{ Name = 'SelectorContract'; Kind = 'Script'; Globs = @(
-        'scripts/run-affected-tests.ps1', 'scripts/test-affected-selector.ps1'); Script = 'scripts/test-affected-selector.ps1' }
+        'scripts/run-affected-tests.ps1', 'scripts/test-affected-selector.ps1'); Script = 'scripts/test-affected-selector.ps1' },
+    # CI 工作流契约（2026-11-04 分层复检与批量落轨，契约 #55）：ci.yml 的 merge_group
+    # 触发与必需检查名「格式、测试与构建」由文件内容契约测试锁定（先例＝
+    # test-bootstrap-*-contract.ps1 的文件内容断言模式）；Kind=Script 子进程执行，
+    # 非 0 退出＝失败。全量表 .github/workflows/* 条目保留为防御纵深（本条目前置接住
+    # ci.yml——先例＝LauncherGridMath/SettingsWindowMetrics）。
+    @{ Name = 'CiWorkflowContract'; Kind = 'Script'; Globs = @(
+        '.github/workflows/ci.yml', 'scripts/test-ci-merge-queue-contract.ps1'); Script = 'scripts/test-ci-merge-queue-contract.ps1' }
 )
 
 # ---- L1 全量表（真全局文件；逐条打印 [affected-full] 标记行与 category）----
@@ -220,7 +234,7 @@ $globalFulls = @(
         'src/FloatingTransferStation.Core/Design/*') },
     @{ Reason = '原生互操作/窗口效果（F2 §三.H KEEP-FULL：DwmWindowEffects 测试 0 直接引用、src 9 文件消费；NativeMethods 3 文件直用＋src 9 文件消费——Win32 路径行为面全域，不可枚举）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Services/DwmWindowEffects.cs', 'src/FloatingTransferStation/Services/NativeMethods.cs') },
-    @{ Reason = '构建/依赖/解决方案/CI 配置（F2 §三.I KEEP-FULL：构建输入影响全部产物与两测试工程全体，结构性全域）'; Category = 'C5'; Globs = @(
+    @{ Reason = '构建/依赖/解决方案/CI 配置（F2 §三.I KEEP-FULL：构建输入影响全部产物与两测试工程全体，结构性全域；ci.yml 实际由例外表 CiWorkflowContract 前置接住，本条为防御纵深）'; Category = 'C5'; Globs = @(
         'Directory.Build.props', 'Directory.Packages.props', 'FloatingTransferStation.slnx', 'global.json', 'nuget.config',
         '.github/workflows/*') },
     @{ Reason = '视觉/动画基础设施（F2 §三.J KEEP-FULL×4：FadeAnimation 卡片模板约 90 处挂载→渲染真实卡片的测试全部间接；LiftAnimation＝CardRootStyle 每卡根样式悬停触发；CardEntrance 经 CollectionChanged 任何新增卡片驱动；VisualTransitions CollapseTimer_Tick＝共享 harness 与 10 文件 InvokePrivate 驱动——共享路径间接消费机制实证，R-AppStem/L2 派生不能接管）'; Category = 'C5'; Globs = @(
@@ -353,6 +367,21 @@ function Test-FilterHitsAny([string]$filter, [string[]]$targets) {
         }
     }
     return $false
+}
+
+function Get-TierDisposition([string]$areaName, [string]$filter, [string[]]$coreInventory, [string]$tier) {
+    # 执行档位裁决（契约 #55，纯函数）：档位是判定序之上的执行层选择，不改计划本身。
+    # - Desktop（默认/流式单窗口）：一切区域本地照旧执行（桌面套件区域照跑）。
+    # - Fast（批次/多窗口快速档，D1 不变量：本地强制集零 UiTests 互斥获取）：
+    #   桌面套件区域（App.Tests 装载面）显式交 CI quality 权威门；Core.* 区域按 Core 工程
+    #   清单裁决——Core 部分本地跑（裁到 Core.Tests 工程，不再 solution 级带 filter 装载
+    #   App.Tests），App 工程同族部分交 CI；Core 工程 0 命中的 Core.* 区域整体交 CI
+    # （不触发运行期空选集失败——该族测试全部落在桌面工程，属「交 CI」而非「空选中」）。
+    if ($tier -ne 'Fast') { return 'Run' }
+    if ($areaName -like 'Core.*' -and $filter -and (Test-FilterHitsAny $filter $coreInventory)) {
+        return 'CoreProjectOnly'
+    }
+    return 'DeferToCi'
 }
 
 function Get-ConventionArea([string]$file, [string[]]$appInventory, [string[]]$coreInventory) {
@@ -614,6 +643,9 @@ function Show-TestPlan($plan) {
         } else {
             Write-Host '-Full 强制全量。'
         }
+        if ($Tier -eq 'Fast') {
+            Write-Host '[fast-tier] 全量计划的桌面套件部分（App.Tests）显式交 CI quality 权威门；本地仅跑 Core.Tests 强制基线（零 UiTests 互斥获取）。'
+        }
     } elseif ($plan.Mode -eq 'Exempt') {
         if ($plan.ExemptFiles.Count) {
             Write-Host '纯文档变更（豁免类），未选任何测试：'
@@ -628,7 +660,16 @@ function Show-TestPlan($plan) {
             $entry.Filter = if ($entry.Filters.Count) { $entry.Filters -join '|' } else { $null }
             $filterText = if ($entry.Script) { "契约测试子进程：$($entry.Script)" }
             elseif ($entry.Filter) { $entry.Filter } else { '（强制基线覆盖，无附加 filter）' }
-            Write-Host "区域 $name → filter=$filterText；理由：$($entry.Files -join ', ')"
+            $tierNote = ''
+            if ($Tier -eq 'Fast' -and -not $entry.Script -and $entry.Filter) {
+                $disposition = Get-TierDisposition $name $entry.Filter $coreInventory $Tier
+                $tierNote = if ($disposition -eq 'CoreProjectOnly') { '；[fast-tier] Core 工程本地跑，App 工程同族部分交 CI' }
+                elseif ($disposition -eq 'DeferToCi') { '；[fast-tier] 桌面套件区域交 CI quality' }
+            }
+            Write-Host "区域 $name → filter=$filterText；理由：$($entry.Files -join ', ')$tierNote"
+        }
+        if ($Tier -eq 'Fast') {
+            Write-Host '[fast-tier] 桌面套件区域本地不执行（零 UiTests 互斥获取）；Core.Tests 强制基线照跑；桌面区域与全量由本批 PR 的 CI quality 承担。'
         }
     }
 }
@@ -768,6 +809,15 @@ Show-TestPlan $plan
 if ($Explain) { Write-Host '-Explain：仅打印计划，不执行。'; exit 0 }
 
 if ($plan.Mode -eq 'Full') {
+    if ($Tier -eq 'Fast') {
+        # 快速档全量：判定序与回退理由不变（见上方 [affected-full] 行）；本地仅跑 Core.Tests
+        # 强制基线，App.Tests 全量部分显式交本批 PR 的 CI quality 权威门（D1：零互斥获取）。
+        & $DotnetPath build $coreTests -c $Configuration
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Invoke-TestRun 'CoreBaseline' $coreTests $null | Out-Null
+        Write-Host '[fast-tier] 全量计划的桌面套件部分（App.Tests）交 CI quality 权威门；本地 Core.Tests 强制基线通过，零 UiTests 互斥获取。'
+        exit 0
+    }
     & $DotnetPath test $solution -c $Configuration --results-directory (Join-Path $repoRoot 'TestResults') --logger 'trx;LogFilePrefix=affected-full'
     exit $LASTEXITCODE
 }
@@ -778,15 +828,19 @@ if ($plan.Mode -eq 'Exempt') {
 
 & $DotnetPath build $coreTests -c $Configuration
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& $DotnetPath build $appTests -c $Configuration
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($Tier -ne 'Fast') {
+    # Desktop 档照旧预构建 App 测试工程；Fast 档无任何 App.Tests 装载面（区域全交 CI 或裁到
+    # Core 工程），不再构建（编译面由五命令的严格 Release 构建与 CI 全量覆盖）。
+    & $DotnetPath build $appTests -c $Configuration
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
 
 $baselineTotal = Invoke-TestRun 'CoreBaseline' $coreTests $null
 $areaTotals = @()
 foreach ($name in $plan.Selected.Keys) {
     $entry = $plan.Selected[$name]
     if ($entry.Script) {
-        # Kind=Script 区域（选择器契约测试）：Core 基线后子进程运行，非 0 退出＝失败；
+        # Kind=Script 区域（选择器/CI 契约测试）：Core 基线后子进程运行，非 0 退出＝失败；
         # 契约测试损坏到无法运行时同样非 0 退出——不可能静默绿灯。
         $scriptPath = Join-Path $repoRoot $entry.Script
         Write-Host "运行区域 $name（契约测试子进程：$($entry.Script)）..."
@@ -797,6 +851,18 @@ foreach ($name in $plan.Selected.Keys) {
     }
     $entry.Filter = if ($entry.Filters.Count) { $entry.Filters -join '|' } else { $null }
     if (-not $entry.Filter) { continue }
+    $disposition = Get-TierDisposition $name $entry.Filter $coreInventory $Tier
+    if ($disposition -eq 'DeferToCi') {
+        Write-Host "[fast-tier] 区域 $name → 桌面套件区域交 CI quality（权威全量门）；本地不获取 UiTests 互斥体。"
+        continue
+    }
+    if ($disposition -eq 'CoreProjectOnly') {
+        # Core.* 区域在快速档裁到 Core.Tests 工程本地跑（不再 solution 级带 filter 装载 App.Tests）；
+        # App 工程同族部分交 CI。
+        Write-Host "[fast-tier] 区域 $name → Core 工程部分本地跑；App 工程同族部分交 CI quality。"
+        $areaTotals += (Invoke-TestRun $name $coreTests $entry.Filter)
+        continue
+    }
     if ($name -like 'Core.*') {
         # Core 侧区域走 solution 级「带 filter」运行（覆盖 Core.Tests 与 App 两个测试工程）；
         # 契约只禁止 solution 级「无 filter」全量，此处带 filter 合规。

@@ -307,7 +307,8 @@
 & .\.tools\dotnet\dotnet.exe restore FloatingTransferStation.slnx
 
 # 开发循环测试：按变更集四层判定序选受影响区域（约定派生优先＋例外表覆写＋未知回退；
-# Core.Tests 恒跑基线；纯文档变更自动跳过）。-Scope Edit 只看本次编辑，默认 Integrate＝整条分支
+# Core.Tests 恒跑基线；纯文档变更自动跳过）。-Scope Edit 只看本次编辑，默认 Integrate＝整条分支。
+# 多窗口批次并行时同命令加 -Tier Fast：桌面 UI 测试区域显式交 CI 权威门，本地零互斥排队（见贡献指南）
 & .\scripts\run-affected-tests.ps1 -Scope Edit
 
 # 全量测试（发行打包与 CI 质量门使用；本地开发循环不要求）
