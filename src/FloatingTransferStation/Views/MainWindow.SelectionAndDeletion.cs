@@ -330,8 +330,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private void HeaderActionRegion_MouseEnter(object sender, MouseEventArgs e) =>
+    private void HeaderActionRegion_MouseEnter(object sender, MouseEventArgs e)
+    {
+        NoteUserInteraction();
         SetHeaderActionsVisible(true);
+    }
 
     private void HeaderActionRegion_MouseLeave(object sender, MouseEventArgs e) =>
         SetHeaderActionsVisible(false);
@@ -478,7 +481,8 @@ public partial class MainWindow : Window
         Guid[] selectedBefore,
         BoardCategory targetCategory,
         TrashClearMode clearMode = TrashClearMode.None,
-        IReadOnlyList<Guid>? selectionToRestore = null)
+        IReadOnlyList<Guid>? selectionToRestore = null,
+        BoardDeleteMode deleteMode = BoardDeleteMode.Undoable)
     {
         if (_isClosing ||
             _isDeletePending ||
@@ -516,7 +520,11 @@ public partial class MainWindow : Window
             string? completionStatus = null;
             if (selectedBefore.Length > 0)
             {
-                success = await _mutations.DeleteManyAsync(selectedBefore);
+                success = await _mutations.DeleteManyAsync(selectedBefore, deleteMode);
+                if (success && deleteMode == BoardDeleteMode.Permanent)
+                {
+                    completionStatus = $"已永久删除 {selectedBefore.Length} 项（不可撤销）";
+                }
             }
             else if (clearMode == TrashClearMode.NonPinned)
             {
@@ -595,6 +603,27 @@ public partial class MainWindow : Window
             [item.Id],
             item.Category,
             selectionToRestore: CaptureSelectedItemIds());
+    }
+
+    /// <summary>
+    /// 单卡永久删除（删除按钮右键，2026-11-03 需求 1，契约 #19 双语义）：与左键
+    /// 路径同一条 <see cref="DeleteContentAsync"/> 删除管线，仅删除模式切换为
+    /// <see cref="BoardDeleteMode.Permanent"/>——不进撤销栈（Ctrl+Z 不可恢复）、
+    /// 图片文件保存成功后立即清理；仍不改当前选中集合、不滚动列表，选中守卫与
+    /// 左键路径同源（选中卡片的删除一律走顶部批量按钮）。
+    /// </summary>
+    private async Task DeleteSingleCardPermanentlyAsync(BoardItem item)
+    {
+        if (BoardList.SelectedItems.Contains(item))
+        {
+            return;
+        }
+
+        await DeleteContentAsync(
+            [item.Id],
+            item.Category,
+            selectionToRestore: CaptureSelectedItemIds(),
+            deleteMode: BoardDeleteMode.Permanent);
     }
 
     private void BeginDeletedCardFade(

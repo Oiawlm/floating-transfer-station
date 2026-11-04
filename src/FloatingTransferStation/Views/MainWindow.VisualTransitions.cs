@@ -75,6 +75,9 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 交互记账挂在真实 MouseEnter 事件处理器（悬停意图共享入口含收起交接的
+        // 补发重评，非指针活动，不在此记账——契约 #26 修订）。
+        NoteUserInteraction();
         EvaluateHoverIntent(category.Category);
     }
 
@@ -330,10 +333,14 @@ public partial class MainWindow : Window
 
     private void Root_MouseEnter(object sender, MouseEventArgs e)
     {
+        NoteUserInteraction();
         CancelPanelCollapseExit();
         StopPanelContentAnimation();
         _collapseTimer.Stop();
         _panelState.EnterSurface();
+        // 指针入场时刻捕获外部前台窗口为送达目标快照（需求 6）：入场时面板尚未
+        // 被任何点击激活，前台＝用户刚才打字的窗口。按压时刻会再刷新一次。
+        _inputDelivery.CaptureForegroundTarget();
     }
 
     private void Root_MouseLeave(object sender, MouseEventArgs e)

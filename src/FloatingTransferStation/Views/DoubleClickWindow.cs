@@ -35,4 +35,9 @@ internal static class DoubleClickWindow
             Math.Abs(position.X - lastPosition.X) <= toleranceX &&
             Math.Abs(position.Y - lastPosition.Y) <= toleranceY;
     }
+
+    /// <summary>系统双击时限（毫秒→时间跨度）：左半裸单击送达的延迟触发窗与
+    /// 就地编辑的双击判定共用同一时限来源（窗口内第二击＝双击，不送达）。</summary>
+    public static TimeSpan SystemDoubleClickSpan =>
+        TimeSpan.FromMilliseconds(GetDoubleClickTime());
 }

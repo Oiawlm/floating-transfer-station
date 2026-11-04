@@ -12,7 +12,9 @@ namespace FloatingTransferStation.Views;
 /// 无 ScrollChanged 回写自身 Width 的自引用（Issue #162 回归结构就此消灭）；
 /// 窄轨/收起期视口 0 由布局系统自然承载（量出 0 宽、展开后自动重测），无需跳帧
 /// 补算特例。行内左对齐、末行不满时靠左（WrapPanel 语义），200 上限的有界性
-/// 不变（不虚拟化）。沟道由排版间距承载（瓦片不再自带 Margin）。
+/// 不变（不虚拟化）。沟道由排版间距承载（瓦片不再自带 Margin）；内容顶/底留
+/// token 化视口内衬（LauncherTileViewportInsetPx，W6 顶排圆角裁切修复）——首/末
+/// 行没有沟道缓冲，悬停上浮与确认脉冲的 RenderTransform 溢出需内衬吸收。
 /// 列数策略（默认自适应 = 既有公式）经 <see cref="ColumnStrategy"/> 依赖属性
 /// 下发：MainWindow 偏好管线赋值即失效重测（无重启）；面板未实现（启动器表面
 /// 未激活）期间由表面激活路径回放当前偏好——权威源=CurrentPreferences，见
@@ -61,7 +63,14 @@ internal sealed class LauncherTilePanel : Panel
         }
 
         var rows = (InternalChildren.Count + columns - 1) / columns;
-        var height = rows > 0 ? rows * tileHeight + (rows - 1) * gutter : 0;
+        // 视口顶/底内衬（W6 顶排圆角裁切修复 2026-11-03）：首/末行没有行间沟道缓冲，
+        // 悬停上浮与确认脉冲的 RenderTransform 溢出越过视口缘即被 ScrollContentPresenter
+        // 裁剪——内容顶/底各留 token 内衬（随内容滚动，恰在列表自然停位提供余量）。
+        // 空面板不留内衬（空态是兄弟元素，面板自身零高度）。
+        var viewportInset = DesignTokens.LauncherTileViewportInsetPx;
+        var height = rows > 0
+            ? 2 * viewportInset + rows * tileHeight + (rows - 1) * gutter
+            : 0;
         return new Size(columns * tileWidth + (columns - 1) * gutter, height);
     }
 
@@ -71,13 +80,14 @@ internal sealed class LauncherTilePanel : Panel
         var tileWidth = LauncherGridMath.TileWidth(finalSize.Width, columns);
         var tileHeight = DesignTokens.LauncherTileHeightPx;
         var gutter = DesignTokens.LauncherTileGutterPx;
+        var viewportInset = DesignTokens.LauncherTileViewportInsetPx;
         for (var index = 0; index < InternalChildren.Count; index++)
         {
             var row = index / columns;
             var column = index % columns;
             InternalChildren[index].Arrange(new Rect(
                 column * (tileWidth + gutter),
-                row * (tileHeight + gutter),
+                viewportInset + row * (tileHeight + gutter),
                 tileWidth,
                 tileHeight));
         }

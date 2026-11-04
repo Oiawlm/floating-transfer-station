@@ -67,6 +67,7 @@ public partial class MainWindow : Window
     private readonly IGlobalHotkeySource _globalHotkeySource;
     private readonly ISecretProtector _secretProtector;
     private readonly DeepSeekClient _deepSeekClient;
+    private readonly InputDeliveryService _inputDelivery;
     private readonly BoardOperationGate? _operationGate;
     private readonly DataDirectoryChangeService? _dataDirectoryChangeService;
     private readonly string _dataDirectory;
@@ -89,6 +90,11 @@ public partial class MainWindow : Window
     private long _categoryDropTargetWithdrawVersion;
     private long _categoryDropTargetAssertTick;
     private int? _heldInsertionSlotIndex;
+    // 指示线显示真值（拖拽会话态，契约 #51 增补）：显/隐切换走「断言→撤离保持窗
+    // 复核→终清」单一状态机，与分类高亮同构——边缘往返不再产生硬切换脉冲。
+    private bool _insertionIndicatorShown;
+    private long _insertionIndicatorWithdrawVersion;
+    private long _insertionIndicatorAssertTick;
     private bool _isClosing;
     private bool _allowClose;
     private bool _globalHotkeyRegistered;
@@ -137,7 +143,9 @@ public partial class MainWindow : Window
         IUpdateService? updateService = null,
         ILauncherStore? launcherStore = null,
         AppLauncher? appLauncher = null,
-        ILauncherDiscoveryStore? launcherDiscoveryStore = null)
+        ILauncherDiscoveryStore? launcherDiscoveryStore = null,
+        InputDeliveryService? inputDelivery = null,
+        Func<DateTimeOffset>? updateClock = null)
     {
         InitializeComponent();
         _preferences = preferences ?? AppPreferences.Default;
@@ -149,10 +157,21 @@ public partial class MainWindow : Window
         // 未注入时用真实实现兜底（与 _startupManager/_globalHotkeySource 同法）。
         _secretProtector = secretProtector ?? new DpapiSecretProtector();
         _deepSeekClient = deepSeekClient ?? new DeepSeekClient();
+        // 输入送达（需求 6）：可注入（测试传假 Win32 接缝）；未注入时用真实实现兜底
+        //（与 _startupManager/_globalHotkeySource 同法）。
+        _inputDelivery = inputDelivery ?? new InputDeliveryService();
         // AI 整理编排（1.41.0）复用同一客户端实例；组合根显式装配，测试可注入
         // 挂假 HttpMessageHandler 客户端的编排器（全离线）。
         _aiTextOrganizer = aiTextOrganizer ?? new AiTextOrganizer(_deepSeekClient);
         _updateService = updateService ?? new UpdateService();
+        // 更新调度时钟可注入（契约 #26 修订：空闲触发的时间抽象，测试注入假时钟）；
+        // 未注入时用真实时钟（与 updateService 同法：生产兜底、测试注入）。
+        _updateClock = updateClock ?? (() => DateTimeOffset.Now);
+        _updateScheduler = new UpdateCheckScheduler(
+            UpdateFirstCheckDelay,
+            UpdateCheckInterval,
+            UpdateIdleCheckInterval,
+            _updateClock);
         _operationGate = operationGate;
         _dataDirectoryChangeService = dataDirectoryChangeService;
         _dataDirectory = dataDirectory ?? string.Empty;
@@ -358,7 +377,8 @@ public partial class MainWindow : Window
         ReassertTopmost();
         _topmostTimer.Start();
         _autoCleanupCheckTimer.Start();
-        // 自动检查更新（默认开）：启动 30 秒后首检 + 每 24 小时一次（契约 #26）。
+        // 自动检查更新（默认开）：30 秒首检 + 24 小时周期 + 2 小时交互空闲，三触发
+        // 统一调度（契约 #26 修订，Issue #275）。
         ApplyUpdateCheckPreference(_preferences.AutoUpdateCheckEnabled);
     }
 
