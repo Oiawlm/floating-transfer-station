@@ -30,12 +30,52 @@ public sealed partial class LocalStore
         }
 
         var content = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(content))
+        if (!HasRecordedContent(content))
         {
             return new DailyReviewDocument(date, string.Empty, false, Fingerprint(string.Empty));
         }
 
         return new DailyReviewDocument(date, content, true, Fingerprint(content));
+    }
+
+    /// <summary>
+    /// 枚举「有文字记录」的日期（升序）：与 <see cref="LoadAsync"/> 的 Exists
+    /// 判定共用 <see cref="HasRecordedContent"/>——空白文件视为无记录（唯一判定源）。
+    /// 非法文件名与非 .md 文件跳过；枚举与读取之间文件被删/占用时按无记录跳过
+    /// （可用性查询对瞬时 IO 竞态取降级语义，与 watcher 防抖的 IO 容忍同族）。
+    /// </summary>
+    public async Task<IReadOnlyList<DateOnly>> EnumerateRecordedDatesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (!Directory.Exists(ReviewsDirectory))
+        {
+            return Array.Empty<DateOnly>();
+        }
+
+        var dates = new List<DateOnly>();
+        foreach (var path in Directory.EnumerateFiles(ReviewsDirectory, "*.md"))
+        {
+            if (!TryParseDate(Path.GetFileNameWithoutExtension(path), out var date))
+            {
+                continue;
+            }
+
+            try
+            {
+                var content = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+                if (HasRecordedContent(content))
+                {
+                    dates.Add(date);
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // 文件在枚举后、读取前消失或被占用：视同无记录，不阻断整表。
+            }
+        }
+
+        dates.Sort();
+        return dates;
     }
 
     public async Task SaveAsync(
@@ -44,7 +84,7 @@ public sealed partial class LocalStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(content);
-        if (string.IsNullOrWhiteSpace(content))
+        if (!HasRecordedContent(content))
         {
             await DeleteAsync(date, cancellationToken).ConfigureAwait(false);
             return;
@@ -228,6 +268,9 @@ public sealed partial class LocalStore
 
     private static bool TryParseDate(string value, out DateOnly date) =>
         DateOnly.TryParseExact(value, ReviewDatePattern, CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
+
+    /// <summary>「有无文字记录」的唯一判定源：LoadAsync 的 Exists 与日期枚举共用。</summary>
+    private static bool HasRecordedContent(string content) => !string.IsNullOrWhiteSpace(content);
 
     private static string Fingerprint(string content) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content)));

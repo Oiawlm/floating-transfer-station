@@ -574,13 +574,16 @@
               <RowDefinition Height="*" />
               <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <!-- 日期导航仅保留 ‹ › 一步切一天（原日期下拉对绝大多数用户只有一项，已移除；
-                 日期文本靠右对齐保持原下拉区域的位置语义）。
-                 左缘新增「阅读｜编辑」分段切换（实验性，默认关闭＝Collapsed，本格零占位、
-                 复盘表面与现状逐像素一致）；独占 Auto 列为后续工具栏增件（如日期跳转）
-                 留出并排结构——增件另起列，不挤占本控件。 -->
+            <!-- 日期导航＝双层箭头＋单步箭头：« »（ReviewJumpPrevious/NextButton）直接
+                 跳到上一个/下一个有文字记录的日期（空白文件＝无记录），‹ › 一步切一天
+                 语义不变（原日期下拉对绝大多数用户只有一项，已移除；日期文本靠右对齐
+                 保持原下拉区域的位置语义）。
+                 左缘「阅读｜编辑」分段切换（实验性，默认关闭＝Collapsed，本格零占位）独占
+                 Auto 列——工具栏增件各起 Auto 列并排，不挤占该控件。 -->
             <Grid Grid.Row="0" Margin="0,0,0,8">
               <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -606,9 +609,28 @@
                                Checked="ReviewEditModeButton_Checked" />
                 </StackPanel>
               </Border>
-              <Button x:Name="ReviewPreviousButton"
+              <Button x:Name="ReviewJumpPreviousButton"
                       Grid.Column="1"
                       Style="{StaticResource ThemedNavButtonStyle}"
+                      ToolTip="上一个有记录的日期"
+                      AutomationProperties.Name="上一个有记录的日期"
+                      IsEnabled="False"
+                      Click="ReviewJumpPreviousButton_Click">
+                <!-- 双层 chevron（«）：单层几何横向平移 5.5 DIP 并列（墨迹盒
+                     0,0–13.5,15），同族描边/圆角参数与居中范式（见下方单层注释）。 -->
+                <Path Data="M7.25,0.75 L0.75,7.5 L7.25,14.25 M12.75,0.75 L6.25,7.5 L12.75,14.25"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                      StrokeThickness="1.5"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round" />
+              </Button>
+              <Button x:Name="ReviewPreviousButton"
+                      Grid.Column="2"
+                      Style="{StaticResource ThemedNavButtonStyle}"
+                      Margin="4,0,0,0"
                       ToolTip="上一天"
                       AutomationProperties.Name="上一天"
                       Click="ReviewPreviousButton_Click">
@@ -631,7 +653,7 @@
                       StrokeLineJoin="Round" />
               </Button>
               <Button x:Name="ReviewNextButton"
-                      Grid.Column="2"
+                      Grid.Column="3"
                       Style="{StaticResource ThemedNavButtonStyle}"
                       Margin="4,0,0,0"
                       ToolTip="下一天"
@@ -646,8 +668,25 @@
                       StrokeEndLineCap="Round"
                       StrokeLineJoin="Round" />
               </Button>
+              <Button x:Name="ReviewJumpNextButton"
+                      Grid.Column="4"
+                      Style="{StaticResource ThemedNavButtonStyle}"
+                      Margin="4,0,0,0"
+                      ToolTip="下一个有记录的日期"
+                      AutomationProperties.Name="下一个有记录的日期"
+                      IsEnabled="False"
+                      Click="ReviewJumpNextButton_Click">
+                <Path Data="M0.75,0.75 L7.25,7.5 L0.75,14.25 M6.25,0.75 L12.75,7.5 L6.25,14.25"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                      StrokeThickness="1.5"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round" />
+              </Button>
               <TextBlock x:Name="ReviewDateState"
-                         Grid.Column="3"
+                         Grid.Column="5"
                          Margin="8,0,0,0"
                          HorizontalAlignment="Right"
                          VerticalAlignment="Center"
