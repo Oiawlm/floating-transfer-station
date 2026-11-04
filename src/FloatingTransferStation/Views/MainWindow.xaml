@@ -673,11 +673,13 @@
                  只读 FlowDocument 渲染（排版走设计 token＋主题语义键，随浅深主题即时
                  切换）；内容唯一来源＝编辑器文本（RefreshReviewReadingView 单点重建），
                  编辑器仍是保存/防抖/合并/Esc 契约的唯一事实源。内部滚动条经窗级隐式
-                 瘦条样式与全 App 同源。 -->
+                 瘦条样式与全 App 同源。W6 焦点视觉治理同款：阅读面非文本输入，键入
+                 焦点不画 Aero2 虚线框（键盘滚动可达性保留）。 -->
             <FlowDocumentScrollViewer x:Name="ReviewReadingView"
                                       Grid.Row="1"
                                       Visibility="Collapsed"
                                       Padding="4,0,4,0"
+                                      FocusVisualStyle="{x:Null}"
                                       AutomationProperties.Name="每日复盘阅读视图" />
             <TextBlock x:Name="ReviewStatus"
                        Grid.Row="2"
