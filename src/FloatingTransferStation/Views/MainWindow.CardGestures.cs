@@ -11,17 +11,19 @@ namespace FloatingTransferStation.Views;
 /// 卡片指针手势状态机（1.17.0 左右分区重构，1.18.0 对半修正，1.24.0 删除钮）。
 /// 卡片指针输入收敛为单一模型：Down 记录按压会话（命中条目、命中区域、
 /// 起点与按下时刻）→ Move 判拖拽 → Up 按「区域 × 双击窗 × 修饰键」分发意图
-/// （编辑 / 选择 / 置顶 / 删除 / 复制），意图实现（BeginCardTextEditing、
+/// （编辑 / 选择 / 置顶 / 删除 / 复制 / 送达），意图实现（BeginCardTextEditing、
 /// ToggleSelection、SelectRange、ToggleCardPinAsync、DeleteSingleCardAsync、
-/// CopyBoardItemsToClipboard）保持与手势判定解耦。
-/// 分区契约（对半）：卡片内容左右两半——左半（命中层左列）承载双击编辑与
-/// 拖拽起点，无左键选择语义（右键选择手势全卡面统一，Issue #240）；右半
-///（命中层右列，置顶/选择按钮所在半区）承载左键复制（手势交换，Issue #216：
-/// 任意修饰键的左键单击复制该卡），右键选择手势不分区域、全卡面统一
-///（裸/Ctrl 右键 toggle、Shift/Ctrl+Shift 右键范围选择在右键 Up 分发——见
-/// MainWindow.ClipboardDelivery.cs），置顶按钮为右半内的独立置顶意图；
-/// 卡片 12px 边缘环带不经命中层，按默认归左半（贴边左键点击承载拖拽，
-/// 不误触复制；右键同属统一选择手势）。
+/// CopyBoardItemsToClipboard、ScheduleTextDelivery）保持与手势判定解耦。
+/// 分区契约（对半）：卡片内容左右两半——左半（命中层左列）承载双击编辑、
+/// 拖拽起点与裸单击送达（2026-11-03 需求 6：文字卡非空白正文的裸左键单击
+/// 延迟到双击窗口期满把卡片文字送进外部输入框——第二击＝双击编辑、拖出、
+/// 新按压都取消；仍无选择语义），右半（命中层右列，置顶/选择按钮所在半区）
+/// 承载左键复制（手势交换，Issue #216：任意修饰键的左键单击复制该卡），
+/// 右键选择手势不分区域、全卡面统一（裸/Ctrl 右键 toggle、Shift/Ctrl+Shift
+/// 右键范围选择在右键 Up 分发——见 MainWindow.ClipboardDelivery.cs；例外：
+/// 按压起于删除钮的右键＝永久删除该单卡，2026-11-03 需求 1），置顶按钮为
+/// 右半内的独立置顶意图；卡片 12px 边缘环带不经命中层，按默认归左半（贴边
+/// 左键点击承载拖拽，不误触复制；右键同属统一选择手势）。
 /// 双击判定由手势层自维护（上次点击的按下时刻、按下位置与命中区域），
 /// 与系统语义一致按 Down 判定，不依赖 Control.MouseDoubleClick——其系统触发
 /// 链会被预览层为压制 ListBox 默认选择而设置的 Handled 阻断
@@ -92,8 +94,19 @@ public partial class MainWindow
     private CardClickTrace? _lastCardClick;
     private Button? _pressButton;
 
+    // 右键按压会话（2026-11-03 需求 1：删除钮右键＝永久删除，镜像左键的按钮
+    // 命中分类——命中分类先于卡面选择手势，滑离按钮取消意图）。其余右键命中
+    // 仍走全卡面统一选择手势（Issue #240，无会话语义）。
+    private BoardItem? _rightPressItem;
+    private Button? _rightPressButton;
+
     private void BoardList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // 任何新的按压意图取消挂起的左半裸单击送达（需求 6）：双击窗内的第二击
+        //（即将进入编辑）、演变成的拖出、以及其他任何点击都不送达——只有「延迟
+        // 窗口期满且期间无任何新按压」的单击才送达。
+        CancelPendingTextDelivery();
+
         var source = e.OriginalSource as DependencyObject;
 
         // 编辑中的卡片是编辑表面（1.22.0 前由覆盖层整卡接管：编辑期卡片对
@@ -183,6 +196,9 @@ public partial class MainWindow
         // 命中卡片：记录按压会话并压制 ListBox 默认单击选择——左键选择只经由
         // 选择按钮发生（右键选择手势全卡面统一、不经按压会话，Issue #240），
         // 左半左键点击不携带任何选择语义。
+        // 按压时刻刷新送达目标快照（需求 6）：本次按压激活面板之前前台仍是用户
+        // 刚才打字的外部窗口时更新；面板已激活则沿用 MouseEnter 快照。
+        _inputDelivery.CaptureForegroundTarget();
         _pressStartPosition = e.GetPosition(this);
         _pressTimestamp = e.Timestamp;
         _pressItem = container.DataContext as BoardItem;
@@ -291,6 +307,19 @@ public partial class MainWindow
             // 仅「未成拖拽的 Up」到达这里：按下后移动超系统拖拽阈值即转入
             // 既有拖拽路径（BoardList_PreviewMouseMove），Up 不复制。
             CopyBoardItemsToClipboard([item]);
+        }
+        else if (_pressZone == CardHitZone.Content)
+        {
+            // 左半裸单击（2026-11-03 需求 6，契约 #36 第三递送通道）：无修饰键、
+            // 文字卡、正文非空白 → 延迟到双击窗口期满才送达（窗口内第二击＝双击
+            // 进编辑，不送达）。图片卡、空白正文与带修饰键的单击维持「无行为」——
+            // 左半左键仍无选择语义（契约 #14）。仅「未成拖拽的 Up」到达这里。
+            if (item.Kind == BoardItemKind.Text &&
+                !string.IsNullOrWhiteSpace(item.Text) &&
+                Keyboard.Modifiers == ModifierKeys.None)
+            {
+                ScheduleTextDelivery(item);
+            }
         }
 
         // 痕迹只记左半与右半点击（1.28.0）：右半痕迹的职责是重置左半双击窗

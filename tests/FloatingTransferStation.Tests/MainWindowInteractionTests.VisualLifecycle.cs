@@ -1179,7 +1179,7 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(30d, deleteButton.Height);
             Assert.AreEqual(0d, deleteButton.Opacity);
             Assert.IsFalse(deleteButton.IsHitTestVisible);
-            Assert.AreEqual("删除", deleteButton.ToolTip);
+            Assert.AreEqual("删除（左键可撤销，右键永久）", deleteButton.ToolTip);
             Assert.IsNotNull(contentGrid);
             // 1.18.0 对半分区：命中层两列 * /* 各占一半；右半（Tag=
             // CardGestureZones.OperationsZone）右上角保留按钮网格（1.30.0 起固定

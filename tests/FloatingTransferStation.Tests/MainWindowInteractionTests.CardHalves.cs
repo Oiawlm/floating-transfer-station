@@ -198,7 +198,13 @@ public sealed partial class MainWindowInteractionTests
         var board = new BoardService();
         var item = board.AddText("左半真实单击", BoardCategory.Inbox);
         var other = board.AddText("已选的另一张", BoardCategory.Inbox);
-        var window = CreateWindow(directory, board);
+        // 2026-11-03 需求 6：左半裸单击获得「送达」语义——注入记录假件断言送达
+        // 触发与负载；选择语义仍无（契约 #14 修订）。
+        var delivery = new RecordingInputDeliveryNative();
+        var window = CreateWindow(
+            directory,
+            board,
+            inputDelivery: new InputDeliveryService(delivery));
 
         try
         {
@@ -212,7 +218,8 @@ public sealed partial class MainWindowInteractionTests
             list.SelectedItems.Add(other);
 
             // 左半中央（约 25% 卡宽处）：单击不得产生任何选择语义——
-            // 左半只承载双击编辑与拖拽，既有已选条目保持不变。
+            // 左半承载双击编辑、拖拽与裸单击送达（2026-11-03 修订），既有已选
+            // 条目保持不变。
             var contentZone = HalvesZoneOf(container, CardGestureZones.ContentZone);
             var zoneOrigin = contentZone.TranslatePoint(new Point(), container);
             var clickPoint = new Point(
@@ -235,6 +242,24 @@ public sealed partial class MainWindowInteractionTests
                 "卡片左半的真实输入单击不得产生选择语义（既有已选保留）。");
             AssertNoVisibleCardEditor(window);
             // 左半单击不得进入编辑。
+
+            // 双击窗口期满后送达该卡全文（延迟触发：期间无第二击）——负载与
+            // 复制通道同构（契约 #36：单卡文字＋内部条目标记），不改板数据。
+            PumpDispatcherFor(
+                window.Dispatcher,
+                TimeSpan.FromMilliseconds(GetDoubleClickTime() + 150));
+            Assert.IsTrue(
+                delivery.Calls.Contains("send-ctrl-v"),
+                "左半裸单击在双击窗口期满后必须送达目标输入框。序列=" +
+                string.Join(",", delivery.Calls));
+            Assert.IsNotNull(delivery.WrittenPayload, "送达必须写入剪贴板负载。");
+            Assert.AreEqual(
+                "左半真实单击",
+                delivery.WrittenPayload.GetData(DataFormats.UnicodeText),
+                "送达负载必须是卡片全文。");
+            Assert.IsTrue(
+                delivery.WrittenPayload.GetDataPresent(DragPayloadService.InternalItemIdFormat),
+                "送达负载必须携带内部条目标记（防重采集，契约 #36）。");
         }
         finally
         {

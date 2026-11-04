@@ -637,7 +637,7 @@
                       <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
-                               Text="启动 30 秒后检查，之后每 24 小时一次"
+                               Text="启动 30 秒后首检，之后每 24 小时一次；连续 2 小时无操作也会检查"
                                Style="{StaticResource RowCaptionStyle}" />
                     <CheckBox x:Name="AutoUpdateCheckToggle"
                               Grid.Column="1"
@@ -647,7 +647,7 @@
                               Unchecked="AutoUpdateCheckToggle_Unchecked" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="检查在后台静默进行；发现新版本时标题栏「更新」按钮会点亮，点击即可自动下载安装。关闭后仍可随时点击该按钮手动检查。" />
+                             Text="检查在后台静默进行；发现新版本即自动「下载 → 校验 → 安装 → 重启」，无需手动确认（手动检查同样如此）。关闭后仅停止自动检查，仍可随时点击标题栏「更新」按钮手动检查。" />
                 </StackPanel>
               </Border>
             </StackPanel>

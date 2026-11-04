@@ -12,13 +12,16 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 检查更新与一键更新的窗口层契约（契约 #26）：头部按钮行最左常驻更新按钮；
-/// 双态（无更新=次级色「检查更新」，有更新=强调色 + tooltip/无障碍名携带新版本号）；
-/// 自动检查的失败完全静默、发现新版本仅状态条提示一次；无更新手动点击状态条反馈、
-/// 失败提示一次；检查与下载全程单飞防重入；可用态点击按「下载→校验→排空→静默
-/// 安装→优雅退出」的锁定顺序触发；下载失败清理后保持可用态可重试；设置开关
-/// 即时生效与持久化；新按钮继承头部悬停淡显与 #17 armed 常显；契约 #13——
-/// 悬停淡显后 Win32 消息直驱真实点击可达。
+/// 检查更新与静默自动更新的窗口层契约（契约 #26，2026-11-03 修订 Issue #275）：
+/// 头部按钮行最左常驻更新按钮；双态（无更新=次级色「检查更新」，有更新=强调色
+/// + tooltip/无障碍名携带新版本号）；任何检查（手动或自动）发现新版本即自动续接
+/// 完整静默更新流（下载→校验→排空→静默安装→优雅退出，无第二击）；自动检查的
+/// 失败完全静默、手动检查失败状态条提示一次；无更新手动点击状态条反馈；检查与
+/// 下载全程单飞防重入；下载失败清理后保持可用态可重试（点亮态点击=重试完整
+/// 更新流）；三触发（30 秒首检/24 小时周期/2 小时交互空闲）统一调度不重复检查
+///（时钟注入）；设置开关即时生效与持久化（关=定时与空闲都不跑，手动不受影响）；
+/// 新按钮继承头部悬停淡显与 #17 armed 常显；契约 #13——悬停淡显后 Win32 消息
+/// 直驱真实点击可达。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -49,6 +52,13 @@ public sealed partial class MainWindowInteractionTests
         PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
     }
 
+    /// <summary>驱动一次调度定时器 tick（三触发统一后的到期评估入口）并等结算。</summary>
+    private static void RunUpdateCheckTick(MainWindow window)
+    {
+        InvokePrivate(window, "UpdateCheckTimer_Tick");
+        PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+    }
+
     /// <summary>等待状态条出现期望文案（点击后的 async void 续体经固定 300ms 泵
     /// 存在竞态——CI 2026-11-03 红实证：下载失败续体晚于泵窗，断言读到检查期
     /// 旧文案。谓词等待消除竞态；超时由调用方断言以原语义消息暴露）。</summary>
@@ -59,6 +69,25 @@ public sealed partial class MainWindowInteractionTests
         {
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
         }
+    }
+
+    /// <summary>通用谓词等待（更新流经 Drain/安装/退出的 async 续体结算，泵窗竞态
+    /// 同 WaitForStatusText；返回最终谓词值，由调用方断言携带语义消息）。</summary>
+    private static bool WaitForCondition(MainWindow window, Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(20));
+        }
+
+        return condition();
+    }
+
+    /// <summary>可推进的假时钟：空闲/周期触发的注入时间源（契约 #26 修订，时间抽象注入）。</summary>
+    private sealed class MutableClock
+    {
+        public DateTimeOffset Now { get; set; } = DateTimeOffset.Now;
     }
 
     private static void ClickUpdateButton(MainWindow window)
@@ -123,10 +152,13 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void UpdateCheck_NewerVersionFound_LightsButtonAndPromptsOnceWhenPanelVisible()
+    public void UpdateCheck_NewerVersionFound_AutoRunsSilentInstallFlow()
     {
         using var directory = new TestDirectory();
         var fake = new FakeUpdateService { CheckResult = AvailableUpdate() };
+        var installerPath = Path.Combine(directory.Root, $"FloatingTransferStation-Setup-{UpdateVersion}.exe");
+        File.WriteAllText(installerPath, "installer");
+        fake.DownloadResult = UpdateDownloadResult.Ok(installerPath);
         var window = CreateWindow(directory, new BoardService(), updateService: fake);
 
         try
@@ -136,30 +168,34 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var button = UpdateButtonOf(window);
 
+            // 自动检查发现新版本：不待第二击，直接自动续接完整静默更新流。
             RunScheduledCheck(window);
+            Assert.IsTrue(
+                WaitForCondition(window, () => GetPrivateField<bool>(window, "_isClosing")),
+                "自动检查发现新版本必须自动走完「下载→校验→排空→静默安装→优雅退出」。");
 
             Assert.AreEqual(
                 $"发现新版本 {UpdateVersion}，点击更新",
                 button.ToolTip,
-                "有更新态 tooltip 必须携带新版本号。");
-            Assert.AreEqual($"发现新版本 {UpdateVersion}，点击更新", AutomationProperties.GetName(button));
-            Assert.AreSame(
-                window.TryFindResource("AccentBrush"),
-                button.Foreground,
-                "有更新态必须点亮强调色（业界先例：着色提示是必要项）。");
-            Assert.IsTrue(
-                StatusTextOf(window).Contains(UpdateVersion),
-                "面板可见时发现新版本必须状态条提示一次。");
-
-            // 下一个检查周期再次确认同一版本：不再重复提示（提示疲劳防护）。
-            var promptOnce = StatusTextOf(window);
-            RunScheduledCheck(window);
-            Assert.AreEqual(promptOnce, StatusTextOf(window), "同一版本重复检查不得重复提示。");
-            Assert.AreEqual(2, fake.CheckCallCount);
+                "更新流在途/完成后按钮保持点亮态（点亮由版本比较派生）。");
+            Assert.AreSame(fake.CheckResult, fake.DownloadedCheck, "下载必须消费检查结果的精确资产定位。");
+            Assert.AreEqual(
+                GetPrivateStaticField<string>("UpdateDownloadDirectory"),
+                fake.DownloadedDirectory,
+                "安装包必须下载到专用 %TEMP% 子目录。");
+            Assert.AreEqual(installerPath, fake.StartedInstallerPath);
+            CollectionAssert.AreEqual(
+                new[] { "check", "download", "install" },
+                fake.EventLog,
+                "自动检查发现新版必须自动续接「下载→（已校验）→静默安装」（无第二击，契约 #26 修订）。");
         }
         finally
         {
-            CloseWindowWithoutSaving(window);
+            // 更新流程自身已走优雅退出路径：窗口可能已（或正在）关闭，仅未关闭时补关。
+            if (window.IsLoaded)
+            {
+                CloseWindowWithoutSaving(window);
+            }
         }
     }
 
@@ -169,7 +205,7 @@ public sealed partial class MainWindowInteractionTests
         using var directory = new TestDirectory();
         var fake = new FakeUpdateService
         {
-            CheckResult = UpdateCheckResult.Fail(UpdateErrorKind.RateLimited, "请求过于频繁，请稍后再试。")
+            CheckResult = UpdateCheckResult.Fail(UpdateErrorKind.RateLimited, "请求过于频繁，请稍后重试。")
         };
         var window = CreateWindow(directory, new BoardService(), updateService: fake);
 
@@ -220,7 +256,7 @@ public sealed partial class MainWindowInteractionTests
         using var directory = new TestDirectory();
         var fake = new FakeUpdateService
         {
-            CheckResult = UpdateCheckResult.Fail(UpdateErrorKind.RateLimited, "请求过于频繁，请稍后再试。")
+            CheckResult = UpdateCheckResult.Fail(UpdateErrorKind.RateLimited, "请求过于频繁，请稍后重试。")
         };
         var window = CreateWindow(directory, new BoardService(), updateService: fake);
 
@@ -231,9 +267,9 @@ public sealed partial class MainWindowInteractionTests
 
             ClickUpdateButton(window);
 
-            WaitForStatusText(window, "检查更新失败：请求过于频繁，请稍后再试。");
+            WaitForStatusText(window, "检查更新失败：请求过于频繁，请稍后重试。");
             Assert.AreEqual(
-                "检查更新失败：请求过于频繁，请稍后再试。",
+                "检查更新失败：请求过于频繁，请稍后重试。",
                 StatusTextOf(window),
                 "手动检查失败必须经状态条提示一次。");
         }
@@ -263,6 +299,7 @@ public sealed partial class MainWindowInteractionTests
             // 在途期间：再次点击与定时 tick 都不得重入。
             InvokeClickOnDispatcher(window);
             InvokePrivate(window, "RunScheduledUpdateCheck");
+            RunUpdateCheckTick(window);
             Assert.AreEqual(1, fake.CheckCallCount, "检查与下载全程单飞防重入。");
 
             held.SetResult(UpdateCheckResult.UpToDate());
@@ -276,7 +313,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void UpdateButton_AvailableUpdateClick_RunsDownloadThenInstallThenGracefulExit()
+    public void UpdateButton_Click_NewerVersionFound_ChecksDownloadsInstallsAndExitsInOneAction()
     {
         using var directory = new TestDirectory();
         var fake = new FakeUpdateService { CheckResult = AvailableUpdate() };
@@ -291,14 +328,17 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
 
-            // 先经自动检查进入可用态，再点击执行更新。
-            RunScheduledCheck(window);
+            // 单击可用态按钮＝检查＋自动续接安装：原「点检测→再点安装」两步收敛为
+            // 单动作（契约 #26 修订，无第二次点击）。
             ClickUpdateButton(window);
+            Assert.IsTrue(
+                WaitForCondition(window, () => GetPrivateField<bool>(window, "_isClosing")),
+                "单次点击必须自动走完「检查→发现新版→下载→校验→排空→静默安装→优雅退出」。");
 
             CollectionAssert.AreEqual(
                 new[] { "check", "download", "install" },
                 fake.EventLog,
-                "点击可用态按钮必须按「下载→（已校验）→静默安装」顺序执行（校验在服务内，失败不会到达安装）。");
+                "一次点击必须按「检查→下载→（已校验）→静默安装」顺序完成（校验在服务内，失败不会到达安装）。");
             Assert.AreEqual(
                 GetPrivateStaticField<string>("UpdateDownloadDirectory"),
                 fake.DownloadedDirectory,
@@ -334,9 +374,8 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var button = UpdateButtonOf(window);
 
+            // 自动检查发现新版 → 自动续接安装流 → 下载/校验失败。
             RunScheduledCheck(window);
-            ClickUpdateButton(window);
-
             WaitForStatusText(window, "更新包校验失败，已放弃安装。");
             Assert.AreEqual(
                 "更新包校验失败，已放弃安装。",
@@ -344,11 +383,118 @@ public sealed partial class MainWindowInteractionTests
                 "下载/校验失败必须状态条提示。");
             CollectionAssert.AreEqual(new[] { "check", "download" }, fake.EventLog, "校验失败绝不启动安装器。");
 
-            // 回到可用态：按钮仍点亮、点击可重试。
+            // 回到可用态：按钮仍点亮、点击可重试（点亮态点击=重试完整更新流）。
             Assert.IsNotNull(GetPrivateField<UpdateCheckResult>(window, "_availableUpdate"));
             Assert.AreEqual($"发现新版本 {UpdateVersion}，点击更新", button.ToolTip);
             ClickUpdateButton(window);
             Assert.AreEqual(2, fake.DownloadCallCount, "失败后按钮保持可用态可重试。");
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void UpdateCheck_IdleTwoHours_TriggersOneCheckPerIdleEpisode()
+    {
+        using var directory = new TestDirectory();
+        var fake = new FakeUpdateService();
+        var clock = new MutableClock();
+        var window = CreateWindow(
+            directory,
+            new BoardService(),
+            updateService: fake,
+            updateClock: () => clock.Now);
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            Assert.AreEqual(0, fake.CheckCallCount);
+
+            // 无交互 3 小时（≥2 小时空闲阈值）：调度 tick 到期触发一次检查。
+            clock.Now = clock.Now.AddHours(3);
+            RunUpdateCheckTick(window);
+            Assert.AreEqual(1, fake.CheckCallCount, "对本应用窗口 ≥2 小时无交互必须触发一次检查。");
+
+            // 同一空闲段不再重复：继续空闲 1 小时再 tick，无第二次检查。
+            clock.Now = clock.Now.AddHours(1);
+            RunUpdateCheckTick(window);
+            Assert.AreEqual(1, fake.CheckCallCount, "同一空闲段至多触发一次检查（空闲臂已被派发消费）。");
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void UpdateCheck_UserInteractionReArmsIdleTrigger()
+    {
+        using var directory = new TestDirectory();
+        var fake = new FakeUpdateService();
+        var clock = new MutableClock();
+        var window = CreateWindow(
+            directory,
+            new BoardService(),
+            updateService: fake,
+            updateClock: () => clock.Now);
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+
+            // 指针进入本应用窗口（既有挂点汇入的交互记账）：空闲段重新起算。
+            InvokePrivate(window, "NoteUserInteraction");
+            clock.Now = clock.Now.AddHours(2).AddMinutes(5);
+            RunUpdateCheckTick(window);
+            Assert.AreEqual(1, fake.CheckCallCount, "交互后 ≥2 小时无操作触发检查。");
+
+            clock.Now = clock.Now.AddHours(1);
+            RunUpdateCheckTick(window);
+            Assert.AreEqual(1, fake.CheckCallCount, "空闲段已消费，持续空闲不重复检查。");
+
+            // 新交互重挂空闲触发臂：再满 2 小时触发第二次检查。
+            InvokePrivate(window, "NoteUserInteraction");
+            clock.Now = clock.Now.AddHours(2).AddMinutes(5);
+            RunUpdateCheckTick(window);
+            Assert.AreEqual(2, fake.CheckCallCount, "新的用户交互必须重挂空闲触发臂。");
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void UpdateCheck_ThreeTriggersUnified_NoDuplicateChecksWhenBothDue()
+    {
+        using var directory = new TestDirectory();
+        var fake = new FakeUpdateService();
+        var clock = new MutableClock();
+        var window = CreateWindow(
+            directory,
+            new BoardService(),
+            updateService: fake,
+            updateClock: () => clock.Now);
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+
+            // 交互后推进 26 小时：周期到期与空闲到期均已过——一次 tick 只派发一次
+            // 检查（三触发共用同一「下次检查到期」状态与派发入口，不互相踩）。
+            InvokePrivate(window, "NoteUserInteraction");
+            clock.Now = clock.Now.AddHours(26);
+            RunUpdateCheckTick(window);
+            Assert.AreEqual(1, fake.CheckCallCount, "多触发同时到期也只检查一次（统一到期状态）。");
+
+            // 派发已同时推进周期并消费空闲臂：紧接的 tick 不得重复检查。
+            RunUpdateCheckTick(window);
+            Assert.AreEqual(1, fake.CheckCallCount, "三触发统一调度：派发统一结算，不重复检查。");
         }
         finally
         {
@@ -460,13 +606,13 @@ public sealed partial class MainWindowInteractionTests
 
                 toggle.IsChecked = false;
                 CompleteLayout(window);
-                Assert.IsFalse(timer.IsEnabled, "关闭开关必须立即停表（关=停定时器）。");
+                Assert.IsFalse(timer.IsEnabled, "关闭开关必须立即停表（关=定时与空闲检查都不跑）。");
                 Assert.IsNotNull(preferencesStore.LastSaved);
                 Assert.IsFalse(preferencesStore.LastSaved.AutoUpdateCheckEnabled, "开关变化必须经 ApplyPreferences 持久化。");
 
                 toggle.IsChecked = true;
                 CompleteLayout(window);
-                Assert.IsTrue(timer.IsEnabled, "重新开启必须恢复节奏（开=恢复定时器）。");
+                Assert.IsTrue(timer.IsEnabled, "重新开启必须恢复调度（开=恢复定时器）。");
                 Assert.IsTrue(preferencesStore.LastSaved!.AutoUpdateCheckEnabled);
             }
             finally
@@ -551,13 +697,14 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
-    /// <summary>记录调用顺序的假更新服务：检查可挂起（单飞验证），下载/安装只记录。</summary>
+    /// <summary>记录调用顺序的假更新服务：检查与下载均可挂起（单飞/证据验证），安装只记录。</summary>
     private sealed class FakeUpdateService : IUpdateService
     {
         public UpdateCheckResult CheckResult { get; set; } = UpdateCheckResult.UpToDate();
         public UpdateDownloadResult DownloadResult { get; set; } =
             UpdateDownloadResult.Fail(UpdateErrorKind.DownloadFailed, "未配置下载结果。");
         public Task<UpdateCheckResult>? HeldCheck { get; set; }
+        public Task<UpdateDownloadResult>? HeldDownload { get; set; }
         public int CheckCallCount { get; private set; }
         public int DownloadCallCount { get; private set; }
         public string? DownloadedDirectory { get; private set; }
@@ -581,7 +728,7 @@ public sealed partial class MainWindowInteractionTests
             EventLog.Add("download");
             DownloadedDirectory = downloadDirectory;
             DownloadedCheck = check;
-            return Task.FromResult(DownloadResult);
+            return HeldDownload ?? Task.FromResult(DownloadResult);
         }
 
         public bool TryStartSilentInstaller(string installerPath)
@@ -594,9 +741,10 @@ public sealed partial class MainWindowInteractionTests
 
     /// <summary>
     /// 发布证据（FTS_UPDATE_EVIDENCE_DIR 设置时产出真实 WPF 渲染截图，契约 #26）：
-    /// 头部「更新」按钮双态——常态（次级色「检查更新」）与发现新版本态（强调色点亮）。
-    /// 有更新态经 fake 服务回报真实走 AdoptCheckResult 采纳路径；渲染走
-    /// SaveVisualEvidence（RenderTargetBitmap 实拍窗口壳层）。
+    /// 头部「更新」按钮双态——常态（次级色「检查更新」）与发现新版本态（强调色点亮，
+    /// 状态条显示自动下载进行中）。有更新态经 fake 服务回报真实走 AdoptCheckResult
+    /// 采纳路径并自动续接更新流（下载挂起供截图）；渲染走 SaveVisualEvidence
+    ///（RenderTargetBitmap 实拍窗口壳层）。
     /// </summary>
     [STATestMethod]
     public void Evidence_CaptureUpdateButtonDualStates()
@@ -611,6 +759,9 @@ public sealed partial class MainWindowInteractionTests
         var board = new BoardService();
         board.AddText(new string('更', 160), BoardCategory.Inbox);
         var fake = new FakeUpdateService { CheckResult = AvailableUpdate() };
+        var heldDownload = new TaskCompletionSource<UpdateDownloadResult>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        fake.HeldDownload = heldDownload.Task;
         var window = CreateWindow(directory, board, updateService: fake);
 
         try
@@ -630,14 +781,21 @@ public sealed partial class MainWindowInteractionTests
                 "update-button-default.png",
                 "FTS_UPDATE_EVIDENCE_DIR");
 
-            // 发现新版本态：强调色点亮（fake 服务回报可用更新，真实走检查采纳路径）。
+            // 发现新版本态：强调色点亮＋自动更新流在途（下载挂起，状态条显示自动
+            // 下载文案——新语义的证据画面，fake 服务回报后真实走检查采纳与续接）。
             InvokePrivate(window, "RunScheduledUpdateCheck");
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
             Assert.IsNotNull(GetPrivateField<UpdateCheckResult>(window, "_availableUpdate"));
+            Assert.IsTrue(
+                StatusTextOf(window).Contains($"正在下载更新（{UpdateVersion}"),
+                "证据画面必须呈现「发现新版本即自动下载」的新语义状态条。");
             SaveVisualEvidence(
                 (Border)window.FindName("WindowShell"),
                 "update-button-available.png",
                 "FTS_UPDATE_EVIDENCE_DIR");
+            heldDownload.SetResult(
+                UpdateDownloadResult.Fail(UpdateErrorKind.DownloadFailed, "证据截图完成，释放挂起的下载。"));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
         }
         finally
         {

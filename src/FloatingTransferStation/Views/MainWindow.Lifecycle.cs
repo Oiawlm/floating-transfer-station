@@ -224,6 +224,8 @@ public partial class MainWindow : Window
         _edgeHideRecallTimer.Stop();
         _autoCleanupCheckTimer.Stop();
         _updateCheckTimer.Stop();
+        // 关闭时取消挂起的左半单击送达（窗口销毁后送达目标与状态条均无意义）。
+        CancelPendingTextDelivery();
         DisposeQuickLaunch();
         DisposeLauncherDiscovery();
         if (_allowClose)

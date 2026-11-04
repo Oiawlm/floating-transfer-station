@@ -1069,6 +1069,7 @@ public partial class MainWindow
             return;
         }
 
+        NoteUserInteraction();
         AnimateLauncherHoverLift(tile, lifted: true);
     }
 
