@@ -437,6 +437,9 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
     <Setter Property="Cursor" Value="Hand" />
+    <!-- W6 焦点视觉治理（2026-11-03）：下拉框键入焦点不再画 Aero2 虚线框
+         （悬停描边反馈保留）。 -->
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="ItemContainerStyle">
       <Setter.Value>
         <Style TargetType="ComboBoxItem">
@@ -547,11 +550,9 @@
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
-    <Style.Triggers>
-      <Trigger Property="IsKeyboardFocusWithin" Value="True">
-        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-      </Trigger>
-    </Style.Triggers>
+    <!-- 焦点视觉只保留文本输入控件（W6 焦点视觉治理，2026-11-03）：容器级
+         IsKeyboardFocusWithin→Accent 描边触发器移除——分类改名编辑器持焦时
+         标签不再整圈紫框，聚焦反馈由编辑器自身的 Themed 描边承载。 -->
   </Style>
 
   <Style x:Key="CategoryActiveLayerStyle" TargetType="Border">
@@ -783,6 +784,8 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0,4" />
+    <!-- W6 焦点视觉治理（2026-11-03）：ListBox 本体键入焦点不再画 Aero2 虚线框。 -->
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
   </Style>
 
   <Style x:Key="BoardListItemStyle" TargetType="ListBoxItem">
@@ -903,12 +906,9 @@
     <Setter Property="Background" Value="{DynamicResource CardBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Style.Triggers>
-      <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=IsKeyboardFocusWithin}"
-                   Value="True">
-        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-      </DataTrigger>
-    </Style.Triggers>
+    <!-- 焦点视觉只保留文本输入控件（W6 焦点视觉治理，2026-11-03）：卡片容器
+         IsKeyboardFocusWithin→Accent 描边触发器移除——键盘选中卡不再紫框，
+         选中态视觉由既有 SelectedCardBrush 底色承载。 -->
   </Style>
 
   <Style x:Key="SelectionButtonStyle" TargetType="Button">
@@ -1676,6 +1676,48 @@
     </Setter>
   </Style>
 
+  <!-- W6 焦点视觉治理（2026-11-03）——全局策略：焦点框视觉只保留在文本输入控件
+       （ThemedTextBoxStyle 家族的聚焦描边是打字定位的功能反馈）；其余一切控件不画
+       焦点框。双层落地：①本块根级隐式样式安全网——六窗全部 merge 本字典，未带显式
+       样式的 Button/ToggleButton/CheckBox/RadioButton/ComboBox/ListBox/ListBoxItem
+       在此统一清除 Aero2 默认虚线 FocusVisualStyle（隐式样式不影响带显式样式的控件，
+       后者由各自共享样式层的置 null setter 覆盖）；②共享显式样式（BoardListStyle/
+       ThemedComboBoxStyle/ThemedNavButtonStyle 族/BoardListItemStyle 等）自带置 null
+       setter。TextBox 不入本清单——文本输入的功能性聚焦描边按策略保留。 -->
+  <Style TargetType="{x:Type Button}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type ToggleButton}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type CheckBox}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type RadioButton}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type ComboBox}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type ListBox}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type ListBoxItem}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <!-- 容器型可聚焦控件（ScrollViewer/ItemsControl/ContentControl 默认 Focusable=true，
+       键入焦点同样画 Aero2 虚线框——模板内 PART_ContentHost 滚动器与收起把手等
+       未带显式样式的实例由此兜底；隐式样式按精确类型匹配，不影响派生控件）。 -->
+  <Style TargetType="{x:Type ScrollViewer}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type ItemsControl}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type ContentControl}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+
   <Style TargetType="ScrollBar">
     <Setter Property="Width" Value="8" />
     <Setter Property="Background" Value="Transparent" />
@@ -1714,6 +1756,9 @@
        透传绑定缺一不可：CanContentScroll 是虚拟化与键盘滚动的生命线；两向 ScrollBarVisibility
        保留 Auto 语义（需要时才出现，只是不再改变 viewport 宽）；不引入自动隐藏定时器。 -->
   <Style x:Key="OverlayScrollViewerStyle" TargetType="ScrollViewer">
+    <!-- W6 焦点视觉治理（2026-11-03）：带显式样式的滚动器（主窗启动区/设置共享视口/
+         多选器）在此清除 Aero2 虚线 FocusVisualStyle（隐式安全网不覆盖显式样式实例）。 -->
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ScrollViewer">

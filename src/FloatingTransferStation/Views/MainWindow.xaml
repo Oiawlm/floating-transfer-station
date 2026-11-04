@@ -216,12 +216,13 @@
                         ToolTip="保持展开，暂停自动收起"
                         AutomationProperties.Name="保持展开，暂停自动收起"
                         Click="PanelHoldButton_Click">
-                  <!-- 「贴缘面板」语汇：全高竖线=屏幕右缘，左侧垂直居中的横向长方形=展开的面板，
-                       面板贴住右缘即保持展开（应用「面板贴屏幕右缘」布局的微缩图）；
-                       长方形右长边由竖线兼任，8.5 宽×4 高≈2.1:1 的横向比例直译「展开的面板」，
-                       墨迹高约为竖线 0.28（近方形旧形约 1.4:1，读作方块而非面板）。
-                       描边图标显式 14.5×14.5 + 1.5 描边，与恢复默认按钮同一规范。 -->
-                  <Path Data="M10.5,0 L10.5,14.5 M10.5,5.25 L2,5.25 L2,9.25 L10.5,9.25"
+                  <!-- 「贴缘面板」语汇（W6 需求 10 改向，2026-11-03）：全高竖线=屏幕右缘，
+                       其左侧垂直居中的竖向长方形=展开的面板——展开面板在屏上是贴住右缘的
+                       竖条，微缩图竖向矩形直译这一形态（旧形为横向矩形，方向反了）；
+                       矩形右短边由竖线兼任，4 宽×8.5 高≈1:2.1（旧形 2.1:1 的 90° 旋转），
+                       墨迹宽约为竖线高的 0.28。描边图标显式 14.5×14.5 + 1.5 描边，
+                       与恢复默认按钮同一规范。 -->
+                  <Path Data="M10.5,0 L10.5,14.5 M10.5,3 L6.5,3 L6.5,11.5 L10.5,11.5"
                         Width="14.5"
                         Height="14.5"
                         Stretch="Uniform"
@@ -842,9 +843,10 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                   <DataTemplate DataType="{x:Type models:LauncherItem}">
-                    <!-- 瓦片几何（高 100、沟道 8、宽=视口摊分）由 LauncherTilePanel 排版
-                         承载（DesignTokens 同源经 LauncherGridMath）；瓦片根不再自带
-                         Width/Height/Margin。悬停 167ms/-2px 与按压 83ms/0.96 走既有
+                    <!-- 瓦片几何（高 100、沟道 8、宽=视口摊分、内容顶/底视口内衬
+                         LauncherTileViewportInsetPx——W6 顶排圆角裁切修复）由
+                         LauncherTilePanel 排版承载（DesignTokens 同源经 LauncherGridMath）；
+                         瓦片根不再自带 Width/Height/Margin。悬停 167ms/-2px 与按压 83ms/0.96 走既有
                          动画体系；启动确认/失败描边/重复脉冲为代码驱动的场景动画。
                          分区手势（#30 修订 2026-10-18，Issue #186）：启动区（图标格，
                          Tag=LauncherLaunchZone）单击=启动；名称带（Tag=LauncherNameZone）
@@ -923,7 +925,8 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
                               <!-- 多选态（#30 修订 2026-10-18）：选中底色对齐卡片范式
-                                   （SelectedCardBrush），焦点描边（accent）独立并存。 -->
+                                   （SelectedCardBrush）。W6 焦点视觉治理（2026-11-03）：
+                                   键盘焦点不再画独立 Accent 描边——选中底色是唯一选中视觉。 -->
                               <Setter Property="Background" Value="{DynamicResource SelectedCardBrush}" />
                             </DataTrigger>
                           </Style.Triggers>
@@ -1002,8 +1005,12 @@
                             <!-- 就地改名编辑器（名称带双击/F2/菜单进入；Enter 提交/
                                  Esc 取消/失焦提交；空提交=回退原名；IME 组合守卫与
                                  卡片编辑同族；Explicit 绑定修复保持——1.49.1 键入
-                                 不生效根因修复，契约锁定）。 -->
+                                 不生效根因修复，契约锁定）。W6 焦点视觉治理（2026-11-03）：
+                                 套 ThemedTextBoxStyle——脱离系统默认 TextBox 模板，聚焦
+                                 描边由主题键承载（文本输入的功能性焦点反馈，全局策略
+                                 唯一保留项）。 -->
                             <TextBox x:Name="TileNameEditor"
+                                     Style="{StaticResource ThemedTextBoxStyle}"
                                      MaxHeight="32"
                                      FontSize="12"
                                      TextBlock.LineHeight="16"
@@ -1179,6 +1186,9 @@
         <ContentControl.Style>
           <Style TargetType="ContentControl">
             <Setter Property="Visibility" Value="Visible" />
+            <!-- W6 焦点视觉治理（2026-11-03）：内联显式样式不走隐式安全网，
+                 键入焦点不画 Aero2 虚线框。 -->
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
               <Setter.Value>
                 <ControlTemplate TargetType="ContentControl">
