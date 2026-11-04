@@ -8,7 +8,7 @@ namespace FloatingTransferStation.Tests;
 
 /// <summary>
 /// 主窗数据目录搬迁的静默期契约：quiesce 停止全部写入者并封闭操作门、成功后直接
-/// 放行退出；失败恢复运行（重开操作门、恢复剪贴板监听）；插件目录偏好的守卫规则。
+/// 放行退出；失败恢复运行（重开操作门、恢复剪贴板监听）。
 /// </summary>
 [TestClass]
 public sealed class MainWindowDataRelocationTests
@@ -94,8 +94,7 @@ public sealed class MainWindowDataRelocationTests
         ThrowingClipboardReader reader,
         IDataDirectoryRegistration registration,
         bool spawnSucceeds,
-        out BoardOperationGate gate,
-        IPreferencesStore? preferencesStore = null)
+        out BoardOperationGate gate)
     {
         var paths = AppPaths.ForTests(sourceDataDirectory);
         var store = new LocalStore(paths, new AtomicTextWriter());
@@ -116,7 +115,6 @@ public sealed class MainWindowDataRelocationTests
             defaultCaptureCategory: null,
             new ImageNormalizer(store.ImagesDirectory),
             clipboardReader: reader,
-            preferencesStore: preferencesStore,
             dataDirectory: sourceDataDirectory,
             operationGate: operationGate,
             dataDirectoryChangeService: changeService);
@@ -149,8 +147,8 @@ public sealed class MainWindowDataRelocationTests
         Assert.IsTrue(result.ExitApplication);
         Assert.IsNull(result.Error);
         Assert.AreEqual(1, registration.Commits.Count);
-        Assert.AreEqual((Path.Combine(targetParent, "Data"), targetParent), registration.Commits[0]);
-        var target = Path.Combine(targetParent, "Data");
+        Assert.AreEqual((Path.Combine(targetParent, "悬浮中转站"), targetParent), registration.Commits[0]);
+        var target = Path.Combine(targetParent, "悬浮中转站");
         Assert.AreEqual(
             File.ReadAllText(Path.Combine(source, "board.json")),
             File.ReadAllText(Path.Combine(target, "board.json")),
@@ -182,7 +180,7 @@ public sealed class MainWindowDataRelocationTests
         var cancellation = GetPrivateField<CancellationTokenSource>(window, "_windowOperationCancellation");
         Assert.IsFalse(cancellation.IsCancellationRequested, "失败后恢复新的取消令牌。");
         Assert.IsTrue(File.Exists(Path.Combine(source, "board.json")));
-        Assert.IsFalse(Directory.Exists(Path.Combine(_root, "next", "Data")), "发布目录回滚删除。");
+        Assert.IsFalse(Directory.Exists(Path.Combine(_root, "next", "悬浮中转站")), "发布目录回滚删除。");
         Assert.IsNotNull(GetPrivateField<System.Windows.Interop.HwndSource>(window, "_windowSource"), "剪贴板钩子恢复。");
 
         // 恢复后的窗口仍可正常走既有退出序列。
@@ -213,58 +211,9 @@ public sealed class MainWindowDataRelocationTests
         Assert.IsTrue(result.ExitApplication);
         StringAssert.Contains(result.Error, "自动重启失败");
         Assert.AreEqual(1, registration.Commits.Count, "登记不回滚。");
-        Assert.IsTrue(File.Exists(Path.Combine(targetParent, "Data", "board.json")));
+        Assert.IsTrue(File.Exists(Path.Combine(targetParent, "悬浮中转站", "board.json")));
         Assert.IsTrue(GetPrivateField<bool>(window, "_allowClose"));
         Assert.IsTrue(closed.Task.IsCompleted, "重启失败同样直接退出本实例。");
     }
 
-    [STATestMethod]
-    public void ApplyPluginsDirectory_RejectsInsideDataDirectoryAndSavesValidOverride()
-    {
-        var source = CreateManagedSource();
-        var reader = new ThrowingClipboardReader();
-        var saved = new List<AppPreferences>();
-        var preferencesStore = new CapturingPreferencesStore(saved);
-        var window = CreateWindow(
-            source, reader, new FakeRegistration(true), spawnSucceeds: true, out _, preferencesStore);
-
-        var insideTask = window.ApplyPluginsDirectoryAsync(Path.Combine(source, "custom-plugins"));
-        PumpDispatcherUntil(window.Dispatcher, insideTask);
-        var inside = insideTask.Result;
-        Assert.IsNotNull(inside, "数据目录之内的插件目录必须拒绝。");
-        Assert.AreEqual(0, saved.Count);
-
-        var external = Path.Combine(_root, "my-plugins");
-        var errorTask = window.ApplyPluginsDirectoryAsync(external);
-        PumpDispatcherUntil(window.Dispatcher, errorTask);
-        var error = errorTask.Result;
-        Assert.IsNull(error);
-        Assert.AreEqual(1, saved.Count);
-        Assert.AreEqual(
-            Path.GetFullPath(external).TrimEnd(Path.DirectorySeparatorChar),
-            saved[0].PluginsDirectoryOverride);
-
-        var resetTask = window.ApplyPluginsDirectoryAsync(null);
-        PumpDispatcherUntil(window.Dispatcher, resetTask);
-        var resetError = resetTask.Result;
-        Assert.IsNull(resetError);
-        Assert.AreEqual(2, saved.Count);
-        Assert.IsNull(saved[1].PluginsDirectoryOverride);
-
-        typeof(MainWindow).GetField("_allowClose", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-            .SetValue(window, true);
-        window.Close();
-    }
-
-    private sealed class CapturingPreferencesStore(List<AppPreferences> saved) : IPreferencesStore
-    {
-        public Task<AppPreferences> LoadPreferencesAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(AppPreferences.Default);
-
-        public Task SavePreferencesAsync(AppPreferences preferences, CancellationToken cancellationToken = default)
-        {
-            saved.Add(preferences);
-            return Task.CompletedTask;
-        }
-    }
 }

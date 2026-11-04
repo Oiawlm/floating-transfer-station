@@ -6,7 +6,8 @@ namespace FloatingTransferStation.Services;
 /// <summary>
 /// 设置窗口与主窗口之间的宿主契约：读取当前偏好、立即应用并异步持久化、
 /// 提供自启管理与数据目录，以及触发主窗既有的保存退出序列（不得绕过冲刷语义）。
-/// 1.16.0 起新增数据目录搬迁（预检 + 执行 + 自动重启）与插件目录偏好。
+/// 1.16.0 起新增数据目录搬迁（预检 + 执行 + 自动重启）；插件目录已结构性内嵌为
+/// 数据根 plugins（随数据目录一起移动），无独立偏好入口。
 /// </summary>
 public interface ISettingsHost
 {
@@ -32,9 +33,6 @@ public interface ISettingsHost
         string targetParentDirectory,
         IProgress<DataDirectoryCopyProgress>? progress = null,
         CancellationToken cancellationToken = default);
-    string EffectivePluginsDirectory { get; }
-    bool PluginsDirectoryIsDefault { get; }
-    Task<string?> ApplyPluginsDirectoryAsync(string? directoryOverride);
 
     /// <summary>当前标签显示顺序（1.25.0）：设置页「标签顺序」节的渲染来源。</summary>
     IReadOnlyList<BoardCategory> CurrentDisplayOrder { get; }

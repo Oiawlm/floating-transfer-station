@@ -43,6 +43,7 @@
 | `launcher-discovery-settings-light/dark.png` | 1020×900 / 680×600 | 88/51 KB | 设置发现节 | 同上 |
 | `update-button-available.png` / `update-button-default.png` | 418×640 | 21/12 KB | 更新按钮点亮/常态（`update-flow-diagram` 的裁剪源） | usage「更新」 |
 | `settings-auto-cleanup-retention-tiers/disabled.png` | 1020×900 | 90/88 KB | 自动清理保留时长两态 | 本表登记（PR 引用） |
+| `wechat-qr.png` | 1568×1568 | 12 KB | 开发者微信二维码（品牌深紫 #463A9E、EC-H；规划窗口重绘资产，非应用画面；内容与 `ProductIdentity.WeChatId` 一致） | README「联系与反馈」 |
 | `card-gesture-swap-evidence/`（4 PNG） | — | 共 72 KB | 2026-10-23 手势交换窗口证据 | 本表登记（PR 引用） |
 
 总量约 2.5 MB（预算目标 ≤11 MB、硬上限 12 MB，大幅富余）。引用宽度一律 ≤ 源宽；GIF 帧率 12 fps。
@@ -121,4 +122,4 @@ ffprobe -v error -select_streams v:0 -show_entries stream=width,height,avg_frame
 
 总量目标 ≤11 MB、硬上限 12 MB（当前约 2.5 MB）。单项：hero ≤2.5 MB、面板 GIF ≤1.5 MB、静态标注图 ≤200 KB、双联 ≤300 KB。降级顺序（原速基准资产除外）：缩时长 → 缩宽度 → 降帧率（≥10fps）→ 改静态图 → 删除（仅限低优先级资产）。
 
-视觉规划的通用方法论以公开社区惯例为准，入口见 [README 风格指南](../readme-style-guide.md) 文末；项目资产构成与再生方式以本台账为准。
+视觉规划的通用方法论以公开社区惯例为准；项目资产构成与再生方式以本台账为准。

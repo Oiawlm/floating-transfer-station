@@ -641,8 +641,10 @@ public sealed class SettingsWindowPluginTests
     {
         Assert.AreEqual(Visibility.Visible, ((Button)settings.FindName("ChangeDataDirectoryButton")!).Visibility);
         Assert.AreEqual(Visibility.Visible, ((Button)settings.FindName("OpenDataDirectoryButton")!).Visibility);
-        Assert.AreEqual(Visibility.Visible, ((Button)settings.FindName("ChangePluginDirectoryButton")!).Visibility);
-        Assert.AreEqual(Visibility.Visible, ((Button)settings.FindName("ResetPluginDirectoryButton")!).Visibility);
+        // 2026-11-05 数据根统一起插件目录结构性内嵌于数据根（W3）：插件卡动作收敛为
+        // 「重新扫描 + 打开」，「更改…/恢复默认」随能力删除（见契约 #9/#47 修订）。
+        Assert.AreEqual(Visibility.Visible, ((Button)settings.FindName("RescanPluginsButton")!).Visibility);
+        Assert.AreEqual(Visibility.Visible, ((Button)settings.FindName("OpenPluginDirectoryButton")!).Visibility);
     }
 
     private static void CloseLeftoverSettings(MainWindow window)
@@ -681,7 +683,7 @@ public sealed class SettingsWindowPluginTests
     }
 
     [STATestMethod]
-    public void DirectoryControls_ShowChangeButtonsAndDefaultNote()
+    public void DirectoryControls_ShowDataChangeButtonsAndEmbeddedPluginDirectory()
     {
         using var directory = new TestDirectory();
         var catalog = CreateCatalog(directory);
@@ -696,16 +698,18 @@ public sealed class SettingsWindowPluginTests
             Assert.IsNotNull(changeData);
             Assert.AreEqual(Visibility.Visible, changeData.Visibility);
 
-            // 插件目录区块：路径 + 更改 + 恢复默认 + 打开，默认时说明文字标明默认。
+            // 插件目录区块（2026-11-05 数据根统一，W3）：路径 + 重新扫描 + 打开；
+            // 插件目录结构性内嵌于数据根，「更改…/恢复默认」随能力删除（不存在于 namescope）。
+            Assert.IsNull(settings.FindName("ChangePluginDirectoryButton"), "插件目录不再支持单独更改。");
+            Assert.IsNull(settings.FindName("ResetPluginDirectoryButton"), "插件目录不再有独立默认值可恢复。");
             Assert.AreEqual(
                 Visibility.Visible,
-                ((Button)settings.FindName("ChangePluginDirectoryButton")!).Visibility);
+                ((Button)settings.FindName("RescanPluginsButton")!).Visibility);
             Assert.AreEqual(
                 Visibility.Visible,
-                ((Button)settings.FindName("ResetPluginDirectoryButton")!).Visibility);
+                ((Button)settings.FindName("OpenPluginDirectoryButton")!).Visibility);
             var note = settings.FindName("PluginDirectoryNoteText") as TextBlock;
             Assert.IsNotNull(note);
-            StringAssert.Contains(note.Text, "默认");
             StringAssert.Contains(note.Text, "数据目录");
         }
         finally

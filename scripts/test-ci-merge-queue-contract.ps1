@@ -1,7 +1,7 @@
 ﻿# CI 工作流契约测试（分层复检与批量落轨，设计契约 #55）：锁定 .github/workflows/ci.yml 的
 # 触发面与必需检查名——①on: 必含 push/pull_request/merge_group 三触发且都锚定 main
 # （merge_group＝合并队列对整批组合结果跑同一全量门）；②汇总 job 名必须恰为「格式、测试与构建」
-# （main 分支保护必需检查名，CONTRIBUTING「评审与合并」约束——扩充检查时保留该名称）；
+# （main 分支保护必需检查名——扩充检查时保留该名称）；
 # ③windows job 产出必须被 quality 汇总门消费（needs 链不断）。文件内容断言先例＝
 # test-bootstrap-*-contract.ps1。0 退出码＝通过；由选择器 CiWorkflowContract 区域
 # （Kind=Script）在 Core 基线后子进程执行。

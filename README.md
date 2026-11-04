@@ -29,9 +29,8 @@
 - [🖼️ 界面一览](#️-界面一览)
 - [📁 数据与卸载](#-数据与卸载)
 - [⚠️ 当前限制](#️-当前限制)
+- [💬 联系与反馈](#-联系与反馈)
 - [🗺️ 路线图](#️-路线图)
-- [🛠️ 本地开发](#️-本地开发)
-- [🤝 参与贡献](#-参与贡献)
 - [📄 许可证](#-许可证)
 
 ## ✨ 功能特性
@@ -71,7 +70,12 @@
 本地 Windows 构建产物使用中文名，GitHub Release 为了稳定下载链接使用上面的英文文件名。Release 页面中的 `Source code (zip)` / `Source code (tar.gz)` 是 GitHub 自动生成的源码包。
 
 > [!NOTE]
-> 安装包未经代码签名，首次运行时 Windows SmartScreen 可能提示「Windows 已保护你的电脑」——点击「更多信息」后选择「仍要运行」。运行安装程序更新版本后，开机自启会重新开启，可在设置中再次关闭。
+> 安装包未经代码签名，首次运行时 Windows SmartScreen 可能提示「Windows 已保护你的电脑」。这时逐步操作即可继续安装：
+>
+> 1. 在提示框中单击「更多信息」。
+> 2. 单击「仍要运行」，安装程序随即启动。
+>
+> 运行安装程序更新版本后，开机自启会重新开启，可在设置中再次关闭。
 
 ## 🚀 常用操作速查
 
@@ -280,9 +284,9 @@
 ## 📁 数据与卸载
 
 > [!WARNING]
-> 卸载会删除程序、自启项，以及应用登记并管理的数据目录（新位置为所选文件夹下的 `Data`，历史位置为 `悬浮中转站\Data`）；不会删除你选择的文件夹里的其他文件。重要内容仍建议另外备份。
+> 卸载会删除程序、自启项，以及应用登记并管理的数据目录（即所选文件夹下的 `悬浮中转站` 文件夹本身，历史位置为 `Data` 与 `悬浮中转站\Data`）；不会删除你选择的文件夹里的其他文件。重要内容仍建议另外备份。
 
-- 默认程序目录是 `%LocalAppData%\Programs\悬浮中转站\`，默认数据目录是 `%LocalAppData%\悬浮中转站\Data\`。安装或更新时可以改选两者的位置。
+- 默认程序目录是 `%LocalAppData%\Programs\悬浮中转站\`，默认数据目录是 `%LocalAppData%\悬浮中转站\`（数据与插件都直接放在这个文件夹里）。安装或更新时可以改选两者的位置；旧版本的 `Data` 布局会在升级后首次启动时自动迁移到新布局。
 - 从 1.4.3 或更早版本升级的步骤与卸载器边界说明，见[历史版本兼容](docs/usage.md#历史版本兼容)。
 
 ## ⚠️ 当前限制
@@ -296,36 +300,15 @@
 
 遇到问题可以提交 [Bug 报告](https://github.com/Oiawlm/floating-transfer-station/issues/new?template=bug_report.yml)，有新想法可以提交 [功能建议](https://github.com/Oiawlm/floating-transfer-station/issues/new?template=feature_request.yml)。
 
+## 💬 联系与反馈
+
+也可以直接联系开发者：微信号 `niubizhe_gengzhudong`（扫码或加好友时请注明来意），或在 [GitHub Issues](https://github.com/Oiawlm/floating-transfer-station/issues) 留言。设置窗口页脚的「关于」区同样可以扫码与一键复制微信号。
+
+<p align="center"><img src="docs/images/wechat-qr.png" width="200" alt="开发者微信二维码：扫码加好友时请注明来意"></p>
+
 ## 🗺️ 路线图
 
 分类管理（动态增删）、外部拖入激活方式与常驻模式等仍需逐项设计，完整说明见[路线图](ROADMAP.md)。
-
-## 🛠️ 本地开发
-
-```powershell
-& .\scripts\bootstrap-dotnet.ps1
-& .\.tools\dotnet\dotnet.exe restore FloatingTransferStation.slnx
-
-# 开发循环测试：按变更集四层判定序选受影响区域（约定派生优先＋例外表覆写＋未知回退；
-# Core.Tests 恒跑基线；纯文档变更自动跳过）。-Scope Edit 只看本次编辑，默认 Integrate＝整条分支。
-# 多窗口批次并行时同命令加 -Tier Fast：桌面 UI 测试区域显式交 CI 权威门，本地零互斥排队（见贡献指南）
-& .\scripts\run-affected-tests.ps1 -Scope Edit
-
-# 全量测试（发行打包与 CI 质量门使用；本地开发循环不要求）
-& .\.tools\dotnet\dotnet.exe test FloatingTransferStation.slnx -c Release --no-restore
-```
-
-生成 Windows 安装包：
-
-```powershell
-& .\scripts\build-release.ps1
-```
-
-默认构建允许 `CHANGELOG.md` 中保留未发布记录；正式发布使用 `build-release.ps1 -ForRelease`，检查步骤见[发布指南](docs/releasing.md)。开发运行不会登记开机自启，自启项由安装器统一管理。版本变化见[更新记录](CHANGELOG.md)；更完整的改动规则见[贡献指南](CONTRIBUTING.md)，主要组件与数据流见[架构说明](docs/architecture.md)。
-
-## 🤝 参与贡献
-
-欢迎提交 Bug、使用反馈和 PR。新增主要交互、数据格式、安装/卸载范围或拖放契约前，请先开 Issue 对齐问题和边界，避免大家在不同假设上重复工作。
 
 ## 📄 许可证
 

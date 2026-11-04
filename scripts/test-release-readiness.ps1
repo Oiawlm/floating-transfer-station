@@ -33,7 +33,7 @@ if (-not $RequireVersionAhead) {
     return
 }
 
-# Version-ahead assertion (release train, see docs/releasing.md "发行列车").
+# Version-ahead assertion (release train).
 if ([string]::IsNullOrWhiteSpace($VersionPath)) {
     $VersionPath = Join-Path (Split-Path -Parent $ChangelogPath) 'version.txt'
 }
@@ -81,6 +81,6 @@ if ($null -eq $latestTag) {
 
 Write-Host ('Latest remote version tag: ' + $latestTag)
 if ($localVersion -le $latestRemoteVersion) {
-    throw ('Release readiness failed: version.txt (' + $localVersion.ToString() + ') is not ahead of the latest remote tag ' + $latestTag + '. Another train already claimed this version: replay on the latest main and advance the version (see docs/releasing.md, the release-train section).')
+    throw ('Release readiness failed: version.txt (' + $localVersion.ToString() + ') is not ahead of the latest remote tag ' + $latestTag + '. Another train already claimed this version: replay on the latest main and advance the version.')
 }
 Write-Host ('Release readiness passed: version.txt ' + $localVersion.ToString() + ' is strictly ahead of ' + $latestTag + '.')

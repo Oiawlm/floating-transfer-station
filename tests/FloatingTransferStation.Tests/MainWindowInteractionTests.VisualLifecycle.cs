@@ -251,11 +251,11 @@ public sealed partial class MainWindowInteractionTests
             foreach (var category in viewModel.Categories)
             {
                 var tab = FindCategoryTab(window, category);
-                // 2026-11-03 W7（Issue #280）：标记改为描边靶心 Path（原字符「◎」）。
+                // 2026-11-05 W2 重设计：标记改为单段圆弧紫色圆环（原三同心圆靶心）。
                 var marker = FindDescendants<System.Windows.Shapes.Path>(tab)
                     .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
-                StringAssert.Contains(marker.Data.ToString(), "A8.75,8.75");
-                Assert.AreEqual(1.5d, marker.StrokeThickness);
+                StringAssert.Contains(marker.Data.ToString(), "A8,8");
+                Assert.AreEqual(1.25d, marker.StrokeThickness);
                 Assert.AreEqual(category.IsDefaultCapture ? 1d : 0d, marker.Opacity);
             }
         }

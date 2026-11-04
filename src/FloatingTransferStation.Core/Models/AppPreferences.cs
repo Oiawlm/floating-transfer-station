@@ -69,8 +69,9 @@ public enum AutoCleanupRetention
 /// 起右键复制偏好（1.15.0 引入、1.17.0 限于右半）随「右半左键＝复制、
 /// 右键＝选择」交换整体移除（Issue #216，统一手势是定案、不设替代开关），
 /// 旧文件残留的该字段按未知成员忽略、不影响加载；
-/// 1.16.0 起新增插件目录覆盖（null = 默认数据目录下 plugins，插件目录是用户偏好
-/// 而非受管数据契约；启用状态 plugins-state.json 仍留在数据目录）；
+/// 1.16.0 起曾提供插件目录覆盖偏好，随「插件目录结构性内嵌为数据根 plugins」
+/// （数据目录模型统一）整体移除；旧文件残留的该字段按未知成员忽略、不影响加载、
+/// 不再写回（启用状态 plugins-state.json 恒留数据根）；
 /// 1.23.0 起新增自动清理开关（默认开启）；1.25.0 起清理语义为逐卡 24 小时 TTL
 /// （入库满期即删、判据幂等），原成对的调度记账时间戳字段随间隔清扫语义删除，
 /// 旧文件残留的时间戳成员按未知成员忽略、不影响加载；
@@ -130,7 +131,6 @@ public sealed record AppPreferences(
     bool CopySelectionWithCtrlCEnabled = true,
     TrashNoSelectionLeftClickAction TrashNoSelectionLeftClick = TrashNoSelectionLeftClickAction.ClearNonPinned,
     TrashNoSelectionRightClickAction TrashNoSelectionRightClick = TrashNoSelectionRightClickAction.ClearAll,
-    string? PluginsDirectoryOverride = null,
     bool AutoCleanupEnabled = true,
     string? DeepSeekApiKeyProtected = null,
     double? SettingsWindowLeft = null,

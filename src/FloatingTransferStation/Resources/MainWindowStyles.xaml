@@ -641,17 +641,18 @@
             Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
   </Style>
 
-  <!-- 默认接收分类标记（2026-11-03 W7，Issue #280）：fluentui 同族描边靶心
-       （三同心圆，中心圆以 1.5 描边读作实心点），14.5×14.5 + 1.5 描边＝头部
-       按钮图标同一规范；替代原字体字符「◎」（字体回退显示不清的根因）。 -->
+  <!-- 默认接收分类标记（2026-11-05 W2 重设计）：单段圆弧紫色圆环（原三同心圆
+       靶心嵌套多层、观感差且偏大），缩小为 10×10 + 1.25 描边——脱离头部按钮
+       图标 14.5 规范（登记见 docs/design.md §五·D）；显隐唯一条件
+       IsDefaultCapture 与位置/层级语义不变。 -->
   <Style x:Key="CategoryDefaultMarkerStyle" TargetType="Path">
     <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
-    <Setter Property="StrokeThickness" Value="1.5" />
+    <Setter Property="StrokeThickness" Value="1.25" />
     <Setter Property="StrokeStartLineCap" Value="Round" />
     <Setter Property="StrokeEndLineCap" Value="Round" />
     <Setter Property="StrokeLineJoin" Value="Round" />
-    <Setter Property="Width" Value="14.5" />
-    <Setter Property="Height" Value="14.5" />
+    <Setter Property="Width" Value="10" />
+    <Setter Property="Height" Value="10" />
     <Setter Property="Stretch" Value="Uniform" />
     <Setter Property="HorizontalAlignment" Value="Right" />
     <Setter Property="VerticalAlignment" Value="Top" />
@@ -1124,7 +1125,7 @@
     </Border>
   </ControlTemplate>
 
-  <!-- 卡片操作按钮可见性状态矩阵（契约 #19，唯一权威=docs/design-contracts.md）：
+  <!-- 卡片操作按钮可见性状态矩阵（契约 #19，唯一权威=设计契约清单，维护者本地维护）：
        信号 = (悬停 IsMouseOver, 选中 IsSelected, 置顶 IsPinned)。
        置顶钮：可见/可命中 = IsPinned ∨ (悬停 ∧ 未选中)；
                选中时换纯展示徽章模板并以次文字色呈现（点击由
