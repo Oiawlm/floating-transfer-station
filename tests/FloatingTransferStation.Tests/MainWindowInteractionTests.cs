@@ -157,6 +157,8 @@ public sealed partial class MainWindowInteractionTests
 
         public nint GetForegroundWindow() => ForeignTargetWindow;
 
+        public nint GetForegroundFocus() => ForeignTargetWindow;
+
         public bool IsWindow(nint hwnd) => hwnd == ForeignTargetWindow;
 
         public bool IsOwnProcessWindow(nint hwnd) => false;
@@ -170,6 +172,8 @@ public sealed partial class MainWindowInteractionTests
         public bool WriteClipboard(IDataObject data) => true;
 
         public bool SetClipboard(IDataObject data) => true;
+
+        public uint GetClipboardSequenceNumber() => 1;
 
         public Task DelayAsync(TimeSpan delay) => Task.CompletedTask;
     }
@@ -197,6 +201,12 @@ public sealed partial class MainWindowInteractionTests
         public nint GetForegroundWindow()
         {
             Calls.Add("get-foreground");
+            return ForeignWindow;
+        }
+
+        public nint GetForegroundFocus()
+        {
+            Calls.Add("get-focus");
             return ForeignWindow;
         }
 
@@ -234,6 +244,12 @@ public sealed partial class MainWindowInteractionTests
             Calls.Add("set-clipboard");
             RestoredBackup = data;
             return true;
+        }
+
+        public uint GetClipboardSequenceNumber()
+        {
+            Calls.Add("get-sequence");
+            return 1;
         }
 
         public Task DelayAsync(TimeSpan delay)
