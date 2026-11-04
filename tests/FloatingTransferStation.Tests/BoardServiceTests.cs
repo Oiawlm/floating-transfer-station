@@ -459,7 +459,7 @@ public sealed class BoardServiceTests
     {
         var normalized = new WindowSettings(900, 900, -20).Normalize(500, 400);
 
-        Assert.AreEqual(442, normalized.PanelWidth);
+        Assert.AreEqual(500 - WindowSettings.TabWidth, normalized.PanelWidth);
         Assert.AreEqual(400, normalized.WindowHeight);
         Assert.AreEqual(0, normalized.Top);
     }

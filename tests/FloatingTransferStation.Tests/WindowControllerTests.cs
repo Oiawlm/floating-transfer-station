@@ -88,8 +88,8 @@ public sealed class WindowControllerTests
             new WorkArea(0, 0, 1920, 1040),
             new WindowSettings(360, 640, 80));
 
-        Assert.AreEqual(1502, placement.Left);
-        Assert.AreEqual(418, placement.Width);
+        Assert.AreEqual(1920 - WindowSettings.TabWidth - 360, placement.Left);
+        Assert.AreEqual(360 + WindowSettings.TabWidth, placement.Width);
         Assert.AreEqual(1920, placement.Left + placement.Width);
     }
 
