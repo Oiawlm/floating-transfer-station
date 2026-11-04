@@ -17,6 +17,7 @@ public partial class MainWindow
     private bool _reviewDirty;
     private bool _reviewLoading;
     private bool _reviewLoaded;
+    private int _reviewJumpRefreshVersion;
 
     private void InitializeDailyReviewEditing()
     {
@@ -263,6 +264,70 @@ public partial class MainWindow
         }
     }
 
+    private async void ReviewJumpPreviousButton_Click(object sender, RoutedEventArgs e) =>
+        await JumpToNearestRecordedDateAsync(forward: false);
+
+    private async void ReviewJumpNextButton_Click(object sender, RoutedEventArgs e) =>
+        await JumpToNearestRecordedDateAsync(forward: true);
+
+    /// <summary>
+    /// 跳到严格小于/大于当前日期的最近有记录日期（点击时枚举实时状态，不依赖
+    /// 可用性缓存的陈旧与否）；沿用 <see cref="SwitchReviewDateAsync"/>（冲刷未保存
+    /// 编辑＋拒绝未来日期）。无目标日＝空操作。
+    /// </summary>
+    private async Task JumpToNearestRecordedDateAsync(bool forward)
+    {
+        if (_dailyReviews is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var (previous, next) = await FindReviewJumpTargetsAsync();
+            var target = forward ? next : previous;
+            if (target is { } date)
+            {
+                await SwitchReviewDateAsync(date);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            ReviewStatus.Text = "复盘日期跳转失败：" + exception.Message;
+        }
+    }
+
+    /// <summary>
+    /// 求当前日期两侧的最近跳转目标：向前目标以上界「今天」收口（未来日期文件不构成
+    /// 目标——与 <see cref="SwitchReviewDateAsync"/> 的未来拒绝同源；今天有记录且当前
+    /// 在其之前时向前目标＝今天）。
+    /// </summary>
+    private async Task<(DateOnly? Previous, DateOnly? Next)> FindReviewJumpTargetsAsync()
+    {
+        if (_dailyReviews is null)
+        {
+            return (null, null);
+        }
+
+        var dates = await _dailyReviews.EnumerateRecordedDatesAsync();
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        DateOnly? previous = null;
+        DateOnly? next = null;
+        foreach (var date in dates)
+        {
+            if (date < _reviewDate)
+            {
+                previous = date; // 升序表：不断覆盖为更近的左侧日期
+            }
+            else if (date > _reviewDate && date <= today && next is null)
+            {
+                next = date; // 首个严格更大且不越今天的日期即最近目标
+            }
+        }
+
+        return (previous, next);
+    }
+
     private async Task SwitchReviewDateAsync(DateOnly date)
     {
         if (_dailyReviews is null || date > DateOnly.FromDateTime(DateTime.Now))
@@ -285,6 +350,53 @@ public partial class MainWindow
         ReviewPreviousButton.IsEnabled = _reviewDate > DateOnly.MinValue;
         ReviewNextButton.IsEnabled = _reviewDate < today;
         ReviewDateState.Text = _reviewDate == today ? "今天" : _reviewDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        // 双层跳转箭头的可用性并入本单点（不另设刷新路径）：全部既有调用方
+        //（装载/切日/冲刷失败）随单步箭头同一时刻重估。
+        RefreshReviewJumpAvailability();
+    }
+
+    /// <summary>
+    /// 重估双层箭头可用性。枚举为异步磁盘 IO：结果统一经 <see cref="ApplyReviewJumpAvailability"/>
+    /// 封送回 UI 线程后按版本守卫落位（不依赖宿主是否装有同步上下文——测试 STA 线程
+    /// context=null 时续体落线程池，直写 DP 即跨线程异常；快速连切日期时只有最新一轮
+    /// 结果落 UI）；IO 失败按「无法证实有目标」禁用（保守降级，点击路径有独立报错，
+    /// 此处不刷状态文本避免每次刷新失败都打扰）。
+    /// </summary>
+    private async void RefreshReviewJumpAvailability()
+    {
+        var version = ++_reviewJumpRefreshVersion;
+        try
+        {
+            var (previous, next) = await FindReviewJumpTargetsAsync();
+            ApplyReviewJumpAvailability(version, previous is not null, next is not null);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            ApplyReviewJumpAvailability(version, false, false);
+        }
+    }
+
+    private void ApplyReviewJumpAvailability(int version, bool previousEnabled, bool nextEnabled)
+    {
+        void Apply()
+        {
+            if (version != _reviewJumpRefreshVersion)
+            {
+                return;
+            }
+
+            ReviewJumpPreviousButton.IsEnabled = previousEnabled;
+            ReviewJumpNextButton.IsEnabled = nextEnabled;
+        }
+
+        if (ReviewJumpPreviousButton.Dispatcher.CheckAccess())
+        {
+            Apply();
+        }
+        else
+        {
+            ReviewJumpPreviousButton.Dispatcher.BeginInvoke(DispatcherPriority.Background, (Action)Apply);
+        }
     }
 
     private void DailyReviews_Changed(object? sender, DailyReviewFileChangedEventArgs e)
