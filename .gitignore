@@ -13,6 +13,12 @@ TestResults/
 .preview-data/
 /AGENTS.md
 /PROJECT_GUIDE.md
+/CODE_OF_CONDUCT.md
+/CONTRIBUTING.md
+/docs/multi-window.md
+/docs/releasing.md
+/docs/design-contracts.md
+/docs/readme-style-guide.md
 /docs/handoff/
 /docs/research/
 /docs/superpowers/
