@@ -5,7 +5,8 @@
 # 出处＝docs/research/DATA-AFFECTED-REPLAY-20261027.ps1（gitignored 本地档案，W1 审计
 # 产物；内联是干净 clone 上可运行的必要条件，-ReplayDataPath 可对档案做漂移核对）。
 # 与 test-bootstrap-*.ps1 同族的独立契约测试；点源复用选择器的数据与函数（单一事实源，无副本）。
-# 协议出处：docs/design-contracts.md 契约「受影响测试选区协议」（#32）。
+# 协议出处：docs/design-contracts.md 契约「受影响测试选区协议」（#32）；执行档位（Desktop/Fast，
+# 分层复检）场景矩阵见「分层复检档位」段，出处契约 #55。
 [CmdletBinding()]
 param(
     [string]$DotnetPath,
@@ -507,6 +508,60 @@ Assert-Scenario '噪声防线：推导层过滤（[affected-noise] 行＋清单�
     } finally {
         $script:changesetNoisePrefixes = @()
     }
+}
+
+# ---- 分层复检档位（契约 #55；D1 不变量：Fast 档本地强制集零 UiTests 互斥获取）----
+
+Assert-Scenario '档位裁决纯函数：Desktop 全跑；Fast 桌面区域交 CI；Core.* 区域裁 Core 工程；0 命中整体交 CI' {
+    Assert-True ((Get-TierDisposition 'CardGestures' 'FullyQualifiedName~CardGestures' $core 'Desktop') -eq 'Run') 'Desktop 档应保持现行口径（一切区域本地 Run）'
+    Assert-True ((Get-TierDisposition 'CardGestures' 'FullyQualifiedName~CardGestures' $core 'Fast') -eq 'DeferToCi') 'Fast 档 App 侧区域应整体交 CI（DeferToCi）'
+    Assert-True ((Get-TierDisposition 'Core.AppPreferences' 'FullyQualifiedName~Preferences' $core 'Fast') -eq 'CoreProjectOnly') 'Fast 档 Core.* 区域（Core 工程有命中）应裁到 Core.Tests 工程本地跑'
+    Assert-True ((Get-TierDisposition 'Core.PanelStateMachine' 'FullyQualifiedName~PanelStateMachine' @('Other.Something_X') 'Fast') -eq 'DeferToCi') 'Core.* 区域 Core 工程 0 命中应整体交 CI（全族在桌面工程，不触发运行期空选集失败）'
+    Assert-True ((Get-TierDisposition 'Core.LocalStore' $null $core 'Fast') -eq 'DeferToCi') '无 filter 的 Core.* 条目不得判 CoreProjectOnly'
+}
+
+Assert-Scenario '-Tier Fast 端到端：App 区域显式标注交 CI（-Explain 可见去留）' {
+    $output = Invoke-SelectorCli "-Explain -Tier Fast -ChangeSet @('src/FloatingTransferStation/Views/MainWindow.CardGestures.cs')"
+    Assert-True ($output -match '计划模式：Affected') "应为 Affected，实际：$output"
+    Assert-True ($output -match '区域 CardGestures') '应列出 CardGestures 区域'
+    Assert-True ($output -match '\[fast-tier\] 桌面套件区域交 CI quality') "应打印桌面区域交 CI 标注，实际：$output"
+    Assert-True ($output -match '零 UiTests 互斥获取') '应打印零互斥获取不变量标注'
+}
+
+Assert-Scenario '-Tier Fast 端到端：Core.* 区域标注 Core 工程本地跑＋App 同族交 CI' {
+    $output = Invoke-SelectorCli "-Explain -Tier Fast -ChangeSet @('src/FloatingTransferStation.Core/Models/AppPreferences.cs')"
+    Assert-True ($output -match '计划模式：Affected') "应为 Affected，实际：$output"
+    Assert-True ($output -match 'Core\.AppPreferences.*\[fast-tier\] Core 工程本地跑') "Core.* 区域应标注 Core 工程本地跑，实际：$output"
+}
+
+Assert-Scenario '-Tier Fast 端到端：全量计划标注桌面全量交 CI（回退全量语义不变）' {
+    $output = Invoke-SelectorCli "-Explain -Tier Fast -ChangeSet @('src/FloatingTransferStation/Services/ISettingsHost.cs')"
+    Assert-True ($output -match '计划模式：Full') "未知/全量类文件应仍判 Full（判定序不受档位影响），实际：$output"
+    Assert-True ($output -match '\[affected-full\]') '应保留 [affected-full] 标记行'
+    Assert-True ($output -match '\[fast-tier\] 全量计划的桌面套件部分') 'Fast 档全量计划应标注桌面部分交 CI'
+}
+
+Assert-Scenario '默认档（Desktop）无 fast-tier 标注：现行口径零回归' {
+    $output = Invoke-SelectorCli "-Explain -ChangeSet @('src/FloatingTransferStation/Views/MainWindow.CardGestures.cs')"
+    Assert-True ($output -match '计划模式：Affected') "应为 Affected，实际：$output"
+    Assert-True ($output -match '区域 CardGestures') '应列出区域'
+    Assert-True ($output -notmatch 'fast-tier') "默认档不得出现 fast-tier 标注，实际：$output"
+}
+
+Assert-Scenario '-Tier Fast 纯文档豁免不变；非法档位报错' {
+    $output = Invoke-SelectorCli "-Explain -Tier Fast -ChangeSet @('docs/x.md')"
+    Assert-True ($output -match '计划模式：Exempt') "纯文档在 Fast 档应仍为 Exempt，实际：$output"
+    $bad = Invoke-SelectorCli "-Explain -Tier Bogus"
+    Assert-True ($bad -match 'Bogus') "非法档位应被 ValidateSet 拒绝，实际：$bad"
+}
+
+Assert-Scenario '端到端：ci.yml 变更 → Affected[CiWorkflowContract]（CI 工作流契约承接，不再全量）' {
+    $output = Invoke-SelectorCli "-Explain -ChangeSet @('.github/workflows/ci.yml')"
+    Assert-True ($output -match '计划模式：Affected') "ci.yml 应由例外表 CiWorkflowContract 承接为 Affected，实际：$output"
+    Assert-True ($output -match '区域 CiWorkflowContract') '应列出 CiWorkflowContract 区域'
+    Assert-True ($output -match '契约测试子进程：scripts/test-ci-merge-queue-contract.ps1') '应以契约测试子进程形态展示'
+    $output2 = Invoke-SelectorCli "-Explain -ChangeSet @('scripts/test-ci-merge-queue-contract.ps1')"
+    Assert-True ($output2 -match '区域 CiWorkflowContract') '契约测试自身变更应同区承接（自噬消灭）'
 }
 
 # ---- 历史回放场景（W1 回放基线逐条；出处锚见各条 Evidence）----
