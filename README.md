@@ -1,4 +1,4 @@
-<h1 align="center">悬浮中转站</h1>
+﻿<h1 align="center">悬浮中转站</h1>
 
 <p align="center">一个贴在屏幕边缘的文字与图片中转站——复制、拖进来、分个类，再把内容拖到真正需要它的软件里。</p>
 
@@ -54,11 +54,11 @@
 
 ## 📦 下载与安装
 
-在 [1.65.2 发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.65.2) 下载 Windows 安装程序：
+在 [1.66.0 发行版](https://github.com/Oiawlm/floating-transfer-station/releases/tag/v1.66.0) 下载 Windows 安装程序：
 
 | 平台 | 下载 | 状态 |
 |---|---|---|
-| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.65.2/FloatingTransferStation-Setup-1.65.2.exe) | 正式版 |
+| Windows 11 x64 | [Windows 安装程序](https://github.com/Oiawlm/floating-transfer-station/releases/download/v1.66.0/FloatingTransferStation-Setup-1.66.0.exe) | 正式版 |
 
 发行页同时提供 `SHA256SUMS.txt`。Windows 无需另装 .NET。
 
