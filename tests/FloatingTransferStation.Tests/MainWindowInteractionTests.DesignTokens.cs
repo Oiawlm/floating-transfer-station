@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
@@ -190,6 +191,31 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(
                 19d * DesignTokens.CardNoteMaxVisibleLines,
                 (double)window.FindResource("CardNoteMaxHeight"));
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void DesignTokens_RailColumnWidthMirrorsTheStructuralTabWidth()
+    {
+        // 设计契约 #54（2026-11-04 回归修复）：轨道列宽是 WindowSettings.TabWidth
+        // 的 XAML 镜像——结构常量内容无关（58，禁止为内容加宽），第二列是唯一
+        // 消费面，字面漂移即互锁失败。
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+
+        try
+        {
+            var layoutRoot = (Grid)window.FindName("LayoutRoot");
+            Assert.IsNotNull(layoutRoot, "LayoutRoot 必须存在。");
+            Assert.HasCount(2, layoutRoot.ColumnDefinitions);
+            Assert.AreEqual(
+                new GridLength(WindowSettings.TabWidth),
+                layoutRoot.ColumnDefinitions[1].Width,
+                "轨道列宽必须逐值镜像 WindowSettings.TabWidth（58，内容无关结构常量）。");
         }
         finally
         {

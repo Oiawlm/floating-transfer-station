@@ -63,6 +63,7 @@
 | 51 | 拖放视觉反馈稳定：插入槽位迟滞带内观测噪声零视觉变化（指示线与落点同源）、同位整区不显示指示线（NoChange 谓词与 Drop 单一事实源、切换边界随迟滞）、分类高亮状态真值差分应用（稳态零重启动画）、撤离保持窗复核同时覆盖指示线与高亮（抖动无 false 回落与明灭脉冲、真离开一次清到位）；落点/批量/置顶钳制/Drop 语义零变化 | 拖放反馈／动效稳定性 |
 | 52 | tracked 文档对 gitignored 本地路径的引用按 hygiene 内嵌基线冻结（只减不增、新条目禁引）；指名历史设计/计划稿用「已归档设计稿〈文件名〉（维护者本地档案）」形态 | 仓库文档引用面／hygiene 检查 |
 | 53 | UI 测试套件机器准入网关：可注入内核五步准入（已装实例 fail-fast→登记先于等锁→取互斥→外来套件等待→空闲准入）、登记目录死锁规避、CI 零影响；harness 密封缺省（真实剪贴板写响亮失败 stub＋无网络更新假件）；TRX 清理不删并发新文件 | 测试基建／机器准入 |
+| 54 | 标签轨道宽＝内容无关结构常量 58（收起宽/轨道列宽唯一消费面），禁止为内容加宽；标签两字/行自适应（快捷启动两行居中、2 字单行、6 字 ≤3 行无截断），头部标题全名单行 | 窗口几何／标签轨道 |
 
 ## 一、自冻结清单迁入（1–11）
 
@@ -504,6 +505,15 @@
 - **由来**：多窗口并行复检互相污染（用户症状：某窗口复检整轮判废）。根因＝UI 套件非密封触碰交互桌面单例资源（真实光标 `SetCursorPos` 17 文件、SendInput 键鼠族、测试窗口 Topmost 带＋2 秒周期重申、兜底真实剪贴板写），两套件并发即互踩；2026-11-02 W2 的裸互斥只约束双方都含网关的套件（旧分支/裸跑不受约束）、无空闲准入、无外来探测、无已装实例检查，且并行期 %TEMP% 人工锁已被实证违反（report-w2 §1）——机制化取代三条人工纪律与人工锁。外部佐证：vstest 解决方案级逐工程串行起 testhost（dotnet/sdk#10178、vstest#1851）；GetLastInputInfo 会话作用域且 CI 会话可能恒 0（Raymond Chen 2026-06-18、SO 6146114）；命名互斥体是「多 runner 共享同一桌面」的成熟排他模式（MS Mutex 文档）。行为级前后对照证据见批次 `evidence/`（外来被等待、实例 fail-fast 1.35 秒、双网关并发不互等）。
 - **锁定**：`tests/FloatingTransferStation.Tests/MachineAdmissionGateTests.cs`（13 例全绿：互斥等待/超时归因（登记目录 pid/state/root 进消息）/abandoned 接管/外来等待与超时归因/已登记排除（死锁规避核心，活进程登记）/已装实例 fail-fast/空闲等待与超时归因/CI 跳过（空闲探针禁止被咨询）/登记 running 态与票据释放删除/死 pid 机会式清扫/归因描述——全部 GUID 名互斥体＋假探针，严禁触碰真实命名互斥）；harness 密封缺省由 `MainWindowInteractionTests.CreateWindow` 单一接缝施加（迁移五处直构为委托）。
 - **关联**：#13（真实输入可达性——网关保护其宿主前提）、#32（选区协议——§三.K 共享设施注册表同步 `MachineAdmissionGate.cs`）、[多窗口协议](multi-window.md)（机器准入机制化后的窗口测试纪律）、B-009 观察条目（对策已机制化，见维护者本地档案）；CHANGELOG 未发布区。
+
+## 三十、本次新增（54，标签轨道结构常量＋两字/行自适应，2026-11-04）
+
+### 54. 标签轨道宽为内容无关结构常量（TabWidth＝58）＋标签两字/行自适应
+
+- **断言**：`WindowSettings.TabWidth`＝58 是内容无关的结构常量——收起态窗口宽恒＝58、展开态窗口宽恒＝面板宽＋58，MainWindow.xaml `LayoutRoot` 第二列（`Width="58"`）是其唯一 XAML 镜像；任何内容（默认名、自定义名、任意合法 ≤6 字名称）不得加宽轨道。标签内容按两字/行自适应消费结构宽：`CategoryLabelTextStyle` 以两字宽文本列（30 DIP，2 字 24≤30＜3 字 36）＋既有 `TextWrapping=Wrap` 自然换行实现——纯布局约束，禁止按名字长度特判的转换器/代码分支、禁止 TextTrimming 截断；「快捷启动」＝快捷/启动 两行居中、「重要/记录」单行不动、至多 6 字 → 至多 ⌈6/2⌉＝3 行且无截断（全文保留在文本属性中）；改名编辑器 `CategoryNameEditorStyle` 收窄至嵌套可用宽 36（58 轨道内容宽 46−Margin 5×2；Width 48 在 66 轨道即溢出 4 DIP，系被加宽掩盖的连带出厂缺陷）；标签 TextBlock 双向居中渲染，头部标题仍绑 `DisplayName` 全名单行、不受本规则约束。
+- **由来**：2026-11-03 W7（Issue #280）默认名通用化把「启动」改为四字「快捷启动」后，58 轨道可用宽 46 DIP（58−页边 5×2−边框 1×2）放不下 12px×4 字＝48 DIP 的单行、自然折行逐字断行，当次以「加宽轨道 58→66 保四字单行」收场并同步了 design.md 与证据测试；2026-11-04 用户判定该改动为回归——结构尺寸不得为内容让步（同族先例：#23 滚动条不占布局宽、#16 卡片为操作钮预留而非加宽面板），恢复 58 并把自适应移到内容侧——以「文本列固定两字宽＋自然 Wrap」实现（46 DIP 内容宽可容 3 字/行，故必须把文本列收敛到 30 DIP 使 3 字必然放不下，折行档位由此确定），而非文本手术（转换器插换行符/按长度特判）或截断。
+- **锁定**：Core `tests/FloatingTransferStation.Core.Tests/CategoryRailLabelTests.cs`（TabWidth 恒 58）；App `tests/FloatingTransferStation.Tests/MainWindowInteractionTests.DesignTokens.cs` 的 `DesignTokens_RailColumnWidthMirrorsTheStructuralTabWidth`（LayoutRoot 第二列宽逐值镜像 TabWidth）；`MainWindowInteractionTests.CategoryEditing.cs` 的 `CategoryTab_RailLabelRendersTwoCharactersPerLineAdaptively`（两字宽文本列 30、快捷启动两行/重要单行/6 字名 3 行无截断、编辑器 36 不溢出）；`WindowControllerTests`「rail.Width==TabWidth」互锁；证据测试 `CategoryTab_RailLabelEvidenceBothThemes`（FTS_TAB_RAIL_EVIDENCE_DIR，八宫格矩阵）。
+- **关联**：#6/#12（窗口几何与单次迁移）、#23/#16（结构不为内容让步的同族原则）、design.md「五、间距与位移」结构性尺寸段；CHANGELOG 未发布区（2026-11-04）。
 
 ## 维护规则
 

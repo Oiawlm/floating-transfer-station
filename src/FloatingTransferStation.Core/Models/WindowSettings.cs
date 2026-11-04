@@ -9,11 +9,14 @@ public sealed record WindowSettings(
     int CategoryNameMigrationVersion = 0,
     IReadOnlyList<BoardCategory>? CategoryOrder = null)
 {
-    // 标签轨道宽（2026-11-03 W7，Issue #280）：58→66——四字默认名「快捷启动」在
-    // 12px 标签字号下需 48 DIP，58−页边 5×2−边框 1×2＝46 放不下（逐字折行）；
-    // 66−12＝54 容纳四字并留 6 DIP 呼吸。轨道列宽唯一消费面＝MainWindow.xaml
-    // LayoutRoot 第二列（x:Static 直引本常量）。
-    public const double TabWidth = 66;
+    // 标签轨道宽＝内容无关的结构常量（2026-11-04 回归修复，设计契约 #54）：
+    // 2026-11-03 W7（Issue #280）曾为四字默认名「快捷启动」单行显示加宽到 66，
+    // 实为回归——结构尺寸禁止为内容加宽；恢复 58，内容侧按两字/行自适应折行
+    // （CategoryLabelTextStyle 两字宽文本列 30＋自然 Wrap：「快捷启动」＝
+    // 快捷/启动 两行居中、6 字名至多 3 行无截断），58−页边 5×2−边框 1×2＝
+    // 46 DIP 对 2 字×12px＝24 DIP 充裕。轨道列宽唯一消费面＝MainWindow.xaml
+    // LayoutRoot 第二列（x:Static 直引本常量的 XAML 镜像）。
+    public const double TabWidth = 58;
     // 卡片内容宽 = PanelWidth − 50（页边 12×2 + 边框 1×2 + 卡内边距 12×2），
     // 右半区 = 内容宽/2 必须容纳右上两列按钮网格占地 2×30=60（1.33.0 起网格几何，
     // Issue #103；四列时代曾为 4×30=120 下限；正文另让 4 DIP 缓冲合计内缩 64，
