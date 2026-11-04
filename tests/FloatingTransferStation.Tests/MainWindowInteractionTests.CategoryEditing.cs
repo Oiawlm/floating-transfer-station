@@ -35,9 +35,16 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(customer.IsEditingName);
             Assert.IsTrue(FindDescendants<TextBox>(customerTab).Single().IsVisible);
             var markerStyle = (Style)window.FindResource("CategoryDefaultMarkerStyle");
-            var marker = FindDescendants<TextBlock>(customerTab)
+            // 2026-11-03 W7（Issue #280）：标记由字体字符「◎」改为 fluentui 同族描边
+            // 靶心 Path——锁定几何与描边档（14.5×14.5 + 1.5），杜绝字体回退歧义。
+            var marker = FindDescendants<System.Windows.Shapes.Path>(customerTab)
                 .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
-            Assert.AreEqual("◎", marker.Text);
+            StringAssert.Contains(marker.Data.ToString(), "A8.75,8.75");
+            StringAssert.Contains(marker.Data.ToString(), "A5,5");
+            StringAssert.Contains(marker.Data.ToString(), "A1.5,1.5");
+            Assert.AreEqual(1.5d, marker.StrokeThickness);
+            Assert.AreEqual(14.5d, marker.Width);
+            Assert.AreEqual(14.5d, marker.Height);
             Assert.AreEqual(customer.IsDefaultCapture ? 1d : 0d, marker.Opacity);
             Assert.IsTrue(
                 Panel.GetZIndex(marker) > Panel.GetZIndex(FindDescendants<TextBox>(customerTab).Single()));
@@ -148,7 +155,7 @@ public sealed partial class MainWindowInteractionTests
 
             InvokePrivateTask(window, "SaveCategoryNameAsync", customer, "客户");
 
-            Assert.AreEqual("图片", customer.DisplayName);
+            Assert.AreEqual("重要", customer.DisplayName);
             Assert.AreEqual("分类名称未保存，已恢复原名称。", viewModel.StatusText);
             Assert.IsTrue(customer.IsDefaultCapture);
             Assert.AreEqual(BoardCategory.CustomerOriginal, state.Current);
@@ -195,7 +202,7 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.IsTrue(viewModel.IsPanelExpanded);
             Assert.IsTrue(customer.IsEditingName);
-            Assert.AreEqual("图片", customer.DisplayName);
+            Assert.AreEqual("重要", customer.DisplayName);
             Assert.AreEqual("T", customer.DraftName);
             Assert.IsNull(store.LastSavedSettings);
         }
@@ -237,7 +244,7 @@ public sealed partial class MainWindowInteractionTests
             editor.CaretIndex = editor.Text.Length;
             CompleteLayout(window);
 
-            Assert.AreEqual("图片", customer.DraftName);
+            Assert.AreEqual("重要", customer.DraftName);
             Assert.AreEqual(editor.Text.Length, editor.CaretIndex);
 
             InvokePrivate(window, "CommitCategoryNameEdit", customer, editor.Text);
@@ -343,7 +350,7 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.IsFalse(enter.Handled);
             Assert.IsTrue(customer.IsEditingName);
-            Assert.AreEqual("图片", customer.DisplayName);
+            Assert.AreEqual("重要", customer.DisplayName);
             Assert.IsNull(store.LastSavedSettings);
         }
         finally

@@ -9,7 +9,7 @@ using FloatingTransferStation.ViewModels;
 namespace FloatingTransferStation.Views;
 
 /// <summary>
-/// 空状态引导（契约 #33）：内容桶（待分类/图片）为空时以居中「图标＋标题＋副文案」
+/// 空状态引导（契约 #33）：内容桶（待分类/重要）为空时以居中「图标＋标题＋副文案」
 /// 告知内容进入方式（复用启动表面 LauncherEmptyState 先例，无 CTA——内容桶没有
 /// 显式添加动作）。可见性单点＝<see cref="UpdatePanelSurface"/> 表面切换＋激活桶
 /// 集合变化＋搜索态进出；文案按 (BoardCategory, IsDefaultCapture) 二维矩阵派生：

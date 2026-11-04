@@ -592,11 +592,18 @@
             Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
   </Style>
 
-  <Style x:Key="CategoryDefaultMarkerStyle" TargetType="TextBlock">
-    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
-    <Setter Property="FontFamily" Value="{DynamicResource InterfaceFontFamily}" />
-    <Setter Property="FontSize" Value="11" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+  <!-- 默认接收分类标记（2026-11-03 W7，Issue #280）：fluentui 同族描边靶心
+       （三同心圆，中心圆以 1.5 描边读作实心点），14.5×14.5 + 1.5 描边＝头部
+       按钮图标同一规范；替代原字体字符「◎」（字体回退显示不清的根因）。 -->
+  <Style x:Key="CategoryDefaultMarkerStyle" TargetType="Path">
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+    <Setter Property="StrokeStartLineCap" Value="Round" />
+    <Setter Property="StrokeEndLineCap" Value="Round" />
+    <Setter Property="StrokeLineJoin" Value="Round" />
+    <Setter Property="Width" Value="14.5" />
+    <Setter Property="Height" Value="14.5" />
+    <Setter Property="Stretch" Value="Uniform" />
     <Setter Property="HorizontalAlignment" Value="Right" />
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="Margin" Value="0,3,4,0" />
