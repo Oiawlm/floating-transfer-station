@@ -56,6 +56,60 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void CategoryDefaultMarker_Evidence_BothThemes()
+    {
+        // 2026-11-03 W7（Issue #280）：默认接收标记由字符「◎」改为描边靶心 Path——
+        // 浅/深双主题渲染证据（默认标记落在待分类标签上＝默认接收分类 Inbox）。
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_DEFAULT_MARKER_EVIDENCE_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_DEFAULT_MARKER_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        using var directory = new TestDirectory();
+        var state = new DefaultCaptureCategoryState();
+        var window = CreateWindow(directory, new BoardService(), state);
+
+        try
+        {
+            window.Show();
+            window.Topmost = true;
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            Assert.AreEqual(BoardCategory.Inbox, viewModel.DefaultCapturePanel!.Category, "前置：默认接收＝待分类。");
+
+            var markerStyle = (Style)window.FindResource("CategoryDefaultMarkerStyle");
+            System.Windows.Shapes.Path MarkerOf(FloatingTransferStation.Views.MainWindow owner, CategoryViewModel category)
+            {
+                var tab = FindCategoryTab(owner, category);
+                return FindDescendants<System.Windows.Shapes.Path>(tab)
+                    .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
+            }
+
+            DesignThemeManager.Apply(window, DesignTheme.Light);
+            CompleteLayout(window);
+            Assert.AreEqual(1d, MarkerOf(window, viewModel.DefaultCapturePanel!).Opacity, "前置：浅色主题默认接收标记在场。");
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "default-marker-light.png",
+                "FTS_DEFAULT_MARKER_EVIDENCE_DIR");
+
+            DesignThemeManager.Apply(window, DesignTheme.Dark);
+            CompleteLayout(window);
+            Assert.AreEqual(1d, MarkerOf(window, viewModel.DefaultCapturePanel!).Opacity, "前置：深色主题默认接收标记在场。");
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "default-marker-dark.png",
+                "FTS_DEFAULT_MARKER_EVIDENCE_DIR");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void CategoryTabLabelAndEditor_LockDisplayTextFormattingForCrispSmallText()
     {
         using var directory = new TestDirectory();

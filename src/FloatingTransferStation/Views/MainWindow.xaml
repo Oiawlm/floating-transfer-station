@@ -138,7 +138,9 @@
     <Grid x:Name="LayoutRoot" Background="Transparent">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
-        <ColumnDefinition Width="58" />
+        <!-- 轨道列宽＝WindowSettings.TabWidth 的 XAML 镜像（GridLength 无法 x:Static
+             直引 double；镜像由 WindowControllerTests「rail.Width==TabWidth」互锁）。 -->
+        <ColumnDefinition Width="66" />
       </Grid.ColumnDefinitions>
 
       <Grid x:Name="PanelContentHost"
