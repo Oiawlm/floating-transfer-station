@@ -112,11 +112,12 @@
             <Border Style="{StaticResource CategoryActiveLayerStyle}" />
             <Border Style="{StaticResource CategoryDropTargetLayerStyle}" />
             <Border Style="{StaticResource CategoryActiveMarkerStyle}" />
-            <!-- 默认接收分类标记（2026-11-03 W7 重设计，Issue #280）：原字体字符「◎」
-                 辨识度低（字体回退时显示不清），改 fluentui 同族描边靶心 Path——
-                 14.5×14.5 + 1.5 描边（与头部按钮图标同规范），语义「内容收集落点」。 -->
+            <!-- 默认接收分类标记（2026-11-05 W2 重设计）：三同心圆靶心嵌套多层、
+                 观感差且偏大，改单段圆弧紫色圆环——viewbox 24×24、半径 8 描边圆
+                 （无内圈无中心点），缩小为 10×10 + 1.25 描边；语义「内容收集落点」
+                 不变（前身：字体字符「◎」→ 2026-11-03 靶心 Path，Issue #280）。 -->
             <Path Style="{StaticResource CategoryDefaultMarkerStyle}"
-                  Data="M3.25,12 A8.75,8.75 0 1 1 20.75,12 A8.75,8.75 0 1 1 3.25,12 M7,12 A5,5 0 1 1 17,12 A5,5 0 1 1 7,12 M10.5,12 A1.5,1.5 0 1 1 13.5,12 A1.5,1.5 0 1 1 10.5,12" />
+                  Data="M12,4 A8,8 0 1 1 11.99,4 Z" />
             <!-- 标签两字/行自适应（设计契约 #54）由 CategoryLabelTextStyle 的
                  两字宽文本列＋自然折行承载，纯布局约束、不为内容加宽轨道。 -->
             <TextBlock Text="{Binding DisplayName}"

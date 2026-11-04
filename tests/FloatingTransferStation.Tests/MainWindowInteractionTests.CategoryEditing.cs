@@ -35,16 +35,18 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(customer.IsEditingName);
             Assert.IsTrue(FindDescendants<TextBox>(customerTab).Single().IsVisible);
             var markerStyle = (Style)window.FindResource("CategoryDefaultMarkerStyle");
-            // 2026-11-03 W7（Issue #280）：标记由字体字符「◎」改为 fluentui 同族描边
-            // 靶心 Path——锁定几何与描边档（14.5×14.5 + 1.5），杜绝字体回退歧义。
+            // 2026-11-05 W2 重设计：标记由三同心圆靶心缩小为单段圆弧紫色圆环——
+            // 锁定单圆几何与描边档（10×10 + 1.25，Data 含 A8,8 且无旧靶心内圈），
+            // 杜绝回退到多层同心圆或字体字符歧义。
             var marker = FindDescendants<System.Windows.Shapes.Path>(customerTab)
                 .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
-            StringAssert.Contains(marker.Data.ToString(), "A8.75,8.75");
-            StringAssert.Contains(marker.Data.ToString(), "A5,5");
-            StringAssert.Contains(marker.Data.ToString(), "A1.5,1.5");
-            Assert.AreEqual(1.5d, marker.StrokeThickness);
-            Assert.AreEqual(14.5d, marker.Width);
-            Assert.AreEqual(14.5d, marker.Height);
+            var markerData = marker.Data.ToString();
+            StringAssert.Contains(markerData, "A8,8");
+            StringAssert.DoesNotContain(markerData, "A5,5");
+            StringAssert.DoesNotContain(markerData, "A1.5,1.5");
+            Assert.AreEqual(1.25d, marker.StrokeThickness);
+            Assert.AreEqual(10d, marker.Width);
+            Assert.AreEqual(10d, marker.Height);
             Assert.AreEqual(customer.IsDefaultCapture ? 1d : 0d, marker.Opacity);
             Assert.IsTrue(
                 Panel.GetZIndex(marker) > Panel.GetZIndex(FindDescendants<TextBox>(customerTab).Single()));
