@@ -75,6 +75,9 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 交互记账挂在真实 MouseEnter 事件处理器（悬停意图共享入口含收起交接的
+        // 补发重评，非指针活动，不在此记账——契约 #26 修订）。
+        NoteUserInteraction();
         EvaluateHoverIntent(category.Category);
     }
 
@@ -330,6 +333,7 @@ public partial class MainWindow : Window
 
     private void Root_MouseEnter(object sender, MouseEventArgs e)
     {
+        NoteUserInteraction();
         CancelPanelCollapseExit();
         StopPanelContentAnimation();
         _collapseTimer.Stop();

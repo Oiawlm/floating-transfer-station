@@ -218,7 +218,7 @@ public partial class MainWindow : Window
 
     private void UpdateExternalRailGap(DragEventArgs e)
     {
-        HideInsertionIndicator();
+        WithdrawInsertionIndicator();
         WithdrawCategoryDropTarget();
         if (GetExternalDropPayload(e.Data) is not null)
         {
@@ -236,7 +236,7 @@ public partial class MainWindow : Window
 
     private void UpdateCategoryDropTarget(object sender, DragEventArgs e)
     {
-        HideInsertionIndicator();
+        WithdrawInsertionIndicator();
         if (sender is Border { DataContext: CategoryViewModel tabCategory } &&
             !BoardCategoryCatalog.IsContentBucket(tabCategory.Category))
         {
@@ -507,7 +507,7 @@ public partial class MainWindow : Window
         if (_viewModel.ActivePanel is not { } panel ||
             _dragPayload.GetInternalItemIds(e.Data) is not { } itemIds)
         {
-            HideInsertionIndicator();
+            WithdrawInsertionIndicator();
             e.Effects = DragDropEffects.None;
             e.Handled = true;
             return;
@@ -516,20 +516,31 @@ public partial class MainWindow : Window
         var location = GetBoardDropLocation(e, panel, itemIds);
         if (!_board.CanMoveMany(itemIds, panel.Category, location.InsertionIndex))
         {
-            HideInsertionIndicator();
+            WithdrawInsertionIndicator();
             e.Effects = DragDropEffects.None;
             e.Handled = true;
             return;
         }
 
-        ShowInsertionIndicator(location.IndicatorY);
+        // 同位整区隐藏（契约 #51 增补）：NoChange 谓词按 held 槽位评估（与 Drop 的
+        // NoChange 判定同一实现），落点＝原位置时指示线不显示；切换边界随 held
+        // 槽位继承迟滞。Drop 语义零变化（同位松手仍走 MoveMany→NoChange→恢复选择）。
+        if (_board.IsNoChangeMove(itemIds, panel.Category, location.InsertionIndex))
+        {
+            HideInsertionIndicatorForSamePosition();
+        }
+        else
+        {
+            ShowInsertionIndicator(location.IndicatorY);
+        }
+
         e.Effects = DragDropEffects.Move;
         e.Handled = true;
     }
 
     private void BoardList_PreviewDragLeave(object sender, DragEventArgs e)
     {
-        HideInsertionIndicator();
+        WithdrawInsertionIndicator();
         e.Handled = true;
     }
 
@@ -619,13 +630,76 @@ public partial class MainWindow : Window
 
     private void ShowInsertionIndicator(double y)
     {
+        // 断言即真值（契约 #51）：作废挂起的撤离复核并记断言时刻——保持窗内的
+        // 重断言不产生任何 IsActive 翻转（零淡入重启、零明灭脉冲）。
+        _insertionIndicatorWithdrawVersion++;
+        _insertionIndicatorAssertTick = Environment.TickCount64;
+        _insertionIndicatorShown = true;
         Canvas.SetTop(InsertionIndicator, ClampIndicatorY(y));
         InsertionIndicator.Visibility = Visibility.Visible;
         FadeAnimation.SetIsActive(InsertionIndicator, true);
     }
 
+    /// <summary>
+    /// 同位隐藏（契约 #51 增补）：held 槽位（迟滞过滤后的真值）落入 NoChange 区
+    /// ——落点＝原位置，指示线整区不显示。谓词按 held 槽位评估，同位/异位切换
+    /// 边界因此天然继承 ±SlotFlipHysteresisDip 迟滞，原位附近来回进出不产生闪烁。
+    /// </summary>
+    private void HideInsertionIndicatorForSamePosition()
+    {
+        _insertionIndicatorWithdrawVersion++;
+        _insertionIndicatorShown = false;
+        FadeAnimation.SetIsActive(InsertionIndicator, false);
+        InsertionIndicator.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 撤离（DragLeave／非内部载荷／非法槽位／轨道与标签面）不立即隐藏：进入
+    /// <see cref="DesignTokens.DropTargetWithdrawHoldMs"/> 保持窗复核——窗口内任何
+    /// 重断言作废复核（指示线持续可见、IsActive 不翻转），真离开一次清到位；
+    /// 与分类高亮撤离语义同构（契约 #51 ③），消灭边缘往返的隐-现脉冲。
+    /// </summary>
+    private void WithdrawInsertionIndicator()
+    {
+        var version = ++_insertionIndicatorWithdrawVersion;
+        if (!_insertionIndicatorShown)
+        {
+            // 从未断言（或已终清）：撤离语义下直接收敛到位——表面切换可能把元素
+            // 置回 Visible（Opacity 0），不留「Visible 但透明」的悬置态。
+            HideInsertionIndicator();
+            return;
+        }
+
+        ScheduleInsertionIndicatorWithdrawCommit(version);
+    }
+
+    private void ScheduleInsertionIndicatorWithdrawCommit(long version)
+    {
+        _ = Dispatcher.BeginInvoke(
+            DispatcherPriority.Input,
+            new Action(() =>
+            {
+                if (version != _insertionIndicatorWithdrawVersion)
+                {
+                    return;
+                }
+
+                if (Environment.TickCount64 - _insertionIndicatorAssertTick <
+                    DesignTokens.DropTargetWithdrawHoldMs)
+                {
+                    // 保持窗未期满：还不能确认真离开，再等一个输入通道。
+                    ScheduleInsertionIndicatorWithdrawCommit(version);
+                    return;
+                }
+
+                HideInsertionIndicator();
+            }));
+    }
+
     private void HideInsertionIndicator()
     {
+        _insertionIndicatorWithdrawVersion++;
+        _insertionIndicatorShown = false;
         FadeAnimation.SetIsActive(InsertionIndicator, false);
         InsertionIndicator.Visibility = Visibility.Collapsed;
     }

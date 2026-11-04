@@ -330,8 +330,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private void HeaderActionRegion_MouseEnter(object sender, MouseEventArgs e) =>
+    private void HeaderActionRegion_MouseEnter(object sender, MouseEventArgs e)
+    {
+        NoteUserInteraction();
         SetHeaderActionsVisible(true);
+    }
 
     private void HeaderActionRegion_MouseLeave(object sender, MouseEventArgs e) =>
         SetHeaderActionsVisible(false);
