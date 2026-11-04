@@ -259,6 +259,7 @@ $interactionTestPrefixes = @{
     'CardGestures'           = @('CardGestures')
     'CardHalves'             = @('CardHalves')
     'CardNote'               = @('CardNote', 'CardOperationAvoidance', 'CardOperationMatrix')
+    'TextDelivery'           = @('TextDelivery')
     'CardOperationAvoidance' = @('CardOperationStrip', 'CardText', 'CardTextReservedInset')
     'CardRendering'          = @('BatchStructuralChange', 'BoardList', 'CardTemplate', 'CardText', 'CardThumbnail')
     'CategoryEditing'        = @('CategoryNameEditing', 'CategoryNameEditor', 'CategoryNameSave', 'CategoryNameSaveFailure', 'CategoryTab', 'CategoryTabLabelAndEditor', 'F2Rename')
@@ -268,11 +269,12 @@ $interactionTestPrefixes = @{
     'DailyReview'            = @('ReviewCategory', 'ReviewEditing', 'ReviewEditor', 'ReviewToolbar', 'ReviewWithoutEditorFocus')
     'DesignTheme'            = @('ThemeEvidence', 'ThemeSwitch')
     'DesignTokens'           = @('DesignTokens', 'WindowAnimationDurations')
-    'DragAndDrop'            = @('AnimatedImageFile', 'BoardInsertionFeedback', 'BoardListBlankHover', 'CategoryDropFeedback', 'CategoryHoverDuringInternalDragKeepsSourcePanelAndSelection', 'DragLifecycle', 'ExternalDropRailProjection', 'ExternalFileDrop', 'ExternalOrderedFileDrop', 'ExternalRail', 'ExternalTextDrop', 'FailedExternalImport', 'InternalBatchCategoryDrop', 'InternalBatchEquivalentListDropDoesNotSaveAndKeepsSelection', 'InternalBatchListDrop', 'InternalCategoryDrop', 'InternalDragData', 'InternalImageBatch', 'MidpointJitterDrop', 'MixedPinBatch', 'NormalCardMidpointDrag', 'NormalCategoryDrop', 'PinnedBoundaryDrag', 'PinnedDrag', 'RejectedExternalDrop', 'SupportedExternalText', 'UnsupportedExternalDrag', 'UnsupportedOrInternalData')
+    'DragAndDrop'            = @('AnimatedImageFile', 'BoardInsertionFeedback', 'BoardListBlankHover', 'CategoryDropFeedback', 'CategoryHoverDuringInternalDragKeepsSourcePanelAndSelection', 'DragLifecycle', 'ExternalDropRailProjection', 'ExternalFileDrop', 'ExternalOrderedFileDrop', 'ExternalRail', 'ExternalTextDrop', 'FailedExternalImport', 'InsertionIndicatorWithdraw', 'InternalBatchCategoryDrop', 'InternalBatchEquivalentListDropDoesNotSaveAndKeepsSelection', 'InternalBatchListDrop', 'InternalCategoryDrop', 'InternalDragData', 'InternalImageBatch', 'MidpointJitterDrop', 'MixedPinBatch', 'NormalCardMidpointDrag', 'NormalCategoryDrop', 'PinnedBoundaryDrag', 'PinnedDrag', 'RejectedExternalDrop', 'SamePositionDrag', 'SupportedExternalText', 'UnsupportedExternalDrag', 'UnsupportedOrInternalData')
     'EdgeGeometry'           = @('CollapsedGeometry', 'DisplayChange', 'ExpandedGeometry', 'ResetAction', 'SettingChange', 'WidthResize')
     'EdgeHide'               = @('EdgeHide')
     'EditingCommit'          = @('EditingCommit')
     'ExpandPipeline'         = @('ColdExpandImageCategory', 'ExpandImageCategory', 'ExpandWithSavedDeepOffset')
+    'FocusVisuals'           = @('FocusVisual')
     'LauncherDiscovery'      = @('Discovery')
     'HeaderIconMetrics'      = @('HeaderActionIcons')
     'InterfaceFont'          = @('FontEvidence')
@@ -297,6 +299,7 @@ $interactionTestPrefixes = @{
     'QuickLaunchUrl'         = @('QuickLaunch', 'UrlInput')
     'RangeSelection'         = @('RangeSelection')
     'ReviewEditorEscape'     = @('ReviewEditor')
+    'ReviewMarkdownView'     = @('ReviewMarkdownView')
     'ReviewNav'              = @('ReviewNav')
     'ScrollViewport'         = @('ScrollViewport')
     'Search'                 = @('Search')
@@ -306,6 +309,7 @@ $interactionTestPrefixes = @{
     'Updates'                = @('AutoUpdateCheckToggle', 'Evidence', 'UpdateButton', 'UpdateCheck')
     'VisualLifecycle'        = @('ActiveCategoryFeedback', 'BeginPanelDrag', 'BoardList', 'CardOperationColumns', 'CategoryFeedback', 'CategoryHover', 'CategorySwitch', 'CategoryTab', 'Close', 'Collapse', 'CollapsedCategoryHover', 'CollapsedHandle', 'CollapsedPlacement', 'CollapsedWindow', 'DisablingClientAreaAnimations', 'ExpandedCategoryHover', 'ExpandedPlacement', 'ExpandedRailReveal', 'ExternalRailPlacement', 'FailedFinalSave', 'Header', 'ImageCard', 'PanelContentAnimation', 'PinnedBoundary', 'RapidCollapsedCategoryHover', 'ResetAction', 'RootMouseEnter', 'StatusOverlay', 'TextCard', 'Topmost', 'WindowResources', 'WindowShell')
     'VisualTransitions'      = @('CollapseExit', 'PendingCollapse')
+    'W6Evidence'             = @('W6Evidence')
 }
 
 function Test-ExemptDocument([string]$file) {

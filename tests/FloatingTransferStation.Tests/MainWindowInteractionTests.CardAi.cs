@@ -265,13 +265,17 @@ public sealed partial class MainWindowInteractionTests
                 Assert.AreEqual(1, handler.CallCount);
 
                 // 真实键盘 Ctrl+Z：先把窗口带到前台（Windows 前台锁定下 Activate
-                // 可能被拒；真实鼠标点击是既有先例的激活路径，点击点落在卡片左半
-                // 无选择语义区），前台成立后才注入真实修饰键状态（SendInput
+                // 可能被拒；真实鼠标点击是既有先例的激活路径，点击点落在列表空白区
+                // ——2026-11-03 起卡片左半裸单击会调度「送达」（需求 6）并延迟写
+                // 状态条污染本断言；空白区点击仅清空选择（无选择＝no-op），前台成立后才注入真实修饰键状态（SendInput
                 // 硬件级，WPF 才能读到 Control 修饰键；未取得前台即注入会把按键
                 // 误送进用户的其他应用，宁可测试失败也不冒这个险）。前台是 OS
                 // 异步完成的真实前置——经 RealInputGate 等谓词而非点击后立即断言
                 // （立即断言在慢激活下先红，台账 A2）。
-                var activationPoint = container.PointToScreen(new Point(12, container.ActualHeight * 0.5));
+                var boardList = (ListBox)window.FindName("BoardList");
+                var activationPoint = boardList.PointToScreen(new Point(
+                    boardList.ActualWidth * 0.5,
+                    Math.Max(boardList.ActualHeight - 15, 0)));
                 Assert.IsTrue(
                     SetCursorPos((int)Math.Round(activationPoint.X), (int)Math.Round(activationPoint.Y)),
                     "激活点击的光标落位必须成功。");

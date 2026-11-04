@@ -2910,4 +2910,110 @@ public sealed partial class MainWindowInteractionTests
             CloseWindowWithoutSaving(window);
         }
     }
+
+    /// <summary>W6 顶排圆角裁切修复（需求 8，2026-11-03）的布局回归：瓦片动画全为
+    /// RenderTransform（悬停抬升 −2、确认脉冲 ±3），溢出越过滚动视口缘即被
+    /// ScrollContentPresenter 裁剪——首行/末行原本无沟道缓冲，顶/底圆角被切。
+    /// 修复＝LauncherTilePanel 内容顶/底各留 token 化视口内衬（LauncherTileViewportInsetPx，
+    /// 随内容滚动，恰在列表自然停位提供余量）。断言：滚动停顶时首行上缘距视口顶
+    /// ≥ token；末行下缘距面板底 ≥ token（停底脉冲余量）。</summary>
+    [STATestMethod]
+    public void QuickLaunch_FirstAndLastRowsSitInsideViewportInset()
+    {
+        using var directory = new TestDirectory();
+        using var app = new StubAppFile();
+        var board = new BoardService();
+        var paths = AppPaths.ForTests(directory.Root);
+        var store = new LocalStore(paths, new AtomicTextWriter());
+        var starter = new RecordingLauncherStarter();
+        var items = Enumerable.Range(0, 7)
+            .Select(index => new LauncherItem(
+                Guid.NewGuid(),
+                LauncherKind.Application,
+                $"{app.Path}.{index}",
+                $"应用{index}",
+                DateTimeOffset.UtcNow))
+            .ToArray();
+        var window = CreateLauncherWindowSync(directory, board, store, starter, items);
+
+        try
+        {
+            window.Show();
+            window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+            ExpandCategory(window, QuickLaunchMigration.LauncherCategory);
+            CompleteLayout(window);
+            var catalog = window.LaunchersForTests();
+            var inset = DesignTokens.LauncherTileViewportInsetPx;
+            var panel = FindDescendant<LauncherTilePanel>(window.LauncherTileGrid);
+            Assert.IsNotNull(panel, "前置：瓦片面板已生成。");
+
+            // 停顶：首行上缘距视口顶 = token（内衬随内容滚动，停顶时全量在视口内）。
+            window.LauncherScroll.ScrollToTop();
+            CompleteLayout(window);
+            var firstTile = FindLauncherTile(window, catalog.Items[0]);
+            Assert.IsNotNull(firstTile, "前置：首行瓦片已生成。");
+            var firstTopInViewport = firstTile.TranslatePoint(new Point(0, 0), window.LauncherScroll).Y;
+            Assert.IsTrue(
+                firstTopInViewport >= inset - 0.5,
+                $"首行上缘距视口顶必须 ≥ token {inset}（实际 {firstTopInViewport}）——"
+                + "否则悬停抬升与确认脉冲的 RenderTransform 溢出会裁掉顶排圆角。");
+
+            // 面板内容几何：顶/底内衬成对出现在面板高度里（末行脉冲下溢余量）。
+            var lastTile = FindLauncherTile(
+                window,
+                catalog.Items[^1]);
+            Assert.IsNotNull(lastTile, "前置：末行瓦片已生成。");
+            var lastBottomInPanel = lastTile.TranslatePoint(
+                new Point(0, lastTile.ActualHeight),
+                panel).Y;
+            Assert.IsTrue(
+                panel.ActualHeight - lastBottomInPanel >= inset - 0.5,
+                $"末行下缘距面板底必须 ≥ token {inset}（实际 {panel.ActualHeight - lastBottomInPanel}）——"
+                + "停底时确认脉冲下溢同样需要余量。");
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    /// <summary>面板排版级精确断言（不经窗口）：Arrange 后首子元素布局槽上缘=token、
+    /// 末子元素槽下缘+token=面板高度——内衬是排版几何的一部分，不是渲染巧合。</summary>
+    [STATestMethod]
+    public void QuickLaunch_PanelArrangePlacesRowsBetweenViewportInsets()
+    {
+        var panel = new LauncherTilePanel();
+        foreach (var _ in Enumerable.Range(0, 7))
+        {
+            panel.Children.Add(new Border());
+        }
+
+        var width = 560d;
+        panel.Measure(new Size(width, double.PositiveInfinity));
+        panel.Arrange(new Rect(0, 0, width, panel.DesiredSize.Height));
+        var inset = DesignTokens.LauncherTileViewportInsetPx;
+        var columns = LauncherGridMath.ColumnCount(width);
+        var rows = (int)Math.Ceiling(7d / columns);
+
+        var firstSlot = System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(
+            (FrameworkElement)panel.Children[0]);
+        Assert.AreEqual(
+            inset,
+            firstSlot.Y,
+            0.01,
+            "首行布局槽上缘=视口内衬 token。");
+        var lastSlot = System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(
+            (FrameworkElement)panel.Children[^1]);
+        Assert.AreEqual(
+            panel.RenderSize.Height - inset,
+            lastSlot.Y + lastSlot.Height,
+            0.01,
+            "末行槽下缘+内衬=面板高度（底内衬对称）。");
+        Assert.AreEqual(
+            2 * inset + rows * DesignTokens.LauncherTileHeightPx
+                + (rows - 1) * DesignTokens.LauncherTileGutterPx,
+            panel.RenderSize.Height,
+            0.01,
+            "面板高度=双内衬+行高×行数+行间沟道。");
+    }
 }

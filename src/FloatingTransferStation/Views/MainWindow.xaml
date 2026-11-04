@@ -221,12 +221,13 @@
                         ToolTip="保持展开，暂停自动收起"
                         AutomationProperties.Name="保持展开，暂停自动收起"
                         Click="PanelHoldButton_Click">
-                  <!-- 「贴缘面板」语汇：全高竖线=屏幕右缘，左侧垂直居中的横向长方形=展开的面板，
-                       面板贴住右缘即保持展开（应用「面板贴屏幕右缘」布局的微缩图）；
-                       长方形右长边由竖线兼任，8.5 宽×4 高≈2.1:1 的横向比例直译「展开的面板」，
-                       墨迹高约为竖线 0.28（近方形旧形约 1.4:1，读作方块而非面板）。
-                       描边图标显式 14.5×14.5 + 1.5 描边，与恢复默认按钮同一规范。 -->
-                  <Path Data="M10.5,0 L10.5,14.5 M10.5,5.25 L2,5.25 L2,9.25 L10.5,9.25"
+                  <!-- 「贴缘面板」语汇（W6 需求 10 改向，2026-11-03）：全高竖线=屏幕右缘，
+                       其左侧垂直居中的竖向长方形=展开的面板——展开面板在屏上是贴住右缘的
+                       竖条，微缩图竖向矩形直译这一形态（旧形为横向矩形，方向反了）；
+                       矩形右短边由竖线兼任，4 宽×8.5 高≈1:2.1（旧形 2.1:1 的 90° 旋转），
+                       墨迹宽约为竖线高的 0.28。描边图标显式 14.5×14.5 + 1.5 描边，
+                       与恢复默认按钮同一规范。 -->
+                  <Path Data="M10.5,0 L10.5,14.5 M10.5,3 L6.5,3 L6.5,11.5 L10.5,11.5"
                         Width="14.5"
                         Height="14.5"
                         Stretch="Uniform"
@@ -578,17 +579,63 @@
               <RowDefinition Height="*" />
               <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <!-- 日期导航仅保留 ‹ › 一步切一天（原日期下拉对绝大多数用户只有一项，已移除；
-                 日期文本靠右对齐保持原下拉区域的位置语义）。 -->
+            <!-- 日期导航＝双层箭头＋单步箭头：« »（ReviewJumpPrevious/NextButton）直接
+                 跳到上一个/下一个有文字记录的日期（空白文件＝无记录），‹ › 一步切一天
+                 语义不变（原日期下拉对绝大多数用户只有一项，已移除；日期文本靠右对齐
+                 保持原下拉区域的位置语义）。
+                 左缘「阅读｜编辑」分段切换（实验性，默认关闭＝Collapsed，本格零占位）独占
+                 Auto 列——工具栏增件各起 Auto 列并排，不挤占该控件。 -->
             <Grid Grid.Row="0" Margin="0,0,0,8">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
               </Grid.ColumnDefinitions>
-              <Button x:Name="ReviewPreviousButton"
+              <Border x:Name="ReviewModeSwitch"
                       Grid.Column="0"
+                      Style="{StaticResource ReviewModeSegmentBorderStyle}"
+                      Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton x:Name="ReviewReadingModeButton"
+                               GroupName="ReviewViewMode"
+                               Content="阅读"
+                               Style="{StaticResource ReviewModeSegmentStyle}"
+                               AutomationProperties.Name="切换到阅读视图"
+                               Checked="ReviewReadingModeButton_Checked" />
+                  <RadioButton x:Name="ReviewEditModeButton"
+                               GroupName="ReviewViewMode"
+                               Content="编辑"
+                               IsChecked="True"
+                               Style="{StaticResource ReviewModeSegmentStyle}"
+                               AutomationProperties.Name="切换到编辑视图"
+                               Checked="ReviewEditModeButton_Checked" />
+                </StackPanel>
+              </Border>
+              <Button x:Name="ReviewJumpPreviousButton"
+                      Grid.Column="1"
                       Style="{StaticResource ThemedNavButtonStyle}"
+                      ToolTip="上一个有记录的日期"
+                      AutomationProperties.Name="上一个有记录的日期"
+                      IsEnabled="False"
+                      Click="ReviewJumpPreviousButton_Click">
+                <!-- 双层 chevron（«）：单层几何横向平移 5.5 DIP 并列（墨迹盒
+                     0,0–13.5,15），同族描边/圆角参数与居中范式（见下方单层注释）。 -->
+                <Path Data="M7.25,0.75 L0.75,7.5 L7.25,14.25 M12.75,0.75 L6.25,7.5 L12.75,14.25"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                      StrokeThickness="1.5"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round" />
+              </Button>
+              <Button x:Name="ReviewPreviousButton"
+                      Grid.Column="2"
+                      Style="{StaticResource ThemedNavButtonStyle}"
+                      Margin="4,0,0,0"
                       ToolTip="上一天"
                       AutomationProperties.Name="上一天"
                       Click="ReviewPreviousButton_Click">
@@ -611,7 +658,7 @@
                       StrokeLineJoin="Round" />
               </Button>
               <Button x:Name="ReviewNextButton"
-                      Grid.Column="1"
+                      Grid.Column="3"
                       Style="{StaticResource ThemedNavButtonStyle}"
                       Margin="4,0,0,0"
                       ToolTip="下一天"
@@ -626,8 +673,25 @@
                       StrokeEndLineCap="Round"
                       StrokeLineJoin="Round" />
               </Button>
+              <Button x:Name="ReviewJumpNextButton"
+                      Grid.Column="4"
+                      Style="{StaticResource ThemedNavButtonStyle}"
+                      Margin="4,0,0,0"
+                      ToolTip="下一个有记录的日期"
+                      AutomationProperties.Name="下一个有记录的日期"
+                      IsEnabled="False"
+                      Click="ReviewJumpNextButton_Click">
+                <Path Data="M0.75,0.75 L7.25,7.5 L0.75,14.25 M6.25,0.75 L12.75,7.5 L6.25,14.25"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                      StrokeThickness="1.5"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round" />
+              </Button>
               <TextBlock x:Name="ReviewDateState"
-                         Grid.Column="2"
+                         Grid.Column="5"
                          Margin="8,0,0,0"
                          HorizontalAlignment="Right"
                          VerticalAlignment="Center"
@@ -649,6 +713,18 @@
                  KeyDown="ReviewEditor_KeyDown"
                  LostKeyboardFocus="ReviewEditor_LostKeyboardFocus"
                  AutomationProperties.Name="每日复盘编辑器" />
+            <!-- 复盘 Markdown 阅读视图（实验性，默认关闭＝Collapsed，逐像素不影响现状）：
+                 只读 FlowDocument 渲染（排版走设计 token＋主题语义键，随浅深主题即时
+                 切换）；内容唯一来源＝编辑器文本（RefreshReviewReadingView 单点重建），
+                 编辑器仍是保存/防抖/合并/Esc 契约的唯一事实源。内部滚动条经窗级隐式
+                 瘦条样式与全 App 同源。W6 焦点视觉治理同款：阅读面非文本输入，键入
+                 焦点不画 Aero2 虚线框（键盘滚动可达性保留）。 -->
+            <FlowDocumentScrollViewer x:Name="ReviewReadingView"
+                                      Grid.Row="1"
+                                      Visibility="Collapsed"
+                                      Padding="4,0,4,0"
+                                      FocusVisualStyle="{x:Null}"
+                                      AutomationProperties.Name="每日复盘阅读视图" />
             <TextBlock x:Name="ReviewStatus"
                        Grid.Row="2"
                        Margin="2,8,2,0"
@@ -847,9 +923,10 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                   <DataTemplate DataType="{x:Type models:LauncherItem}">
-                    <!-- 瓦片几何（高 100、沟道 8、宽=视口摊分）由 LauncherTilePanel 排版
-                         承载（DesignTokens 同源经 LauncherGridMath）；瓦片根不再自带
-                         Width/Height/Margin。悬停 167ms/-2px 与按压 83ms/0.96 走既有
+                    <!-- 瓦片几何（高 100、沟道 8、宽=视口摊分、内容顶/底视口内衬
+                         LauncherTileViewportInsetPx——W6 顶排圆角裁切修复）由
+                         LauncherTilePanel 排版承载（DesignTokens 同源经 LauncherGridMath）；
+                         瓦片根不再自带 Width/Height/Margin。悬停 167ms/-2px 与按压 83ms/0.96 走既有
                          动画体系；启动确认/失败描边/重复脉冲为代码驱动的场景动画。
                          分区手势（#30 修订 2026-10-18，Issue #186）：启动区（图标格，
                          Tag=LauncherLaunchZone）单击=启动；名称带（Tag=LauncherNameZone）
@@ -928,7 +1005,8 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
                               <!-- 多选态（#30 修订 2026-10-18）：选中底色对齐卡片范式
-                                   （SelectedCardBrush），焦点描边（accent）独立并存。 -->
+                                   （SelectedCardBrush）。W6 焦点视觉治理（2026-11-03）：
+                                   键盘焦点不再画独立 Accent 描边——选中底色是唯一选中视觉。 -->
                               <Setter Property="Background" Value="{DynamicResource SelectedCardBrush}" />
                             </DataTrigger>
                           </Style.Triggers>
@@ -1007,8 +1085,12 @@
                             <!-- 就地改名编辑器（名称带双击/F2/菜单进入；Enter 提交/
                                  Esc 取消/失焦提交；空提交=回退原名；IME 组合守卫与
                                  卡片编辑同族；Explicit 绑定修复保持——1.49.1 键入
-                                 不生效根因修复，契约锁定）。 -->
+                                 不生效根因修复，契约锁定）。W6 焦点视觉治理（2026-11-03）：
+                                 套 ThemedTextBoxStyle——脱离系统默认 TextBox 模板，聚焦
+                                 描边由主题键承载（文本输入的功能性焦点反馈，全局策略
+                                 唯一保留项）。 -->
                             <TextBox x:Name="TileNameEditor"
+                                     Style="{StaticResource ThemedTextBoxStyle}"
                                      MaxHeight="32"
                                      FontSize="12"
                                      TextBlock.LineHeight="16"
@@ -1184,6 +1266,9 @@
         <ContentControl.Style>
           <Style TargetType="ContentControl">
             <Setter Property="Visibility" Value="Visible" />
+            <!-- W6 焦点视觉治理（2026-11-03）：内联显式样式不走隐式安全网，
+                 键入焦点不画 Aero2 虚线框。 -->
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
               <Setter.Value>
                 <ControlTemplate TargetType="ContentControl">

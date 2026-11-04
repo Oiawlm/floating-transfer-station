@@ -247,6 +247,54 @@
     <Setter Property="Focusable" Value="True" />
   </Style>
 
+  <!-- 复盘「阅读｜编辑」分段切换（实验性，2026-11-03，仅实验开关开启时可见）：外框
+       与分段段体沿用既有选中语言——外框 BorderBrush＋控件级圆角，选中段
+       ActiveCategoryBrush 底＋PrimaryText，未选中 SecondaryText，悬停
+       HoverSurfaceBrush；不引入新颜色键，浅深两主题随字典整本替换。RadioButton
+       原生承载 SelectionItem 自动化语义与方向键互切。 -->
+  <Style x:Key="ReviewModeSegmentBorderStyle" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+    <Setter Property="Padding" Value="1" />
+  </Style>
+  <Style x:Key="ReviewModeSegmentStyle" TargetType="RadioButton">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="Height" Value="26" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Border x:Name="Segment"
+                  Background="{TemplateBinding Background}"
+                  CornerRadius="{StaticResource ControlCornerRadius}">
+            <ContentPresenter HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Margin="{TemplateBinding Padding}"
+                              RecognizesAccessKey="True" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Segment" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Segment" Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
+              <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+              <Setter Property="FontWeight" Value="SemiBold" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- ＋ 添加两入口菜单项（快捷启动 #30 切片 4）：菜单行形态——透明底、无边框、
        左对齐，悬停 HoverSurfaceBrush；承载于 HeaderBrush 弹层。 -->
   <Style x:Key="LauncherAddMenuButtonStyle" TargetType="Button">
@@ -437,6 +485,9 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
     <Setter Property="Cursor" Value="Hand" />
+    <!-- W6 焦点视觉治理（2026-11-03）：下拉框键入焦点不再画 Aero2 虚线框
+         （悬停描边反馈保留）。 -->
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="ItemContainerStyle">
       <Setter.Value>
         <Style TargetType="ComboBoxItem">
@@ -547,11 +598,9 @@
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
-    <Style.Triggers>
-      <Trigger Property="IsKeyboardFocusWithin" Value="True">
-        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-      </Trigger>
-    </Style.Triggers>
+    <!-- 焦点视觉只保留文本输入控件（W6 焦点视觉治理，2026-11-03）：容器级
+         IsKeyboardFocusWithin→Accent 描边触发器移除——分类改名编辑器持焦时
+         标签不再整圈紫框，聚焦反馈由编辑器自身的 Themed 描边承载。 -->
   </Style>
 
   <Style x:Key="CategoryActiveLayerStyle" TargetType="Border">
@@ -790,6 +839,8 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0,4" />
+    <!-- W6 焦点视觉治理（2026-11-03）：ListBox 本体键入焦点不再画 Aero2 虚线框。 -->
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
   </Style>
 
   <Style x:Key="BoardListItemStyle" TargetType="ListBoxItem">
@@ -910,12 +961,9 @@
     <Setter Property="Background" Value="{DynamicResource CardBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Style.Triggers>
-      <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=IsKeyboardFocusWithin}"
-                   Value="True">
-        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-      </DataTrigger>
-    </Style.Triggers>
+    <!-- 焦点视觉只保留文本输入控件（W6 焦点视觉治理，2026-11-03）：卡片容器
+         IsKeyboardFocusWithin→Accent 描边触发器移除——键盘选中卡不再紫框，
+         选中态视觉由既有 SelectedCardBrush 底色承载。 -->
   </Style>
 
   <Style x:Key="SelectionButtonStyle" TargetType="Button">
@@ -1119,9 +1167,10 @@
     </Style.Triggers>
   </Style>
 
-  <!-- 删除钮（1.24.0 新增）：可见/可命中 = 悬停 ∧ 未选中——仅未选中卡片悬停时
-       淡入，选中卡片一律隐藏（含悬停时），删除走单卡撤销管线；语义实现见
-       MainWindow.CardGestures 的 OperationsDelete 会话与 DeleteSingleCardAsync。 -->
+  <!-- 删除钮（1.24.0 新增；2026-11-03 双语义）：可见/可命中 = 悬停 ∧ 未选中——
+       仅未选中卡片悬停时淡入，选中卡片一律隐藏（含悬停时）。左键＝可撤销单卡删除
+       （手势层 OperationsDelete 会话 → DeleteSingleCardAsync）；右键＝永久删除
+       （ClipboardDelivery 右键按压会话 → DeleteSingleCardPermanentlyAsync，不可撤销）。 -->
   <Style x:Key="DeleteButtonStyle" TargetType="Button">
     <Setter Property="Width" Value="30" />
     <Setter Property="Height" Value="30" />
@@ -1135,7 +1184,7 @@
     <Setter Property="Padding" Value="6" />
     <Setter Property="Focusable" Value="False" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-    <Setter Property="ToolTip" Value="删除" />
+    <Setter Property="ToolTip" Value="删除（左键可撤销，右键永久）" />
     <Setter Property="Template" Value="{StaticResource CardIconButtonTemplate}" />
     <Setter Property="views:FadeAnimation.IsActive" Value="False" />
     <Setter Property="views:FadeAnimation.AnimationsEnabled"
@@ -1682,6 +1731,48 @@
     </Setter>
   </Style>
 
+  <!-- W6 焦点视觉治理（2026-11-03）——全局策略：焦点框视觉只保留在文本输入控件
+       （ThemedTextBoxStyle 家族的聚焦描边是打字定位的功能反馈）；其余一切控件不画
+       焦点框。双层落地：①本块根级隐式样式安全网——六窗全部 merge 本字典，未带显式
+       样式的 Button/ToggleButton/CheckBox/RadioButton/ComboBox/ListBox/ListBoxItem
+       在此统一清除 Aero2 默认虚线 FocusVisualStyle（隐式样式不影响带显式样式的控件，
+       后者由各自共享样式层的置 null setter 覆盖）；②共享显式样式（BoardListStyle/
+       ThemedComboBoxStyle/ThemedNavButtonStyle 族/BoardListItemStyle 等）自带置 null
+       setter。TextBox 不入本清单——文本输入的功能性聚焦描边按策略保留。 -->
+  <Style TargetType="{x:Type Button}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type ToggleButton}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type CheckBox}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type RadioButton}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type ComboBox}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type ListBox}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type ListBoxItem}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <!-- 容器型可聚焦控件（ScrollViewer/ItemsControl/ContentControl 默认 Focusable=true，
+       键入焦点同样画 Aero2 虚线框——模板内 PART_ContentHost 滚动器与收起把手等
+       未带显式样式的实例由此兜底；隐式样式按精确类型匹配，不影响派生控件）。 -->
+  <Style TargetType="{x:Type ScrollViewer}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type ItemsControl}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+  <Style TargetType="{x:Type ContentControl}">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  </Style>
+
   <Style TargetType="ScrollBar">
     <Setter Property="Width" Value="8" />
     <Setter Property="Background" Value="Transparent" />
@@ -1720,6 +1811,9 @@
        透传绑定缺一不可：CanContentScroll 是虚拟化与键盘滚动的生命线；两向 ScrollBarVisibility
        保留 Auto 语义（需要时才出现，只是不再改变 viewport 宽）；不引入自动隐藏定时器。 -->
   <Style x:Key="OverlayScrollViewerStyle" TargetType="ScrollViewer">
+    <!-- W6 焦点视觉治理（2026-11-03）：带显式样式的滚动器（主窗启动区/设置共享视口/
+         多选器）在此清除 Aero2 虚线 FocusVisualStyle（隐式安全网不覆盖显式样式实例）。 -->
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ScrollViewer">
@@ -1938,7 +2032,7 @@
                           Style="{StaticResource DeleteButtonStyle}"
                           Tag="{Binding}"
                           CommandParameter="{x:Static views:CardGestureZones.DeleteCardCommand}"
-                          AutomationProperties.Name="删除">
+                          AutomationProperties.Name="删除（左键可撤销，右键永久）">
                     <Viewbox Width="16" Height="16">
                       <Path Data="M8.5,4 L11.5,4 C11.5,3.17157 10.8284,2.5 10,2.5 C9.17157,2.5 8.5,3.17157 8.5,4 Z M7.5,4 C7.5,2.61929 8.61929,1.5 10,1.5 C11.3807,1.5 12.5,2.61929 12.5,4 L17.5,4 C17.7761,4 18,4.22386 18,4.5 C18,4.77614 17.7761,5 17.5,5 L16.4456,5 L15.2521,15.3439 C15.0774,16.8576 13.7957,18 12.2719,18 L7.72813,18 C6.20431,18 4.92256,16.8576 4.7479,15.3439 L3.55437,5 L2.5,5 C2.22386,5 2,4.77614 2,4.5 C2,4.22386 2.22386,4 2.5,4 L7.5,4 Z M5.74131,15.2292 C5.85775,16.2384 6.71225,17 7.72813,17 L12.2719,17 C13.2878,17 14.1422,16.2384 14.2587,15.2292 L15.439,5 L4.56101,5 Z M8.5,7.5 C8.77614,7.5 9,7.72386 9,8 L9,14 C9,14.2761 8.77614,14.5 8.5,14.5 C8.22386,14.5 8,14.2761 8,14 L8,8 C8,7.72386 8.22386,7.5 8.5,7.5 Z M12,8 C12,7.72386 11.7761,7.5 11.5,7.5 C11.2239,7.5 11,7.72386 11,8 L11,14 C11,14.2239 11.2239,14.5 11.5,14.5 C11.7761,14.5 12,14.2761 12,14 L12,8 Z"
                             Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"

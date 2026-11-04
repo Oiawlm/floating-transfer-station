@@ -1069,6 +1069,7 @@ public partial class MainWindow
             return;
         }
 
+        NoteUserInteraction();
         AnimateLauncherHoverLift(tile, lifted: true);
     }
 
@@ -1546,13 +1547,10 @@ public partial class MainWindow
 
     private void ApplyLauncherFocusVisual()
     {
-        foreach (var (_, tile) in _launcherTileContainers)
-        {
-            tile.SetCurrentValue(Border.BorderBrushProperty, Brushes.Transparent);
-        }
-
+        // 焦点视觉只保留文本输入控件（W6 焦点视觉治理，2026-11-03）：键盘导航
+        // 逻辑（焦点移动/勾选钮可见性/BringIntoView）保留，瓦片不再画 Accent
+        // 描边——纯键盘操作的视觉指示不由紫框承载。
         _launcherTileContainers.Clear();
-        // 焦点指示同步到勾选钮可见性绑定（IsKeyboardFocused 会话态，#13 族）。
         foreach (var entry in _launchers.Items)
         {
             entry.IsKeyboardFocused = false;
@@ -1568,7 +1566,6 @@ public partial class MainWindow
         if (FindLauncherTile(focusedItem) is { } focused)
         {
             _launcherTileContainers[focusedItem.Id] = focused;
-            focused.SetCurrentValue(Border.BorderBrushProperty, (Brush)FindResource("AccentBrush"));
             focused.BringIntoView();
         }
     }

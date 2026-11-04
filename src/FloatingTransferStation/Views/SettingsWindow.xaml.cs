@@ -70,6 +70,7 @@ public partial class SettingsWindow : Window
         LauncherDiscoveryToggle.IsChecked = host.CurrentPreferences.LauncherDiscoveryEnabled;
         AutoCleanupToggle.IsChecked = host.CurrentPreferences.AutoCleanupEnabled;
         AiOrganizeEnabledToggle.IsChecked = host.CurrentPreferences.AiOrganizeEnabled;
+        ReviewMarkdownViewToggle.IsChecked = host.CurrentPreferences.ReviewMarkdownViewEnabled;
         SetAiOrganizeAreasAvailability(host.CurrentPreferences.AiOrganizeEnabled);
         // 档位显示文案由唯一映射派生（全仓小时数字面量只允许出现在映射与测试期望），
         // 枚举序≠显示序（零值是默认档 24h），选中项一律按 Tag 匹配、不依赖下标；
@@ -1039,6 +1040,25 @@ public partial class SettingsWindow : Window
 
         SetAiOrganizeAreasAvailability(enabled);
         _host.ApplyPreferences(_host.CurrentPreferences with { AiOrganizeEnabled = enabled });
+    }
+
+    // ---- 实验性（首个先例，2026-11-03）：复盘 Markdown 阅读视图。经 ApplyPreferences
+    // 唯一管线即时生效＋原子持久化（契约 #5 同路）；开关状态在构造同步段回显。----
+
+    private void ReviewMarkdownViewToggle_Checked(object sender, RoutedEventArgs e) =>
+        ApplyReviewMarkdownViewPreference(enabled: true);
+
+    private void ReviewMarkdownViewToggle_Unchecked(object sender, RoutedEventArgs e) =>
+        ApplyReviewMarkdownViewPreference(enabled: false);
+
+    private void ApplyReviewMarkdownViewPreference(bool enabled)
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with { ReviewMarkdownViewEnabled = enabled });
     }
 
     private void SetAiOrganizeAreasAvailability(bool enabled)

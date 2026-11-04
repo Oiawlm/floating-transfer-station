@@ -113,6 +113,24 @@ public static class DesignTokens
     /// <summary>备注可见行数上限（CardNoteMaxHeight=行高×此值；默认字体 2×19=38）。</summary>
     public const int CardNoteMaxVisibleLines = 2;
 
+    // 复盘阅读视图（实验性，2026-11-03）：排版 token——正文字号沿用 CardTextFontSize
+    //（不设第二份 14）；标题字号为阅读档位阶梯（H1–H3 显式 token，H4–H6＝正文字号
+    // 加 SemiBold 权重区分）；颜色不新增——全部走主题字典语义键（正文/引用＝
+    // PrimaryTextBrush，链接＝AccentBrush，代码块底＝HoverSurfaceBrush，描边＝
+    // BorderBrush），浅深两主题随整本替换即时切换。代码字体是独立功能来源
+    //（同图标字体先例，不随用户界面字体变化；Win11 必装 Cascadia Mono，回退
+    // Consolas），不违反 #48「界面字体字面量唯一来源」——它不是界面字体。
+    public const double ReadingHeading1FontSize = 20;
+    public const double ReadingHeading2FontSize = 17;
+    public const double ReadingHeading3FontSize = 15;
+    public const string ReadingCodeFontFamily = "Cascadia Mono, Consolas";
+    /// <summary>阅读视图块间垂直间距（段落/代码块/引用/列表/分隔线共用）。</summary>
+    public const double ReadingBlockGapPx = 6;
+    /// <summary>代码块内边距（背景与描边围出的呼吸空间）。</summary>
+    public const double ReadingCodePaddingPx = 8;
+    /// <summary>块引用左缘竖条宽度（BorderBrush）。</summary>
+    public const double ReadingQuoteBarPx = 3;
+
     // 圆角。窗壳圆角权威=DwmCornerRadius（DWM 裁剪与内容层自裁剪同值），
     // XAML 资源 ShellCornerRadius 由锁定测试镜像它——不设第二个壳圆角 token。
     // 两档阶梯（#30 修订 2026-10-18，Issue #186 D9）：控件级 4（输入框/按钮/下拉/
@@ -147,4 +165,11 @@ public static class DesignTokens
     public const double LauncherTilePitchPx = LauncherTileWidthPx + LauncherTileGutterPx;
     public const int LauncherTileMinColumns = 3;
     public const int LauncherTileMaxColumns = 6;
+    /// <summary>启动瓦片视口顶/底内衬（px，W6 顶排圆角裁切修复 2026-11-03，需求 8）：
+    /// 瓦片动画全为 RenderTransform（悬停上浮 −2、确认脉冲 1.06 放大上下各溢 ≈3），
+    /// 溢出越过滚动视口缘即被 ScrollContentPresenter 裁剪——首行/末行没有行间沟道
+    /// 缓冲，顶/底圆角被切（其余行有 8px 沟道吸收）。LauncherTilePanel 在内容顶/底
+    /// 各留此内衬（随内容滚动，恰在列表自然停位提供余量）；取值 ≥ 上浮 2＋脉冲 3＋
+    /// 描边余量，取整对齐沟道 8 的节奏。面板宽仍=视口（拉伸填充不变，#23/#30 不回退）。</summary>
+    public const int LauncherTileViewportInsetPx = 8;
 }
