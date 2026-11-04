@@ -117,4 +117,89 @@ public sealed class DailyReviewStoreTests
 
         Assert.AreEqual(DailyReviewMigration.CurrentVersion, reset.ReviewMigrationVersion);
     }
+
+    [TestMethod]
+    public async Task EnumerateRecordedDates_EmptyOrMissingDirectoryReturnsNone()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        using IDailyReviewStore store = new LocalStore(paths, new AtomicTextWriter());
+
+        // 目录从未创建（未 StartWatching、未保存过）：空表而非异常。
+        Assert.AreEqual(0, (await store.EnumerateRecordedDatesAsync()).Count);
+
+        Directory.CreateDirectory(paths.ReviewsDirectory);
+        Assert.AreEqual(0, (await store.EnumerateRecordedDatesAsync()).Count);
+    }
+
+    [TestMethod]
+    public async Task EnumerateRecordedDates_SkipsBlankInvalidAndNonMarkdownFilesAndSortsAcrossYears()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        using IDailyReviewStore store = new LocalStore(paths, new AtomicTextWriter());
+        Directory.CreateDirectory(paths.ReviewsDirectory);
+
+        File.WriteAllText(Path.Combine(paths.ReviewsDirectory, "2026-11-02.md"), "今天的内容");
+        File.WriteAllText(Path.Combine(paths.ReviewsDirectory, "2025-12-31.md"), "去年最后一天");
+        File.WriteAllText(Path.Combine(paths.ReviewsDirectory, "2024-06-15.md"), "前年有记录");
+        File.WriteAllText(Path.Combine(paths.ReviewsDirectory, "2026-11-01.md"), " \n\t ");   // 空白＝无记录
+        File.WriteAllText(Path.Combine(paths.ReviewsDirectory, "2026-11-03.md"), "");         // 空文件＝无记录
+        File.WriteAllText(Path.Combine(paths.ReviewsDirectory, "notes.md"), "非法文件名跳过"); // 非日期名
+        File.WriteAllText(Path.Combine(paths.ReviewsDirectory, "2026-1-1.md"), "非法格式跳过"); // 非 yyyy-MM-dd
+        File.WriteAllText(Path.Combine(paths.ReviewsDirectory, "2026-11-04.txt"), "非 .md 跳过");
+
+        var dates = await store.EnumerateRecordedDatesAsync();
+
+        // 跨年升序；空白/非法名/非法格式/非 md 全部不进表。
+        CollectionAssert.AreEqual(
+            new[] { new DateOnly(2024, 6, 15), new DateOnly(2025, 12, 31), new DateOnly(2026, 11, 2) },
+            dates.ToArray());
+    }
+
+    [TestMethod]
+    public async Task EnumerateRecordedDates_SharesTheExistsJudgmentWithLoadAsync()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        using IDailyReviewStore store = new LocalStore(paths, new AtomicTextWriter());
+        Directory.CreateDirectory(paths.ReviewsDirectory);
+
+        var recorded = new DateOnly(2026, 10, 30);
+        var blank = new DateOnly(2026, 10, 31);
+        File.WriteAllText(Path.Combine(paths.ReviewsDirectory, "2026-10-30.md"), "有记录");
+        File.WriteAllText(Path.Combine(paths.ReviewsDirectory, "2026-10-31.md"), "　\n");
+
+        var dates = await store.EnumerateRecordedDatesAsync();
+
+        // 同源锁定：枚举进表的日期 LoadAsync Exists=true；被空白排除的日期 Exists=false。
+        CollectionAssert.Contains(dates.ToArray(), recorded);
+        CollectionAssert.DoesNotContain(dates.ToArray(), blank);
+        Assert.IsTrue((await store.LoadAsync(recorded)).Exists);
+        Assert.IsFalse((await store.LoadAsync(blank)).Exists);
+    }
+
+    [TestMethod]
+    public async Task EnumerateRecordedDates_FollowsSaveAndDeleteLifecycle()
+    {
+        using var directory = new TestDirectory();
+        var paths = AppPaths.ForTests(directory.Root);
+        using IDailyReviewStore store = new LocalStore(paths, new AtomicTextWriter());
+
+        var first = new DateOnly(2026, 10, 28);
+        var second = new DateOnly(2026, 10, 29);
+
+        Assert.AreEqual(0, (await store.EnumerateRecordedDatesAsync()).Count);
+
+        await store.SaveAsync(second, "第二条");
+        await store.SaveAsync(first, "第一条");
+        CollectionAssert.AreEqual(
+            new[] { first, second },
+            (await store.EnumerateRecordedDatesAsync()).ToArray());
+
+        // 保存空白＝删文件（无记录）；显式删除同样出表。
+        await store.SaveAsync(first, "  ");
+        await store.DeleteAsync(second);
+        Assert.AreEqual(0, (await store.EnumerateRecordedDatesAsync()).Count);
+    }
 }
