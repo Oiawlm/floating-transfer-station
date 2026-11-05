@@ -130,6 +130,43 @@
           </Grid>
         </Border>
       </DataTemplate>
+      <!-- 子分组 chip（实验性，契约 #57 形态①）：视觉沿分类轨标签语言（边框/圆角/
+           hover/激活 accent）；单击过滤、双击改名（照分类轨「单击激活、双击改名」
+           同构）、拖卡入 chip＝批量归属该槽（照「拖卡入标签=移动分类」先例）。
+           改名会话与分类改名同一套机器（IME 守卫＋Enter/Esc/失焦提交）。 -->
+      <DataTemplate x:Key="SubgroupChipTemplate"
+                    DataType="{x:Type vm:SubgroupChipViewModel}">
+        <Border x:Name="ChipSurface"
+                Style="{StaticResource SubgroupChipContainerStyle}"
+                Tag="{Binding Slot}"
+                AllowDrop="True"
+                MouseLeftButtonDown="SubgroupChip_MouseLeftButtonDown"
+                MouseLeftButtonUp="SubgroupChip_MouseLeftButtonUp"
+                DragEnter="SubgroupChip_DragEnter"
+                DragLeave="SubgroupChip_DragLeave"
+                DragOver="SubgroupChip_DragOver"
+                Drop="SubgroupChip_Drop">
+          <Grid Background="Transparent">
+            <Border x:Name="ChipHoverLayer"
+                    Background="{DynamicResource HoverSurfaceBrush}"
+                    CornerRadius="6"
+                    Opacity="0"
+                    IsHitTestVisible="False"
+                    views:FadeAnimation.IsActive="{Binding IsMouseOver, ElementName=ChipSurface}"
+                    views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                    views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+            <Border Style="{StaticResource SubgroupChipActiveLayerStyle}" />
+            <Border Style="{StaticResource SubgroupChipDropTargetLayerStyle}" />
+            <TextBlock Text="{Binding DisplayName}"
+                       Style="{StaticResource SubgroupChipLabelTextStyle}" />
+            <TextBox Text="{Binding DraftName, UpdateSourceTrigger=Explicit}"
+                     Style="{StaticResource SubgroupChipNameEditorStyle}"
+                     TextChanged="SubgroupChipNameEditor_TextChanged"
+                     KeyDown="SubgroupChipNameEditor_KeyDown"
+                     LostKeyboardFocus="SubgroupChipNameEditor_LostKeyboardFocus" />
+          </Grid>
+        </Border>
+      </DataTemplate>
     </ResourceDictionary>
   </Window.Resources>
 
@@ -166,6 +203,10 @@
         </Grid.RenderTransform>
         <Grid.RowDefinitions>
           <RowDefinition Height="44" />
+          <!-- 子分组按钮轨行（契约 #57 形态①）：Auto 行＝轨 Collapsed 时零占位
+               （BoardList 几何与 Off 现状逐 DIP 一致）；开＝固定高 36（结构常量
+               WindowSettings.SubgroupRailHeight，不随过滤态/名称变化）。 -->
+          <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -479,8 +520,39 @@
           </Grid>
         </Border>
 
+        <!-- 子分组按钮轨（实验性，契约 #57 形态①）：ChipRail 模式且激活面板为
+             内容桶才可见（VM IsSubgroupRailVisible 唯一驱动；复盘/启动表面零呈现）；
+             四槽 UniformGrid（不加不减不排序）。Off/GroupedView＝整行 Collapsed
+             零占位，BoardList 几何与现状逐 DIP 一致。 -->
+        <Border x:Name="SubgroupRail"
+                Grid.Row="1"
+                Height="{x:Static models:WindowSettings.SubgroupRailHeight}"
+                Padding="12,2"
+                Background="Transparent">
+          <Border.Style>
+            <Style TargetType="Border">
+              <Setter Property="Visibility" Value="Visible" />
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSubgroupRailVisible}" Value="False">
+                  <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Border.Style>
+          <ItemsControl ItemsSource="{Binding SubgroupChips}"
+                        ItemTemplate="{StaticResource SubgroupChipTemplate}"
+                        Background="Transparent"
+                        Focusable="False">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="{x:Static models:SubgroupCatalog.SlotCount}" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+          </ItemsControl>
+        </Border>
+
         <ListBox x:Name="BoardList"
-                 Grid.Row="1"
+                 Grid.Row="2"
                  ItemsSource="{Binding ActivePanel.Items}"
                  ItemContainerStyle="{StaticResource BoardListItemStyle}"
                  Style="{StaticResource BoardListStyle}"
@@ -518,14 +590,15 @@
 
         <!-- 搜索空态：无匹配时居中提示 + 一键清空（代码后置切换可见性）。 -->
         <Border x:Name="SearchEmptyHint"
-                Grid.Row="1"
+                Grid.Row="2"
                 Visibility="Collapsed"
                 Background="Transparent"
                 IsHitTestVisible="True">
           <StackPanel Orientation="Vertical"
                       HorizontalAlignment="Center"
                       VerticalAlignment="Center">
-            <TextBlock Text="无匹配结果"
+            <TextBlock x:Name="SearchEmptyHintTitle"
+                       Text="无匹配结果"
                        FontSize="13"
                        Foreground="{DynamicResource SecondaryTextBrush}"
                        HorizontalAlignment="Center"
@@ -548,7 +621,7 @@
              False 让拖放与点击命中穿透回 BoardList（兄弟层不截获隧道事件）。搜索态
              让位给 SearchEmptyHint（无匹配语义）。 -->
         <StackPanel x:Name="BoardEmptyState"
-                    Grid.Row="1"
+                    Grid.Row="2"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     IsHitTestVisible="False"
@@ -573,7 +646,7 @@
         </StackPanel>
 
         <Border x:Name="ReviewContentHost"
-                Grid.Row="1"
+                Grid.Row="2"
                 Padding="12,8,12,10"
                 Background="Transparent"
                 Visibility="Collapsed">
@@ -774,7 +847,7 @@
              内容区为空态或瓦片网格；文件拖入分流与放置态（2px accent 描边 + 8% 填充
              + 「松开以添加」）。 -->
         <Border x:Name="LauncherContentHost"
-                Grid.Row="1"
+                Grid.Row="2"
                 Padding="12,8,12,10"
                 Background="Transparent"
                 Visibility="Collapsed"
@@ -1197,7 +1270,7 @@
           </Grid>
         </Border>
 
-        <Canvas Grid.Row="1"
+        <Canvas Grid.Row="2"
                 Background="Transparent"
                 IsHitTestVisible="False">
           <Border x:Name="InsertionIndicator"
@@ -1215,7 +1288,7 @@
         </Canvas>
 
         <Border x:Name="StatusOverlay"
-                Grid.Row="1"
+                Grid.Row="2"
                 Panel.ZIndex="2"
                 Style="{StaticResource StatusOverlayStyle}">
           <TextBlock Text="{Binding StatusText}"
@@ -1226,7 +1299,7 @@
                Style="{StaticResource WidthResizeThumbStyle}"
                DragDelta="WidthThumb_DragDelta"
                DragCompleted="ResizeThumb_DragCompleted" />
-        <Thumb Grid.Row="1"
+        <Thumb Grid.Row="2"
                Style="{StaticResource HeightResizeThumbStyle}"
                DragDelta="HeightThumb_DragDelta"
                DragCompleted="ResizeThumb_DragCompleted" />

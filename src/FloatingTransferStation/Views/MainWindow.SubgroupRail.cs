@@ -1,0 +1,356 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
+using FloatingTransferStation.Models;
+using FloatingTransferStation.Services;
+using FloatingTransferStation.ViewModels;
+
+namespace FloatingTransferStation.Views;
+
+/// <summary>
+/// 分类内子分组·形态①按钮轨（实验性，契约 #57）：单击 chip＝按槽过滤（再点还原）、
+/// 双击 chip＝改名（照 <see cref="MainWindow.CategoryEditing"/> 全套会话机器）、
+/// 拖卡片到 chip＝批量归属该槽（照「拖卡入标签=移动分类」先例）。过滤与搜索互斥
+/// （搜索激活＝chip 过滤冻结让位、chip 选中态保留、退出搜索自动恢复；搜索态下
+/// chip 单击＝退出搜索并应用 chip 过滤）；过滤只经 BoardList.Items.Filter 单点
+/// （ApplyBoardListFilter，契约 #37 扩展）。无「全部/未指定」chip；实验期无取消
+/// 归属手势（拖到其他 chip 可覆盖，README 与契约登记）。
+/// </summary>
+public partial class MainWindow
+{
+    private readonly HashSet<TextBox> _activeSubgroupNameCompositions = [];
+
+    /// <summary>当前 chip 过滤槽（null=无过滤）；搜索激活期间冻结（让位裁决）。</summary>
+    private int? _subgroupFilterSlot;
+
+    /// <summary>chip 过滤生效谓词：槽已选且 ChipRail 模式（Off/GroupedView 无过滤态）。
+    /// internal＝锁定测试直达（拖放/Ctrl+A/收起抑制的守卫前置）。</summary>
+    internal bool IsSubgroupFilterActive =>
+        _subgroupFilterSlot is not null &&
+        _viewModel.SubgroupDisplay == SubgroupDisplayMode.ChipRail;
+
+    private bool IsSubgroupNameEditActive() =>
+        _viewModel.SubgroupChips.Any(chip => chip.IsEditingName);
+
+    private void InitializeSubgroupNameEditing()
+    {
+        AddHandler(
+            TextCompositionManager.PreviewTextInputStartEvent,
+            new TextCompositionEventHandler(SubgroupChipNameEditor_CompositionStartedOrUpdated),
+            true);
+        AddHandler(
+            TextCompositionManager.PreviewTextInputUpdateEvent,
+            new TextCompositionEventHandler(SubgroupChipNameEditor_CompositionStartedOrUpdated),
+            true);
+        AddHandler(
+            TextCompositionManager.PreviewTextInputEvent,
+            new TextCompositionEventHandler(SubgroupChipNameEditor_CompositionCompleted),
+            true);
+    }
+
+    // ---- 单击过滤 / 双击改名（照分类轨「Down 承载双击、Up 承载单击」先例） ----
+
+    private void SubgroupChip_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_isClosing ||
+            e.ChangedButton != MouseButton.Left ||
+            e.ClickCount < 2 ||
+            FindAncestor<TextBox>(e.OriginalSource as DependencyObject) is not null ||
+            sender is not Border { DataContext: SubgroupChipViewModel chip } surface ||
+            _viewModel.ActivePanel is not { } panel ||
+            !BoardCategoryCatalog.IsContentBucket(panel.Category))
+        {
+            return;
+        }
+
+        BeginSubgroupNameEdit(chip, surface);
+        e.Handled = true;
+    }
+
+    private void SubgroupChip_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_isClosing ||
+            e.ChangedButton != MouseButton.Left ||
+            FindAncestor<TextBox>(e.OriginalSource as DependencyObject) is not null ||
+            sender is not Border { DataContext: SubgroupChipViewModel chip } ||
+            chip.IsEditingName)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        ToggleSubgroupFilter(chip);
+    }
+
+    private void ToggleSubgroupFilter(SubgroupChipViewModel chip)
+    {
+        if (_isClosing ||
+            _viewModel.ActivePanel is not { } panel ||
+            !BoardCategoryCatalog.IsContentBucket(panel.Category))
+        {
+            return;
+        }
+
+        // 搜索态下 chip 单击＝退出搜索并应用 chip 过滤（沿「切换分类退出搜索」先例）。
+        if (_viewModel.IsSearchActive)
+        {
+            ExitSearchMode();
+        }
+
+        var activating = _subgroupFilterSlot != chip.Slot;
+        _subgroupFilterSlot = activating ? chip.Slot : null;
+        ApplySubgroupFilterSelection();
+        if (activating)
+        {
+            // 进入过滤视图＝清空选择（沿 #37 进入搜索口径；过滤视图的选择范围无意义）。
+            ClearUserSelection();
+        }
+
+        ApplyBoardListFilter();
+    }
+
+    private void ApplySubgroupFilterSelection()
+    {
+        foreach (var chip in _viewModel.SubgroupChips)
+        {
+            chip.IsFilterActive = chip.Slot == _subgroupFilterSlot;
+        }
+    }
+
+    /// <summary>清除 chip 过滤（契约 #57）：Off/模式切换/切分类共用；reapply＝立即重评
+    /// Filter 单点（旧面板视图上的 Filter 残留由调用方在面板切换前清）。</summary>
+    private void ClearSubgroupFilter(bool reapplyFilter)
+    {
+        if (_subgroupFilterSlot is null)
+        {
+            return;
+        }
+
+        _subgroupFilterSlot = null;
+        ApplySubgroupFilterSelection();
+        if (reapplyFilter)
+        {
+            ApplyBoardListFilter();
+        }
+    }
+
+    // ---- 双击改名会话（照 CategoryEditing 全套：草稿限长/IME 守卫/Enter/Esc/失焦提交） ----
+
+    private void BeginSubgroupNameEdit(SubgroupChipViewModel chip, Border host)
+    {
+        chip.BeginNameEdit();
+        Dispatcher.BeginInvoke(
+            DispatcherPriority.Input,
+            new Action(() =>
+            {
+                if (!chip.IsEditingName ||
+                    FindDescendant<TextBox>(host) is not { } editor)
+                {
+                    return;
+                }
+
+                editor.Focus();
+                editor.SelectAll();
+            }));
+    }
+
+    private void SubgroupChipNameEditor_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (sender is not TextBox editor ||
+            editor.DataContext is not SubgroupChipViewModel chip ||
+            !chip.IsEditingName ||
+            _activeSubgroupNameCompositions.Contains(editor))
+        {
+            return;
+        }
+
+        // MaxLength 按 UTF-16 计数（代理对占 2），文本元素口径的限长在此归一。
+        var limited = SubgroupCatalog.LimitName(editor.Text);
+        if (limited == editor.Text)
+        {
+            return;
+        }
+
+        editor.Text = limited;
+        editor.CaretIndex = editor.Text.Length;
+    }
+
+    private void SubgroupChipNameEditor_CompositionStartedOrUpdated(
+        object sender,
+        TextCompositionEventArgs e)
+    {
+        if (e.OriginalSource is TextBox
+            {
+                DataContext: SubgroupChipViewModel { IsEditingName: true }
+            } editor)
+        {
+            _activeSubgroupNameCompositions.Add(editor);
+        }
+    }
+
+    private void SubgroupChipNameEditor_CompositionCompleted(
+        object sender,
+        TextCompositionEventArgs e)
+    {
+        if (e.OriginalSource is TextBox editor)
+        {
+            _activeSubgroupNameCompositions.Remove(editor);
+        }
+    }
+
+    private void SubgroupChipNameEditor_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox editor ||
+            editor.DataContext is not SubgroupChipViewModel chip)
+        {
+            return;
+        }
+
+        if (_activeSubgroupNameCompositions.Contains(editor))
+        {
+            return;
+        }
+
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            CommitSubgroupNameEdit(chip, editor.Text);
+        }
+        else if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            _activeSubgroupNameCompositions.Remove(editor);
+            chip.CancelNameEdit();
+            ReconcileSurfaceAfterEditing();
+        }
+    }
+
+    private void SubgroupChipNameEditor_LostKeyboardFocus(
+        object sender,
+        KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is TextBox { DataContext: SubgroupChipViewModel chip } editor)
+        {
+            _activeSubgroupNameCompositions.Remove(editor);
+            CommitSubgroupNameEdit(chip, editor.Text);
+        }
+    }
+
+    private void CommitSubgroupNameEdit(SubgroupChipViewModel chip, string draftName)
+    {
+        if (!chip.IsEditingName)
+        {
+            return;
+        }
+
+        var name = chip.EndNameEdit(draftName);
+        ReconcileSurfaceAfterEditing();
+        if (name == chip.DisplayName ||
+            _viewModel.ActivePanel is not { } panel)
+        {
+            return;
+        }
+
+        TrackPendingOperation(SaveSubgroupNameAsync(panel.Category, chip.Slot, name));
+    }
+
+    /// <summary>子分组槽名乐观提交（镜像 <see cref="SaveCategoryNameAsync"/>：save gate
+    /// 原子写＋失败回弹＋状态条）；成功后刷新轨名与组头派生（名清单单一事实源仍在
+    /// settings.json）。</summary>
+    private async Task SaveSubgroupNameAsync(BoardCategory category, int slot, string name)
+    {
+        await _settingsSaveGate.WaitAsync();
+        try
+        {
+            var originalName = _settings.SubgroupName(category, slot);
+            _settings = _settings.WithSubgroupName(category, slot, name);
+            try
+            {
+                await _store.SaveSettingsAsync(_settings);
+                if (_viewModel.ActivePanel is { } panel &&
+                    panel.Category == category)
+                {
+                    _viewModel.RefreshSubgroupChips(_settings, category);
+                }
+
+                _board.SetSubgroupDisplay(_viewModel.SubgroupDisplay, _settings);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _settings = _settings.WithSubgroupName(category, slot, originalName);
+                ShowStatus("子分组名称未保存，已恢复原名称。");
+            }
+        }
+        finally
+        {
+            _settingsSaveGate.Release();
+        }
+    }
+
+    // ---- 拖卡归属（本功能唯一指派手势；过滤激活时拖放已禁，指派只在无过滤态发生） ----
+
+    private void SubgroupChip_DragEnter(object sender, DragEventArgs e) =>
+        UpdateSubgroupChipDropTarget(sender, e);
+
+    private void SubgroupChip_DragOver(object sender, DragEventArgs e) =>
+        UpdateSubgroupChipDropTarget(sender, e);
+
+    private void SubgroupChip_DragLeave(object sender, DragEventArgs e)
+    {
+        if (sender is Border { DataContext: SubgroupChipViewModel chip })
+        {
+            chip.IsDropTarget = false;
+        }
+
+        e.Handled = true;
+    }
+
+    private void UpdateSubgroupChipDropTarget(object sender, DragEventArgs e)
+    {
+        WithdrawInsertionIndicator();
+        WithdrawCategoryDropTarget();
+        if (sender is Border { DataContext: SubgroupChipViewModel chip } &&
+            _viewModel.ActivePanel is { } panel &&
+            BoardCategoryCatalog.IsContentBucket(panel.Category) &&
+            !IsSubgroupFilterActive &&
+            _dragPayload.GetInternalItemIds(e.Data) is { })
+        {
+            ApplySubgroupChipDropTarget(chip);
+            e.Effects = DragDropEffects.Move;
+            e.Handled = true;
+            return;
+        }
+
+        ApplySubgroupChipDropTarget(null);
+        e.Effects = DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void ApplySubgroupChipDropTarget(SubgroupChipViewModel? target)
+    {
+        foreach (var chip in _viewModel.SubgroupChips)
+        {
+            chip.IsDropTarget = ReferenceEquals(chip, target);
+        }
+    }
+
+    private async void SubgroupChip_Drop(object sender, DragEventArgs e)
+    {
+        ClearDropFeedback();
+        ApplySubgroupChipDropTarget(null);
+        e.Effects = DragDropEffects.None;
+        e.Handled = true;
+        if (sender is not Border { DataContext: SubgroupChipViewModel chip } ||
+            _viewModel.ActivePanel is not { } panel ||
+            !BoardCategoryCatalog.IsContentBucket(panel.Category) ||
+            IsSubgroupFilterActive ||
+            _dragPayload.GetInternalItemIds(e.Data) is not { } itemIds)
+        {
+            return;
+        }
+
+        e.Effects = DragDropEffects.Move;
+        await _mutations.AssignSubgroupAsync(itemIds, chip.Slot);
+    }
+}

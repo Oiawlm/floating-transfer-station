@@ -89,6 +89,18 @@ public partial class SettingsWindow : Window
         AutoCleanupToggle.IsChecked = host.CurrentPreferences.AutoCleanupEnabled;
         AiOrganizeEnabledToggle.IsChecked = host.CurrentPreferences.AiOrganizeEnabled;
         ReviewMarkdownViewToggle.IsChecked = host.CurrentPreferences.ReviewMarkdownViewEnabled;
+        // 子分组三态（契约 #57 实验性第二项）：枚举设置一律 ComboBox（仓库先例），
+        /// 选中项按 Tag 匹配、不依赖下标。
+        var subgroupItems = new[]
+        {
+            new ComboBoxItem { Content = "关闭", Tag = SubgroupDisplayMode.Off },
+            new ComboBoxItem { Content = "按钮轨", Tag = SubgroupDisplayMode.ChipRail },
+            new ComboBoxItem { Content = "视觉分组", Tag = SubgroupDisplayMode.GroupedView }
+        };
+        SubgroupModeComboBox.ItemsSource = subgroupItems;
+        SubgroupModeComboBox.SelectedItem = subgroupItems.Single(item =>
+            item.Tag is SubgroupDisplayMode mode &&
+            mode == host.CurrentPreferences.SubgroupDisplay);
         SetAiOrganizeAreasAvailability(host.CurrentPreferences.AiOrganizeEnabled);
         // 档位显示文案由唯一映射派生（全仓小时数字面量只允许出现在映射与测试期望），
         // 枚举序≠显示序（零值是默认档 24h），选中项一律按 Tag 匹配、不依赖下标；
@@ -1175,6 +1187,20 @@ public partial class SettingsWindow : Window
         }
 
         _host.ApplyPreferences(_host.CurrentPreferences with { ReviewMarkdownViewEnabled = enabled });
+    }
+
+    // ---- 实验性第二项（契约 #57）：分类内子分组三态。经 ApplyPreferences 唯一
+    // 管线即时生效＋原子持久化（契约 #5 同路）；选中态在构造同步段按 Tag 回显。----
+
+    private void SubgroupModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isSynchronizingControls ||
+            SubgroupModeComboBox.SelectedItem is not ComboBoxItem { Tag: SubgroupDisplayMode mode })
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with { SubgroupDisplay = mode });
     }
 
     private void SetAiOrganizeAreasAvailability(bool enabled)

@@ -365,7 +365,9 @@ public partial class MainWindow : Window
     private void CollapseTimer_Tick(object? sender, EventArgs e)
     {
         _collapseTimer.Stop();
-        if (IsPanelEditHoldActive() || !_panelState.WouldCollapse)
+        // chip 过滤态抑制自动收起（契约 #57，沿 #37 搜索态口径；本方法是一切收起
+        // 计时的收敛点，单点守卫覆盖全部启动路径）。
+        if (IsPanelEditHoldActive() || IsSubgroupFilterActive || !_panelState.WouldCollapse)
         {
             return;
         }

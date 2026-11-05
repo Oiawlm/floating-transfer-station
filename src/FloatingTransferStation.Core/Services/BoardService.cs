@@ -35,6 +35,22 @@ public sealed record RemovedBoardCategory(
     BoardCategory Category,
     IReadOnlyList<BoardItem> Items);
 
+/// <summary>子分组批量指派的结果（契约 #57，照 <see cref="BoardPinChange"/> 惯例）：
+/// 批量条目、目标槽与原始槽快照（供失败还原与撤销复用）。</summary>
+public sealed record BoardSubgroupAssignment(
+    bool Changed,
+    BoardCategory Category,
+    int Slot,
+    IReadOnlyList<BoardItem> Items,
+    IReadOnlyList<int?> OriginalSlots);
+
+/// <summary>子分组稳定分区的结果（契约 #57）：分类整序快照（含置顶区原样），
+/// Changed=false 表示已按槽聚簇（no-op）。</summary>
+public sealed record BoardSubgroupPartition(
+    bool Changed,
+    BoardCategory Category,
+    IReadOnlyList<BoardItem> OriginalOrder);
+
 public sealed class BoardService
 {
     private readonly Dictionary<BoardCategory, BoardItemCollection> _items =
@@ -42,7 +58,127 @@ public sealed class BoardService
             category => category,
             _ => new BoardItemCollection());
 
+    // 子分组派生源（契约 #57）：呈现模式与名清单快照由窗口层经
+    // SetSubgroupDisplay 喂入（ApplyPreferences/装载唯一管线）；settings 仍是
+    // 名单持久化单一事实源，服务侧仅派生缓存。
+    private SubgroupDisplayMode _subgroupMode = SubgroupDisplayMode.Off;
+    private WindowSettings? _subgroupNamesSource;
+
     public BoardItemCollection Items(BoardCategory category) => _items[category];
+
+    /// <summary>
+    /// 喂入子分组呈现模式与名清单快照（契约 #57 唯一入口）：模式变化即全分类
+    /// Reindex 刷新派生标记（StartsSubgroupRegion 仅 GroupedView 置位，Off/
+    /// ChipRail 恒 false）；settings 给出时更新名清单快照（组头与轨名共用）。
+    /// </summary>
+    public void SetSubgroupDisplay(SubgroupDisplayMode mode, WindowSettings? settings = null)
+    {
+        _subgroupMode = mode;
+        if (settings is not null)
+        {
+            _subgroupNamesSource = settings;
+        }
+
+        foreach (var category in BoardCategoryCatalog.Ordered)
+        {
+            Reindex(category);
+        }
+    }
+
+    /// <summary>
+    /// 批量指派子分组槽（契约 #57，形态①拖卡归属的唯一数据落点）：只改槽字段、
+    /// 不动顺序（物理重排只由分区变更与用户拖拽写入）；同槽幂等返回 Changed=false。
+    /// </summary>
+    public BoardSubgroupAssignment AssignSubgroup(
+        IReadOnlyCollection<Guid> itemIds,
+        int slot)
+    {
+        if (!SubgroupCatalog.IsValidSlot(slot))
+        {
+            throw new ArgumentOutOfRangeException(nameof(slot), slot, null);
+        }
+
+        var context = ResolveBatch(itemIds);
+        var originalSlots = context.OrderedItems
+            .Select(item => item.Subgroup)
+            .ToArray();
+        if (context.OrderedItems.All(item => item.Subgroup == slot))
+        {
+            return new BoardSubgroupAssignment(
+                false,
+                context.SourceCategory,
+                slot,
+                context.OrderedItems,
+                originalSlots);
+        }
+
+        foreach (var item in context.OrderedItems)
+        {
+            item.Subgroup = slot;
+        }
+
+        Reindex(context.SourceCategory);
+        return new BoardSubgroupAssignment(
+            true,
+            context.SourceCategory,
+            slot,
+            context.OrderedItems,
+            originalSlots);
+    }
+
+    public void Undo(BoardSubgroupAssignment change)
+    {
+        if (!change.Changed)
+        {
+            return;
+        }
+
+        for (var index = 0; index < change.Items.Count; index++)
+        {
+            change.Items[index].Subgroup = change.OriginalSlots[index];
+        }
+
+        Reindex(change.Category);
+    }
+
+    /// <summary>
+    /// 普通区按子分组槽一次稳定分区（契约 #57，形态②进入时的整队）：槽序升序
+    /// （未指定 null 居首）→组内既有相对序（LINQ OrderBy 稳定排序承载），经
+    /// Reindex 重写持久化 Order；置顶区不动（置顶优先不分组）。已按槽聚簇时
+    /// no-op（Changed=false，不写盘）。
+    /// </summary>
+    public BoardSubgroupPartition PartitionNormalRegionBySubgroup(BoardCategory category)
+    {
+        if (!BoardCategoryCatalog.IsDefined(category))
+        {
+            throw new ArgumentOutOfRangeException(nameof(category), category, null);
+        }
+
+        var current = _items[category].ToArray();
+        var pinnedCount = current.TakeWhile(item => item.IsPinned).Count();
+        var normal = current.Skip(pinnedCount).ToArray();
+        // null（未指定）→0 居首，槽 0–3 →1–4 升序；OrderBy 稳定＝组内既有相对序。
+        var partitioned = normal
+            .OrderBy(item => item.Subgroup is { } slot ? slot + 1 : 0)
+            .ToArray();
+        if (partitioned.SequenceEqual(normal))
+        {
+            return new BoardSubgroupPartition(false, category, current);
+        }
+
+        ReorderCategory(category, current.Take(pinnedCount).Concat(partitioned));
+        return new BoardSubgroupPartition(true, category, current);
+    }
+
+    public void Undo(BoardSubgroupPartition change)
+    {
+        if (!change.Changed)
+        {
+            return;
+        }
+
+        ReorderCategory(change.Category, change.OriginalOrder);
+    }
 
     public BoardItem AddText(string text, Guid? id = null, DateTimeOffset? createdAt = null) =>
         AddText(text, BoardCategory.Inbox, id, createdAt);
@@ -804,6 +940,7 @@ public sealed class BoardService
     private void Reindex(BoardCategory category)
     {
         var collection = _items[category];
+        var grouped = _subgroupMode == SubgroupDisplayMode.GroupedView;
         for (var index = 0; index < collection.Count; index++)
         {
             collection[index].Category = category;
@@ -812,6 +949,19 @@ public sealed class BoardService
                 index > 0 &&
                 !collection[index].IsPinned &&
                 collection[index - 1].IsPinned;
+            // 子分组组边界派生（契约 #57，StartsNormalRegion 机制的泛化）：普通区
+            // 内与前邻卡槽不同且非置顶转换点；仅 GroupedView 置位，Off/ChipRail
+            // 恒 false（模板触发器死路，渲染与现状逐字节一致）。组头名按名清单
+            // 快照逐槽解析，未指定组（Subgroup=null）无组头。
+            var startsSubgroup = grouped &&
+                index > 0 &&
+                !collection[index].IsPinned &&
+                !collection[index - 1].IsPinned &&
+                collection[index].Subgroup != collection[index - 1].Subgroup;
+            collection[index].StartsSubgroupRegion = startsSubgroup;
+            collection[index].SubgroupHeader = startsSubgroup && collection[index].Subgroup is { } slot
+                ? _subgroupNamesSource?.SubgroupName(category, slot) ?? SubgroupCatalog.DefaultName(slot)
+                : null;
         }
     }
 

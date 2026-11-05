@@ -57,6 +57,13 @@ public partial class MainWindow : Window
             ExitSearchMode();
         }
 
+        // 子分组 chip 过滤（契约 #57）：切换分类＝清过滤（沿搜索先例）；先在旧面板
+        // 的集合视图上移除 Filter（每分类独立视图，残留会作用于该分类再次激活）。
+        if (_subgroupFilterSlot is not null && _viewModel.ActivePanel?.Category != category)
+        {
+            ClearSubgroupFilter(reapplyFilter: true);
+        }
+
         if (_viewModel.ActivePanel?.Category != category)
         {
             ClearUserSelection();
@@ -66,6 +73,8 @@ public partial class MainWindow : Window
         if (_viewModel.ActivePanel is { } activePanel)
         {
             AttachCardEntrance(activePanel.Items);
+            // 轨名按激活分类的名清单逐槽解析刷新（形态①作用域＝内容桶）。
+            _viewModel.RefreshSubgroupChips(_settings, activePanel.Category);
         }
 
         UpdatePanelSurface();
@@ -255,6 +264,7 @@ public partial class MainWindow : Window
             Keyboard.FocusedElement is TextBoxBase ||
             !_viewModel.IsPanelExpanded ||
             _viewModel.IsSearchActive ||
+            IsSubgroupFilterActive ||
             _viewModel.ActivePanel is not { Items.Count: > 0 })
         {
             return;
@@ -729,6 +739,17 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             ExitSearchMode();
+            return;
+        }
+
+        // chip 过滤的退出手势（契约 #57）：无搜索时 Esc＝取消子分组过滤（先于清选择）。
+        if (e.Key == Key.Escape &&
+            !_isClosing &&
+            Keyboard.FocusedElement is not TextBoxBase &&
+            IsSubgroupFilterActive)
+        {
+            e.Handled = true;
+            ClearSubgroupFilter(reapplyFilter: true);
             return;
         }
 
