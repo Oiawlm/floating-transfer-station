@@ -95,7 +95,7 @@
 
 | Token | 值 | 用途 |
 |---|---|---|
-| ControlCornerRadiusPx | 4 | 控件级：输入框、按钮、下拉、复盘编辑框、行内编辑器（WPF 镜像资源 `ControlCornerRadius`） |
+| ControlCornerRadiusPx | 4 | 控件级：输入框、按钮、下拉、记录编辑框、行内编辑器（WPF 镜像资源 `ControlCornerRadius`） |
 | SurfaceCornerRadiusPx | 8 | 表面级：卡片、瓦片、弹窗壳、主壳（WPF 镜像资源 `SurfaceCornerRadius`；`CardCornerRadius` 与瓦片/卡片资源 `CardCornerRadius` 同源收敛=8） |
 | DwmCornerRadius（Windows） | 8 | Windows 窗壳：DWM 四角圆角与内容层自裁剪同值（WPF 资源 `ShellCornerRadius` 镜像，不设第二个壳圆角 token）；可见态窗口完整落在工作区内，四角圆角恒定（2026-10-08 决策删除 1.8.0 的右缘越屏裁切，1.21.0 起） |
 
@@ -126,7 +126,7 @@
 
 ## 五·B、层级（Elevation）
 
-- 卡片模板为三层结构（1.11.3 起）：根容器（`CardRootStyle`，承载外距与悬停上浮，无 Effect）+ 阴影层（`CardShadowLayerStyle`，与卡片同形状的不透明底 + 共享冻结 `CardShadowEffect`，不承载内容、不参与命中）+ 内容面（`CardContainerStyle`，不透明卡片底、描边与焦点态，**不得携带 Effect**）。带 `Effect` 的元素会把整个子树渲染进中间位图并强制关闭 ClearType（卡片正文发糊主因），阴影因此必须隔离在文字子树之外；小字号文本（卡片正文/复盘编辑器 14、状态文本 12、徽标计数 9）按像素对齐渲染（`TextFormattingMode=Display`），16px 标题保持 Ideal。
+- 卡片模板为三层结构（1.11.3 起）：根容器（`CardRootStyle`，承载外距与悬停上浮，无 Effect）+ 阴影层（`CardShadowLayerStyle`，与卡片同形状的不透明底 + 共享冻结 `CardShadowEffect`，不承载内容、不参与命中）+ 内容面（`CardContainerStyle`，不透明卡片底、描边与焦点态，**不得携带 Effect**）。带 `Effect` 的元素会把整个子树渲染进中间位图并强制关闭 ClearType（卡片正文发糊主因），阴影因此必须隔离在文字子树之外；小字号文本（卡片正文/记录编辑器 14、状态文本 12、徽标计数 9）按像素对齐渲染（`TextFormattingMode=Display`），16px 标题保持 Ideal。
 - 卡片统一携带共享冻结的 `CardShadowEffect`（浅色 `#1D1D1F`/0.12、深色 `#000000`/0.35，模糊 8、深度 2、方向 270°），不逐卡片实例化以保证虚拟化列表性能。
 - 卡片悬停时以渲染位移上浮 1px（`LiftAnimation.LiftedOffsetPx = -1`，167ms 减速曲线，回落用加速曲线），不参与布局、不影响命中测试。
 - 滚动条滑块悬停时经 6px 宽悬停层交叉淡入表现展宽（基宽 4px）。
@@ -158,9 +158,9 @@
 - **自定义字体**：偏好 `InterfaceFont`（`preferences.json` 键 `interfaceFont`，null=默认）经 `InterfaceFontManager` 以**窗口级槽位资源**覆盖默认键（应用面区别于主题整本替换）：进程级当前字体由 `MainWindow.ApplyPreferences` 唯一管线喂值并应用到主窗＋全部存活后代窗口（Owner 链递归，`DynamicResource` 即时生效）；后建窗口在构造期（与 `DesignThemeManager.Apply` 同点）自应用。解析按系统字体清单校验：空白/未安装名字一律回落默认（WPF 对未知名字不抛错而给回退度量，靠清单校验保住「所见即所选」）。**不随应用分发字体文件**（§六第 6 条同源边界）；设置 → 外观「界面字体」下拉只列本机已安装字体（图标/符号字体排除），链首字体项与默认合并为唯一首项（显示名追加「（默认）」，本机形态「Microsoft YaHei UI（默认）」）即恢复默认——偏好 null 与显式链首名回显同一项，无双项并存。
 - **行高由当前字体度量推导**：`CardTextLineHeight` 默认字面量 19 ＝ 默认字体链链首推导值 `ceil(CardTextFontSize 14 × LineSpacing 1.27001953125 ＋ CardTextExtraLeadingPx 1)`，公式常数唯一来源 `DesignTokens`（2026-11-02 改链前 Segoe UI 链推导 20）；自定义字体时同名窗口级槽位注入按该字体度量的推导值（更高 em 字体→更大行高，恒 ≥ 自然行高的整数上界——`BlockLineHeight` 语义下不裁切字形）。行数上限随行高等比：正文可见上限 `CardTextPreviewMaxHeight`＝行高×5（默认 95）、备注可见上限 `CardNoteMaxHeight`＝行高×2（默认 38），默认字体下与既有几何逐值一致。两态行距同源契约（#25）不变：四态消费者同引单一资源键，键值随字体推导。行为契约全文见设计契约清单（维护者本地资料，不入库）第 25（修订）、48 条。
 
-## 五·G、复盘阅读视图排版（Markdown 渲染，实验性，2026-11-03）
+## 五·G、记录阅读视图排版（Markdown 渲染，实验性，2026-11-03）
 
-实验开关 `ReviewMarkdownViewEnabled`（默认关）开启后复盘表面的只读 Markdown 阅读视图（类 Obsidian 阅读体验；子集与降级语义见设计契约 #4 增补）。排版数值唯一来源＝`DesignTokens`（人类可读规范即本节）：
+实验开关 `ReviewMarkdownViewEnabled`（默认关）开启后记录表面的只读 Markdown 阅读视图（类 Obsidian 阅读体验；子集与降级语义见设计契约 #4 增补）。排版数值唯一来源＝`DesignTokens`（人类可读规范即本节）：
 
 | Token | 值 | 用途 |
 |---|---|---|
@@ -173,7 +173,7 @@
 | ReadingQuoteBarPx | 3 | 块引用左缘竖条宽 |
 
 - **字号链路**：正文沿用 `CardTextFontSize`（14，卡片正文同源）；标题阶梯只有 H1–H3 三档显式 token。**颜色零新增**：正文/引用文字＝`PrimaryTextBrush`、次级说明＝`SecondaryTextBrush`、链接＝`AccentBrush`（下划线）、代码块底与行内代码底＝`HoverSurfaceBrush`、代码块描边与引用竖条/分隔线＝`BorderBrush`——全部经 DynamicResource 引用主题字典，浅深两主题整本替换即时切换（锁定测试断言解析为字典实例）。
-- **交互**：阅读/编辑分段切换（RadioButton 分段、选中 `ActiveCategoryBrush` 底）只在实验开关开启且复盘表面激活时可见；软换行按 Obsidian 惯例渲染为换行；链接仅 http/https 可点击（UseShellExecute 开默认浏览器），不加载远程图片。
+- **交互**：阅读/编辑分段切换（RadioButton 分段、选中 `ActiveCategoryBrush` 底）只在实验开关开启且记录表面激活时可见；软换行按 Obsidian 惯例渲染为换行；链接仅 http/https 可点击（UseShellExecute 开默认浏览器），不加载远程图片。
 
 ## 六、动效原则（评审基准）
 

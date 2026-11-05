@@ -1158,7 +1158,7 @@ public partial class SettingsWindow : Window
         _host.ApplyPreferences(_host.CurrentPreferences with { AiOrganizeEnabled = enabled });
     }
 
-    // ---- 实验性（首个先例，2026-11-03）：复盘 Markdown 阅读视图。经 ApplyPreferences
+    // ---- 实验性（首个先例，2026-11-03）：记录 Markdown 阅读视图。经 ApplyPreferences
     // 唯一管线即时生效＋原子持久化（契约 #5 同路）；开关状态在构造同步段回显。----
 
     private void ReviewMarkdownViewToggle_Checked(object sender, RoutedEventArgs e) =>

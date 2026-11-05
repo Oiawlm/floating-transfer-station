@@ -45,7 +45,7 @@ public partial class MainWindow : Window
         // 早于搜索退出与焦点转移——它们的中间状态不应干扰提交流径。
         EndCardEditSessionForViewChange();
 
-        // 冲刷仍是复盘特有行为，键在角色（#30）：离开复盘表面即冲刷未保存复盘。
+        // 冲刷仍是记录特有行为，键在角色（#30）：离开记录表面即冲刷未保存记录。
         if (IsReviewActive() && BoardCategoryCatalog.RoleOf(category) != CategoryRole.Review)
         {
             TrackPendingOperation(FlushReviewAsync());

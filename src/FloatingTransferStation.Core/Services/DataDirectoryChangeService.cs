@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace FloatingTransferStation.Services;
 
 /// <summary>
-/// 主窗在搬迁静默期提供的挂钩：复制/发布期间停止一切写入者（剪贴板采集、复盘
+/// 主窗在搬迁静默期提供的挂钩：复制/发布期间停止一切写入者（剪贴板采集、记录
 /// watcher、操作门封门并冲刷全部 store），失败后恢复运行，成功或重启失败后放行
 /// 既有关闭路径（不再二次冲刷）。
 /// </summary>

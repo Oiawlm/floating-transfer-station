@@ -236,8 +236,8 @@
     </Setter>
   </Style>
 
-  <!-- 导航按钮（复盘 ‹ › 等）：动作按钮的小方块形态。Focusable 必须为 True——
-       键盘可达性与既有回归（复盘失焦恢复收起）都依赖按钮能接收焦点，
+  <!-- 导航按钮（记录 ‹ › 等）：动作按钮的小方块形态。Focusable 必须为 True——
+       键盘可达性与既有回归（记录失焦恢复收起）都依赖按钮能接收焦点，
        与头部动作按钮（装饰性、不可聚焦）不同。 -->
   <Style x:Key="ThemedNavButtonStyle" TargetType="Button" BasedOn="{StaticResource ThemedActionButtonStyle}">
     <Setter Property="Width" Value="30" />
@@ -247,7 +247,7 @@
     <Setter Property="Focusable" Value="True" />
   </Style>
 
-  <!-- 复盘「阅读｜编辑」分段切换（实验性，2026-11-03，仅实验开关开启时可见）：外框
+  <!-- 记录「阅读｜编辑」分段切换（实验性，2026-11-03，仅实验开关开启时可见）：外框
        与分段段体沿用既有选中语言——外框 BorderBrush＋控件级圆角，选中段
        ActiveCategoryBrush 底＋PrimaryText，未选中 SecondaryText，悬停
        HoverSurfaceBrush；不引入新颜色键，浅深两主题随字典整本替换。RadioButton

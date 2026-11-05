@@ -11,8 +11,8 @@ using FloatingTransferStation.Services;
 namespace FloatingTransferStation.Views;
 
 /// <summary>
-/// 复盘 Markdown 阅读视图（实验性，默认关闭；批次 2026-11-03 W4）。实验开关开启后
-/// 复盘工具栏出现「阅读｜编辑」分段切换：编辑态＝现状 TextBox（保存/防抖/合并/Esc
+/// 记录 Markdown 阅读视图（实验性，默认关闭；批次 2026-11-03 W4）。实验开关开启后
+/// 记录工具栏出现「阅读｜编辑」分段切换：编辑态＝现状 TextBox（保存/防抖/合并/Esc
 /// 契约 #4/#20 零改变——阅读态只是另一个只读呈现面，编辑器仍是唯一事实源）；阅读态
 /// ＝Core 文档模型映射的只读 FlowDocument（排版全走设计 token 与主题语义键）。
 /// 模式记忆实现（自选）：会话内记忆（切日期/切标签/开关重开实验开关均保持上次模式），
@@ -56,8 +56,8 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 表面单点（UpdatePanelSurface 的复盘臂在此重估）：切换控件可见＝实验开关开∧
-    /// 复盘激活；阅读视图可见＝其上再∧阅读态；否则编辑器独占。从阅读态离开时若
+    /// 表面单点（UpdatePanelSurface 的记录臂在此重估）：切换控件可见＝实验开关开∧
+    /// 记录激活；阅读视图可见＝其上再∧阅读态；否则编辑器独占。从阅读态离开时若
     /// 编辑器持有焦点，沿 Esc 契约（#20）同链释放焦点——面板去留给既有焦点链清算。
     /// </summary>
     private void UpdateReviewModeControls()

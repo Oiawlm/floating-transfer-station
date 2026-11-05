@@ -7,12 +7,12 @@ using MarkdownDocument = FloatingTransferStation.Models.MarkdownDocument;
 namespace FloatingTransferStation.Services;
 
 /// <summary>
-/// Markdown 原文 → <see cref="MarkdownDocument"/> 映射器（复盘阅读视图，实验性）。
+/// Markdown 原文 → <see cref="MarkdownDocument"/> 映射器（记录阅读视图，实验性）。
 /// 管线＝CommonMark 核心＋精确源定位（<c>UsePreciseSourceLocation</c>）：不激活任何
 /// 扩展，表格/脚注等超集语法不被解析为结构（天然按普通文本呈现＝安全降级），
 /// HTML 块、图片、行内 HTML 等不在子集内的节点按源文切片降级（Raw）。软换行与硬换行
 /// 一并映射为 <see cref="MarkdownInline.LineBreak"/>（Obsidian 阅读惯例：源文单行
-/// 换行即换行——复盘按行记录，逐行呈现符合记录习惯）。链接保留 URL/标题/子节点，
+/// 换行即换行——记录内容按行记录，逐行呈现符合记录习惯）。链接保留 URL/标题/子节点，
 /// 可点击性（仅 http/https 开默认浏览器）由 UI 侧判定——映射器不掺 UI 语义。
 /// </summary>
 public static class MarkdownDocumentMapper

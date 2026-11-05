@@ -7,13 +7,13 @@ public enum BoardCategory
     CustomerOriginal = 0,
     Reference = 1,
     /// <summary>Prompt 槽位 = 快捷启动（历史上是文本桶，#30 让位迁移）；成员名与
-    /// 数值冻结不变，序列化身份兼容（仓库先例：复盘复用成员名 Reference）。</summary>
+    /// 数值冻结不变，序列化身份兼容（仓库先例：记录复用成员名 Reference）。</summary>
     Prompt = 2,
     Inbox = 3
 }
 
 /// <summary>标签的功能角色（#30，Issue #162）：内容桶（接收剪贴板采集与内容拖入）、
-/// 复盘（记录面）与快捷启动（应用启动面）。角色挂靠分类目录、穷尽映射无兜底臂
+/// 记录（记录面）与快捷启动（应用启动面）。角色挂靠分类目录、穷尽映射无兜底臂
 /// （新增成员漏映射在质量门 -warnaserror 下即 CS8509 编译失败），是默认接收、
 /// 拖放、搜索、清扫与表面切换的唯一权威分派依据。</summary>
 public enum CategoryRole
@@ -37,7 +37,7 @@ public static class BoardCategoryCatalog
         });
 
     // 默认显示名（2026-11-03 用户需求，W7 通用化定案）：图片→「重要」、文本1（维护者
-    // 本机曾自定义「复盘」）→「记录」、启动→「快捷启动」、待分类不变；存量快照由
+    // 本机曾自定义、已随 v2 迁移）→「记录」、启动→「快捷启动」、待分类不变；存量快照由
     // CategoryNameMigration v2 映射。枚举成员名与数值仍冻结（序列化身份不变）。
     public static string DisplayName(BoardCategory category) => category switch
     {
@@ -64,7 +64,7 @@ public static class BoardCategoryCatalog
 #pragma warning restore CS8524
 
     /// <summary>是否内容桶（接收剪贴板采集、内容拖入、搜索与自动清扫）。
-    /// 复盘与启动标签共用非内容桶排除语义，消费位点按本谓词收敛（#18 修订）。</summary>
+    /// 记录与启动标签共用非内容桶排除语义，消费位点按本谓词收敛（#18 修订）。</summary>
     public static bool IsContentBucket(BoardCategory category) =>
         RoleOf(category) == CategoryRole.ContentBucket;
 

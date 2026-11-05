@@ -506,7 +506,7 @@
             <!-- 作用域隐式样式：BoardList 模板内部生成的 ScrollViewer 改用 overlay 模板
                  （单格叠加，滚动条悬浮内容之上不占布局列），viewport 几何与滚动条可见性
                  解耦——卡片几何不再随滚动条出现/消失漂移。keyed 样式 + 列表作用域挂接，
-                 不做全局隐式样式（避免波及复盘编辑器等其余 ScrollViewer 表面）。 -->
+                 不做全局隐式样式（避免波及记录编辑器等其余 ScrollViewer 表面）。 -->
             <Style TargetType="ScrollViewer" BasedOn="{StaticResource OverlayScrollViewerStyle}" />
           </ListBox.Resources>
           <ListBox.ItemsPanel>
@@ -716,8 +716,8 @@
                  TextChanged="ReviewEditor_TextChanged"
                  KeyDown="ReviewEditor_KeyDown"
                  LostKeyboardFocus="ReviewEditor_LostKeyboardFocus"
-                 AutomationProperties.Name="每日复盘编辑器" />
-            <!-- 复盘 Markdown 阅读视图（实验性，默认关闭＝Collapsed，逐像素不影响现状）：
+                 AutomationProperties.Name="每日记录编辑器" />
+            <!-- 记录 Markdown 阅读视图（实验性，默认关闭＝Collapsed，逐像素不影响现状）：
                  只读 FlowDocument 渲染（排版走设计 token＋主题语义键，随浅深主题即时
                  切换）；内容唯一来源＝编辑器文本（RefreshReviewReadingView 单点重建），
                  编辑器仍是保存/防抖/合并/Esc 契约的唯一事实源。内部滚动条经窗级隐式
@@ -728,17 +728,17 @@
                                       Visibility="Collapsed"
                                       Padding="4,0,4,0"
                                       FocusVisualStyle="{x:Null}"
-                                      AutomationProperties.Name="每日复盘阅读视图" />
+                                      AutomationProperties.Name="每日记录阅读视图" />
             <TextBlock x:Name="ReviewStatus"
                        Grid.Row="2"
                        Margin="2,8,2,0"
                        Foreground="{DynamicResource SecondaryTextBrush}"
-                       Text="今天还没有复盘内容。" />
-            <!-- 复盘空态引导（契约 #33 复盘扩展，复用 BoardEmptyState 同一设计语言：
-                 图标＋标题＋副文案，编辑器行内垂直居中，无 CTA——复盘的进入路径是
+                       Text="今天还没有记录内容。" />
+            <!-- 记录空态引导（契约 #33 记录扩展，复用 BoardEmptyState 同一设计语言：
+                 图标＋标题＋副文案，编辑器行内垂直居中，无 CTA——记录的进入路径是
                  直接输入，编辑器本身就是动作面）。可见性与文案由
                  UpdateReviewEmptyState 单点管理（表面切换/输入/日期装载/外部变更四
-                 触发路径）；文案复用 BoardEmptyStateCopy 矩阵复盘臂。纯信息性：
+                 触发路径）；文案复用 BoardEmptyStateCopy 矩阵记录臂。纯信息性：
                  IsHitTestVisible=False 让点击穿透到编辑器取得焦点。声明在编辑器之后
                  ＝同格渲染其上；编辑器为空时才可见，不与内容争用。 -->
             <StackPanel x:Name="ReviewEmptyState"
@@ -758,7 +758,7 @@
                          FontSize="14"
                          FontWeight="SemiBold"
                          Foreground="{DynamicResource PrimaryTextBrush}"
-                         Text="还没有复盘内容" />
+                         Text="还没有记录内容" />
               <TextBlock x:Name="ReviewEmptyStateHint"
                          HorizontalAlignment="Center"
                          FontSize="12"
