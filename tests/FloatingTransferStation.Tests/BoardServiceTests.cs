@@ -832,4 +832,55 @@ public sealed class BoardServiceTests
             removed.RemovedItems.Select(item => item.Id).ToArray());
         Assert.AreEqual(0, board.Items(BoardCategory.Prompt).Count);
     }
+
+    [TestMethod]
+    public void RemoveNonPinned_WithExpiryCutoff_KeepsNotedItemsLikePinned()
+    {
+        // 2026-11-05 备注卡完全同置顶豁免：超龄备注卡与超龄「置顶∧备注」叠加卡
+        // 都不进移除列表，超龄无备注卡照删，未满期无备注卡保留。
+        var board = new BoardService();
+        var now = DateTimeOffset.UtcNow;
+        var expiredNoted = board.AddText("超龄备注", BoardCategory.Prompt);
+        var expiredNoteless = board.AddText("超龄无备注", BoardCategory.Prompt);
+        var expiredPinnedNoted = board.AddText("超龄置顶且备注", BoardCategory.Prompt);
+        var freshNoteless = board.AddText("新鲜无备注", BoardCategory.Prompt);
+        board.SetPinnedMany([expiredPinnedNoted.Id], true);
+        Assert.IsTrue(board.UpdateNote(expiredNoted.Id, "识别标记"));
+        Assert.IsTrue(board.UpdateNote(expiredPinnedNoted.Id, "置顶也有备注"));
+        var cutoff = now - AutoCleanupSchedule.GetRetentionDuration(AutoCleanupRetention.TwentyFourHours);
+        board.SetItemCreatedAt(expiredNoted.Id, cutoff);
+        board.SetItemCreatedAt(expiredNoteless.Id, cutoff);
+        board.SetItemCreatedAt(expiredPinnedNoted.Id, cutoff);
+        board.SetItemCreatedAt(freshNoteless.Id, cutoff.AddSeconds(1));
+
+        var removed = board.RemoveNonPinned([BoardCategory.Prompt], cutoff);
+
+        CollectionAssert.AreEqual(
+            new[] { expiredNoteless.Id },
+            removed.RemovedItems.Select(item => item.Id).ToArray(),
+            "备注卡完全同置顶豁免：超龄备注卡与叠加卡绝不进入移除列表。");
+        // 显示序＝置顶区在前、普通区新卡在上：叠加卡(置顶) → 新鲜无备注 → 超龄备注。
+        CollectionAssert.AreEqual(
+            new[] { expiredPinnedNoted.Id, freshNoteless.Id, expiredNoted.Id },
+            board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray());
+    }
+
+    [TestMethod]
+    public void RemoveNonPinned_WithoutCutoff_KeepsNotedItemsAndClearsNoteless()
+    {
+        // 2026-11-05 手工清空语义变化点：无 cutoff（清空非置顶）时备注卡同样保留，
+        // 只删无备注的非置顶卡。
+        var board = new BoardService();
+        var noted = board.AddText("有备注", BoardCategory.Prompt);
+        var noteless = board.AddText("无备注", BoardCategory.Prompt);
+        Assert.IsTrue(board.UpdateNote(noted.Id, "识别标记"));
+
+        var removed = board.RemoveNonPinned([BoardCategory.Prompt]);
+
+        CollectionAssert.AreEqual(
+            new[] { noteless.Id },
+            removed.RemovedItems.Select(item => item.Id).ToArray(),
+            "无 cutoff 只删无备注的非置顶卡（语义变化：备注卡保留）。");
+        Assert.AreSame(noted, board.Items(BoardCategory.Prompt).Single());
+    }
 }

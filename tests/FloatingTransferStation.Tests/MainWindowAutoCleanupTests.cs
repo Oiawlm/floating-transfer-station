@@ -166,6 +166,46 @@ public sealed class MainWindowAutoCleanupTests
     }
 
     [STATestMethod]
+    public void CheckAutoCleanup_ExpiredNotedCards_AreKeptLikePinned()
+    {
+        // 2026-11-05 备注＝用户手写的识别元数据，完全同置顶豁免自动清扫；
+        // 状态条只计实际被清的无备注卡。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        var board = GetBoard(window);
+        var noted = board.AddText("超龄备注", BoardCategory.CustomerOriginal);
+        var noteless = board.AddText("超龄无备注", BoardCategory.CustomerOriginal);
+        var pinned = board.AddText("超龄置顶", BoardCategory.Inbox);
+        Assert.IsTrue(board.UpdateNote(noted.Id, "识别标记"));
+        board.SetPinnedMany([pinned.Id], true);
+        SetField(window, "_boardLoadSucceeded", true);
+        var now = DateTimeOffset.UtcNow;
+        var expiredAt = now - AutoCleanupSchedule.GetRetentionDuration(AutoCleanupRetention.TwentyFourHours)
+            - TimeSpan.FromHours(1);
+        board.SetItemCreatedAt(noted.Id, expiredAt);
+        board.SetItemCreatedAt(noteless.Id, expiredAt);
+        board.SetItemCreatedAt(pinned.Id, expiredAt);
+
+        InvokeCheck(window, now);
+
+        CollectionAssert.AreEqual(
+            new[] { noted.Id },
+            board.Items(BoardCategory.CustomerOriginal).Select(item => item.Id).ToArray(),
+            "超龄备注卡完全同置顶豁免，幸存。");
+        CollectionAssert.AreEqual(
+            new[] { pinned.Id },
+            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
+            "超龄置顶卡同样豁免。");
+        Assert.AreEqual(
+            "已自动清理 1 张到期卡片，可 Ctrl+Z 撤销（仅本次运行内）",
+            ((MainWindowViewModel)window.DataContext).StatusText,
+            "状态条只计实际被清的无备注卡。");
+        Assert.AreEqual(1, GetStore(window).SaveCount, "清扫必须单次原子保存。");
+        Assert.AreEqual(1, GetMutations(window).PendingUndoCount, "清扫批可整批撤销。");
+    }
+
+    [STATestMethod]
     public void CheckAutoCleanup_TwoHourTier_ExpiresAtBoundaryAndKeepsYoungerCards()
     {
         // 2 小时档：恰满 2h 即到期（边界含等于在新档位复刻），差一秒未满期保留。

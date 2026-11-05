@@ -548,12 +548,23 @@ public sealed class BoardService
     }
 
     /// <summary>
-    /// 清除非置顶条目的唯一移除管线（手工清空与自动清扫共用）：置顶区顺序原样保留；
-    /// 给出 <paramref name="expiryCutoffUtc"/> 时只移除入库满期（CreatedAt ≤ 截止）
-    /// 的非置顶条目（逐卡 TTL，自动清扫语义，截止由所选保留时长档位推导），为 null
-    /// 时移除全部非置顶条目（手工「清空非置顶」语义）。返回被移除内容与各分类完整
-    /// 顺序（供保存失败整批回滚与整批撤销复用）；没有可移除条目时为空操作。同一
-    /// 分类重复出现天然幂等。
+    /// 「清空非置顶」移除资格的唯一权威判定（2026-11-05 起）：非置顶且无备注。
+    /// 备注卡完全同置顶豁免（自动清扫与手工清空两入口一致）；<see cref="RemoveNonPinned"/>
+    /// 的移除谓词与 MainWindow 手工清空前的预筛同源调用本判定，全仓禁止第二处拼写
+    /// 豁免条件（年龄 cutoff 组合只属自动路径，留在谓词内）。
+    /// </summary>
+    public static bool IsEligibleForNonPinnedRemoval(BoardItem item) =>
+        !item.IsPinned && item.Note is null;
+
+    /// <summary>
+    /// 清除非置顶条目的唯一移除管线（手工清空与自动清扫共用）：置顶区顺序原样保留，
+    /// 备注卡完全同置顶豁免（2026-11-05 起；豁免资格判定的唯一权威是本类公开静态
+    /// 判定，移除谓词与 MainWindow 手工清空预筛同源调用；手工清空＝清空无备注的
+    /// 非置顶卡）；给出 <paramref name="expiryCutoffUtc"/> 时只移除入库满期
+    /// （CreatedAt ≤ 截止）的无备注非置顶条目（逐卡 TTL，自动清扫语义，截止由所选
+    /// 保留时长档位推导），为 null 时移除全部无备注的非置顶条目（手工「清空非置顶」
+    /// 语义）。返回被移除内容与各分类完整顺序（供保存失败整批回滚与整批撤销复用）；
+    /// 没有可移除条目时为空操作。同一分类重复出现天然幂等。
     /// </summary>
     public RemovedBoardItems RemoveNonPinned(
         IReadOnlyCollection<BoardCategory> categories,
@@ -579,7 +590,7 @@ public sealed class BoardService
 
             var original = _items[category].ToArray();
             var removed = original
-                .Where(item => !item.IsPinned &&
+                .Where(item => IsEligibleForNonPinnedRemoval(item) &&
                     (expiryCutoffUtc is not { } cutoff || item.CreatedAt <= cutoff))
                 .ToArray();
             if (removed.Length == 0)
@@ -587,8 +598,9 @@ public sealed class BoardService
                 continue;
             }
 
-            // 保留集合 = 原顺序中未被移除的全部条目（置顶区原样 + 未到期普通区），
-            // 不得假设「留下的只有置顶」——TTL cutoff 下未满期普通项同样保留。
+            // 保留集合 = 原顺序中未被移除的全部条目（置顶区、备注卡原样 + 未到期
+            // 普通区），不得假设「留下的只有置顶」——TTL cutoff 下未满期普通项与
+            // 备注卡同样保留。
             var removedIds = removed.Select(item => item.Id).ToHashSet();
             ReplaceCategory(category, original.Where(item => !removedIds.Contains(item.Id)));
             originals[category] = original;
