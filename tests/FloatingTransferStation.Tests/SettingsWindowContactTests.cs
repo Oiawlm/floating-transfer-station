@@ -16,12 +16,14 @@ namespace FloatingTransferStation.Tests;
 
 /// <summary>
 /// 设置窗页脚「关于」区联系方式（W5 2026-11-05；W3 2026-11-05 交互矩阵与
-/// 缩放入场）：微信号文本与二维码位图全部来自 ProductIdentity 单一来源
-///（页脚/放大层共用同一冻结位图实例）；「复制」经可注入剪贴板写入缝落盘
+/// 缩放入场；2026-11-06 右键二维码＝复制图片、复制按钮删除）：微信号文本与
+/// 二维码位图全部来自 ProductIdentity 单一来源（页脚/放大层共用同一冻结位图
+/// 实例）；复制（微信号文本与二维码图片）均经可注入剪贴板写入缝落盘
 ///（harness 密封缺省＝响亮失败 stub，契约 #53 口径——未显式声明写意图的
-/// 测试一旦触达真实剪贴板即失败），反馈为短文案瞬时翻转；放大层（设置窗
-/// 内遮罩，不新建窗口）从缩略图单击打开、左/右键单击遮罩任意处或 Esc 关闭
-///（Esc 只关层不关窗），层内附一致复制入口；微信号两态行左右键皆复制
+/// 测试一旦触达真实剪贴板即失败），反馈为触发侧微信号 Run 文本瞬时翻转；
+/// 放大层（设置窗内遮罩，不新建窗口）从缩略图单击打开、左/右键单击遮罩
+/// 空白处或 Esc 关闭（Esc 只关层不关窗）；右键二维码（缩略图/放大图一致）
+/// ＝复制二维码图片且不弹层/不关层；微信号两态行左右键皆复制微信号文本
 ///（放大态复制不关层），动效开时 QR 卡自缩略图源位置缩放入场、关层自当下态
 /// 原路缩回源位置（放大/收回共用同一进度 p 插值路径：可中断、动态 From、
 /// 终态恒等零残留），动效关＝变换恒等终态即定格。
@@ -185,45 +187,6 @@ public sealed class SettingsWindowContactTests
     }
 
     [STATestMethod]
-    public void FooterCopy_WritesWeChatIdThroughSeamWithTransientFeedback()
-    {
-        using var directory = new TestDirectory();
-        var preferencesStore = new RecordingPreferencesStore();
-        var window = CreateWindow(directory, preferencesStore);
-        try
-        {
-            var settings = OpenSettings(window);
-            CompleteLayout(settings);
-            DataObject? captured = null;
-            settings.ClipboardWriterOverride = data =>
-            {
-                captured = data;
-                return true;
-            };
-            var copy = (Button)settings.FindName("WeChatCopyButton")!;
-
-            copy.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-
-            Assert.IsNotNull(captured, "复制必须经写入缝（不触碰系统剪贴板）。");
-            Assert.AreEqual(
-                ProductIdentity.WeChatId,
-                (string)captured.GetData(DataFormats.UnicodeText)!,
-                "剪贴板负载必须是 ProductIdentity.WeChatId 全文。");
-            Assert.AreEqual("已复制", copy.Content, "复制成功给短文案瞬时反馈。");
-            PumpUntil(settings.Dispatcher, () => Equals(copy.Content, "复制"));
-            Assert.AreEqual("复制", copy.Content, "反馈延迟复位为常态文案。");
-
-            settings.ClipboardWriterOverride = _ => false;
-            copy.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            Assert.AreEqual("复制失败", copy.Content, "写入失败给失败反馈，不假装成功。");
-        }
-        finally
-        {
-            CloseAll(window);
-        }
-    }
-
-    [STATestMethod]
     public void QrOverlay_OpensFromThumbAndClosesOnAnyClick()
     {
         using var directory = new TestDirectory();
@@ -246,9 +209,16 @@ public sealed class SettingsWindowContactTests
             CompleteLayout(settings);
             Assert.IsInstanceOfType<BitmapImage>(((Image)settings.FindName("WeChatQrLarge")!).Source);
             Assert.AreEqual(
-                Visibility.Visible,
-                ((Button)settings.FindName("WeChatCopyLargeButton")!).Visibility,
-                "放大层内必须有一致复制入口。");
+                1,
+                ((System.Windows.Controls.Panel)((TextBlock)settings.FindName("WeChatIdFooterBlock")!).Parent).Children.Count,
+                "页脚微信号行是所在行唯一子元素（2026-11-06 复制按钮已删除，文本复制入口＝微信号行）。");
+            Assert.IsNotNull(
+                settings.FindName("WeChatIdLargeBlock"),
+                "放大态文本复制入口（微信号行）必须存在。");
+            Assert.AreEqual(
+                1,
+                ((System.Windows.Controls.Panel)((TextBlock)settings.FindName("WeChatIdLargeBlock")!).Parent).Children.Count,
+                "放大态微信号行是所在行唯一子元素（放大层复制按钮同裁决已删除）。");
 
             overlay.RaiseEvent(new MouseButtonEventArgs(
                 Mouse.PrimaryDevice,
@@ -266,48 +236,10 @@ public sealed class SettingsWindowContactTests
         }
     }
 
-    [STATestMethod]
-    public void QrOverlay_CopyEntrySharesTheSeamAndFeedback()
-    {
-        using var directory = new TestDirectory();
-        var preferencesStore = new RecordingPreferencesStore();
-        var window = CreateWindow(
-            directory,
-            preferencesStore,
-            preferencesStore.Seeded with { AnimationsEnabled = false });
-        try
-        {
-            var settings = OpenSettings(window);
-            CompleteLayout(settings);
-            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
-                new RoutedEventArgs(ButtonBase.ClickEvent));
-
-            DataObject? captured = null;
-            settings.ClipboardWriterOverride = data =>
-            {
-                captured = data;
-                return true;
-            };
-            var largeCopy = (Button)settings.FindName("WeChatCopyLargeButton")!;
-            largeCopy.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-
-            Assert.IsNotNull(captured, "放大层复制入口与页脚共用同一写入缝。");
-            Assert.AreEqual(ProductIdentity.WeChatId, (string)captured.GetData(DataFormats.UnicodeText)!);
-            Assert.AreEqual("已复制", largeCopy.Content, "放大层复制反馈就地在触发按钮上。");
-            Assert.AreEqual(
-                Visibility.Visible,
-                ((Grid)settings.FindName("WeChatQrOverlay")!).Visibility,
-                "复制按钮的抬起被 Button 消费，不得顺带关闭放大层。");
-        }
-        finally
-        {
-            CloseAll(window);
-        }
-    }
-
     /// <summary>W5 联系方式证据（FTS_W5_EVIDENCE_DIR 设置时产出真实 WPF 渲染
-    /// 截图）：浅/深主题设置窗页脚关于区（联系方式行＋复制按钮＋二维码缩略图）、
-    /// 复制反馈态与二维码放大层。复制走写入缝，不触碰系统剪贴板。</summary>
+    /// 截图）：浅/深主题设置窗页脚关于区（联系方式行＋二维码缩略图，无按钮态）、
+    /// 微信号行复制反馈态、缩略图右键复制反馈态、放大层与放大图右键复制反馈态
+    ///（层不关同证）、动效关开/关即时定格。复制走写入缝，不触碰系统剪贴板。</summary>
     [STATestMethod]
     public void Evidence_CaptureW5ContactScreens()
     {
@@ -329,16 +261,45 @@ public sealed class SettingsWindowContactTests
             SaveWindowShell(settings, evidenceDirectory!, "settings-footer-light.png");
             SaveFooterCrop(settings, evidenceDirectory!, "footer-contact-light.png");
 
-            ((Button)settings.FindName("WeChatCopyButton")!).RaiseEvent(
-                new RoutedEventArgs(ButtonBase.ClickEvent));
+            // 复制反馈态改行触发（2026-11-06：复制按钮删除，反馈就地翻转微信号 Run）。
+            RaisePointUp((TextBlock)settings.FindName("WeChatIdFooterBlock")!, UIElement.MouseLeftButtonUpEvent);
             CompleteLayout(settings);
             SaveFooterCrop(settings, evidenceDirectory!, "footer-contact-copied-light.png");
+            PumpUntil(settings.Dispatcher, () =>
+                ((Run)settings.FindName("WeChatIdRun")!).Text == ProductIdentity.WeChatId);
+
+            // 缩略图右键复制二维码图片 → 页脚 Run 反馈（2026-11-06 新交互证据）。
+            RaisePointUp((Button)settings.FindName("WeChatQrButton")!, UIElement.MouseRightButtonUpEvent);
+            CompleteLayout(settings);
+            SaveFooterCrop(settings, evidenceDirectory!, "footer-contact-qrcopied-light.png");
+            PumpUntil(settings.Dispatcher, () =>
+                ((Run)settings.FindName("WeChatIdRun")!).Text == ProductIdentity.WeChatId);
 
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
             PumpUntil(settings.Dispatcher, () => overlay.Opacity == 1d && overlay.Visibility == Visibility.Visible);
             SaveWindowShell(settings, evidenceDirectory!, "qr-overlay-light.png");
+
+            // 放大图右键复制 → 放大态 Run 反馈且层不关（2026-11-06 新交互证据）。
+            // 右键处理器同步翻转 Run 且不动透明度；UpdateLayout 只跑布局不泵
+            // 调度器（动画时钟完成处理不落地、1.6s 反馈复位不触发），翻转文本
+            // 与满帧层同帧入画——PushFrame 泵会拍到时钟收尾透明帧或复位常态帧。
+            RaisePointUp((Border)settings.FindName("WeChatQrLargeCard")!, UIElement.MouseRightButtonUpEvent);
+            settings.UpdateLayout();
+            SaveWindowShell(settings, evidenceDirectory!, "qr-overlay-qrcopied-light.png");
+            Assert.AreEqual(
+                Visibility.Visible,
+                overlay.Visibility,
+                "放大图右键复制不关层（证据帧同证）。");
+            Assert.AreEqual(
+                "已复制",
+                ((Run)settings.FindName("WeChatIdLargeRun")!).Text,
+                "证据帧同证：放大态 Run 已翻「已复制」。");
+            CompleteLayout(settings);
+            PumpUntil(settings.Dispatcher, () =>
+                ((Run)settings.FindName("WeChatIdLargeRun")!).Text == ProductIdentity.WeChatId);
+            PumpUntil(settings.Dispatcher, () => overlay.Opacity == 1d && overlay.Visibility == Visibility.Visible);
 
             overlay.RaiseEvent(new MouseButtonEventArgs(
                 Mouse.PrimaryDevice,
@@ -363,6 +324,34 @@ public sealed class SettingsWindowContactTests
         finally
         {
             CloseAll(window);
+        }
+
+        // 动效关开/关即时定格（2026-11-06）：偏好动效关的独立窗口。
+        using var disabledDirectory = new TestDirectory();
+        var disabledStore = new RecordingPreferencesStore();
+        var disabledWindow = CreateWindow(
+            disabledDirectory,
+            disabledStore,
+            disabledStore.Seeded with { AnimationsEnabled = false });
+        try
+        {
+            var settings = OpenSettings(disabledWindow);
+            CompleteLayout(settings);
+            var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            CompleteLayout(settings);
+            Assert.AreEqual(Visibility.Visible, overlay.Visibility, "动效关＝打开即时可见。");
+            SaveWindowShell(settings, evidenceDirectory!, "contact-disabled-open-light.png");
+
+            RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
+            CompleteLayout(settings);
+            Assert.AreEqual(Visibility.Collapsed, overlay.Visibility, "动效关＝关闭即时塌缩。");
+            SaveWindowShell(settings, evidenceDirectory!, "contact-disabled-closed-light.png");
+        }
+        finally
+        {
+            CloseAll(disabledWindow);
         }
     }
 
@@ -609,10 +598,10 @@ public sealed class SettingsWindowContactTests
     }
 
     // ---- W3 2026-11-05：二维码/微信号交互矩阵与缩放入场（契约 #24 W3 修订；
-    //      2026-11-06：放大/收回共用插值路径的缩放过渡动画）----
+    //      2026-11-06 修订：右键二维码＝复制二维码图片、复制按钮删除；放大/收回共用插值路径的缩放过渡动画）----
 
     [STATestMethod]
-    public void QrThumb_RightClickCopiesWeChatIdWithoutOpeningOverlay()
+    public void QrThumb_RightClickCopiesQrImageWithoutOpeningOverlay()
     {
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
@@ -630,12 +619,18 @@ public sealed class SettingsWindowContactTests
 
             RaisePointUp((Button)settings.FindName("WeChatQrButton")!, UIElement.MouseRightButtonUpEvent);
 
-            Assert.IsNotNull(captured, "右键缩略图必须经写入缝复制微信号。");
-            Assert.AreEqual(ProductIdentity.WeChatId, (string)captured.GetData(DataFormats.UnicodeText)!);
+            Assert.IsNotNull(captured, "右键缩略图必须经写入缝复制二维码图片。");
+            Assert.IsNull(
+                captured.GetData(DataFormats.UnicodeText),
+                "右键二维码不再复制微信号文本（2026-11-06 矩阵改裁决，文本复制入口＝微信号行）。");
+            Assert.AreSame(
+                ((Image)settings.FindName("WeChatQrThumb")!).Source,
+                captured.GetData(DataFormats.Bitmap),
+                "剪贴板负载必须是缩略图/放大层共用的同一冻结位图实例。");
             Assert.AreEqual(
                 "已复制",
-                ((Button)settings.FindName("WeChatCopyButton")!).Content,
-                "反馈就地在页脚复制按钮（最近复制按钮翻转，零 toast）。");
+                ((Run)settings.FindName("WeChatIdRun")!).Text,
+                "反馈就地翻转页脚微信号 Run（触发侧宿主，零 toast）。");
             Assert.AreEqual(
                 Visibility.Collapsed,
                 ((Grid)settings.FindName("WeChatQrOverlay")!).Visibility,
@@ -666,11 +661,11 @@ public sealed class SettingsWindowContactTests
                 return true;
             };
             var footerRow = (TextBlock)settings.FindName("WeChatIdFooterBlock")!;
-            var copy = (Button)settings.FindName("WeChatCopyButton")!;
+            var footerRun = (Run)settings.FindName("WeChatIdRun")!;
 
             RaisePointUp(footerRow, UIElement.MouseLeftButtonUpEvent);
             Assert.IsNotNull(captured, "页脚微信号行左键必须经写入缝复制。");
-            Assert.AreEqual("已复制", copy.Content, "左键复制反馈就地在相邻复制按钮。");
+            Assert.AreEqual("已复制", footerRun.Text, "左键复制反馈就地翻转本行微信号 Run。");
 
             RaisePointUp(footerRow, UIElement.MouseRightButtonUpEvent);
             Assert.AreEqual(2, captureCount, "右键与左键同一处理器服两事件，都走写入缝。");
@@ -678,7 +673,15 @@ public sealed class SettingsWindowContactTests
                 ProductIdentity.WeChatId,
                 (string)captured!.GetData(DataFormats.UnicodeText)!,
                 "两键负载同为 ProductIdentity.WeChatId 全文。");
-            Assert.AreEqual("已复制", copy.Content, "右键复制反馈同位。");
+            Assert.AreEqual("已复制", footerRun.Text, "右键复制反馈同位。");
+            PumpUntil(settings.Dispatcher, () => footerRun.Text == ProductIdentity.WeChatId);
+            Assert.AreEqual(ProductIdentity.WeChatId, footerRun.Text, "反馈延迟复位回单一来源微信号。");
+
+            // 失败态（并入旧 FooterCopy_WritesWeChatIdThroughSeamWithTransientFeedback）：
+            // 缝返 false 翻「复制失败」，不假装成功。
+            settings.ClipboardWriterOverride = _ => false;
+            RaisePointUp(footerRow, UIElement.MouseRightButtonUpEvent);
+            Assert.AreEqual("复制失败", footerRun.Text, "写入失败给失败反馈，不假装成功。");
         }
         finally
         {
@@ -712,21 +715,72 @@ public sealed class SettingsWindowContactTests
                 return true;
             };
             var largeRow = (TextBlock)settings.FindName("WeChatIdLargeBlock")!;
-            var largeCopy = (Button)settings.FindName("WeChatCopyLargeButton")!;
+            var largeRun = (Run)settings.FindName("WeChatIdLargeRun")!;
 
             RaisePointUp(largeRow, UIElement.MouseLeftButtonUpEvent);
             Assert.IsNotNull(captured, "放大态微信号行左键必须经写入缝复制。");
-            Assert.AreEqual("已复制", largeCopy.Content, "放大态反馈就在放大层复制按钮。");
+            Assert.AreEqual(
+                ProductIdentity.WeChatId,
+                (string)captured.GetData(DataFormats.UnicodeText)!,
+                "放大层复制入口与页脚共用同一写入缝与负载（2026-11-06 并入旧层内复制一致性断言）。");
+            Assert.AreEqual("已复制", largeRun.Text, "放大态反馈就地翻转本行微信号 Run。");
             Assert.AreEqual(Visibility.Visible, overlay.Visibility, "左键复制不得关层（e.Handled 阻断冒泡）。");
 
             RaisePointUp(largeRow, UIElement.MouseRightButtonUpEvent);
             Assert.AreEqual(2, captureCount, "右键与左键同一处理器服两事件。");
             Assert.AreEqual(ProductIdentity.WeChatId, (string)captured!.GetData(DataFormats.UnicodeText)!);
-            Assert.AreEqual("已复制", largeCopy.Content, "右键复制反馈同位。");
+            Assert.AreEqual("已复制", largeRun.Text, "右键复制反馈同位。");
             Assert.AreEqual(
                 Visibility.Visible,
                 overlay.Visibility,
-                "右键复制同样不得关层（与复制按钮被 Button 消费同型）。");
+                "右键复制同样不得关层（e.Handled 阻断冒泡）。");
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    [STATestMethod]
+    public void OverlayQrImage_RightClickCopiesImageWithoutClosingLayer()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            preferencesStore.Seeded with { AnimationsEnabled = false });
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
+
+            DataObject? captured = null;
+            settings.ClipboardWriterOverride = data =>
+            {
+                captured = data;
+                return true;
+            };
+
+            RaisePointUp((Border)settings.FindName("WeChatQrLargeCard")!, UIElement.MouseRightButtonUpEvent);
+
+            Assert.IsNotNull(captured, "右键放大图必须经写入缝复制二维码图片。");
+            Assert.IsNull(captured.GetData(DataFormats.UnicodeText), "放大图右键＝复制图片，不带文本负载。");
+            Assert.AreSame(
+                ((Image)settings.FindName("WeChatQrLarge")!).Source,
+                captured.GetData(DataFormats.Bitmap),
+                "放大层右键负载与页脚缩略图同一冻结位图实例（两处右键一致）。");
+            Assert.AreEqual(
+                "已复制",
+                ((Run)settings.FindName("WeChatIdLargeRun")!).Text,
+                "反馈就地翻转放大态微信号 Run。");
+            Assert.AreEqual(
+                Visibility.Visible,
+                overlay.Visibility,
+                "放大图右键复制不得关层（e.Handled 阻断冒泡到遮罩关层）。");
         }
         finally
         {

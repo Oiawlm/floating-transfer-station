@@ -35,11 +35,11 @@ public partial class SettingsWindow : Window
     private bool _isDeepSeekKeyVisible;
     private bool _isTestingDeepSeekConnection;
 
-    // ---- 页脚关于区联系方式（W5 2026-11-05）----
+    // ---- 页脚关于区联系方式（W5 2026-11-05；2026-11-06 复制按钮删除，
+    //      反馈位改就微信号 Run 文本翻转）----
 
-    private const string WeChatCopyButtonText = "复制";
-    private const string WeChatCopiedButtonText = "已复制";
-    private const string WeChatCopyFailedButtonText = "复制失败";
+    private const string WeChatCopiedFeedbackText = "已复制";
+    private const string WeChatCopyFailedFeedbackText = "复制失败";
     private static readonly TimeSpan WeChatCopyFeedbackRevertDelay = TimeSpan.FromSeconds(1.6);
 
     private DispatcherTimer? _wechatCopyFeedbackTimer;
@@ -241,38 +241,50 @@ public partial class SettingsWindow : Window
             theme == DesignTheme.Dark);
     }
 
-    // ---- 页脚关于区联系方式（W5 2026-11-05；W3 2026-11-05 交互矩阵＋缩放入场）：
-    //         微信号展示、复制、二维码放大层 ----
+    // ---- 页脚关于区联系方式（W5 2026-11-05；W3 2026-11-05 交互矩阵＋缩放入场；
+    //      2026-11-06 右键二维码＝复制图片、复制按钮删除）：微信号展示、复制、
+    //      二维码放大层 ----
 
     private void WeChatQrButton_Click(object sender, RoutedEventArgs e) => ShowWeChatQrOverlay();
 
-    /// <summary>右键缩略二维码＝复制微信号（不放大）：与页脚复制同一缝与反馈位。</summary>
+    /// <summary>右键缩略二维码＝复制二维码图片（不放大）：与页脚微信号行共用
+    /// 反馈位（页脚微信号 Run），复制走图片写入缝。</summary>
     private void WeChatQrButton_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
-        ShowWeChatCopyFeedback(WeChatCopyButton, WriteWeChatIdToClipboard());
+        ShowWeChatCopyFeedback(WeChatIdRun, WriteWeChatQrImageToClipboard());
     }
 
-    /// <summary>页脚微信号行左/右键＝复制：同一处理器服两事件，反馈就地在相邻复制按钮。</summary>
+    /// <summary>页脚微信号行左/右键＝复制微信号文本：同一处理器服两事件，
+    /// 反馈就地翻转本行微信号 Run（2026-11-06 起文本复制唯一入口即本行）。</summary>
     private void WeChatIdFooterBlock_PointButtonUp(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
-        ShowWeChatCopyFeedback(WeChatCopyButton, WriteWeChatIdToClipboard());
+        ShowWeChatCopyFeedback(WeChatIdRun, WriteWeChatIdToClipboard());
     }
 
     /// <summary>放大态微信号行左/右键＝复制且不关层：e.Handled 阻断冒泡到遮罩
-    /// 关层（与复制按钮被 Button 消费同型），反馈就地在相邻复制按钮。</summary>
+    /// 关层（同 QR 卡右键复制被消费的形态），反馈就地翻转本行微信号 Run。</summary>
     private void WeChatIdLargeBlock_PointButtonUp(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
-        ShowWeChatCopyFeedback(WeChatCopyLargeButton, WriteWeChatIdToClipboard());
+        ShowWeChatCopyFeedback(WeChatIdLargeRun, WriteWeChatIdToClipboard());
+    }
+
+    /// <summary>右键放大图＝复制二维码图片且不关层：与缩略图右键同一缝（负载
+    /// 同为冻结位图），e.Handled 阻断冒泡到遮罩关层，反馈就地翻转放大态
+    /// 微信号 Run。</summary>
+    private void WeChatQrLargeCard_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        ShowWeChatCopyFeedback(WeChatIdLargeRun, WriteWeChatQrImageToClipboard());
     }
 
     private void WeChatQrOverlay_PointButtonUpCloses(object sender, MouseButtonEventArgs e)
     {
-        // 左/右键单击遮罩或卡片非按钮区域＝关闭（「任意单击关闭」对称语义）；
-        // 复制按钮的抬起被 Button 消费、放大态微信号行的抬起被其处理器
-        // e.Handled 消费，都不会冒泡到这里；关闭走 FadeAnimation 统一显隐管理。
+        // 左/右键单击遮罩、左键单击卡片＝关闭（「任意单击关闭」对称语义）；
+        // QR 卡右键的抬起被复制图片处理器 e.Handled 消费、放大态微信号行的抬起
+        // 被其处理器 e.Handled 消费，都不会冒泡到这里；关闭走 FadeAnimation 统一显隐管理。
         e.Handled = true;
         HideWeChatQrOverlay();
     }
@@ -465,17 +477,6 @@ public partial class SettingsWindow : Window
             FillBehavior = fill
         };
 
-    /// <summary>页脚与放大层共用同一复制入口：经写入缝落剪贴板，就地轻量反馈。</summary>
-    private void WeChatCopyButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button copyButton)
-        {
-            return;
-        }
-
-        ShowWeChatCopyFeedback(copyButton, WriteWeChatIdToClipboard());
-    }
-
     private bool WriteWeChatIdToClipboard()
     {
         try
@@ -497,12 +498,44 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// 复制反馈（轻档）：按钮短文案瞬时翻转（已复制/复制失败），延迟复位；
-    /// 计时器复位路径可被下一次点击覆盖，不产生并发复位。
+    /// 复制二维码图片：剪贴板负载＝缩略图与放大层共用的同一冻结位图实例
+    ///（DataObject.SetImage，同 DragPayloadService/InputDeliveryService 先例），
+    /// 经同一剪贴板写入缝落剪贴板、同异常捕获（失败如实反馈）。
     /// </summary>
-    private void ShowWeChatCopyFeedback(Button copyButton, bool succeeded)
+    private bool WriteWeChatQrImageToClipboard()
     {
-        copyButton.Content = succeeded ? WeChatCopiedButtonText : WeChatCopyFailedButtonText;
+        if (WeChatQrThumb.Source is not BitmapSource bitmap)
+        {
+            return false;
+        }
+
+        try
+        {
+            var data = new DataObject();
+            data.SetImage(bitmap);
+            if (ClipboardWriterOverride is { } writer)
+            {
+                return writer(data);
+            }
+
+            Clipboard.SetDataObject(data, true);
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is COMException or ExternalException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 复制反馈（轻档）：触发侧微信号 Run 文本瞬时翻转（已复制/复制失败），
+    /// 延迟复位回 ProductIdentity.WeChatId 单一来源；计时器复位路径可被下一次
+    /// 点击覆盖，不产生并发复位。
+    /// </summary>
+    private void ShowWeChatCopyFeedback(Run feedbackRun, bool succeeded)
+    {
+        feedbackRun.Text = succeeded ? WeChatCopiedFeedbackText : WeChatCopyFailedFeedbackText;
         _wechatCopyFeedbackTimer?.Stop();
         _wechatCopyFeedbackTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -511,7 +544,7 @@ public partial class SettingsWindow : Window
         _wechatCopyFeedbackTimer.Tick += (_, _) =>
         {
             _wechatCopyFeedbackTimer.Stop();
-            copyButton.Content = WeChatCopyButtonText;
+            feedbackRun.Text = ProductIdentity.WeChatId;
         };
         _wechatCopyFeedbackTimer.Start();
     }
