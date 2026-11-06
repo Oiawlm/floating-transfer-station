@@ -11,7 +11,7 @@ public sealed class DefaultCaptureCategoryState
     public bool Set(BoardCategory category)
     {
         // 纵深守卫（#30）：默认接收只能落在内容桶——UI 点击已有角色闸，本守卫拦截
-        // 绕过 UI 的直改（复盘与启动标签绝不成为剪贴板落点）。
+        // 绕过 UI 的直改（记录与启动标签绝不成为剪贴板落点）。
         if (!BoardCategoryCatalog.IsDefined(category) ||
             !BoardCategoryCatalog.IsContentBucket(category))
         {

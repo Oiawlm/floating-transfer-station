@@ -244,7 +244,7 @@ public partial class MainWindow : Window
             !BoardCategoryCatalog.IsContentBucket(tabCategory.Category))
         {
             // 启动标签的文件拖入导入（#30 §七矩阵）：∈{*.exe,*.lnk} 给 Copy 效果；
-            // 复盘标签与不支持的文件组维持拒绝（Effects.None）。
+            // 记录标签与不支持的文件组维持拒绝（Effects.None）。
             if (tabCategory.Category == QuickLaunchMigration.LauncherCategory &&
                 ReadImportableLauncherFiles(e.Data).Count > 0)
             {
@@ -401,7 +401,7 @@ public partial class MainWindow : Window
         if (sender is Border { DataContext: CategoryViewModel dropTabCategory } &&
             !BoardCategoryCatalog.IsContentBucket(dropTabCategory.Category))
         {
-            // 启动标签的文件拖入导入（#30 §七矩阵）；其余（卡片/内容/复盘目标）拒绝。
+            // 启动标签的文件拖入导入（#30 §七矩阵）；其余（卡片/内容/记录目标）拒绝。
             if (dropTabCategory.Category == QuickLaunchMigration.LauncherCategory)
             {
                 var importable = ReadImportableLauncherFiles(e.Data);

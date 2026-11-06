@@ -8,7 +8,7 @@ namespace FloatingTransferStation.Views;
 
 public partial class MainWindow : Window
 {
-    // 复盘编辑器的 IME 组合标记：组合期的 Esc 属输入法操作（取消候选），不触发退出编辑。
+    // 记录编辑器的 IME 组合标记：组合期的 Esc 属输入法操作（取消候选），不触发退出编辑。
     private bool _isReviewEditorComposing;
 
     // 面板内任一文本编辑器的 IME 组合标记：组合窗/候选窗是独立 HWND，主窗的
@@ -40,9 +40,9 @@ public partial class MainWindow : Window
         Activated += MainWindow_Activated;
     }
 
-    // 复盘编辑器内按 Esc 退出编辑态：释放键盘焦点（移交宿主窗口），面板去留交给
+    // 记录编辑器内按 Esc 退出编辑态：释放键盘焦点（移交宿主窗口），面板去留交给
     // 既有焦点链（Root_PreviewLostKeyboardFocus 统一清算保持原因并重估表面——
-    // 指针在面板内时维持展开，否则按既有节奏收起）。复盘是防抖自动保存，
+    // 指针在面板内时维持展开，否则按既有节奏收起）。记录是防抖自动保存，
     // 没有取消语义，因此这里不引入提交/取消会话。
     private void ReviewEditor_KeyDown(object sender, KeyEventArgs e)
     {
@@ -64,7 +64,7 @@ public partial class MainWindow : Window
         Focus();
     }
 
-    // 组合事件对复盘编辑器额外维护 Esc 语义标记（契约 #20），对面板内所有文本
+    // 组合事件对记录编辑器额外维护 Esc 语义标记（契约 #20），对面板内所有文本
     // 编辑器维护置顶抑制标记；两条标记同源不同职责，互不替代。
     private void PanelEditor_CompositionStartedOrUpdated(object sender, TextCompositionEventArgs e)
     {

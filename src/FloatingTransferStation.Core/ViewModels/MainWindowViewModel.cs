@@ -42,7 +42,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _defaultCaptureCategory = defaultCaptureCategory ?? new DefaultCaptureCategoryState();
         // 装载期修复（#30）：默认接收只能落在内容桶——历史会话态指向非内容桶
         // （如旧版本设到 Prompt 槽位）时归位 Inbox，保证收起把手与默认接收标记
-        // （靶心 Path 图标，2026-11-03 前为字符「◎」）不落在复盘/启动标签上。
+        // （靶心 Path 图标，2026-11-03 前为字符「◎」）不落在记录/启动标签上。
         // 默认接收无持久化（装载期必为 Inbox），此处是纵深。
         if (!BoardCategoryCatalog.IsContentBucket(_defaultCaptureCategory.Current))
         {
@@ -109,7 +109,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// 按显示顺序重排标签集合（1.25.0 设置页标签顺序）：复用既有
-    /// <see cref="CategoryViewModel"/> 实例（实例身份被 ActivePanel/默认接收/复盘
+    /// <see cref="CategoryViewModel"/> 实例（实例身份被 ActivePanel/默认接收/记录
     /// 表面切换依赖，绝不新建）；数组实例随重排替换并通知标签轨刷新。非法顺序
     /// （数量/成员/重复不符）拒绝重排、保持现状。
     /// </summary>
@@ -195,7 +195,7 @@ public sealed class MainWindowViewModel : ObservableObject
         set => SetProperty(ref _hasEnabledPluginActions, value);
     }
 
-    /// <summary>进入搜索态(窗口层负责应用过滤与焦点);复盘标签不参与(冻结)。</summary>
+    /// <summary>进入搜索态(窗口层负责应用过滤与焦点);记录标签不参与(冻结)。</summary>
     public void EnterSearch()
     {
         IsSearchActive = true;

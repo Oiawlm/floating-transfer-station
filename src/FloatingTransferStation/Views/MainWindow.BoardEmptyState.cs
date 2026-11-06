@@ -15,13 +15,13 @@ namespace FloatingTransferStation.Views;
 /// 集合变化＋搜索态进出；文案按 (BoardCategory, IsDefaultCapture) 二维矩阵派生：
 /// 默认接收桶＝复制自动收集（剪贴板采集只落默认接收分类），非默认桶＝拖入收集。
 /// 元素为纯信息性（IsHitTestVisible=False），命中穿透回 BoardList，拖放语义不变。
-/// 复盘表面同语言空态（ReviewEmptyState，宿主内覆盖编辑器行）由
-/// <see cref="UpdateReviewEmptyState"/> 单点管理，文案复用同一矩阵的复盘臂。
+/// 记录表面同语言空态（ReviewEmptyState，宿主内覆盖编辑器行）由
+/// <see cref="UpdateReviewEmptyState"/> 单点管理，文案复用同一矩阵的记录臂。
 /// </summary>
 public partial class MainWindow
 {
     /// <summary>空态文案二维矩阵：穷尽具名值、无兜底臂——内容桶两分类×默认接收
-    /// 布尔四臂给出文案；复盘臂给复盘空态文案（第二维与复盘无关，忽略——进入路径
+    /// 布尔四臂给出文案；记录臂给记录空态文案（第二维与记录无关，忽略——进入路径
     /// 是直接输入，无默认接收语义）；启动具名值不可达（调用点已按 IsContentBucket
     /// 守卫，启动空态归 LauncherEmptyState），抛
     /// <see cref="ArgumentOutOfRangeException"/> 属不可达防御。未具名枚举值
@@ -41,7 +41,7 @@ public partial class MainWindow
             (BoardCategory.CustomerOriginal, false) => (
                 "还没有内容", "把图片或文字拖到这里即可收集"),
             (BoardCategory.Reference, _) => (
-                "还没有复盘内容", "直接输入即可开始记录，内容会自动保存"),
+                "还没有记录内容", "直接输入即可开始记录，内容会自动保存"),
             (BoardCategory.Prompt, _) =>
                 throw new ArgumentOutOfRangeException(nameof(category), category, null),
         };
@@ -103,14 +103,14 @@ public partial class MainWindow
         BoardEmptyStateHint.SetCurrentValue(TextBlock.TextProperty, hint);
     }
 
-    /// <summary>复盘空态唯一更新点：复盘表面激活、编辑器可用（存储在位）且当前
+    /// <summary>记录空态唯一更新点：记录表面激活、编辑器可用（存储在位）且当前
     /// 编辑内容为空时可见——「当日无内容」以编辑器文本为唯一事实（装载/外部刷新
     /// 都经文本落位）。触发路径＝<see cref="UpdatePanelSurface"/> 表面切换、
     /// ReviewEditor_TextChanged 输入与清空、LoadReviewDateAsync 日期装载完成、
     /// HandleDailyReviewChangeAsync 外部变更后的文本替换；全部 UI 线程进入（外部
     /// 文件 Changed 已由 DailyReviews_Changed 封送），无需封送分支。文案复用
-    /// <see cref="BoardEmptyStateCopy"/> 复盘臂（第二维与复盘无关，传 false）；无
-    /// CTA——复盘的进入路径是直接输入，编辑器本身就是动作面，空态
+    /// <see cref="BoardEmptyStateCopy"/> 记录臂（第二维与记录无关，传 false）；无
+    /// CTA——记录的进入路径是直接输入，编辑器本身就是动作面，空态
     /// IsHitTestVisible=False 让点击穿透到编辑器取得焦点。内容桶空态（#33）与
     /// 本空态各属专属宿主，表面互斥由 UpdatePanelSurface 三态分发结构性保证。</summary>
     private void UpdateReviewEmptyState()

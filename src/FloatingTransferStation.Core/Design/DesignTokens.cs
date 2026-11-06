@@ -116,7 +116,7 @@ public static class DesignTokens
     /// <summary>备注可见行数上限（CardNoteMaxHeight=行高×此值；默认字体 2×19=38）。</summary>
     public const int CardNoteMaxVisibleLines = 2;
 
-    // 复盘阅读视图（实验性，2026-11-03）：排版 token——正文字号沿用 CardTextFontSize
+    // 记录阅读视图（实验性，2026-11-03）：排版 token——正文字号沿用 CardTextFontSize
     //（不设第二份 14）；标题字号为阅读档位阶梯（H1–H3 显式 token，H4–H6＝正文字号
     // 加 SemiBold 权重区分）；颜色不新增——全部走主题字典语义键（正文/引用＝
     // PrimaryTextBrush，链接＝AccentBrush，代码块底＝HoverSurfaceBrush，描边＝
@@ -137,7 +137,7 @@ public static class DesignTokens
     // 圆角。窗壳圆角权威=DwmCornerRadius（DWM 裁剪与内容层自裁剪同值），
     // XAML 资源 ShellCornerRadius 由锁定测试镜像它——不设第二个壳圆角 token。
     // 两档阶梯（#30 修订 2026-10-18，Issue #186 D9）：控件级 4（输入框/按钮/下拉/
-    // 复盘编辑框/行内编辑器）、表面级 8（卡/瓦片/弹窗壳/主壳——CardCornerRadius
+    // 记录编辑框/行内编辑器）、表面级 8（卡/瓦片/弹窗壳/主壳——CardCornerRadius
     // 同源收敛）；识别元素（选择环 r5 等）保留原值不入阶梯。
     public const int DwmCornerRadius = 8;
     public const int HeaderSurfaceCornerRadius = 11;

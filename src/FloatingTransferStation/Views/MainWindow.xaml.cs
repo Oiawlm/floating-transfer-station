@@ -252,7 +252,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 采纳后台装载期间完成的设置迁移结果（复盘迁移、分类默认名迁移）：同步退出保存用的
+    /// 采纳后台装载期间完成的设置迁移结果（记录迁移、分类默认名迁移）：同步退出保存用的
     /// 设置基准与全部分类显示名，使迁移无需在窗口构造前完成（启动先显示收起态）。
     /// </summary>
     internal void AdoptMigratedSettings(WindowSettings settings)

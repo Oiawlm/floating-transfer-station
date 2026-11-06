@@ -191,7 +191,7 @@ public static class StartupDataDirectoryMigration
     }
 
     /// <summary>
-    /// 启动归一的静默作用域：此刻窗口、剪贴板采集与复盘 watcher 均未创建，
+    /// 启动归一的静默作用域：此刻窗口、剪贴板采集与记录 watcher 均未创建，
     /// 数据目录上没有任何写入者——静默承诺（复制/发布期间无并发写入）天然成立，
     /// 三段挂钩全部为空实现。失败路径同样无可恢复对象。
     /// </summary>

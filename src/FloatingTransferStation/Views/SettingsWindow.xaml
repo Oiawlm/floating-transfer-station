@@ -707,17 +707,17 @@
                       <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
-                               Text="复盘界面 Markdown 阅读视图"
+                               Text="记录界面 Markdown 阅读视图"
                                Style="{StaticResource RowCaptionStyle}" />
                     <CheckBox x:Name="ReviewMarkdownViewToggle"
                               Grid.Column="1"
                               Style="{StaticResource ToggleSwitchStyle}"
-                              AutomationProperties.Name="复盘界面 Markdown 阅读视图"
+                              AutomationProperties.Name="记录界面 Markdown 阅读视图"
                               Checked="ReviewMarkdownViewToggle_Checked"
                               Unchecked="ReviewMarkdownViewToggle_Unchecked" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="实验性功能，默认关闭。开启后复盘界面出现「阅读｜编辑」切换：阅读态把复盘内容按 Markdown 渲染成类 Obsidian 的只读视图（标题、列表、粗斜体、代码块、引用、链接等常用语法；链接点击后用浏览器打开，不加载远程图片；不支持的高级语法按原文显示）。默认关闭的原因：渲染子集与排版仍在打磨，编辑器形态（关闭时所见）保持为可靠基准。改动立即生效并自动保存，只影响呈现，不改变复盘的保存与合并行为。" />
+                             Text="实验性功能，默认关闭。开启后记录界面出现「阅读｜编辑」切换：阅读态把记录内容按 Markdown 渲染成类 Obsidian 的只读视图（标题、列表、粗斜体、代码块、引用、链接等常用语法；链接点击后用浏览器打开，不加载远程图片；不支持的高级语法按原文显示）。默认关闭的原因：渲染子集与排版仍在打磨，编辑器形态（关闭时所见）保持为可靠基准。改动立即生效并自动保存，只影响呈现，不改变记录的保存与合并行为。" />
                   <!-- 实验性第二项（2026-11-05，契约 #57）：三态枚举设置沿仓库
                        「枚举设置一律 ComboBox」先例（置顶分隔/清理时长/垃圾桶行为）；
                        即时生效＋原子保存（契约 #5 唯一管线，禁平行保存路径）。 -->
@@ -780,7 +780,7 @@
                               SelectionChanged="AutoCleanupRetentionComboBox_SelectionChanged" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="每张非置顶卡片入库满所选时长即自动删除；置顶卡片、备注卡片与「复盘」内容不受影响；可 Ctrl+Z 撤销（仅本次运行内）；每小时检查一次，改短时长后已超龄的卡片在下次检查时清理；默认 24 小时。" />
+                             Text="每张非置顶卡片入库满所选时长即自动删除；置顶卡片、备注卡片与「记录」内容不受影响；可 Ctrl+Z 撤销（仅本次运行内）；每小时检查一次，改短时长后已超龄的卡片在下次检查时清理；默认 24 小时。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}">
