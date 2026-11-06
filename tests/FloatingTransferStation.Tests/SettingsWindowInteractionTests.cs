@@ -1619,6 +1619,97 @@ public sealed class SettingsWindowInteractionTests
     }
 
     [STATestMethod]
+    public void SubgroupModeComboBox_OffersThreeStatesDefaultingToOff()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var combo = settings.FindName("SubgroupModeComboBox") as ComboBox;
+            Assert.IsNotNull(combo);
+            var items = combo!.Items.OfType<ComboBoxItem>().ToArray();
+            Assert.AreEqual(3, items.Length, "三态：关闭/按钮轨/视觉分组。");
+            Assert.AreEqual("关闭", items[0].Content);
+            Assert.AreEqual("按钮轨", items[1].Content);
+            Assert.AreEqual("视觉分组", items[2].Content);
+            Assert.IsInstanceOfType(combo.SelectedItem, typeof(ComboBoxItem));
+            Assert.AreEqual(
+                SubgroupDisplayMode.Off,
+                ((ComboBoxItem)combo.SelectedItem).Tag,
+                "默认选中＝关闭（实验性默认零打扰）。");
+            Assert.IsNull(
+                preferencesStore.LastSaved,
+                "初始化同步段不得触发保存（_isSynchronizingControls 守卫）。");
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void SubgroupModeComboBox_AppliesImmediatelyPersistsAndSurvivesReopen()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            new FakeStartupManager(),
+            preferencesStore.Seeded);
+
+        try
+        {
+            var settings = OpenSettings(window);
+            var combo = settings.FindName("SubgroupModeComboBox") as ComboBox;
+            Assert.IsNotNull(combo);
+
+            combo!.SelectedItem = combo.Items.OfType<ComboBoxItem>()
+                .Single(item => item.Tag is SubgroupDisplayMode.ChipRail);
+            CompleteLayout(window);
+
+            Assert.AreEqual(
+                SubgroupDisplayMode.ChipRail,
+                window.CurrentPreferences.SubgroupDisplay,
+                "改动必须立即生效。");
+            Assert.AreEqual(
+                SubgroupDisplayMode.ChipRail,
+                preferencesStore.LastSaved!.SubgroupDisplay,
+                "改动必须立即落偏好文件。");
+            Assert.AreEqual(
+                SubgroupDisplayMode.ChipRail,
+                ((MainWindowViewModel)window.DataContext).SubgroupDisplay,
+                "模式经 ApplyPreferences 喂值到窗口 VM（轨可见性的消费源）。");
+
+            CloseWindow(settings);
+            var reopened = OpenSettings(window);
+            var reopenedCombo = reopened.FindName("SubgroupModeComboBox") as ComboBox;
+            Assert.IsNotNull(reopenedCombo);
+            Assert.AreEqual(
+                "按钮轨",
+                ((ComboBoxItem)reopenedCombo.SelectedItem).Content,
+                "重开设置窗必须反映已保存的新值。");
+
+            reopenedCombo.SelectedItem = reopenedCombo.Items.OfType<ComboBoxItem>()
+                .Single(item => item.Tag is SubgroupDisplayMode.GroupedView);
+            CompleteLayout(window);
+            Assert.AreEqual(SubgroupDisplayMode.GroupedView, window.CurrentPreferences.SubgroupDisplay);
+            CloseWindow(reopened);
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void AutoCleanupRetentionComboBox_OffersSevenTiersDefaultingToTwentyFourHours()
     {
         using var directory = new TestDirectory();

@@ -47,6 +47,7 @@ internal static class BoardCreatedAtTestHelpers
         Text = item.Text,
         ImageRelativePath = item.ImageRelativePath,
         IsPinned = item.IsPinned,
-        ImageAbsolutePath = item.ImageAbsolutePath
+        ImageAbsolutePath = item.ImageAbsolutePath,
+        Note = item.Note
     };
 }

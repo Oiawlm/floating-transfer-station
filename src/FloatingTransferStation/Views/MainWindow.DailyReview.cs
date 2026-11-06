@@ -38,7 +38,7 @@ public partial class MainWindow
     /// <summary>
     /// 表面三态分发（#30）：按激活标签角色切换 BoardList / ReviewContentHost /
     /// LauncherContentHost 三者互斥可见；批量置顶/删除按钮只属于内容桶表面
-    /// （复盘与启动隐藏——启动的排除由瓦片表面结构性承载）。复盘表面额外持有
+    /// （记录与启动隐藏——启动的排除由瓦片表面结构性承载）。记录表面额外持有
     /// 文档装载与文件监视生命周期。
     /// </summary>
     private void UpdatePanelSurface()
@@ -50,14 +50,14 @@ public partial class MainWindow
         LauncherContentHost.Visibility = isLauncher ? Visibility.Visible : Visibility.Collapsed;
         BoardList.Visibility = isReview || isLauncher ? Visibility.Collapsed : Visibility.Visible;
         InsertionIndicator.Visibility = isReview || isLauncher ? Visibility.Collapsed : Visibility.Visible;
-        // 内容桶空态随表面切换（契约 #33）：仅板面可见，复盘/启动表面隐藏
+        // 内容桶空态随表面切换（契约 #33）：仅板面可见，记录/启动表面隐藏
         //（两者各有专属空态/内容宿主）；集合与搜索触发另行驱动本单点。
         UpdateBoardEmptyState();
-        // 复盘空态随表面切换重评估（契约 #33 复盘扩展）：宿主刚可见/隐藏时按
+        // 记录空态随表面切换重评估（契约 #33 记录扩展）：宿主刚可见/隐藏时按
         // 当前编辑内容定可见性；日期装载与输入触发另行驱动同一单点。
         UpdateReviewEmptyState();
-        // 阅读/编辑切换随表面切换重评估（实验性）：切换控件可见＝实验开关开∧复盘
-        // 激活；离开复盘表面时一并收起（阅读视图与编辑器互斥分发同源）。
+        // 阅读/编辑切换随表面切换重评估（实验性）：切换控件可见＝实验开关开∧记录
+        // 激活；离开记录表面时一并收起（阅读视图与编辑器互斥分发同源）。
         UpdateReviewModeControls();
         if (isReview || isLauncher)
         {
@@ -104,7 +104,7 @@ public partial class MainWindow
         if (_dailyReviews is null)
         {
             ReviewEditor.IsEnabled = false;
-            ReviewStatus.Text = "复盘存储不可用。";
+            ReviewStatus.Text = "记录存储不可用。";
             return;
         }
 
@@ -140,7 +140,7 @@ public partial class MainWindow
             _reviewLoading = true;
             ReviewEditor.Text = document.Content;
             _reviewLoading = false;
-            ReviewStatus.Text = document.Exists ? "已加载" : "今天还没有复盘内容。";
+            ReviewStatus.Text = document.Exists ? "已加载" : "今天还没有记录内容。";
             UpdateReviewDateControls();
             // 日期装载完成即重评估空态：切到有内容的日期隐藏、切到空日期回归
             //（装载期文本替换走 _reviewLoading 守卫，TextChanged 不触发，须显式驱动）。
@@ -151,7 +151,7 @@ public partial class MainWindow
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             _reviewLoading = false;
-            ReviewStatus.Text = "复盘读取失败：" + exception.Message;
+            ReviewStatus.Text = "记录读取失败：" + exception.Message;
         }
     }
 
@@ -201,12 +201,12 @@ public partial class MainWindow
             }
             catch (IOException exception)
             {
-                ReviewStatus.Text = "复盘保存失败：" + exception.Message;
+                ReviewStatus.Text = "记录保存失败：" + exception.Message;
                 return false;
             }
             catch (UnauthorizedAccessException exception)
             {
-                ReviewStatus.Text = "复盘保存失败：" + exception.Message;
+                ReviewStatus.Text = "记录保存失败：" + exception.Message;
                 return false;
             }
         }
@@ -231,7 +231,7 @@ public partial class MainWindow
         }
         catch (Exception)
         {
-            ReviewStatus.Text = "复盘自动保存失败。";
+            ReviewStatus.Text = "记录自动保存失败。";
         }
     }
 
@@ -293,7 +293,7 @@ public partial class MainWindow
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            ReviewStatus.Text = "复盘日期跳转失败：" + exception.Message;
+            ReviewStatus.Text = "记录日期跳转失败：" + exception.Message;
         }
     }
 
@@ -436,8 +436,8 @@ public partial class MainWindow
             }
 
             var choice = MessageBox.Show(
-                "当天复盘文件已在应用外修改。\n是：载入文件\n否：保留本地\n取消：合并两边内容",
-                "复盘文件冲突",
+                "当天记录文件已在应用外修改。\n是：载入文件\n否：保留本地\n取消：合并两边内容",
+                "记录文件冲突",
                 MessageBoxButton.YesNoCancel,
                 MessageBoxImage.Information);
             if (choice == MessageBoxResult.Yes)
@@ -472,7 +472,7 @@ public partial class MainWindow
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            ReviewStatus.Text = "复盘刷新失败：" + exception.Message;
+            ReviewStatus.Text = "记录刷新失败：" + exception.Message;
         }
     }
 }

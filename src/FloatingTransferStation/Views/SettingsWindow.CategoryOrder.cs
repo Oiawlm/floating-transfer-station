@@ -11,7 +11,7 @@ using FloatingTransferStation.Models;
 namespace FloatingTransferStation.Views;
 
 /// <summary>
-/// 设置窗口「标签顺序」节（1.25.0）：四个固定标签（三个板卡分类 + 复盘）的显示
+/// 设置窗口「标签顺序」节（1.25.0）：四个固定标签（三个板卡分类 + 记录）的显示
 /// 顺序调整，只调顺序、不能增删分类；排序入口只在设置窗口（面板标签轨本身不
 /// 提供拖拽）。拖拽自研最小实现、零新依赖：把手按下捕获鼠标，拖起原位行半透明
 /// 跟随光标，其余行经 TranslateTransform 让位（动效时长取既有 DesignTokens 档，

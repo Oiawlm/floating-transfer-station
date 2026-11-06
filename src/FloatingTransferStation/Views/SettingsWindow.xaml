@@ -211,7 +211,7 @@
         <Setter Property="Focusable" Value="False" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="AutomationProperties.Name" Value="放大微信二维码" />
-        <Setter Property="ToolTip" Value="单击放大微信二维码" />
+        <Setter Property="ToolTip" Value="单击放大微信二维码，右键复制微信号" />
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="Button">
@@ -707,17 +707,39 @@
                       <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
-                               Text="复盘界面 Markdown 阅读视图"
+                               Text="记录界面 Markdown 阅读视图"
                                Style="{StaticResource RowCaptionStyle}" />
                     <CheckBox x:Name="ReviewMarkdownViewToggle"
                               Grid.Column="1"
                               Style="{StaticResource ToggleSwitchStyle}"
-                              AutomationProperties.Name="复盘界面 Markdown 阅读视图"
+                              AutomationProperties.Name="记录界面 Markdown 阅读视图"
                               Checked="ReviewMarkdownViewToggle_Checked"
                               Unchecked="ReviewMarkdownViewToggle_Unchecked" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="实验性功能，默认关闭。开启后复盘界面出现「阅读｜编辑」切换：阅读态把复盘内容按 Markdown 渲染成类 Obsidian 的只读视图（标题、列表、粗斜体、代码块、引用、链接等常用语法；链接点击后用浏览器打开，不加载远程图片；不支持的高级语法按原文显示）。默认关闭的原因：渲染子集与排版仍在打磨，编辑器形态（关闭时所见）保持为可靠基准。改动立即生效并自动保存，只影响呈现，不改变复盘的保存与合并行为。" />
+                             Text="实验性功能，默认关闭。开启后记录界面出现「阅读｜编辑」切换：阅读态把记录内容按 Markdown 渲染成类 Obsidian 的只读视图（标题、列表、粗斜体、代码块、引用、链接等常用语法；链接点击后用浏览器打开，不加载远程图片；不支持的高级语法按原文显示）。默认关闭的原因：渲染子集与排版仍在打磨，编辑器形态（关闭时所见）保持为可靠基准。改动立即生效并自动保存，只影响呈现，不改变记录的保存与合并行为。" />
+                  <!-- 实验性第二项（2026-11-05，契约 #57）：三态枚举设置沿仓库
+                       「枚举设置一律 ComboBox」先例（置顶分隔/清理时长/垃圾桶行为）；
+                       即时生效＋原子保存（契约 #5 唯一管线，禁平行保存路径）。 -->
+                  <Grid Background="Transparent" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="分类内子分组"
+                               Style="{StaticResource RowCaptionStyle}"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center" />
+                    <ComboBox x:Name="SubgroupModeComboBox"
+                              Grid.Column="1"
+                              Style="{StaticResource ThemedComboBoxStyle}"
+                              MaxDropDownHeight="240"
+                              AutomationProperties.Name="分类内子分组"
+                              SelectionChanged="SubgroupModeComboBox_SelectionChanged" />
+                  </Grid>
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="实验性功能，默认关闭。开启后可在内容分类（重要/待分类）内再分一层子分组：「按钮轨」在分类顶部显示四个分组按钮（单击筛选、双击改名、把卡片拖到按钮上归组），「视觉分组」把同组卡片相邻摆放并用分隔线与组名标出边界。默认关闭的原因：两种形态与分组数据模型仍在打磨。改动立即生效并自动保存；子分组归属保存在卡片数据里，关闭开关不会丢失已归组的内容。" />
                 </StackPanel>
               </Border>
             </StackPanel>
@@ -758,7 +780,7 @@
                               SelectionChanged="AutoCleanupRetentionComboBox_SelectionChanged" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="每张非置顶卡片入库满所选时长即自动删除；置顶卡片与「复盘」内容不受影响；可 Ctrl+Z 撤销（仅本次运行内）；每小时检查一次，改短时长后已超龄的卡片在下次检查时清理；默认 24 小时。" />
+                             Text="每张非置顶卡片入库满所选时长即自动删除；置顶卡片、备注卡片与「记录」内容不受影响；可 Ctrl+Z 撤销（仅本次运行内）；每小时检查一次，改短时长后已超龄的卡片在下次检查时清理；默认 24 小时。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}">
@@ -983,7 +1005,8 @@
                     Style="{StaticResource WeChatQrThumbStyle}"
                     Margin="0,0,12,0"
                     VerticalAlignment="Center"
-                    Click="WeChatQrButton_Click">
+                    Click="WeChatQrButton_Click"
+                    MouseRightButtonUp="WeChatQrButton_MouseRightButtonUp">
               <Image x:Name="WeChatQrThumb"
                      Width="60"
                      Height="60"
@@ -997,10 +1020,20 @@
               <TextBlock FontSize="12" Margin="0,2,0,0">
                 <Hyperlink x:Name="RepoLink"
                            Foreground="{DynamicResource AccentBrush}"
-                           RequestNavigate="RepoLink_RequestNavigate">GitHub 仓库与更新记录</Hyperlink>
+                           RequestNavigate="RepoLink_RequestNavigate">GitHub 仓库主页</Hyperlink>
               </TextBlock>
               <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                <TextBlock FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource SecondaryTextBrush}">
+                <!-- 微信号行左右键皆复制（W3 2026-11-05）：透明底整行可命中＋手型
+                     光标，同一处理器服两事件；反馈就地在相邻复制按钮（零 toast）。 -->
+                <TextBlock x:Name="WeChatIdFooterBlock"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           Background="Transparent"
+                           Cursor="Hand"
+                           ToolTip="复制微信号"
+                           MouseLeftButtonUp="WeChatIdFooterBlock_PointButtonUp"
+                           MouseRightButtonUp="WeChatIdFooterBlock_PointButtonUp">
                   <Run Text="微信：" /><Run x:Name="WeChatIdRun" Foreground="{DynamicResource PrimaryTextBrush}" FontWeight="SemiBold" />
                 </TextBlock>
                 <Button x:Name="WeChatCopyButton"
@@ -1030,10 +1063,13 @@
               Panel.ZIndex="10"
               Style="{StaticResource SettingsShellOutlineStyle}" />
 
-      <!-- 微信二维码放大层（W5 2026-11-05）：设置窗内遮罩层（不新建窗口），
-           遮罩用既有 WindowShellBrush 键（零新配色）；单击遮罩或图片本体关闭
-           （MouseLeftButtonUp 冒泡到本 Grid），复制按钮是独立职责入口不关闭；
-           显隐走 FadeAnimation 统一管理（轻档 83ms，动效关闭立即切换），
+      <!-- 微信二维码放大层（W5 2026-11-05；W3 2026-11-05 交互升级）：设置窗内
+           遮罩层（不新建窗口），遮罩用既有 WindowShellBrush 键（零新配色）；
+           左/右键单击遮罩或卡片非按钮区域＝关闭（两事件共用处理器，「任意单击
+           关闭」对称语义），复制按钮是独立职责入口不关闭、放大态微信号行左/右
+           键复制且不关层（其处理器 e.Handled 阻断冒泡）；显隐走 FadeAnimation
+           统一管理（轻档 83ms，动效关闭立即切换），动效开时 QR 卡自页脚缩略图
+           源位置缩放入场（WeChatQrLargeCard 渲染变换，代码后置驱动）；
            Esc 关层优先于关窗（见 SettingsWindow_PreviewKeyDown）。 -->
       <Grid x:Name="WeChatQrOverlay"
             Grid.RowSpan="3"
@@ -1043,7 +1079,8 @@
             Opacity="0"
             views:FadeAnimation.ManageVisibility="True"
             views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FastDurationMs}"
-            MouseLeftButtonUp="WeChatQrOverlay_MouseLeftButtonUp">
+            MouseLeftButtonUp="WeChatQrOverlay_PointButtonUpCloses"
+            MouseRightButtonUp="WeChatQrOverlay_PointButtonUpCloses">
         <Border HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 Background="{DynamicResource CardBrush}"
@@ -1058,7 +1095,11 @@
                        Foreground="{DynamicResource PrimaryTextBrush}"
                        HorizontalAlignment="Center"
                        Margin="0,0,0,10" />
-            <Border Background="White"
+            <!-- QR 卡＝缩放入场动画元素（W3 附录 A）：312×312 白底正方形含 6px
+                 静区，仅含 Image；渲染变换（Scale→Translate 组）由代码后置构造
+                 与驱动，布局一次到位恒定。 -->
+            <Border x:Name="WeChatQrLargeCard"
+                    Background="White"
                     CornerRadius="4"
                     Padding="6">
               <Image x:Name="WeChatQrLarge"
@@ -1070,7 +1111,18 @@
             <StackPanel Orientation="Horizontal"
                         HorizontalAlignment="Center"
                         Margin="0,12,0,0">
-              <TextBlock FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource SecondaryTextBrush}">
+              <!-- 放大态微信号行左右键皆复制且不关层（W3）：与页脚行同一处理器
+                   形态，e.Handled 阻断冒泡到遮罩关层（与复制按钮被 Button 消费
+                   同型）；反馈就地在相邻复制按钮。 -->
+              <TextBlock x:Name="WeChatIdLargeBlock"
+                         FontSize="12"
+                         VerticalAlignment="Center"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Background="Transparent"
+                         Cursor="Hand"
+                         ToolTip="复制微信号"
+                         MouseLeftButtonUp="WeChatIdLargeBlock_PointButtonUp"
+                         MouseRightButtonUp="WeChatIdLargeBlock_PointButtonUp">
                 <Run Text="微信：" /><Run x:Name="WeChatIdLargeRun" Foreground="{DynamicResource PrimaryTextBrush}" FontWeight="SemiBold" />
               </TextBlock>
               <Button x:Name="WeChatCopyLargeButton"

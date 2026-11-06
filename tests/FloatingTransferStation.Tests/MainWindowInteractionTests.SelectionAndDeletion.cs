@@ -2082,7 +2082,93 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(0, store.SaveCount, "空操作不得保存。");
             Assert.IsTrue(delete.IsEnabled, "空操作不进入保存防重入。");
             Assert.AreEqual(
-                "当前分类没有非置顶内容可清空。",
+                "当前分类没有非置顶内容可清空（有备注的卡片保留）。",
+                ((MainWindowViewModel)window.DataContext).StatusText);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void TrashButton_NoSelectionLeftClickClearsNonPinnedKeepsNotedCardsAndCountsAccurately()
+    {
+        // 2026-11-05 备注＝用户手写的识别标记，完全同置顶豁免手工「清空非置顶」；
+        // 完成计数只针对实际被清的无备注卡。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var pinned = AddPinnedText(board, "置顶保留");
+        var noted = board.AddText("有备注的普通内容");
+        Assert.IsTrue(board.UpdateNote(noted.Id, "识别标记"));
+        var noteless = board.AddText("无备注的普通内容");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var delete = (Button)window.FindName("DeleteContentButton");
+            Assert.AreEqual(0, list.SelectedItems.Count);
+
+            delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, delete));
+            PumpDispatcherUntil(window.Dispatcher, store.SaveCompleted.Task);
+            CompleteLayout(window);
+
+            CollectionAssert.AreEqual(
+                new[] { pinned.Id, noted.Id },
+                board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
+                "备注卡完全同置顶豁免，幸存。");
+            Assert.AreEqual("识别标记", noted.Note, "备注内容不因清空而丢失。");
+            Assert.AreEqual(
+                "已清空非置顶 1 项（可 Ctrl+Z 撤销）",
+                ((MainWindowViewModel)window.DataContext).StatusText,
+                "完成计数只针对实际被清的无备注卡。");
+
+            PumpDispatcherUntil(window.Dispatcher, window.UndoLastFromPanelAsync());
+            CompleteLayout(window);
+
+            CollectionAssert.AreEqual(
+                new[] { pinned.Id, noteless.Id, noted.Id },
+                board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
+                "Ctrl+Z 整批撤销恢复被清卡，备注卡不丢不重。");
+            Assert.AreEqual(2, store.SaveCount, "撤销必须再次持久化。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void TrashButton_OnlyNotedNonPinnedLeftClickShowsShortCircuitHint()
+    {
+        // 只剩备注非置顶卡时按空操作短路：新短路文案注明备注保留，零保存。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var noted = board.AddText("只有备注的非置顶内容");
+        Assert.IsTrue(board.UpdateNote(noted.Id, "识别标记"));
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var delete = (Button)window.FindName("DeleteContentButton");
+
+            delete.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, delete));
+            CompleteLayout(window);
+
+            Assert.AreSame(noted, board.Items(BoardCategory.Inbox).Single(), "备注卡绝不被清空非置顶删除。");
+            Assert.AreEqual(0, store.SaveCount, "短路空操作不得保存。");
+            Assert.IsTrue(delete.IsEnabled, "短路空操作不进入保存防重入。");
+            Assert.AreEqual(
+                "当前分类没有非置顶内容可清空（有备注的卡片保留）。",
                 ((MainWindowViewModel)window.DataContext).StatusText);
         }
         finally

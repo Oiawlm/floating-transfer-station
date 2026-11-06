@@ -17,9 +17,9 @@
 | `batch-copy-images.gif` | 720×322 | 136 KB | 资源管理器 `Ctrl+A` 全选＋`Ctrl+C`，面板按来源顺序出卡（角标：Ctrl+A/Ctrl+C/悬停） | README 图集＋usage「批量复制」 |
 | `drag-into-category.gif` | 720×286 | 99 KB | 资源管理器拖图到「重要」标签落入（角标：拖动/悬停） | README 图集＋usage「指定位置放入」 |
 | `edge-collapse-hold.gif` | 190×1040 | 30 KB | 移开收起 → 移入展开 → 保持展开开/关（原速基准；角标：悬停/移开/左键） | README 一览＋usage「不挡工作区」 |
-| `review-tab.gif` | 540×880 | 30 KB | 复盘输入自动保存 → `‹` 切前一天 → `›` 切回内容仍在（角标：悬停/输入/单击） | README 图集＋usage「复盘标签」 |
-| `review-date-jump.gif` | 540×760 | 26 KB | `«»` 双层箭头跳有记录日（11-04→11-03→11-01 跳过空白日→回 11-03；角标：单击） | README 图集＋usage「复盘标签」 |
-| `review-markdown-toggle.gif` | 540×880 | 22 KB | 「阅读/编辑」切换 Markdown 渲染视图（角标：悬停/单击） | README 图集＋usage「复盘标签」 |
+| `review-tab.gif` | 540×880 | 30 KB | 记录输入自动保存 → `‹` 切前一天 → `›` 切回内容仍在（角标：悬停/输入/单击） | README 图集＋usage「记录标签」 |
+| `review-date-jump.gif` | 540×760 | 26 KB | `«»` 双层箭头跳有记录日（11-04→11-03→11-01 跳过空白日→回 11-03；角标：单击） | README 图集＋usage「记录标签」 |
+| `review-markdown-toggle.gif` | 540×880 | 22 KB | 「阅读/编辑」切换 Markdown 渲染视图（角标：悬停/单击） | README 图集＋usage「记录标签」 |
 | `update-flow-diagram.png` | 1020×560 | 38 KB | 自动更新流程静帧图解（常态帧＋点亮帧为真实画面裁剪） | README 图集＋usage「更新」 |
 | `theme-light-dark.png` | 880×848 | 96 KB | 同一展开态面板浅色/深色双联（新标签名；悬停态按钮可见） | README 一览＋usage「主题」 |
 | `quicklaunch-anatomy.png` | 1100×1090 | 78 KB | 启动页布局图解（工具行/发现预留位/瓦片/名称带/勾选钮/排序） | README 图集＋usage「快捷启动」 |

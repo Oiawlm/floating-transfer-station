@@ -16,6 +16,9 @@ public sealed class BoardItem : INotifyPropertyChanged
 
     private bool _isPinned;
     private bool _startsNormalRegion;
+    private bool _startsSubgroupRegion;
+    private string? _subgroupHeader;
+    private int? _subgroup;
     private bool _isEditing;
     private string? _draftText;
     private bool _isEditingNote;
@@ -72,6 +75,40 @@ public sealed class BoardItem : INotifyPropertyChanged
     {
         get => _startsNormalRegion;
         internal set => SetProperty(ref _startsNormalRegion, value);
+    }
+
+    /// <summary>
+    /// 分类内子分组（实验性，契约 #57）：槽号 0–3，null=未指定。持久化字段
+    /// （board.json，免迁移照 <see cref="Note"/> 口径——旧 JSON 缺字段读为 null，
+    /// 越界值由装载端一次回落 null，SchemaVersion 保持 1）。单一事实源：归属
+    /// 唯一存本字段，分组边界/组头全部由 Reindex 派生（不持久化派生值）。
+    /// </summary>
+    public int? Subgroup
+    {
+        get => _subgroup;
+        set => SetProperty(ref _subgroup, SubgroupCatalog.IsValidSlot(value) ? value : null);
+    }
+
+    /// <summary>子分组组边界派生标记（契约 #57，照 <see cref="StartsNormalRegion"/>
+    /// 惯例）：普通区内与前邻卡槽不同且非置顶转换点；仅 GroupedView 模式由
+    /// BoardService.Reindex 置位，Off/ChipRail 恒 false（渲染与现状一致）。
+    /// 会话派生态，不持久化。</summary>
+    [JsonIgnore]
+    public bool StartsSubgroupRegion
+    {
+        get => _startsSubgroupRegion;
+        internal set => SetProperty(ref _startsSubgroupRegion, value);
+    }
+
+    /// <summary>子分组组头名（契约 #57）：Reindex 按 BoardService 持有的有效名
+    /// 清单快照解析（settings 仍是持久化单一事实源，服务侧仅派生缓存）；仅在
+    /// 命名组的边界卡上非 null（未指定组无组头），非边界卡恒 null。会话派生态，
+    /// 不持久化。</summary>
+    [JsonIgnore]
+    public string? SubgroupHeader
+    {
+        get => _subgroupHeader;
+        internal set => SetProperty(ref _subgroupHeader, value);
     }
 
     [JsonIgnore]
@@ -215,6 +252,7 @@ public sealed class BoardItem : INotifyPropertyChanged
         CreatedAt = CreatedAt,
         Text = Text,
         Note = Note,
+        Subgroup = Subgroup,
         ImageRelativePath = ImageRelativePath,
         IsPinned = IsPinned,
         ImageAbsolutePath = ImageAbsolutePath

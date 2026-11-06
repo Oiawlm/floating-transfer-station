@@ -20,10 +20,12 @@ public partial class MainWindow : Window
 {
     private void BoardList_PreviewMouseMove(object sender, MouseEventArgs e)
     {
-        // 搜索过滤期间禁用拖拽：内部排序的落点按可见(已过滤)视图计算会得到错误的源索引，
-        // 拖出语义也随视图收窄产生歧义（设计草案切片 1 明确禁用）。
+        // 搜索/子分组过滤期间禁用拖拽：内部排序的落点按可见(已过滤)视图计算会得到错误的源索引，
+        // 拖出语义也随视图收窄产生歧义（设计草案切片 1 明确禁用；chip 过滤沿 #37 口径，
+        // 契约 #57——拖卡归属只经 chip 目标、不经列表内拖放）。
         // 按钮按压不起拖：按住置顶/选择按钮移动不应拖出整张卡（按钮有自己的意图）。
         if (_viewModel.IsSearchActive ||
+            IsSubgroupFilterActive ||
             e.LeftButton != MouseButtonState.Pressed ||
             _pressItem is null ||
             _pressButton is not null)
@@ -196,9 +198,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 搜索态进行中不启动收起（与 Root_MouseLeave 的保持语义一致）。
+        // 搜索态/chip 过滤态进行中不启动收起（与 Root_MouseLeave 的保持语义一致；
+        // chip 过滤沿 #37 口径抑制自动收起，契约 #57）。
         _panelState.LeaveSurface();
-        if (_panelState.IsExpanded && !_viewModel.IsSearchActive)
+        if (_panelState.IsExpanded && !_viewModel.IsSearchActive && !IsSubgroupFilterActive)
         {
             _collapseTimer.Start();
         }
@@ -241,7 +244,7 @@ public partial class MainWindow : Window
             !BoardCategoryCatalog.IsContentBucket(tabCategory.Category))
         {
             // 启动标签的文件拖入导入（#30 §七矩阵）：∈{*.exe,*.lnk} 给 Copy 效果；
-            // 复盘标签与不支持的文件组维持拒绝（Effects.None）。
+            // 记录标签与不支持的文件组维持拒绝（Effects.None）。
             if (tabCategory.Category == QuickLaunchMigration.LauncherCategory &&
                 ReadImportableLauncherFiles(e.Data).Count > 0)
             {
@@ -398,7 +401,7 @@ public partial class MainWindow : Window
         if (sender is Border { DataContext: CategoryViewModel dropTabCategory } &&
             !BoardCategoryCatalog.IsContentBucket(dropTabCategory.Category))
         {
-            // 启动标签的文件拖入导入（#30 §七矩阵）；其余（卡片/内容/复盘目标）拒绝。
+            // 启动标签的文件拖入导入（#30 §七矩阵）；其余（卡片/内容/记录目标）拒绝。
             if (dropTabCategory.Category == QuickLaunchMigration.LauncherCategory)
             {
                 var importable = ReadImportableLauncherFiles(e.Data);

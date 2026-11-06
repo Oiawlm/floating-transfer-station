@@ -11,7 +11,7 @@
 - `src/FloatingTransferStation/`：保留 WPF 窗口、Windows 剪贴板格式、注册表、安装器和系统集成；启动显式向 Core 的 `AppPaths` 传入 Windows 数据目录设置。
 - `tests/FloatingTransferStation.Core.Tests/`：核心业务回归；覆盖原子保存的损坏恢复、受管图片路径形状（正斜杠/反斜杠）与大小写语义。
 
-`board.json`、`settings.json` 与 `reviews/*.md` 格式保持稳定。复盘文件是普通 Markdown，可由 Obsidian 直接打开。
+`board.json`、`settings.json` 与 `reviews/*.md` 格式保持稳定。记录文件是普通 Markdown，可由 Obsidian 直接打开。
 
 视觉层使用同一组设计 token 数值（唯一来源是共享 Core 的 `DesignTokens`，人类可读规范见 [设计规范](design.md)），由 WPF 渲染。
 
@@ -34,7 +34,7 @@
 2. 图片先规范化为应用管理的本地副本；文字保留实际文本。
 3. `BoardService` 和相关变更服务按分类、置顶区和顺序规则生成新快照。
 4. `LocalStore` 使用临时文件和原子替换保存 `board.json`；失败时界面操作恢复到原状态。
-5. 复盘编辑器通过 `IDailyReviewStore` 读取日期文件；输入停止后自动保存，文件监听发现外部变更时按编辑器 dirty 状态刷新或进入冲突合并。
+5. 记录编辑器通过 `IDailyReviewStore` 读取日期文件；输入停止后自动保存，文件监听发现外部变更时按编辑器 dirty 状态刷新或进入冲突合并。
 6. 界面只在保存成功后保留变更，并通过通用 Windows 数据格式对外拖出。
 
 `LocalStore` 先进入各文件独立的保存门，再将 JSON 序列化和原子写入调度到后台，避免线程调度改变保存顺序，同时让界面继续响应。调用方传入 `BoardService.CreateSnapshot()` 生成的独立快照；窗口设置通过新对象替换。快照构建仍在状态所属线程完成。

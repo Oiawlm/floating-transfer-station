@@ -13,7 +13,7 @@ namespace FloatingTransferStation.Views;
 /// 仍各自生效），不吞事件（e.Handled 不置位——按下继续原旅程：选择、拖拽起手、
 /// 按钮点击照常），不触碰独立对话框类编辑窗（弹层/菜单在独立 HWND，不经本窗
 /// 隧道，天然不受影响）。四处接入：分类名（CategoryEditing）、瓦片名
-/// （QuickLaunch）、卡片正文/备注（CardTextEditing）、复盘编辑器（DailyReview
+/// （QuickLaunch）、卡片正文/备注（CardTextEditing）、记录编辑器（DailyReview
 /// 700ms 防抖的立即冲刷）。编辑器内的按下不触发（交给编辑器放光标/选择）；
 /// 卡片编辑会话对「正在编辑的卡片容器」内的按下不在此触发（由卡片手势层按
 /// 契约 #22 管辖：容器内非编辑器按下＝提交并整卡吞掉）；滚动条例外沿卡片
@@ -49,7 +49,7 @@ public partial class MainWindow
         CommitLauncherRenameOnPointerPressOutside(pressSource);
     }
 
-    /// <summary>复盘编辑器：编辑器之外按下且有待存内容 → 立即冲刷保存（不等
+    /// <summary>记录编辑器：编辑器之外按下且有待存内容 → 立即冲刷保存（不等
     /// 700ms 防抖）。干净时冲刷在 SaveReviewAsync 内自短路，但这里先行判脏，
     /// 避免每次按压都空排队异步操作。</summary>
     private void FlushReviewEditingOnPointerPressOutside(DependencyObject pressSource)

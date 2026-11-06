@@ -27,7 +27,7 @@ public sealed partial class MainWindowInteractionTests
     private const string CustomerOriginalNonDefaultCaptureHint =
         "把图片或文字拖到这里即可收集";
     private const string ReviewEmptyStateTitleCopy =
-        "还没有复盘内容";
+        "还没有记录内容";
     private const string ReviewEmptyStateHintCopy =
         "直接输入即可开始记录，内容会自动保存";
 

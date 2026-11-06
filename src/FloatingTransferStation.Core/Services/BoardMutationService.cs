@@ -444,6 +444,111 @@ public sealed class BoardMutationService
         }, cancellationToken);
 
     /// <summary>
+    /// 批量指派子分组槽并原子持久化（契约 #57，形态①拖卡归属的唯一持久化路径）：
+    /// 批量改槽→快照→保存失败整批还原槽值并提示；成功后进撤销栈（可撤销批，
+    /// 撤销＝恢复各卡原始槽并落盘）。同槽幂等（不写盘、不入栈）返回 true。
+    /// </summary>
+    public Task<bool> AssignSubgroupAsync(
+        IReadOnlyCollection<Guid> itemIds,
+        int slot,
+        CancellationToken cancellationToken = default) =>
+        _operationGate.RunAsync(async () =>
+        {
+            BoardSubgroupAssignment change;
+            try
+            {
+                change = _board.AssignSubgroup(itemIds, slot);
+            }
+            catch (Exception exception) when (exception is ArgumentOutOfRangeException or ArgumentException or KeyNotFoundException)
+            {
+                return false;
+            }
+
+            if (!change.Changed)
+            {
+                return true;
+            }
+
+            var saved = await SaveSubgroupChangeAsync(
+                cancellationToken,
+                undo: () => _board.Undo(change),
+                failureStatus: "子分组未保存，已恢复原分组。");
+            if (!saved)
+            {
+                return false;
+            }
+
+            RecordUndoableBatch(new UndoableSubgroupAssignBatch(this, change));
+            return true;
+        }, cancellationToken);
+
+    /// <summary>
+    /// 普通区按子分组槽一次稳定分区并原子持久化（契约 #57，形态②进入整队的唯一
+    /// 持久化路径）：分区→快照→保存失败还原原顺序并提示；成功后进撤销栈（撤销＝
+    /// 恢复原顺序并落盘）。已按槽聚簇时 no-op（不写盘、不入栈）返回 true。
+    /// </summary>
+    public Task<bool> PartitionSubgroupsAsync(
+        BoardCategory category,
+        CancellationToken cancellationToken = default) =>
+        _operationGate.RunAsync(async () =>
+        {
+            BoardSubgroupPartition change;
+            try
+            {
+                change = _board.PartitionNormalRegionBySubgroup(category);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
+
+            if (!change.Changed)
+            {
+                return true;
+            }
+
+            var saved = await SaveSubgroupChangeAsync(
+                cancellationToken,
+                undo: () => _board.Undo(change),
+                failureStatus: "分组整理未保存，已恢复原顺序。");
+            if (!saved)
+            {
+                return false;
+            }
+
+            RecordUndoableBatch(new UndoableSubgroupPartitionBatch(this, change));
+            return true;
+        }, cancellationToken);
+
+    /// <summary>
+    /// 子分组结构变更（指派/分区）的共享保存路径：变更已应用→原子快照→保存失败
+    /// 还原（undo 回调）并提示；其他异常同样先还原再抛出。与
+    /// <see cref="SaveItemFieldChangeAsync"/> 同族（不平行复制两套持久化管线）。
+    /// </summary>
+    private async Task<bool> SaveSubgroupChangeAsync(
+        CancellationToken cancellationToken,
+        Action undo,
+        string failureStatus)
+    {
+        try
+        {
+            await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            undo();
+            _showStatus(failureStatus);
+            return false;
+        }
+        catch
+        {
+            undo();
+            throw;
+        }
+    }
+
+    /// <summary>
     /// 撤销最近一批可撤销操作(删除批按锚点插回原分类不回退删除后的其他改动 /
     /// AI 文本替换批恢复原文):多批次时后进先出,恢复的总是最近一批。空栈返回
     /// false 并提示。
@@ -578,8 +683,8 @@ public sealed class BoardMutationService
     /// （可整批 Ctrl+Z）；保存失败所有分类整批回滚并提示，不进撤销栈。
     /// 给出 <paramref name="expiryCutoffUtc"/> 时只移除入库满期的非置顶条目
     /// （逐卡 TTL，自动清扫路径，截止由所选保留时长档位推导）；为 null 时移除全部
-    /// 非置顶条目（手工清空路径，语义不变）。全部分类无可移除条目时不写盘，返回
-    /// Saved=true、RemovedCount=0。
+    /// 无备注的非置顶条目（手工清空路径，2026-11-05 起备注卡同置顶豁免）。
+    /// 全部分类无可移除条目时不写盘，返回 Saved=true、RemovedCount=0。
     /// </summary>
     public Task<ClearNonPinnedOutcome> ClearNonPinnedAsync(
         IReadOnlyCollection<BoardCategory> categories,
@@ -782,6 +887,85 @@ public sealed class BoardMutationService
 
                 throw;
             }
+        }
+
+        public void OnEvicted()
+        {
+        }
+    }
+
+    /// <summary>
+    /// 子分组指派批（契约 #57）：撤销＝恢复各卡捕获的原始槽并落盘，保存失败时
+    /// 重放指派（AssignSubgroup 对当前字段状态幂等）保持指派后状态并提示。
+    /// 条目已被删除时跳过（槽值随卡片消失），本批照常消费。无独占资源，驱逐 no-op。
+    /// </summary>
+    private sealed class UndoableSubgroupAssignBatch(
+        BoardMutationService owner,
+        BoardSubgroupAssignment change) : IUndoableBatch
+    {
+        public async Task<bool> UndoAsync(CancellationToken cancellationToken)
+        {
+            owner._board.Undo(change);
+            var saved = await owner.SaveSubgroupChangeAsync(
+                cancellationToken,
+                undo: RedoBestEffort,
+                failureStatus: "撤销未保存，卡片保持指派后的分组。");
+            if (saved)
+            {
+                owner._showStatus("已恢复卡片原分组。");
+            }
+
+            return saved;
+        }
+
+        /// <summary>保存失败时的重放：只对仍存活且同分类的条目重指派（撤销等待期间
+        /// 条目可能已被删除/移动，批量解析失败即放弃重放——槽值不一致优于崩溃）。</summary>
+        private void RedoBestEffort()
+        {
+            try
+            {
+                var surviving = change.Items
+                    .Where(item => owner._board.FindItem(item.Id) is { Category: var category } &&
+                        category == change.Category)
+                    .Select(item => item.Id)
+                    .ToArray();
+                if (surviving.Length > 0)
+                {
+                    _ = owner._board.AssignSubgroup(surviving, change.Slot);
+                }
+            }
+            catch (Exception exception) when (exception is ArgumentException or KeyNotFoundException)
+            {
+            }
+        }
+
+        public void OnEvicted()
+        {
+        }
+    }
+
+    /// <summary>
+    /// 子分组分区批（契约 #57）：撤销＝恢复分类捕获的原始顺序并落盘，保存失败时
+    /// 重放分区（PartitionNormalRegionBySubgroup 对相同字段状态确定性复算）保持
+    /// 分区后顺序并提示。无独占资源，驱逐 no-op。
+    /// </summary>
+    private sealed class UndoableSubgroupPartitionBatch(
+        BoardMutationService owner,
+        BoardSubgroupPartition change) : IUndoableBatch
+    {
+        public async Task<bool> UndoAsync(CancellationToken cancellationToken)
+        {
+            owner._board.Undo(change);
+            var saved = await owner.SaveSubgroupChangeAsync(
+                cancellationToken,
+                undo: () => _ = owner._board.PartitionNormalRegionBySubgroup(change.Category),
+                failureStatus: "撤销未保存，列表保持分组整理后的顺序。");
+            if (saved)
+            {
+                owner._showStatus("已恢复分组整理前的顺序。");
+            }
+
+            return saved;
         }
 
         public void OnEvicted()

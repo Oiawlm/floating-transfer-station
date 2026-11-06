@@ -1,7 +1,7 @@
 namespace FloatingTransferStation.Models;
 
 /// <summary>
-/// 复盘阅读视图的渲染文档模型（实验性，2026-11-03）：与 WPF 无关的中间表示——
+/// 记录阅读视图的渲染文档模型（实验性，2026-11-03）：与 WPF 无关的中间表示——
 /// Markdown 原文经 <c>MarkdownDocumentMapper</c>（Markdig/CommonMark 核心管线）
 /// 映射为本模型，UI 侧再映射为只读渲染。支持子集（锁定，见设计契约 #4 增补）：
 /// 标题、段落、粗体/斜体、行内代码、围栏与缩进代码块、块引用、有序/无序列表、

@@ -36,15 +36,24 @@ public partial class MainWindow
     private void SearchClearFilterButton_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
-        ClearSearchConditions();
-        FocusSearchInput();
+        if (_viewModel.IsSearchActive)
+        {
+            ClearSearchConditions();
+            FocusSearchInput();
+        }
+        else
+        {
+            // chip 过滤空态（契约 #57）：清空按钮取消的是子分组过滤（搜索条未展开，
+            // 不触碰搜索条件与焦点）。
+            ClearSubgroupFilter(reapplyFilter: true);
+        }
     }
 
     private void SearchInput_TextChanged(object sender, TextChangedEventArgs e)
     {
         _viewModel.SearchText = SearchInput.Text;
         UpdateSearchInputHint();
-        ApplySearchFilter();
+        ApplyBoardListFilter();
     }
 
     private void SearchInput_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -68,10 +77,10 @@ public partial class MainWindow
             : textOnly && !imagesOnly
                 ? SearchTypeFilter.TextOnly
                 : SearchTypeFilter.All;
-        ApplySearchFilter();
+        ApplyBoardListFilter();
     }
 
-    /// <summary>进入搜索态：仅内容桶（复盘与启动标签冻结，#30 排除面）；清选择、应用过滤、聚焦输入框。</summary>
+    /// <summary>进入搜索态：仅内容桶（记录与启动标签冻结，#30 排除面）；清选择、应用过滤、聚焦输入框。</summary>
     internal void EnterSearchMode()
     {
         if (_isClosing ||
@@ -88,7 +97,7 @@ public partial class MainWindow
         // 搜索态空集语义由 SearchEmptyHint 承载，内容桶空态让位（契约 #33）。
         UpdateBoardEmptyState();
         UpdateSearchPresentation();
-        ApplySearchFilter();
+        ApplyBoardListFilter();
         FocusSearchInput();
     }
 
@@ -104,7 +113,7 @@ public partial class MainWindow
         UpdateBoardEmptyState();
         ClearSearchControls();
         UpdateSearchPresentation();
-        ApplySearchFilter();
+        ApplyBoardListFilter();
         // 隐藏搜索条后把焦点交还列表:隐藏的输入框可能仍持有逻辑焦点并继续抑制收起。
         BoardList.Focus();
         ReconcileSurfaceAfterEditing();
@@ -144,10 +153,12 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 把当前条件应用到 BoardList 的集合视图：只读过滤，不改源集合。
-    /// 条件为空（无关键词且类型=全部）时移除过滤还原完整列表。
+    /// 把当前过滤条件应用到 BoardList 的集合视图（唯一过滤单点，契约 #37 扩展＝#57）：
+    /// 只读过滤，不改源集合、板序、置顶分区与持久化。裁决序——搜索激活＝搜索谓词
+    /// 压倒（chip 过滤冻结让位、选中态保留）；否则 chip 过滤（item.Subgroup==激活槽，
+    /// 形态①）；否则移除过滤还原完整列表。
     /// </summary>
-    private void ApplySearchFilter()
+    private void ApplyBoardListFilter()
     {
         if (_viewModel.ActivePanel is null)
         {
@@ -156,19 +167,24 @@ public partial class MainWindow
 
         var keyword = _viewModel.SearchText.Trim();
         var type = _viewModel.SearchType;
-        var active = _viewModel.IsSearchActive;
-        if (!active || (keyword.Length == 0 && type == SearchTypeFilter.All))
-        {
-            BoardList.Items.Filter = null;
-        }
-        else
+        var searchActive = _viewModel.IsSearchActive;
+        if (searchActive && (keyword.Length > 0 || type != SearchTypeFilter.All))
         {
             BoardList.Items.Filter = item => MatchesSearchFilter(item, keyword, type);
         }
+        else if (!searchActive && IsSubgroupFilterActive)
+        {
+            var slot = _subgroupFilterSlot!.Value;
+            BoardList.Items.Filter = item => item is BoardItem boardItem && boardItem.Subgroup == slot;
+        }
+        else
+        {
+            BoardList.Items.Filter = null;
+        }
 
         UpdateSearchEmptyHint();
-        // 过滤改变可见视图（进出搜索、改关键词/类型共用本单点）：锚点被过滤
-        // 移出视图即终结会话，仍在视图内则覆盖层重定位跟随。
+        // 过滤改变可见视图（进出搜索、改关键词/类型、chip 过滤切换共用本单点）：锚点
+        // 被过滤移出视图即终结会话，仍在视图内则覆盖层重定位跟随。
         RefreshCardEditSession();
     }
 
@@ -198,7 +214,15 @@ public partial class MainWindow
 
     private void UpdateSearchEmptyHint()
     {
-        var visible = _viewModel.IsSearchActive && BoardList.Items.IsEmpty;
-        SearchEmptyHint.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        // 空态提示单点（契约 #33 让位链扩展＝#57）：搜索态「无匹配结果」与 chip 过滤
+        // 空结果「该分组暂无卡片」复用同一元素、文案按来源切换；内容桶空态让位。
+        var searchVisible = _viewModel.IsSearchActive && BoardList.Items.IsEmpty;
+        var subgroupVisible = !_viewModel.IsSearchActive &&
+            IsSubgroupFilterActive &&
+            BoardList.Items.IsEmpty;
+        SearchEmptyHint.Visibility = searchVisible || subgroupVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        SearchEmptyHintTitle.Text = _viewModel.IsSearchActive ? "无匹配结果" : "该分组暂无卡片";
     }
 }

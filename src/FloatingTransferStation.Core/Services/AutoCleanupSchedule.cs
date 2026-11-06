@@ -4,7 +4,8 @@ namespace FloatingTransferStation.Services;
 
 /// <summary>
 /// 自动清理策略（逐卡 TTL 语义；2026-10-14 起保留时长为用户可选档位，默认
-/// 24 小时）：纯逻辑、零依赖。每张非置顶卡片入库满所选档位的保留时长（
+/// 24 小时）：纯逻辑、零依赖。每张无备注的非置顶卡片（备注卡 2026-11-05 起
+/// 完全同置顶豁免）入库满所选档位的保留时长（
 /// <see cref="GetRetentionDuration"/>）即到期，判据只看卡片自身
 /// <see cref="BoardItem.CreatedAt"/> 与检查时刻的差——对给定时刻重复检查结果
 /// 一致（幂等），且不依赖任何历史记录，因此没有「上次运行」记账与基线：
@@ -42,9 +43,9 @@ public static class AutoCleanupSchedule
     /// <summary>
     /// 清扫范围 = 仅内容桶角色（BoardCategoryCatalog.Ordered 中
     /// <see cref="BoardCategoryCatalog.IsContentBucket"/> 为真的成员；#18 修订，
-    /// Issue #162）：复盘与启动标签永不触碰（即使超龄、即使有残留内容）。
+    /// Issue #162）：记录与启动标签永不触碰（即使超龄、即使有残留内容）。
     /// 单一权威来源是分类目录的角色机制：未来新增内容桶默认纳入清扫，新增
-    /// 复盘/启动类分类天然排除（契约测试锁定清单内容）。
+    /// 记录/启动类分类天然排除（契约测试锁定清单内容）。
     /// </summary>
     public static IReadOnlyList<BoardCategory> SweepCategories { get; } =
         BoardCategoryCatalog.Ordered

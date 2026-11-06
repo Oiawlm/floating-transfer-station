@@ -45,7 +45,7 @@ public partial class MainWindow : Window
         // 早于搜索退出与焦点转移——它们的中间状态不应干扰提交流径。
         EndCardEditSessionForViewChange();
 
-        // 冲刷仍是复盘特有行为，键在角色（#30）：离开复盘表面即冲刷未保存复盘。
+        // 冲刷仍是记录特有行为，键在角色（#30）：离开记录表面即冲刷未保存记录。
         if (IsReviewActive() && BoardCategoryCatalog.RoleOf(category) != CategoryRole.Review)
         {
             TrackPendingOperation(FlushReviewAsync());
@@ -57,6 +57,13 @@ public partial class MainWindow : Window
             ExitSearchMode();
         }
 
+        // 子分组 chip 过滤（契约 #57）：切换分类＝清过滤（沿搜索先例）；先在旧面板
+        // 的集合视图上移除 Filter（每分类独立视图，残留会作用于该分类再次激活）。
+        if (_subgroupFilterSlot is not null && _viewModel.ActivePanel?.Category != category)
+        {
+            ClearSubgroupFilter(reapplyFilter: true);
+        }
+
         if (_viewModel.ActivePanel?.Category != category)
         {
             ClearUserSelection();
@@ -66,6 +73,8 @@ public partial class MainWindow : Window
         if (_viewModel.ActivePanel is { } activePanel)
         {
             AttachCardEntrance(activePanel.Items);
+            // 轨名按激活分类的名清单逐槽解析刷新（形态①作用域＝内容桶）。
+            _viewModel.RefreshSubgroupChips(_settings, activePanel.Category);
         }
 
         UpdatePanelSurface();
@@ -255,6 +264,7 @@ public partial class MainWindow : Window
             Keyboard.FocusedElement is TextBoxBase ||
             !_viewModel.IsPanelExpanded ||
             _viewModel.IsSearchActive ||
+            IsSubgroupFilterActive ||
             _viewModel.ActivePanel is not { Items.Count: > 0 })
         {
             return;
@@ -491,16 +501,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 清空非置顶前先取被清范围：既是状态提示的数量，也是空操作短路条件。
+        // 清空非置顶前先取被清范围（2026-11-05 起备注卡同置顶豁免，资格判定与
+        // BoardService.RemoveNonPinned 移除谓词同源）：既是状态提示的数量，也是
+        // 空操作短路条件。
         var nonPinnedIds = clearMode == TrashClearMode.NonPinned
             ? _board.Items(targetCategory)
-                .Where(item => !item.IsPinned)
+                .Where(BoardService.IsEligibleForNonPinnedRemoval)
                 .Select(item => item.Id)
                 .ToArray()
             : [];
         if (clearMode == TrashClearMode.NonPinned && nonPinnedIds.Length == 0)
         {
-            ShowStatus("当前分类没有非置顶内容可清空。");
+            ShowStatus("当前分类没有非置顶内容可清空（有备注的卡片保留）。");
             return;
         }
 
@@ -729,6 +741,17 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             ExitSearchMode();
+            return;
+        }
+
+        // chip 过滤的退出手势（契约 #57）：无搜索时 Esc＝取消子分组过滤（先于清选择）。
+        if (e.Key == Key.Escape &&
+            !_isClosing &&
+            Keyboard.FocusedElement is not TextBoxBase &&
+            IsSubgroupFilterActive)
+        {
+            e.Handled = true;
+            ClearSubgroupFilter(reapplyFilter: true);
             return;
         }
 

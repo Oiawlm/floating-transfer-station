@@ -200,6 +200,11 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
         _viewModel.ShortCardNotesEnabled = _preferences.ShortCardNotesEnabled;
         _viewModel.AiOrganizeEnabled = _preferences.AiOrganizeEnabled;
+        // 子分组呈现模式（契约 #57）：启动只喂模式与名清单快照（Reindex 派生标记），
+        // 不触发 GroupedView 进入分区——持久化 Order 已是启用时的分区结果，重启
+        // 自动重整队会覆盖用户在 GroupedView 内拖出的有意新 run。
+        _viewModel.SubgroupDisplay = _preferences.SubgroupDisplay;
+        _board.SetSubgroupDisplay(_preferences.SubgroupDisplay, _settings);
         // 插件目录态（Issue #240 插件钮可见性单一来源）：启动装载先于窗口构造
         //（App 组合根），构造期即同步；后续目录变化经设置路径刷新（见
         // MainWindow.Settings.cs）。
@@ -218,6 +223,7 @@ public partial class MainWindow : Window
         InitializeAutoCleanup();
         InitializeUpdates();
         InitializeCategoryNameEditing();
+        InitializeSubgroupNameEditing();
         InitializePanelTextEditing();
         InitializeCardEditSessionTracking();
         InitializeEditingCommit();
@@ -246,7 +252,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 采纳后台装载期间完成的设置迁移结果（复盘迁移、分类默认名迁移）：同步退出保存用的
+    /// 采纳后台装载期间完成的设置迁移结果（记录迁移、分类默认名迁移）：同步退出保存用的
     /// 设置基准与全部分类显示名，使迁移无需在窗口构造前完成（启动先显示收起态）。
     /// </summary>
     internal void AdoptMigratedSettings(WindowSettings settings)

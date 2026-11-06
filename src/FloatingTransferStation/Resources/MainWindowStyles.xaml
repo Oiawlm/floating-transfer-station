@@ -236,8 +236,8 @@
     </Setter>
   </Style>
 
-  <!-- 导航按钮（复盘 ‹ › 等）：动作按钮的小方块形态。Focusable 必须为 True——
-       键盘可达性与既有回归（复盘失焦恢复收起）都依赖按钮能接收焦点，
+  <!-- 导航按钮（记录 ‹ › 等）：动作按钮的小方块形态。Focusable 必须为 True——
+       键盘可达性与既有回归（记录失焦恢复收起）都依赖按钮能接收焦点，
        与头部动作按钮（装饰性、不可聚焦）不同。 -->
   <Style x:Key="ThemedNavButtonStyle" TargetType="Button" BasedOn="{StaticResource ThemedActionButtonStyle}">
     <Setter Property="Width" Value="30" />
@@ -247,7 +247,7 @@
     <Setter Property="Focusable" Value="True" />
   </Style>
 
-  <!-- 复盘「阅读｜编辑」分段切换（实验性，2026-11-03，仅实验开关开启时可见）：外框
+  <!-- 记录「阅读｜编辑」分段切换（实验性，2026-11-03，仅实验开关开启时可见）：外框
        与分段段体沿用既有选中语言——外框 BorderBrush＋控件级圆角，选中段
        ActiveCategoryBrush 底＋PrimaryText，未选中 SecondaryText，悬停
        HoverSurfaceBrush；不引入新颜色键，浅深两主题随字典整本替换。RadioButton
@@ -603,6 +603,102 @@
          标签不再整圈紫框，聚焦反馈由编辑器自身的 Themed 描边承载。 -->
   </Style>
 
+  <!-- 子分组 chip 样式族（实验性，契约 #57 形态①，2026-11-05）：视觉沿分类轨
+       标签语言（边框/圆角/hover/激活 accent）。四槽 UniformGrid 各约 65 DIP
+       （最小面板 310−页边 24≈286÷4），3 字×12px＝36＋内边距充裕；名称上限 3
+       字符由编辑器 MaxLength 单一来源承载（备注 120 先例），设置侧 LimitName
+       归一。 -->
+  <Style x:Key="SubgroupChipContainerStyle" TargetType="Border">
+    <Setter Property="Margin" Value="2,4" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="BorderBrush" Value="{DynamicResource HoverBorderBrush}" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style x:Key="SubgroupChipActiveLayerStyle" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="views:FadeAnimation.IsActive" Value="{Binding IsFilterActive}" />
+    <Setter Property="views:FadeAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
+    <Setter Property="views:FadeAnimation.DurationMs"
+            Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+  </Style>
+
+  <Style x:Key="SubgroupChipDropTargetLayerStyle" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource DropTargetBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="views:FadeAnimation.IsActive" Value="{Binding IsDropTarget}" />
+    <Setter Property="views:FadeAnimation.AnimationsEnabled"
+            Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
+    <Setter Property="views:FadeAnimation.DurationMs"
+            Value="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+  </Style>
+
+  <Style x:Key="SubgroupChipLabelTextStyle" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource InterfaceFontFamily}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+    <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="Margin" Value="4,0" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsEditingName}" Value="True">
+        <Setter Property="Visibility" Value="Collapsed" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding IsFilterActive}" Value="True">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style x:Key="SubgroupChipNameEditorStyle" TargetType="TextBox">
+    <Setter Property="Visibility" Value="Collapsed" />
+    <Setter Property="Margin" Value="4,2" />
+    <Setter Property="Padding" Value="1" />
+    <Setter Property="MaxLength" Value="{x:Static models:SubgroupCatalog.MaxNameLength}" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource InterfaceFontFamily}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="AcceptsReturn" Value="False" />
+    <Setter Property="ToolTip" Value="编辑子分组名称" />
+    <Setter Property="AutomationProperties.Name" Value="子分组名称" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsEditingName}" Value="True">
+        <Setter Property="Visibility" Value="Visible" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+
   <Style x:Key="CategoryActiveLayerStyle" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
     <Setter Property="CornerRadius" Value="7" />
@@ -870,21 +966,51 @@
               <RowDefinition Height="Auto" />
               <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            <!-- 置顶分区分隔元素（契约 #27）：宿主在容器模板行 0，与卡片同轴参与布局。
-                 两轴正交——「边界可见性」由下方模板触发器按 StartsNormalRegion 驱动
-                 （基态塌缩；Recycling 复用下触发器随 DataContext 重评，禁止代码后置
-                 逐容器设状态）；「四态外观」由 Style 槽位资源经 DynamicResource 承载
-                 （MainWindow 按偏好换装）。None 态以零高+空描边实现零渲染——即使
-                 触发器命中也无任何像素与布局占位，边界卡外距与既有间距完全一致。 -->
-            <Line x:Name="PinnedDivider"
-                  Grid.Row="0"
-                  X1="0" Y1="0" X2="1" Y2="0"
-                  Stretch="Fill"
-                  UseLayoutRounding="True"
-                  SnapsToDevicePixels="True"
-                  IsHitTestVisible="False"
-                  Visibility="Collapsed"
-                  Style="{DynamicResource PinnedDividerActiveStyle}" />
+            <!-- 行 0＝分区边界宿主（契约 #27，#57 修订泛化）：置顶|普通边界与子分组
+                 组边界共用同一 divider Line——可见性由模板触发器按 StartsNormalRegion/
+                 StartsSubgroupRegion 驱动（基态塌缩；Recycling 复用下随 DataContext
+                 重评，禁止代码后置逐容器设状态、哨兵数据项与第二套边界判定）；
+                 「四态外观」由 Style 槽位资源经 DynamicResource 承载（MainWindow 按
+                 偏好换装）。None 态零高+空描边＝零渲染，触发器命中也不占布局。
+                 子分组组头（契约 #57 形态②）：divider 上方小节标题，文本绑派生
+                 SubgroupHeader（命名组边界卡非 null、未指定组与普通卡恒 null），
+                 基态 Collapsed；与 divider 各自独立可见、互不占位。 -->
+            <Grid Grid.Row="0" IsHitTestVisible="False">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <TextBlock x:Name="SubgroupHeaderText"
+                         Grid.Row="0"
+                         Text="{Binding SubgroupHeader}"
+                         FontSize="12"
+                         FontFamily="{DynamicResource InterfaceFontFamily}"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         Margin="12,8,12,2">
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock">
+                    <!-- 基态塌缩：SubgroupHeader 只在命名组边界卡非 null（未指定组
+                         无组头），非空即可见——空文本不占布局，Off/ChipRail 模式
+                         （Reindex 恒 null）零渲染零占位。 -->
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding SubgroupHeader, Converter={StaticResource NonEmptyTextConverter}}" Value="True">
+                        <Setter Property="Visibility" Value="Visible" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
+              <Line x:Name="PinnedDivider"
+                    Grid.Row="1"
+                    X1="0" Y1="0" X2="1" Y2="0"
+                    Stretch="Fill"
+                    UseLayoutRounding="True"
+                    SnapsToDevicePixels="True"
+                    IsHitTestVisible="False"
+                    Visibility="Collapsed"
+                    Style="{DynamicResource PinnedDividerActiveStyle}" />
+            </Grid>
             <Border Grid.Row="1"
                     Background="{TemplateBinding Background}"
                     BorderBrush="{TemplateBinding BorderBrush}"
@@ -895,6 +1021,12 @@
           </Grid>
           <ControlTemplate.Triggers>
             <DataTrigger Binding="{Binding StartsNormalRegion}" Value="True">
+              <Setter TargetName="PinnedDivider" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+            <!-- 子分组组边界（契约 #57）：divider 复用置顶分隔同一宿主与四态外观；
+                 组头可见性由 SubgroupHeaderText 自身样式按非空驱动（未指定组无组头，
+                 与 Off 观感最近）。 -->
+            <DataTrigger Binding="{Binding StartsSubgroupRegion}" Value="True">
               <Setter TargetName="PinnedDivider" Property="Visibility" Value="Visible" />
             </DataTrigger>
           </ControlTemplate.Triggers>
