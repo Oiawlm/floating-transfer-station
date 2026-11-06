@@ -223,7 +223,8 @@ public partial class MainWindow : Window, ISettingsHost
     /// 子分组呈现模式下发（契约 #57 唯一管线＝ApplyPreferences 的一部分）：模式切换
     /// 即全分类 Reindex 刷新派生标记（StartsSubgroupRegion 仅 GroupedView 置位）；
     /// 任何切换清 chip 过滤（轨塌缩/出现零残留）；→GroupedView＝触发进入分区（普通区
-    /// 存在 ≥2 个不同槽且物理散布才动手，否则 no-op——已聚簇时不写盘）。
+    /// 存在 ≥2 个不同槽且物理散布才动手，否则 no-op——已聚簇时不写盘）。模式切换必经
+    /// 本单点，末尾同步重评零指派引导条（2026-11-06，#57 可用性扩展）。
     /// </summary>
     private void ApplySubgroupDisplayPreference(SubgroupDisplayMode mode)
     {
@@ -234,6 +235,8 @@ public partial class MainWindow : Window, ISettingsHost
         {
             TrackPendingOperation(PartitionContentBucketsForGroupedViewAsync());
         }
+
+        UpdateGroupedViewGuidance();
     }
 
     /// <summary>GroupedView 进入分区：对两个内容桶分类逐个尝试稳定分区（已聚簇的分类

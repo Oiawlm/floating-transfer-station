@@ -58,8 +58,13 @@ public partial class MainWindow
         }
     }
 
-    private void ActivePanelItems_EmptyStateChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
+    private void ActivePanelItems_EmptyStateChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
         UpdateBoardEmptyState();
+        // 激活桶内容增删/归组/GroupedView 纯重排（Move）同拍重评零指派引导条
+        //（2026-11-06，#57 可用性扩展）：谓词读源集合，与空态单点共用本触发。
+        UpdateGroupedViewGuidance();
+    }
 
     private void ActivePanel_EmptyStateChanged(object? sender, PropertyChangedEventArgs e)
     {
