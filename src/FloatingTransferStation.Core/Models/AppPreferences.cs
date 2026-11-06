@@ -139,6 +139,12 @@ public enum SubgroupDisplayMode
 /// 互斥、开关只切呈现与派生面；数据（BoardItem.Subgroup 槽）与名清单
 /// （settings.SubgroupNames）独立持久化，关闭＝轨塌缩+过滤清除、布局行为与
 /// 现状等价。旧配置缺字段免迁移回落 Off，老用户升级零感知。
+/// 图片拖出为文件开关（2026-11-06 实验性，契约 #58；默认关＝零打扰，沿记录
+/// Markdown 阅读视图先例）：开启后把图片卡（或纯图片多选）拖到文件夹或桌面
+/// 即复制出图片文件（只复制，受管库与应用内卡片不动）；关闭＝图片卡拖出剥离
+/// 外部文件/位图形态，窗内整理与剪贴板复制不受影响。只门控拖出载荷构造
+/// （DragPayloadService 单点），不改窗内拖放与剪贴板语义；旧配置缺字段
+/// 免迁移回落关闭，老用户升级零感知。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -167,7 +173,8 @@ public sealed record AppPreferences(
     bool AiOrganizeEnabled = false,
     string? InterfaceFont = null,
     bool ReviewMarkdownViewEnabled = false,
-    SubgroupDisplayMode SubgroupDisplay = SubgroupDisplayMode.Off)
+    SubgroupDisplayMode SubgroupDisplay = SubgroupDisplayMode.Off,
+    bool DragOutAsFileEnabled = false)
 {
     public static AppPreferences Default { get; } = new();
 }

@@ -1291,6 +1291,153 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
+    // ---- 图片拖出为文件（契约 #58，实验性默认关）：BuildInternalDragData 反射
+    // 直调先例（上方两条）——窗内拖出经门控单点取两态载荷形状，UI 事件层零
+    // 开关感知（开关字段只经偏好下发进服务）。----
+
+    [STATestMethod]
+    public void InternalDragData_DisabledImageDragKeepsInternalIdWithoutFileDrop()
+    {
+        using var directory = new TestDirectory();
+        var path = Path.Combine(directory.Root, "board-image.png");
+        using (var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(
+            2, 2, SixLabors.ImageSharp.Color.Green))
+        {
+            SixLabors.ImageSharp.ImageExtensions.SaveAsPng(image, path);
+        }
+
+        var board = new BoardService();
+        var item = board.AddImage(Guid.NewGuid(), "images/board-image.png", path);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var method = GetPrivateMethod("BuildInternalDragData");
+            Assert.IsNotNull(method);
+
+            var data = method.Invoke(window, [item]) as IDataObject;
+
+            Assert.IsNotNull(data);
+            Assert.AreEqual(item.Id, new DragPayloadService().GetInternalItemId(data));
+            Assert.IsFalse(data.GetDataPresent(DataFormats.FileDrop), "默认关＝窗内图片拖出不携带文件组。");
+            Assert.IsFalse(data.GetDataPresent(DataFormats.Bitmap), "默认关＝窗内图片拖出不携带位图。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void InternalDragData_EnabledImageDragCarriesFileDropList()
+    {
+        using var directory = new TestDirectory();
+        var path = Path.Combine(directory.Root, "board-image.png");
+        using (var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(
+            2, 2, SixLabors.ImageSharp.Color.Green))
+        {
+            SixLabors.ImageSharp.ImageExtensions.SaveAsPng(image, path);
+        }
+
+        var board = new BoardService();
+        var item = board.AddImage(Guid.NewGuid(), "images/board-image.png", path);
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(
+            board,
+            store,
+            WindowSettings.Default,
+            new DefaultCaptureCategoryState(),
+            new ImageNormalizer(store.ImagesDirectory),
+            preferences: AppPreferences.Default with { DragOutAsFileEnabled = true });
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var method = GetPrivateMethod("BuildInternalDragData");
+            Assert.IsNotNull(method);
+
+            var data = method.Invoke(window, [item]) as IDataObject;
+
+            Assert.IsNotNull(data);
+            Assert.AreEqual(item.Id, new DragPayloadService().GetInternalItemId(data));
+            CollectionAssert.AreEqual(
+                new[] { path },
+                ((DataObject)data).GetFileDropList().Cast<string>().ToArray(),
+                "开启＝窗内图片拖出携带文件组（既有能力恢复）。");
+            Assert.IsTrue(data.GetDataPresent(DataFormats.Bitmap));
+            Assert.IsTrue(
+                data.GetDataPresent(DragPayloadService.PreferredDropEffectFormat),
+                "开启＝附 Preferred DropEffect(Copy) 声明（#3 精神：防外部按 Move 删受管源）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void InternalDragData_TextDragUnaffectedByDragOutToggle()
+    {
+        using var directory = new TestDirectory();
+        const string text = "拖出开关不影响文字";
+        var method = GetPrivateMethod("BuildInternalDragData");
+        Assert.IsNotNull(method);
+
+        var offBoard = new BoardService();
+        var offItem = offBoard.AddText(text);
+        var offWindow = CreateWindow(directory, offBoard);
+        try
+        {
+            offWindow.Show();
+            ExpandCategory(offWindow, BoardCategory.Inbox);
+            CompleteLayout(offWindow);
+
+            var data = method.Invoke(offWindow, [offItem]) as IDataObject;
+
+            Assert.IsNotNull(data);
+            Assert.AreEqual(text, data.GetData(DataFormats.UnicodeText), "文字卡拖出两态不变。");
+            Assert.IsFalse(data.GetDataPresent(DataFormats.FileDrop));
+            Assert.IsFalse(data.GetDataPresent(DragPayloadService.PreferredDropEffectFormat));
+        }
+        finally
+        {
+            CloseWindow(offWindow);
+        }
+
+        var enabledStore = new RecordingBoardStore(directory.Root);
+        var enabledBoard = new BoardService();
+        var enabledItem = enabledBoard.AddText(text);
+        var enabledWindow = CreateWindow(
+            enabledBoard,
+            enabledStore,
+            WindowSettings.Default,
+            new DefaultCaptureCategoryState(),
+            new ImageNormalizer(enabledStore.ImagesDirectory),
+            preferences: AppPreferences.Default with { DragOutAsFileEnabled = true });
+        try
+        {
+            enabledWindow.Show();
+            ExpandCategory(enabledWindow, BoardCategory.Inbox);
+            CompleteLayout(enabledWindow);
+
+            var data = method.Invoke(enabledWindow, [enabledItem]) as IDataObject;
+
+            Assert.IsNotNull(data);
+            Assert.AreEqual(text, data.GetData(DataFormats.UnicodeText), "开启态文字卡拖出仍只送文本。");
+            Assert.IsFalse(data.GetDataPresent(DataFormats.FileDrop));
+            Assert.IsFalse(data.GetDataPresent(DragPayloadService.PreferredDropEffectFormat));
+        }
+        finally
+        {
+            CloseWindow(enabledWindow);
+        }
+    }
+
     [STATestMethod]
     public void CategoryHoverDuringInternalDragKeepsSourcePanelAndSelection()
     {
