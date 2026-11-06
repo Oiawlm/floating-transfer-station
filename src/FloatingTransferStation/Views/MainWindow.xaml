@@ -812,9 +812,12 @@
                          Foreground="{DynamicResource SecondaryTextBrush}"
                          Text="今天" />
             </Grid>
+            <!-- 记录编辑器挂 keyed overlay 滚动模板（契约 #23 扩展，2026-11-06）：打满一屏
+                 滚动条出现/消失不改变排版宽（Auto 滚动条悬浮文字之上、8 DIP 落在 Padding=12
+                 右带内），Wrap 全文不再重排；垂直 Auto/水平 Disabled 语义不变。 -->
             <TextBox x:Name="ReviewEditor"
                      Grid.Row="1"
-                     Style="{StaticResource ThemedTextBoxStyle}"
+                     Style="{StaticResource OverlayScrollTextBoxStyle}"
                      AcceptsReturn="True"
                      TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"
