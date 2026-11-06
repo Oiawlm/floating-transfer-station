@@ -236,8 +236,9 @@ public sealed class SettingsWindowContactTests
     }
 
     /// <summary>W5 联系方式证据（FTS_W5_EVIDENCE_DIR 设置时产出真实 WPF 渲染
-    /// 截图）：浅/深主题设置窗页脚关于区（联系方式行＋二维码缩略图）、复制
-    /// 反馈态与二维码放大层。复制走写入缝，不触碰系统剪贴板。</summary>
+    /// 截图）：浅/深主题设置窗页脚关于区（联系方式行＋二维码缩略图，无按钮态）、
+    /// 微信号行复制反馈态、缩略图右键复制反馈态、放大层与放大图右键复制反馈态
+    ///（层不关同证）、动效关开/关即时定格。复制走写入缝，不触碰系统剪贴板。</summary>
     [STATestMethod]
     public void Evidence_CaptureW5ContactScreens()
     {
@@ -263,12 +264,32 @@ public sealed class SettingsWindowContactTests
             RaisePointUp((TextBlock)settings.FindName("WeChatIdFooterBlock")!, UIElement.MouseLeftButtonUpEvent);
             CompleteLayout(settings);
             SaveFooterCrop(settings, evidenceDirectory!, "footer-contact-copied-light.png");
+            PumpUntil(settings.Dispatcher, () =>
+                ((Run)settings.FindName("WeChatIdRun")!).Text == ProductIdentity.WeChatId);
+
+            // 缩略图右键复制二维码图片 → 页脚 Run 反馈（2026-11-06 新交互证据）。
+            RaisePointUp((Button)settings.FindName("WeChatQrButton")!, UIElement.MouseRightButtonUpEvent);
+            CompleteLayout(settings);
+            SaveFooterCrop(settings, evidenceDirectory!, "footer-contact-qrcopied-light.png");
+            PumpUntil(settings.Dispatcher, () =>
+                ((Run)settings.FindName("WeChatIdRun")!).Text == ProductIdentity.WeChatId);
 
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
             PumpUntil(settings.Dispatcher, () => overlay.Opacity == 1d && overlay.Visibility == Visibility.Visible);
             SaveWindowShell(settings, evidenceDirectory!, "qr-overlay-light.png");
+
+            // 放大图右键复制 → 放大态 Run 反馈且层不关（2026-11-06 新交互证据）。
+            RaisePointUp((Border)settings.FindName("WeChatQrLargeCard")!, UIElement.MouseRightButtonUpEvent);
+            CompleteLayout(settings);
+            SaveWindowShell(settings, evidenceDirectory!, "qr-overlay-qrcopied-light.png");
+            Assert.AreEqual(
+                Visibility.Visible,
+                overlay.Visibility,
+                "放大图右键复制不关层（证据帧同证）。");
+            PumpUntil(settings.Dispatcher, () =>
+                ((Run)settings.FindName("WeChatIdLargeRun")!).Text == ProductIdentity.WeChatId);
 
             overlay.RaiseEvent(new MouseButtonEventArgs(
                 Mouse.PrimaryDevice,
@@ -293,6 +314,34 @@ public sealed class SettingsWindowContactTests
         finally
         {
             CloseAll(window);
+        }
+
+        // 动效关开/关即时定格（2026-11-06）：偏好动效关的独立窗口。
+        using var disabledDirectory = new TestDirectory();
+        var disabledStore = new RecordingPreferencesStore();
+        var disabledWindow = CreateWindow(
+            disabledDirectory,
+            disabledStore,
+            disabledStore.Seeded with { AnimationsEnabled = false });
+        try
+        {
+            var settings = OpenSettings(disabledWindow);
+            CompleteLayout(settings);
+            var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            CompleteLayout(settings);
+            Assert.AreEqual(Visibility.Visible, overlay.Visibility, "动效关＝打开即时可见。");
+            SaveWindowShell(settings, evidenceDirectory!, "contact-disabled-open-light.png");
+
+            RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
+            CompleteLayout(settings);
+            Assert.AreEqual(Visibility.Collapsed, overlay.Visibility, "动效关＝关闭即时塌缩。");
+            SaveWindowShell(settings, evidenceDirectory!, "contact-disabled-closed-light.png");
+        }
+        finally
+        {
+            CloseAll(disabledWindow);
         }
     }
 
