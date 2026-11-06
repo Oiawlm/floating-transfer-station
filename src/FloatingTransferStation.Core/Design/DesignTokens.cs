@@ -73,6 +73,9 @@ public static class DesignTokens
     /// 取 120 覆盖手抖频率（≥4Hz 的断言间隔都低于它），又不至于让真离开的
     /// 高亮消退有可感知迟滞。</summary>
     public const int DropTargetWithdrawHoldMs = 120;
+    /// <summary>二维码放大层 QR 卡缩放入场（W3 2026-11-05）：场景常量不加档——
+    /// 直接锚 SlowDurationMs（仿 LaunchConfirmMs，永不加第四档）。</summary>
+    public const int QrZoomEntranceMs = SlowDurationMs;
 
     // 快捷启动（#30）：场景常量不加档——LaunchConfirmMs/ItemLandingMs 直接锚 SlowDurationMs。
     public const int LaunchConfirmMs = SlowDurationMs;
