@@ -281,19 +281,24 @@ public sealed class SettingsWindowContactTests
             SaveWindowShell(settings, evidenceDirectory!, "qr-overlay-light.png");
 
             // 放大图右键复制 → 放大态 Run 反馈且层不关（2026-11-06 新交互证据）。
-            // Run 文本翻转会触发层内布局失效并推进动画时钟的完成处理（入场淡入
-            // FillBehavior.Stop 的收尾落在此泵内），先等回满帧再拍，避免拍到
-            // 时钟收尾瞬间的透明帧。
+            // 右键处理器同步翻转 Run 且不动透明度；UpdateLayout 只跑布局不泵
+            // 调度器（动画时钟完成处理不落地、1.6s 反馈复位不触发），翻转文本
+            // 与满帧层同帧入画——PushFrame 泵会拍到时钟收尾透明帧或复位常态帧。
             RaisePointUp((Border)settings.FindName("WeChatQrLargeCard")!, UIElement.MouseRightButtonUpEvent);
-            CompleteLayout(settings);
-            PumpUntil(settings.Dispatcher, () => overlay.Opacity == 1d && overlay.Visibility == Visibility.Visible);
+            settings.UpdateLayout();
             SaveWindowShell(settings, evidenceDirectory!, "qr-overlay-qrcopied-light.png");
             Assert.AreEqual(
                 Visibility.Visible,
                 overlay.Visibility,
                 "放大图右键复制不关层（证据帧同证）。");
+            Assert.AreEqual(
+                "已复制",
+                ((Run)settings.FindName("WeChatIdLargeRun")!).Text,
+                "证据帧同证：放大态 Run 已翻「已复制」。");
+            CompleteLayout(settings);
             PumpUntil(settings.Dispatcher, () =>
                 ((Run)settings.FindName("WeChatIdLargeRun")!).Text == ProductIdentity.WeChatId);
+            PumpUntil(settings.Dispatcher, () => overlay.Opacity == 1d && overlay.Visibility == Visibility.Visible);
 
             overlay.RaiseEvent(new MouseButtonEventArgs(
                 Mouse.PrimaryDevice,
