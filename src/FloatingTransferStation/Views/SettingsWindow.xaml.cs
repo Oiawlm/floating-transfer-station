@@ -281,6 +281,9 @@ public partial class SettingsWindow : Window
     {
         var animationsEnabled = _host.CurrentPreferences.AnimationsEnabled;
         FadeAnimation.SetAnimationsEnabled(WeChatQrOverlay, animationsEnabled);
+        // 收回曾把遮罩淡出改锚缩放同步时长（Hide），Show 开头复位回轻档 83ms
+        //（既有 DP、ApplyState 读取，零新机制）——入场淡入保持快速档（XAML 不动）。
+        FadeAnimation.SetDurationMs(WeChatQrOverlay, DesignTokens.FastDurationMs);
         FadeAnimation.SetIsActive(WeChatQrOverlay, true);
         if (animationsEnabled)
         {
@@ -292,71 +295,156 @@ public partial class SettingsWindow : Window
 
     private void HideWeChatQrOverlay()
     {
-        // 关层先复位变换：四属性清动画回恒等基值，与遮罩 83ms 淡出并行互不
-        // 残留（淡走 Opacity、缩放走 RenderTransform，分属不同属性）。
-        ResetQrZoomTransform();
-        FadeAnimation.SetAnimationsEnabled(WeChatQrOverlay, _host.CurrentPreferences.AnimationsEnabled);
+        var animationsEnabled = _host.CurrentPreferences.AnimationsEnabled;
+        FadeAnimation.SetAnimationsEnabled(WeChatQrOverlay, animationsEnabled);
+        if (animationsEnabled && MeasureQrSourceRect() is { } sourceRect)
+        {
+            // 收回＝从当下变换态动画回**当下实测**源矩形（「从哪来回哪去」）：
+            // 动态 From 是结构性质——每次收回都以被中断动画的当下值为起点
+            //（SnapshotAndReplace 替换式中断，可随时被再次交互替换）；遮罩淡出
+            // 时长同步缩放时长（先设再 IsActive，ApplyState 读取），整层一个
+            // 节奏收回，避免卡片在已塌遮罩上漂浮。
+            FadeAnimation.SetDurationMs(WeChatQrOverlay, DesignTokens.QrZoomOutMs);
+            AnimateQrZoom(
+                CurrentQrVisualRect(),
+                sourceRect,
+                FadeAnimation.QrZoomOutEasing,
+                DesignTokens.QrZoomOutMs,
+                FillBehavior.HoldEnd);
+        }
+        else
+        {
+            // 动效关（或求值不可达）＝即时塌缩：四属性清动画回恒等基值，与遮罩
+            // 淡出并行互不残留（淡走 Opacity、缩放走 RenderTransform，分属不同
+            // 属性）。
+            ResetQrZoomTransform();
+        }
+
         FadeAnimation.SetIsActive(WeChatQrOverlay, false);
     }
 
     /// <summary>
-    /// 放大层 QR 卡入场（W3 附录 A 规格）：from-rect→to-rect 逐轴插值——t=0
-    /// 卡片精确覆写页脚缩略图源矩形（卡片左下角对齐源左下角），四条显式
-    /// From/To 动画把 Scale→1、Translate→0（FillBehavior.Stop，终态回布局
-    /// 本态零残留）；时长锚 DesignTokens.QrZoomEntranceMs、缓动＝入场减速档
-    /// FadeAnimation.EnterEasing（iOS 照片 zoom-from-origin 本型）。求值不可达
-    /// 或几何非法时静默退化纯淡入，不 crash。
+    /// 放大层 QR 卡入场：共用缩放过渡路径 AnimateQrZoom——from＝当下实测缩略图
+    /// 源矩形、to＝恒等布局矩形、入场缓动/时长（实验性独立常量组）、
+    /// FillBehavior.Stop（终态回恒等基值零残留）。求值不可达或几何非法时静默
+    /// 退化纯淡入，不 crash。不先复位——可中断＝新动画替换（SnapshotAndReplace
+    /// 动态 From），不再用「移除再挂」式中断。
     /// </summary>
     private void PlayQrZoomEntrance()
     {
-        // 先复位再挂新（可中断）：动画进行中再开一律「先复位再挂新」。
-        ResetQrZoomTransform();
         WeChatQrOverlay.UpdateLayout();
+        if (MeasureQrSourceRect() is not { } source)
+        {
+            return;
+        }
 
-        Rect source;
+        var identityCard = new Rect(0, 0, WeChatQrLargeCard.ActualWidth, WeChatQrLargeCard.ActualHeight);
+        AnimateQrZoom(source, identityCard, FadeAnimation.QrZoomInEasing, DesignTokens.QrZoomInMs, FillBehavior.Stop);
+    }
+
+    /// <summary>当下实测页脚缩略图在 QR 卡布局坐标系中的源矩形（不缓存：窗口
+    /// 滚动/移动后收回仍回当下位置）。测量以遮罩为共同坐标基、再换回卡片布局
+    /// 原点——**剥掉 QR 卡自身 RenderTransform 的当下缩放态**（TransformToVisual
+    /// 会穿过卡片 RT，动画进行中直接测量会被自身动画放大），测量不受当下动画
+    /// 污染；求值不可达或几何非法返回 null（调用方静默退化）。</summary>
+    private Rect? MeasureQrSourceRect()
+    {
         try
         {
-            source = WeChatQrThumb.TransformToVisual(WeChatQrLargeCard).TransformBounds(
+            var thumbInOverlay = WeChatQrThumb.TransformToVisual(WeChatQrOverlay).TransformBounds(
                 new Rect(0, 0, WeChatQrThumb.ActualWidth, WeChatQrThumb.ActualHeight));
+            // 卡片布局原点（RT 无关）＝含 RT 的 card→遮罩原点 − RT 平移分量
+            //（遮罩/页脚两条链路都是纯平移布局、无缩放变换，尺寸直通不变）。
+            var cardOriginWithTransform = WeChatQrLargeCard.TransformToVisual(WeChatQrOverlay).Transform(
+                new Point(0, 0));
+            var source = new Rect(
+                thumbInOverlay.X - (cardOriginWithTransform.X - _qrZoomTranslate!.X),
+                thumbInOverlay.Y - (cardOriginWithTransform.Y - _qrZoomTranslate!.Y),
+                thumbInOverlay.Width,
+                thumbInOverlay.Height);
+            return source.Width > 0d && source.Height > 0d &&
+                   double.IsFinite(source.X) && double.IsFinite(source.Y)
+                ? source
+                : (Rect?)null;
         }
         catch (InvalidOperationException)
         {
-            return;
+            return null;
         }
+    }
 
+    /// <summary>当下渲染矩形＝变换反推 Rect(tX, tY, cardW·sX, cardH·sY)——动画
+    /// 中读取即当前插值态（收回的动态 From），零动画时即恒等布局矩形。</summary>
+    private Rect CurrentQrVisualRect() => new(
+        _qrZoomTranslate!.X,
+        _qrZoomTranslate.Y,
+        WeChatQrLargeCard.ActualWidth * _qrZoomScale!.ScaleX,
+        WeChatQrLargeCard.ActualHeight * _qrZoomScale.ScaleY);
+
+    /// <summary>
+    /// QR 卡缩放共用过渡（W3 附录 A；2026-11-06 起放大/收回同一方法）：「视觉
+    /// 矩形 from→to」同一进度 p 驱动——四条显式 From/To DoubleAnimation（先
+    /// Scale 后 Translate）同 duration＋同缓动＋同帧启动，矩形插值是结构性质
+    ///（原路返回不靠两套动画凑巧对称）；可中断＝SnapshotAndReplace 新动画替换；
+    /// fill=Stop 终态回恒等基值零残留，fill=HoldEnd 终值定格、Completed 生命
+    /// 周期复位清动画回恒等（遮罩此时已不可见——复位是终态卫生，不是中断手段）。
+    /// 求值不可达或几何非法静默退化（不动画），不 crash。
+    /// </summary>
+    private void AnimateQrZoom(Rect fromRect, Rect toRect, SplineEase easing, int durationMs, FillBehavior fill)
+    {
         var cardWidth = WeChatQrLargeCard.ActualWidth;
         var cardHeight = WeChatQrLargeCard.ActualHeight;
-        var scaleX0 = cardWidth > 0d ? source.Width / cardWidth : 0d;
-        var scaleY0 = cardHeight > 0d ? source.Height / cardHeight : 0d;
-        if (source.Width <= 0d || source.Height <= 0d ||
-            !double.IsFinite(scaleX0) || !double.IsFinite(scaleY0) ||
-            !double.IsFinite(source.X) || !double.IsFinite(source.Bottom))
+        var fromScaleX = cardWidth > 0d ? fromRect.Width / cardWidth : 0d;
+        var fromScaleY = cardHeight > 0d ? fromRect.Height / cardHeight : 0d;
+        var toScaleX = cardWidth > 0d ? toRect.Width / cardWidth : 0d;
+        var toScaleY = cardHeight > 0d ? toRect.Height / cardHeight : 0d;
+        if (cardWidth <= 0d || cardHeight <= 0d ||
+            fromRect.Width <= 0d || fromRect.Height <= 0d ||
+            toRect.Width <= 0d || toRect.Height <= 0d ||
+            !double.IsFinite(fromRect.X) || !double.IsFinite(fromRect.Y) ||
+            !double.IsFinite(toRect.X) || !double.IsFinite(toRect.Y) ||
+            !double.IsFinite(fromScaleX) || !double.IsFinite(fromScaleY) ||
+            !double.IsFinite(toScaleX) || !double.IsFinite(toScaleY))
         {
             return;
         }
 
-        var translateX0 = source.X;
-        var translateY0 = source.Bottom - (scaleY0 * cardHeight);
-        var duration = new Duration(TimeSpan.FromMilliseconds(DesignTokens.QrZoomEntranceMs));
+        var duration = new Duration(TimeSpan.FromMilliseconds(durationMs));
+        var translateXAnimation = CreateQrZoomAnimation(fromRect.X, toRect.X, duration, easing, fill);
+        // 卡片左下角对齐矩形左下角（W3 附录 A 同一语义）：tY = r.Bottom − sY·cardH。
+        var translateYAnimation = CreateQrZoomAnimation(
+            fromRect.Bottom - (fromScaleY * cardHeight),
+            toRect.Bottom - (toScaleY * cardHeight),
+            duration,
+            easing,
+            fill);
+        if (fill == FillBehavior.HoldEnd)
+        {
+            // 四条动画同 duration/同帧启动，挂任一条即整组终态；HoldEnd 会把
+            // 终值定格在属性上，Completed 时清动画回恒等基值（终态卫生）。
+            translateYAnimation.Completed += (_, _) => ResetQrZoomTransform();
+        }
+
         _qrZoomScale!.BeginAnimation(
             ScaleTransform.ScaleXProperty,
-            CreateQrZoomAnimation(scaleX0, 1d, duration),
+            CreateQrZoomAnimation(fromScaleX, toScaleX, duration, easing, fill),
             FadeAnimation.AnimationHandoffBehavior);
         _qrZoomScale.BeginAnimation(
             ScaleTransform.ScaleYProperty,
-            CreateQrZoomAnimation(scaleY0, 1d, duration),
+            CreateQrZoomAnimation(fromScaleY, toScaleY, duration, easing, fill),
             FadeAnimation.AnimationHandoffBehavior);
         _qrZoomTranslate!.BeginAnimation(
             TranslateTransform.XProperty,
-            CreateQrZoomAnimation(translateX0, 0d, duration),
+            translateXAnimation,
             FadeAnimation.AnimationHandoffBehavior);
         _qrZoomTranslate.BeginAnimation(
             TranslateTransform.YProperty,
-            CreateQrZoomAnimation(translateY0, 0d, duration),
+            translateYAnimation,
             FadeAnimation.AnimationHandoffBehavior);
     }
 
-    /// <summary>四属性先清动画回恒等基值（FadeAnimation.ApplyState 同型）。</summary>
+    /// <summary>四属性清动画回恒等基值（FadeAnimation.ApplyState 同型）——仅
+    /// 动效关塌缩与收回动画 Completed 终态复位两处调用，不作中断手段。</summary>
     private void ResetQrZoomTransform()
     {
         if (_qrZoomScale is null || _qrZoomTranslate is null)
@@ -370,11 +458,11 @@ public partial class SettingsWindow : Window
         _qrZoomTranslate.BeginAnimation(TranslateTransform.YProperty, null);
     }
 
-    private static DoubleAnimation CreateQrZoomAnimation(double from, double to, Duration duration) =>
+    private static DoubleAnimation CreateQrZoomAnimation(double from, double to, Duration duration, SplineEase easing, FillBehavior fill) =>
         new(from, to, duration)
         {
-            EasingFunction = FadeAnimation.EnterEasing,
-            FillBehavior = FillBehavior.Stop
+            EasingFunction = easing,
+            FillBehavior = fill
         };
 
     /// <summary>页脚与放大层共用同一复制入口：经写入缝落剪贴板，就地轻量反馈。</summary>

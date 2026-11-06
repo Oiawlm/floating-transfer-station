@@ -1085,14 +1085,16 @@
               Panel.ZIndex="10"
               Style="{StaticResource SettingsShellOutlineStyle}" />
 
-      <!-- 微信二维码放大层（W5 2026-11-05；W3 2026-11-05 交互升级）：设置窗内
-           遮罩层（不新建窗口），遮罩用既有 WindowShellBrush 键（零新配色）；
-           左/右键单击遮罩或卡片非按钮区域＝关闭（两事件共用处理器，「任意单击
-           关闭」对称语义），复制按钮是独立职责入口不关闭、放大态微信号行左/右
-           键复制且不关层（其处理器 e.Handled 阻断冒泡）；显隐走 FadeAnimation
-           统一管理（轻档 83ms，动效关闭立即切换），动效开时 QR 卡自页脚缩略图
-           源位置缩放入场（WeChatQrLargeCard 渲染变换，代码后置驱动）；
-           Esc 关层优先于关窗（见 SettingsWindow_PreviewKeyDown）。 -->
+      <!-- 微信二维码放大层（W5 2026-11-05；W3 2026-11-05 交互升级；2026-11-06
+           收回缩放动画）：设置窗内遮罩层（不新建窗口），遮罩用既有
+           WindowShellBrush 键（零新配色）；左/右键单击遮罩或卡片非按钮区域＝
+           关闭（两事件共用处理器，「任意单击关闭」对称语义），放大态微信号行
+           左/右键复制且不关层（其处理器 e.Handled 阻断冒泡）；显隐走
+           FadeAnimation 统一管理（入场轻档 83ms、收回淡出时长同步缩放时长，
+           动效关闭立即切换），动效开时 QR 卡自页脚缩略图源位置缩放入场、
+           关层自当下态原路缩回源位置（WeChatQrLargeCard 渲染变换，代码后置
+           驱动，放大/收回同一插值路径）；Esc 关层优先于关窗
+           （见 SettingsWindow_PreviewKeyDown）。 -->
       <Grid x:Name="WeChatQrOverlay"
             Grid.RowSpan="3"
             Panel.ZIndex="20"
