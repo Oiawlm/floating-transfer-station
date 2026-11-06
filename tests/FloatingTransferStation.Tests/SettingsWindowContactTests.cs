@@ -281,8 +281,12 @@ public sealed class SettingsWindowContactTests
             SaveWindowShell(settings, evidenceDirectory!, "qr-overlay-light.png");
 
             // 放大图右键复制 → 放大态 Run 反馈且层不关（2026-11-06 新交互证据）。
+            // Run 文本翻转会触发层内布局失效并推进动画时钟的完成处理（入场淡入
+            // FillBehavior.Stop 的收尾落在此泵内），先等回满帧再拍，避免拍到
+            // 时钟收尾瞬间的透明帧。
             RaisePointUp((Border)settings.FindName("WeChatQrLargeCard")!, UIElement.MouseRightButtonUpEvent);
             CompleteLayout(settings);
+            PumpUntil(settings.Dispatcher, () => overlay.Opacity == 1d && overlay.Visibility == Visibility.Visible);
             SaveWindowShell(settings, evidenceDirectory!, "qr-overlay-qrcopied-light.png");
             Assert.AreEqual(
                 Visibility.Visible,
