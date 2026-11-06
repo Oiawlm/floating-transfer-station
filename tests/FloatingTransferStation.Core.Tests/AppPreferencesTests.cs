@@ -784,4 +784,51 @@ public sealed class AppPreferencesTests
             restored.ReviewMarkdownViewEnabled,
             "旧 preferences.json 缺字段时必须回落到默认关闭（升级零感知）。");
     }
+
+    [TestMethod]
+    public void Default_DisablesDragOutAsFile()
+    {
+        Assert.IsFalse(
+            AppPreferences.Default.DragOutAsFileEnabled,
+            "图片拖出为文件默认关闭（实验性＝零打扰，对外拖出能力需显式开启）。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesDragOutAsFileEnabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        foreach (var enabled in new[] { false, true })
+        {
+            var preferences = AppPreferences.Default with { DragOutAsFileEnabled = enabled };
+
+            var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+            StringAssert.Contains(serialized, "\"dragOutAsFileEnabled\"", "落盘键名必须是 dragOutAsFileEnabled（camelCase）。");
+            var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+            Assert.AreEqual(preferences, restored);
+            Assert.AreEqual(enabled, restored!.DragOutAsFileEnabled);
+        }
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutDragOutAsFileField_FallsBackToDisabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","interfaceFont":null}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsFalse(
+            restored.DragOutAsFileEnabled,
+            "旧 preferences.json 缺字段时必须回落到默认关闭（升级零感知）。");
+    }
 }

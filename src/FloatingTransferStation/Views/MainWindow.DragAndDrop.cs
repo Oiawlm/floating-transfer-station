@@ -87,8 +87,8 @@ public partial class MainWindow : Window
         }
 
         return plan.Items.Count > 1
-            ? _dragPayload.BuildInternalBatch(plan.Items)
-            : _dragPayload.Build(plan.Items[0]);
+            ? _dragPayload.BuildDragBatch(plan.Items)
+            : _dragPayload.BuildDrag(plan.Items[0]);
     }
 
     private void ToggleSelection(BoardItem item)

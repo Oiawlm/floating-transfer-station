@@ -740,6 +740,28 @@
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
                              Text="实验性功能，默认关闭。开启后可在内容分类（重要/待分类）内再分一层子分组：「按钮轨」在分类顶部显示四个分组按钮（单击筛选、双击改名、把卡片拖到按钮上归组），「视觉分组」把同组卡片相邻摆放并用分隔线与组名标出边界。默认关闭的原因：两种形态与分组数据模型仍在打磨。改动立即生效并自动保存；子分组归属保存在卡片数据里，关闭开关不会丢失已归组的内容。" />
+                  <!-- 实验性第三项（2026-11-06，契约 #58）：图片拖出为文件——门控
+                       既有拖出能力（默认关＝对外剥离文件/位图形态，窗内拖放与
+                       剪贴板复制零变化）；即时生效＋原子保存（契约 #5 同路）。 -->
+                  <Grid Background="Transparent" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="图片拖出为文件"
+                               Style="{StaticResource RowCaptionStyle}"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center" />
+                    <CheckBox x:Name="DragOutAsFileToggle"
+                              Grid.Column="1"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              AutomationProperties.Name="图片拖出为文件"
+                              Checked="DragOutAsFileToggle_Checked"
+                              Unchecked="DragOutAsFileToggle_Unchecked" />
+                  </Grid>
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="实验性功能，默认关闭。开启后把图片卡（或纯图片多选）直接拖到文件夹或桌面，即复制出图片文件；只复制，受管图片库与应用内卡片不动。默认关闭的原因：对外拖出在不同目标应用的表现仍在打磨。关闭时窗内整理与剪贴板复制不受影响。改动立即生效并自动保存。" />
                 </StackPanel>
               </Border>
             </StackPanel>

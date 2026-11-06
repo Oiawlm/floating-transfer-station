@@ -1710,6 +1710,56 @@ public sealed class SettingsWindowInteractionTests
     }
 
     [STATestMethod]
+    public void DragOutAsFileToggle_DefaultsOffAppliesImmediatelyAndPersistsAcrossReopen()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            new FakeStartupManager(),
+            preferencesStore.Seeded);
+
+        try
+        {
+            var settings = OpenSettings(window);
+            ((RadioButton)settings.FindName("SettingsNavGeneral")!).IsChecked = true;
+            CompleteLayout(window);
+            var toggle = (CheckBox)settings.FindName("DragOutAsFileToggle")!;
+            Assert.IsNotNull(toggle);
+            Assert.IsFalse(toggle.IsChecked!.Value, "图片拖出为文件默认关闭（实验性＝零打扰）。");
+            Assert.IsNull(
+                preferencesStore.LastSaved,
+                "初始化同步段不得触发保存（_isSynchronizingControls 守卫）。");
+
+            toggle.IsChecked = true;
+            CompleteLayout(window);
+            Assert.IsTrue(window.CurrentPreferences.DragOutAsFileEnabled, "改动必须立即生效（契约 #5）。");
+            Assert.IsTrue(preferencesStore.LastSaved!.DragOutAsFileEnabled, "改动必须立即落偏好存储。");
+
+            // 重开设置窗：开关状态必须来自已保存偏好而非控件残留。
+            settings.Close();
+            var reopened = OpenSettings(window);
+            ((RadioButton)reopened.FindName("SettingsNavGeneral")!).IsChecked = true;
+            CompleteLayout(window);
+            var reopenedToggle = (CheckBox)reopened.FindName("DragOutAsFileToggle")!;
+            Assert.IsTrue(reopenedToggle.IsChecked!.Value, "重开设置窗必须反映已保存的新值。");
+
+            reopenedToggle.IsChecked = false;
+            CompleteLayout(window);
+            Assert.IsFalse(window.CurrentPreferences.DragOutAsFileEnabled, "关闭必须即时生效。");
+            Assert.IsFalse(preferencesStore.LastSaved!.DragOutAsFileEnabled);
+            reopened.Close();
+        }
+        finally
+        {
+            DesignThemeManager.PreviewOverride = null;
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void AutoCleanupRetentionComboBox_OffersSevenTiersDefaultingToTwentyFourHours()
     {
         using var directory = new TestDirectory();

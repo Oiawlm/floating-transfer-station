@@ -308,6 +308,175 @@ public sealed class DragPayloadServiceTests
             service.BuildClipboardPayload([single, single]));
     }
 
+    // ---- 图片拖出为文件（契约 #58，实验性默认关）：门控矩阵两态载荷形状——
+    // off＝图片卡/纯图片批剥离外部交付形态只留内部格式（且不校验缺图），on＝
+    // 现状＋Preferred DropEffect(Copy)；文本卡、混合批与剪贴板路径两态不变。----
+
+    [STATestMethod]
+    public void BuildDrag_ImageDisabledKeepsInternalIdWithoutFileDropOrBitmap()
+    {
+        using var directory = new TestDirectory();
+        var item = CreateManagedImage(directory, "gated.png");
+        var service = new DragPayloadService();
+
+        var data = service.BuildDrag(item);
+
+        Assert.AreEqual(item.Id, service.GetInternalItemId(data));
+        Assert.IsFalse(data.GetDataPresent(DataFormats.FileDrop), "默认关＝不向外部目标提供文件组。");
+        Assert.IsFalse(data.GetDataPresent(DataFormats.Bitmap), "默认关＝不向外部目标提供位图。");
+        Assert.IsFalse(
+            data.GetDataPresent(DragPayloadService.PreferredDropEffectFormat),
+            "默认关＝无 Preferred DropEffect 声明（无文件交付即无效果声明）。");
+    }
+
+    [STATestMethod]
+    public void BuildDrag_ImageEnabledProvidesFileDropBitmapAndPreferredCopy()
+    {
+        using var directory = new TestDirectory();
+        var item = CreateManagedImage(directory, "enabled.png");
+        var service = new DragPayloadService { ExternalFilePayloadsEnabled = true };
+
+        var data = service.BuildDrag(item);
+
+        Assert.AreEqual(item.Id, service.GetInternalItemId(data));
+        CollectionAssert.AreEqual(
+            new[] { item.ImageAbsolutePath! },
+            data.GetFileDropList().Cast<string>().ToArray());
+        Assert.IsTrue(data.GetDataPresent(DataFormats.Bitmap));
+        Assert.IsInstanceOfType(
+            data.GetData(DragPayloadService.PreferredDropEffectFormat),
+            typeof(MemoryStream));
+        var bytes = ((MemoryStream)data.GetData(DragPayloadService.PreferredDropEffectFormat)!).ToArray();
+        Assert.AreEqual(4, bytes.Length, "CFSTR_PREFERREDDROPEFFECT 必须是 4 字节 DROPEFFECT 流。");
+        Assert.AreEqual(
+            (int)DragDropEffects.Copy,
+            BitConverter.ToInt32(bytes, 0),
+            "效果值必须是 DROPEFFECT_COPY（防外部目标按 Move 删除受管源）。");
+    }
+
+    [STATestMethod]
+    public void BuildDrag_TextDeliversTextInBothToggleStates()
+    {
+        var item = BoardItem.CreateText(
+            "开关两态不变的文字",
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow);
+        foreach (var service in new[]
+                 {
+                     new DragPayloadService(),
+                     new DragPayloadService { ExternalFilePayloadsEnabled = true }
+                 })
+        {
+            var data = service.BuildDrag(item);
+
+            Assert.AreEqual("开关两态不变的文字", data.GetData(DataFormats.UnicodeText));
+            Assert.AreEqual("开关两态不变的文字", data.GetData(DataFormats.Text));
+            Assert.AreEqual(item.Id, service.GetInternalItemId(data));
+            Assert.IsFalse(data.GetDataPresent(DataFormats.FileDrop));
+            Assert.IsFalse(data.GetDataPresent(DataFormats.Bitmap));
+        }
+    }
+
+    [STATestMethod]
+    public void BuildDrag_DisabledSkipsMissingImageCheck()
+    {
+        var item = BoardItem.CreateImage(
+            Guid.NewGuid(),
+            "images/missing.png",
+            "C:/definitely-missing-floating-transfer-station-gated.png",
+            DateTimeOffset.UtcNow);
+        var service = new DragPayloadService();
+
+        var data = service.BuildDrag(item);
+
+        Assert.AreEqual(item.Id, service.GetInternalItemId(data), "默认关＝剥离交付即剥离缺图校验，内部拖放可继续。");
+        Assert.IsFalse(data.GetDataPresent(DataFormats.FileDrop));
+    }
+
+    [STATestMethod]
+    public void BuildDrag_EnabledMissingImageFailsBeforeDragStarts()
+    {
+        var item = BoardItem.CreateImage(
+            Guid.NewGuid(),
+            "images/missing.png",
+            "C:/definitely-missing-floating-transfer-station-enabled.png",
+            DateTimeOffset.UtcNow);
+        var service = new DragPayloadService { ExternalFilePayloadsEnabled = true };
+
+        Assert.ThrowsExactly<FileNotFoundException>(() => service.BuildDrag(item));
+    }
+
+    [STATestMethod]
+    public void BuildDragBatch_ImageBatchDisabledKeepsInternalIdsWithoutFileDrop()
+    {
+        using var directory = new TestDirectory();
+        var existing = CreateManagedImage(directory, "batch-existing.png");
+        var missing = BoardItem.CreateImage(
+            Guid.NewGuid(),
+            "images/missing.png",
+            Path.Combine(directory.Root, "missing.png"),
+            DateTimeOffset.UtcNow);
+        var service = new DragPayloadService();
+
+        var data = service.BuildDragBatch([existing, missing]);
+
+        CollectionAssert.AreEqual(
+            new[] { existing.Id, missing.Id },
+            service.GetInternalItemIds(data)!.ToArray());
+        Assert.IsFalse(data.GetDataPresent(DataFormats.FileDrop), "默认关＝纯图片批不提供文件组。");
+        Assert.IsFalse(data.GetDataPresent(DataFormats.Bitmap));
+        Assert.IsFalse(
+            data.GetDataPresent(DragPayloadService.PreferredDropEffectFormat),
+            "默认关＝批量也剥离缺图校验与效果声明（内部拖放可继续）。");
+    }
+
+    [STATestMethod]
+    public void BuildDragBatch_ImageBatchEnabledProvidesOrderedFileDropAndPreferredCopy()
+    {
+        using var directory = new TestDirectory();
+        var first = CreateManagedImage(directory, "batch-first.png");
+        var second = CreateManagedImage(directory, "batch-second.png");
+        var service = new DragPayloadService { ExternalFilePayloadsEnabled = true };
+
+        var data = service.BuildDragBatch([second, first]);
+
+        CollectionAssert.AreEqual(
+            new[] { second.Id, first.Id },
+            service.GetInternalItemIds(data)!.ToArray());
+        CollectionAssert.AreEqual(
+            new[] { second.ImageAbsolutePath!, first.ImageAbsolutePath! },
+            data.GetFileDropList().Cast<string>().ToArray(),
+            "文件组必须按板内顺序。");
+        Assert.IsFalse(data.GetDataPresent(DataFormats.Bitmap), "批量拖出与现状同构：无位图。");
+        var bytes = ((MemoryStream)data.GetData(DragPayloadService.PreferredDropEffectFormat)!).ToArray();
+        Assert.AreEqual(4, bytes.Length);
+        Assert.AreEqual((int)DragDropEffects.Copy, BitConverter.ToInt32(bytes, 0));
+    }
+
+    [STATestMethod]
+    public void BuildDragBatch_MixedBatchStaysInternalOnlyInBothStates()
+    {
+        using var directory = new TestDirectory();
+        var text = BoardItem.CreateText("混合中的文字", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        var image = CreateManagedImage(directory, "mixed-gated.png");
+        foreach (var service in new[]
+                 {
+                     new DragPayloadService(),
+                     new DragPayloadService { ExternalFilePayloadsEnabled = true }
+                 })
+        {
+            var data = service.BuildDragBatch([text, image]);
+
+            CollectionAssert.AreEqual(
+                new[] { text.Id, image.Id },
+                service.GetInternalItemIds(data)!.ToArray());
+            Assert.IsFalse(data.GetDataPresent(DataFormats.FileDrop), "混合批两态均无外部格式（现状即无）。");
+            Assert.IsFalse(data.GetDataPresent(DataFormats.UnicodeText));
+            Assert.IsFalse(data.GetDataPresent(DataFormats.Bitmap));
+            Assert.IsFalse(data.GetDataPresent(DragPayloadService.PreferredDropEffectFormat));
+        }
+    }
+
     private static BoardItem CreateManagedImage(TestDirectory directory, string fileName)
     {
         var path = Path.Combine(directory.Root, fileName);
