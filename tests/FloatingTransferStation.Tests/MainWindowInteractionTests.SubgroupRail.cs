@@ -54,9 +54,12 @@ public sealed partial class MainWindowInteractionTests
 
     private static Border FindSubgroupChip(MainWindow window, int slot)
     {
+        // Tag 判别照 FindCategoryTab 先例：chip 模板的内层层（hover/激活/拖放层）共享
+        // DataContext，只有外层宿主 Border 带 Tag=Slot。
         return FindDescendants<Border>(FindSubgroupRail(window)).Single(candidate =>
             candidate.DataContext is SubgroupChipViewModel chip &&
-            chip.Slot == slot);
+            chip.Slot == slot &&
+            Equals(candidate.Tag, slot));
     }
 
     private static void ClickChip(MainWindow window, int slot)
@@ -569,8 +572,8 @@ public sealed partial class MainWindowInteractionTests
             var order = board.Items(BoardCategory.Inbox).ToArray();
             Assert.AreEqual(4, order.Length);
             Assert.AreSame(unspecified, order[0], "未指定 null 居首。");
-            Assert.AreSame(slotOne, order[1], "槽 1 组首（组内既有相对序：槽一物理在槽一又一前）。");
-            Assert.AreSame(slotOneSecond, order[2]);
+            Assert.AreSame(slotOneSecond, order[1], "槽 1 组内保持既有相对序（槽一又一物理在槽一前）。");
+            Assert.AreSame(slotOne, order[2]);
             Assert.AreSame(slotTwo, order[3], "槽 2 殿后。");
 
             var persisted = ReadPersistedJson<BoardSnapshot>(directory, "board.json");
@@ -601,8 +604,9 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
-        board.AddText("未指定", BoardCategory.Inbox);
         board.AddText("槽一", BoardCategory.Inbox).Subgroup = 1;
+        board.AddText("未指定", BoardCategory.Inbox);
+        // InsertAtTop 逆序：物理 [未指定, 槽一]——槽一有前邻（未指定≠槽 1）才派生组边界。
         var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.GroupedView);
 
         try
@@ -645,8 +649,9 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
-        board.AddText("未指定", BoardCategory.Inbox);
         board.AddText("槽一", BoardCategory.Inbox).Subgroup = 1;
+        board.AddText("未指定", BoardCategory.Inbox);
+        // InsertAtTop 逆序：物理 [未指定, 槽一]——槽一是命名组边界卡。
         var settings = WindowSettings.Default
             .WithSubgroupName(BoardCategory.Inbox, 1, "急件");
         var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.GroupedView, settings);
@@ -739,8 +744,9 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(3, before.Length);
             Assert.IsTrue(before[1].StartsSubgroupRegion, "槽一与前邻槽二不同槽即成边界（邻接派生）。");
 
-            // 同分类拖放＝纯重排（MoveMany 管线零改动）：把槽一拖到未指定之后。
-            board.MoveMany([slotOne.Id], BoardCategory.Inbox, 2);
+            // 同分类拖放＝纯重排（MoveMany 管线零改动）：把槽一拖到未指定之后
+            //（pre-removal 索引语义：目标 3＝移除后插到剩余两项之尾）。
+            board.MoveMany([slotOne.Id], BoardCategory.Inbox, 3);
             CompleteLayout(window);
 
             Assert.AreEqual(1, slotOne.Subgroup, "拖出组不改槽字段（无组采用语义）。");
@@ -811,9 +817,17 @@ public sealed partial class MainWindowInteractionTests
         var board = new BoardService();
         var first = board.AddText("甲", BoardCategory.Inbox);
         var second = board.AddText("乙", BoardCategory.Inbox);
-        first.Subgroup = 1;
+        // 物理 [乙(1), 甲(null)]——分区才有实际重排可撤销。
+        first.Subgroup = null;
         second.Subgroup = 1;
-        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.Off);
+        var store = new SubgroupRecordingStore(directory.Root);
+        var window = CreateWindow(
+            board,
+            new LocalStore(AppPaths.ForTests(directory.Root), new AtomicTextWriter()),
+            WindowSettings.Default,
+            new DefaultCaptureCategoryState(),
+            new ImageNormalizer(store.ImagesDirectory),
+            preferences: AppPreferences.Default with { SubgroupDisplay = SubgroupDisplayMode.Off });
 
         try
         {
@@ -821,35 +835,64 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
 
-            // 指派→撤销：槽恢复原值（可撤销批）。
-            RunMutationsTask(window, mutations => mutations.AssignSubgroupAsync([first.Id, second.Id], 2));
+            // 指派→撤销：槽恢复原值（可撤销批）。撤销链线程口径沿 Undo.cs 先例用同步
+            // 完成 store（真实落盘持久化由指派/改名/分区用例以 LocalStore 锁定）。
+            var mutations = new BoardMutationService(board, store, _ => { });
+            RunMutationsTask(window, _ => mutations.AssignSubgroupAsync([first.Id, second.Id], 2));
             Assert.AreEqual(2, first.Subgroup);
             Assert.AreEqual(2, second.Subgroup);
 
-            InvokePrivateTask(window, "UndoLastFromPanelAsync");
-            Assert.AreEqual(1, first.Subgroup, "撤销恢复指派前槽值。");
+            RunMutationsTask(window, _ => mutations.UndoLastAsync());
+            Assert.IsNull(first.Subgroup, "撤销恢复指派前槽值（null 保持 null）。");
             Assert.AreEqual(1, second.Subgroup);
 
             // 分区→撤销：顺序恢复。
-            RunMutationsTask(window, mutations => mutations.PartitionSubgroupsAsync(BoardCategory.Inbox));
+            RunMutationsTask(window, _ => mutations.PartitionSubgroupsAsync(BoardCategory.Inbox));
             var partitionedIds = board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray();
             Assert.AreEqual(2, board.Items(BoardCategory.Inbox).Count());
-            InvokePrivateTask(window, "UndoLastFromPanelAsync");
+            RunMutationsTask(window, _ => mutations.UndoLastAsync());
             CollectionAssert.AreNotEqual(
                 partitionedIds,
                 board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
                 "撤销恢复分区前顺序。");
 
             // 既有删除撤销路径不回归：删除一批再撤销仍插回。
-            RunMutationsTask(window, mutations => mutations.DeleteManyAsync([first.Id]));
+            RunMutationsTask(window, _ => mutations.DeleteManyAsync([first.Id]));
             Assert.IsNull(board.FindItem(first.Id));
-            InvokePrivateTask(window, "UndoLastFromPanelAsync");
+            RunMutationsTask(window, _ => mutations.UndoLastAsync());
             Assert.IsNotNull(board.FindItem(first.Id), "既有删除撤销路径不回归。");
+            Assert.AreEqual(6, store.SaveCount, "指派/撤销/分区/撤销/删除/撤销各落盘一次。");
         }
         finally
         {
             CloseWindow(window);
         }
+    }
+
+    /// <summary>撤销链测试用同步完成 store（照 Undo.cs RecordingUndoStore 先例），
+    /// 并按同一口径计数落盘次数。</summary>
+    private sealed class SubgroupRecordingStore(string root) : IBoardStore
+    {
+        public int SaveCount { get; private set; }
+
+        public string ImagesDirectory { get; } = Path.Combine(root, "images");
+
+        public Task<BoardSnapshot> LoadBoardAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new BoardSnapshot());
+
+        public Task SaveBoardAsync(BoardSnapshot snapshot, CancellationToken cancellationToken = default)
+        {
+            SaveCount++;
+            return Task.CompletedTask;
+        }
+
+        public Task<WindowSettings> LoadSettingsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(WindowSettings.Default);
+
+        public Task SaveSettingsAsync(WindowSettings settings, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public bool TryDeleteImage(string? absolutePath) => true;
     }
 
     [STATestMethod]
