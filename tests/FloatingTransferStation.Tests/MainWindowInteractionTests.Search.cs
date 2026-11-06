@@ -152,6 +152,47 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void Search_EmptyHintRefreshesWhenLastMatchRemovedDuringSearch()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("唯一命中", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var hint = (Border)window.FindName("SearchEmptyHint");
+
+            window.EnterSearchMode();
+            var input = (TextBox)window.FindName("SearchInput");
+            input!.Text = "唯一命中";
+            CompleteLayout(window);
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                hint!.Visibility,
+                "前置：命中在场，空提示隐藏。");
+
+            // 搜索态下删除最后一张匹配卡（测试持有的 board 实例直改源集合，照既有
+            // 删除用例的 RemoveNonPinned 口径）：集合变化此前只驱动内容桶空态、
+            // 从不重评 SearchEmptyHint——空提示必须即时接管。
+            Assert.IsNotNull(board.RemoveNonPinned([BoardCategory.Inbox]));
+            CompleteLayout(window);
+
+            Assert.AreEqual(
+                Visibility.Visible,
+                hint.Visibility,
+                "集合变化也要重评搜索空提示（修复前视图已空而提示缺席）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void Search_ActiveSuppressesAutoCollapseUntilExit()
     {
         using var directory = new TestDirectory();
