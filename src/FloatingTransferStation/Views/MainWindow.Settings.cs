@@ -199,7 +199,7 @@ public partial class MainWindow : Window, ISettingsHost
         settings.Show();
     }
 
-    /// <summary>立即应用偏好（主题/界面字体/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/AI 整理开关/启动·自动发现/启动器列数策略/复盘 Markdown 阅读视图）并异步原子持久化；持久化失败经状态条提示。</summary>
+    /// <summary>立即应用偏好（主题/界面字体/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/AI 整理开关/启动·自动发现/启动器列数策略/复盘 Markdown 阅读视图/分类内子分组）并异步原子持久化；持久化失败经状态条提示。</summary>
     public void ApplyPreferences(AppPreferences preferences)
     {
         _preferences = preferences;
@@ -211,11 +211,41 @@ public partial class MainWindow : Window, ISettingsHost
         ApplyPinnedDividerPreference(preferences.PinnedDivider);
         _viewModel.ShortCardNotesEnabled = preferences.ShortCardNotesEnabled;
         _viewModel.AiOrganizeEnabled = preferences.AiOrganizeEnabled;
+        ApplySubgroupDisplayPreference(preferences.SubgroupDisplay);
         ApplyReviewMarkdownViewPreference();
         ApplyLauncherDiscoveryPreference(preferences);
         ApplyLauncherColumnStrategy();
         UpdateDeleteButtonLabel();
         TrackPendingOperation(PersistPreferencesAsync(preferences));
+    }
+
+    /// <summary>
+    /// 子分组呈现模式下发（契约 #57 唯一管线＝ApplyPreferences 的一部分）：模式切换
+    /// 即全分类 Reindex 刷新派生标记（StartsSubgroupRegion 仅 GroupedView 置位）；
+    /// 任何切换清 chip 过滤（轨塌缩/出现零残留）；→GroupedView＝触发进入分区（普通区
+    /// 存在 ≥2 个不同槽且物理散布才动手，否则 no-op——已聚簇时不写盘）。
+    /// </summary>
+    private void ApplySubgroupDisplayPreference(SubgroupDisplayMode mode)
+    {
+        _viewModel.SubgroupDisplay = mode;
+        _board.SetSubgroupDisplay(mode, _settings);
+        ClearSubgroupFilter(reapplyFilter: true);
+        if (mode == SubgroupDisplayMode.GroupedView)
+        {
+            TrackPendingOperation(PartitionContentBucketsForGroupedViewAsync());
+        }
+    }
+
+    /// <summary>GroupedView 进入分区：对两个内容桶分类逐个尝试稳定分区（已聚簇的分类
+    /// no-op 不写盘）；经 BoardMutationService（快照→原子保存→失败还原→撤销栈）。</summary>
+    private async Task PartitionContentBucketsForGroupedViewAsync()
+    {
+        foreach (var category in BoardCategoryCatalog.Ordered.Where(BoardCategoryCatalog.IsContentBucket))
+        {
+            await _mutations.PartitionSubgroupsAsync(
+                category,
+                _windowOperationCancellation.Token);
+        }
     }
 
     /// <summary>

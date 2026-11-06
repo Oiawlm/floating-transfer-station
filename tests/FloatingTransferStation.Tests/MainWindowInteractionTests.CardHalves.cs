@@ -730,11 +730,11 @@ public sealed partial class MainWindowInteractionTests
             var viewModel = (MainWindowViewModel)window.DataContext;
 
             // 绕过 EnterSearchMode 的清选择/聚焦搜索框（焦点路径也会终结
-            // 会话），直接驱动过滤单点：证明 ApplySearchFilter 的锚点判定
+            // 会话），直接驱动过滤单点：证明过滤单点（ApplyBoardListFilter，#37/#57 共用）的锚点判定
             // 独立于焦点迁移。
             viewModel.EnterSearch();
             viewModel.SearchText = "不匹配的关键词";
-            InvokePrivate(window, "ApplySearchFilter");
+            InvokePrivate(window, "ApplyBoardListFilter");
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(50));
 
             AssertNoVisibleCardEditor(window);
@@ -743,7 +743,7 @@ public sealed partial class MainWindowInteractionTests
                 board.FindItem(item.Id)!.Text,
                 "过滤钩子必须独立于焦点迁移终结并提交会话。");
             viewModel.ExitSearch();
-            InvokePrivate(window, "ApplySearchFilter");
+            InvokePrivate(window, "ApplyBoardListFilter");
         }
         finally
         {

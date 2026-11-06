@@ -19,7 +19,8 @@ namespace FloatingTransferStation.Tests;
 /// 外观=主题/动效/置顶分隔（外观组新增节走 Issue 修订），面板=CategoryOrderHost
 /// ＋ShortCardNotesToggle（卡片备注节，2026-10-22 修订 Issue #211）＋
 /// LauncherDiscoveryToggle（启动·自动发现节，#45）、
-/// 通用=StartupToggle、数据与维护=AutoCleanupToggle、AI=DeepSeekKeyBox。
+/// 通用=StartupToggle＋SubgroupModeComboBox（实验性节第二项，2026-11-05 契约 #57）、
+/// 数据与维护=AutoCleanupToggle、AI=DeepSeekKeyBox。
 /// </summary>
 [TestClass]
 public sealed class SettingsWindowNavPaneTests
@@ -28,7 +29,7 @@ public sealed class SettingsWindowNavPaneTests
     [
         ("外观", ["ThemeComboBox", "AnimationsToggle", "PinnedDividerComboBox"]),
         ("面板", ["CategoryOrderHost", "ShortCardNotesToggle", "LauncherDiscoveryToggle"]),
-        ("通用", ["StartupToggle"]),
+        ("通用", ["StartupToggle", "SubgroupModeComboBox"]),
         ("数据与维护", ["AutoCleanupToggle"]),
         ("AI", ["DeepSeekKeyBox"])
     ];

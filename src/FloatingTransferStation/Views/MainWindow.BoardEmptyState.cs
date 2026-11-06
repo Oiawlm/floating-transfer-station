@@ -88,6 +88,7 @@ public partial class MainWindow
         var visible = panel is not null &&
             BoardCategoryCatalog.IsContentBucket(panel.Category) &&
             !_viewModel.IsSearchActive &&
+            !IsSubgroupFilterActive &&
             panel.Items.Count == 0;
         BoardEmptyState.SetCurrentValue(VisibilityProperty, visible ? Visibility.Visible : Visibility.Collapsed);
         if (!visible || panel is null)

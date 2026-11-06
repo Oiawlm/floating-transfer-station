@@ -21,6 +21,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _isSearchActive;
     private string _searchText = string.Empty;
     private SearchTypeFilter _searchType;
+    private SubgroupDisplayMode _subgroupDisplay;
     private bool _shortCardNotesEnabled;
     private string _statusText = string.Empty;
     private bool _aiOrganizeEnabled = true;
@@ -58,6 +59,48 @@ public sealed class MainWindowViewModel : ObservableObject
         _defaultCapturePanel = Categories.Single(
             category => category.Category == _defaultCaptureCategory.Current);
         _defaultCapturePanel.IsDefaultCapture = true;
+        SubgroupChips = Enumerable.Range(0, SubgroupCatalog.SlotCount)
+            .Select(slot => new SubgroupChipViewModel(slot))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// 子分组按钮轨 chip 集（契约 #57，形态①）：固定 4 槽实例（槽号即身份），
+    /// 显示名由窗口层按名清单逐槽解析喂值（<see cref="RefreshSubgroupChips"/>）。
+    /// </summary>
+    public IReadOnlyList<SubgroupChipViewModel> SubgroupChips { get; }
+
+    /// <summary>
+    /// 子分组呈现模式（契约 #57 三态，默认 Off）：由 ApplyPreferences 唯一管线
+    /// 喂值（照 ShortCardNotesEnabled 先例）；变化时连带通知轨可见性。
+    /// </summary>
+    public SubgroupDisplayMode SubgroupDisplay
+    {
+        get => _subgroupDisplay;
+        set
+        {
+            if (SetProperty(ref _subgroupDisplay, value))
+            {
+                OnPropertyChanged(nameof(IsSubgroupRailVisible));
+            }
+        }
+    }
+
+    /// <summary>按钮轨可见性（契约 #57 作用域）：ChipRail 模式且激活面板为内容桶
+    /// （复盘/启动表面零呈现——轨不出现）；Off/GroupedView 恒隐藏。</summary>
+    public bool IsSubgroupRailVisible =>
+        SubgroupDisplay == SubgroupDisplayMode.ChipRail &&
+        ActivePanel is { } panel &&
+        BoardCategoryCatalog.IsContentBucket(panel.Category);
+
+    /// <summary>按名清单逐槽刷新 chip 显示名（激活面板的名；窗口层在面板激活与
+    /// 改名提交后调用，settings 仍是名单持久化单一事实源）。</summary>
+    public void RefreshSubgroupChips(WindowSettings settings, BoardCategory category)
+    {
+        foreach (var chip in SubgroupChips)
+        {
+            chip.ApplyDisplayName(settings.SubgroupName(category, chip.Slot));
+        }
     }
 
     private CategoryViewModel[] _categories;
@@ -193,6 +236,8 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         ActivePanel = activePanel;
+        // 子分组轨可见性随激活面板的内容桶角色翻转（契约 #57 作用域）。
+        OnPropertyChanged(nameof(IsSubgroupRailVisible));
     }
 
     public void SetPanelExpanded(bool isExpanded)

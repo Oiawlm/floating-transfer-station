@@ -718,6 +718,28 @@
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
                              Text="实验性功能，默认关闭。开启后复盘界面出现「阅读｜编辑」切换：阅读态把复盘内容按 Markdown 渲染成类 Obsidian 的只读视图（标题、列表、粗斜体、代码块、引用、链接等常用语法；链接点击后用浏览器打开，不加载远程图片；不支持的高级语法按原文显示）。默认关闭的原因：渲染子集与排版仍在打磨，编辑器形态（关闭时所见）保持为可靠基准。改动立即生效并自动保存，只影响呈现，不改变复盘的保存与合并行为。" />
+                  <!-- 实验性第二项（2026-11-05，契约 #57）：三态枚举设置沿仓库
+                       「枚举设置一律 ComboBox」先例（置顶分隔/清理时长/垃圾桶行为）；
+                       即时生效＋原子保存（契约 #5 唯一管线，禁平行保存路径）。 -->
+                  <Grid Background="Transparent" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="分类内子分组"
+                               Style="{StaticResource RowCaptionStyle}"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center" />
+                    <ComboBox x:Name="SubgroupModeComboBox"
+                              Grid.Column="1"
+                              Style="{StaticResource ThemedComboBoxStyle}"
+                              MaxDropDownHeight="240"
+                              AutomationProperties.Name="分类内子分组"
+                              SelectionChanged="SubgroupModeComboBox_SelectionChanged" />
+                  </Grid>
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="实验性功能，默认关闭。开启后可在内容分类（重要/待分类）内再分一层子分组：「按钮轨」在分类顶部显示四个分组按钮（单击筛选、双击改名、把卡片拖到按钮上归组），「视觉分组」把同组卡片相邻摆放并用分隔线与组名标出边界。默认关闭的原因：两种形态与分组数据模型仍在打磨。改动立即生效并自动保存；子分组归属保存在卡片数据里，关闭开关不会丢失已归组的内容。" />
                 </StackPanel>
               </Border>
             </StackPanel>

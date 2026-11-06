@@ -1460,8 +1460,11 @@ public sealed partial class MainWindowInteractionTests
                 .ToArray();
             var delete = window.FindName("DeleteContentButton") as Button;
 
-            Assert.AreEqual(2, panel.RowDefinitions.Count);
-            Assert.IsTrue(panel.RowDefinitions[1].Height.IsStar);
+            // 三行＝头行(44)/子分组轨行(Auto，Off 塌缩零占位，契约 #57)/列表行(*)；
+            // StatusOverlay 与 BoardList 同在列表行（Grid.Row 镜像同值）。
+            Assert.AreEqual(3, panel.RowDefinitions.Count);
+            Assert.IsTrue(panel.RowDefinitions[1].Height.IsAuto);
+            Assert.IsTrue(panel.RowDefinitions[2].Height.IsStar);
             Assert.AreEqual(Grid.GetRow(list), Grid.GetRow(overlay));
             Assert.AreEqual(Visibility.Collapsed, overlay.Visibility);
             Assert.IsFalse(overlay.IsHitTestVisible);

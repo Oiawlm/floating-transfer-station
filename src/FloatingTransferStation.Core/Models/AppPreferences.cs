@@ -62,6 +62,19 @@ public enum AutoCleanupRetention
 }
 
 /// <summary>
+/// 分类内子分组呈现形态（实验性，契约 #57；默认 Off）：两种形态互斥——
+/// ChipRail＝头行下固定高按钮轨（单击过滤/双击改名/拖卡归属），
+/// GroupedView＝视觉分组（进入时一次稳定分区＋divider 组边界＋组头）。
+/// JSON 沿字符串枚举惯例按名落盘、数值无持久化含义（不写显式值）。
+/// </summary>
+public enum SubgroupDisplayMode
+{
+    Off,
+    ChipRail,
+    GroupedView
+}
+
+/// <summary>
 /// 用户偏好首版：主题模式（跟随系统/浅色/深色）与动效开关；
 /// 1.10.0 起新增全局快捷键唤起开关（默认关闭，仅用户显式开启时注册系统热键）；
 /// 1.15.0 起新增卡片复制手势与垃圾桶按钮无选择行为（卡片右半左键复制、
@@ -121,6 +134,11 @@ public enum AutoCleanupRetention
 /// 渲染（子集见 MarkdownDocumentMapper）；关闭＝复盘表面与现状逐像素一致。
 /// 只门控呈现面——保存/防抖/合并/Esc 契约（#4/#20）不随本开关变化；旧配置
 /// 缺字段免迁移回落关闭，老用户升级零感知。
+/// 分类内子分组（2026-11-05 实验性，契约 #57）：三态偏好 SubgroupDisplay
+/// （Off/ChipRail/GroupedView，默认 Off＝零打扰，沿实验开关先例）——两种形态
+/// 互斥、开关只切呈现与派生面；数据（BoardItem.Subgroup 槽）与名清单
+/// （settings.SubgroupNames）独立持久化，关闭＝轨塌缩+过滤清除、布局行为与
+/// 现状等价。旧配置缺字段免迁移回落 Off，老用户升级零感知。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -148,7 +166,8 @@ public sealed record AppPreferences(
     LauncherColumnStrategy LauncherColumnStrategy = LauncherColumnStrategy.Adaptive,
     bool AiOrganizeEnabled = false,
     string? InterfaceFont = null,
-    bool ReviewMarkdownViewEnabled = false)
+    bool ReviewMarkdownViewEnabled = false,
+    SubgroupDisplayMode SubgroupDisplay = SubgroupDisplayMode.Off)
 {
     public static AppPreferences Default { get; } = new();
 }
