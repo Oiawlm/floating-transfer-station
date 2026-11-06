@@ -135,6 +135,41 @@ public partial class MainWindow
         }
     }
 
+    // ---- 视觉分组零指派引导（2026-11-06，契约 #57 形态②可用性扩展） ----
+
+    /// <summary>GroupedViewGuidance 可见性唯一更新点：GroupedView 模式、激活面板为
+    /// 内容桶、面板非空且非置顶卡的不同 Subgroup 值（含 null）≤1——＝零组边界
+    /// 渲染（「视觉分组看不出分组」的真条件，覆盖全部未指派与全部同槽两情形）时
+    /// 可见，告知先回「按钮轨」拖卡归组；面板空让位 BoardEmptyState（内容桶空态
+    /// 语义优先），Off/ChipRail（按钮轨在场）恒塌缩——两种形态互斥分用 Row=1 行：
+    /// ChipRail＝轨可见、GroupedView＝引导条可评估、Off 全塌缩。可见性统一
+    /// SetCurrentValue；非 UI 线程进入统一封送（集合变化可能来自后台导入路径，
+    /// 与空态单点同法）。触发路径并集：ApplySubgroupDisplayPreference（模式切换
+    /// 必经）、激活桶集合 CollectionChanged（拖卡归属与 GroupedView 纯重排 Move
+    /// 都会触发）、UpdatePanelSurface（表面切换）——归组只发生在 ChipRail（与
+    /// 引导条不同屏），结构上不存在漏路径；同路径重复调用无害（纯求值幂等）。
+    /// 谓词读源集合（Items.Count/Subgroup 值），不经绑定视图，无视图消化时序。</summary>
+    private void UpdateGroupedViewGuidance()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(UpdateGroupedViewGuidance);
+            return;
+        }
+
+        var panel = _viewModel.ActivePanel;
+        var visible = panel is not null &&
+            _viewModel.SubgroupDisplay == SubgroupDisplayMode.GroupedView &&
+            BoardCategoryCatalog.IsContentBucket(panel.Category) &&
+            panel.Items.Count > 0 &&
+            panel.Items
+                .Where(item => !item.IsPinned)
+                .Select(item => item.Subgroup)
+                .Distinct()
+                .Count() <= 1;
+        GroupedViewGuidance.SetCurrentValue(VisibilityProperty, visible ? Visibility.Visible : Visibility.Collapsed);
+    }
+
     // ---- 双击改名会话（照 CategoryEditing 全套：草稿限长/IME 守卫/Enter/Esc/失焦提交） ----
 
     private void BeginSubgroupNameEdit(SubgroupChipViewModel chip, Border host)
