@@ -543,6 +543,79 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void Subgroup_ChipFilterOnEmptyPanelShowsHintWithoutBoardEmptyStateOverlap()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        // 面板本就空：内容桶空态已可见（BoardEmptyState），此时点 chip 进入过滤视图。
+        // 修复前 chip 单击路径只重评 SearchEmptyHint 的过滤空视图、从不重评
+        // BoardEmptyState——两元素同格（Grid.Row=2）叠加两段空态文字。
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var hint = (Border)window.FindName("SearchEmptyHint");
+            var boardEmpty = (StackPanel)window.FindName("BoardEmptyState");
+            Assert.AreEqual(
+                Visibility.Visible,
+                boardEmpty!.Visibility,
+                "前置：空面板内容桶空态在场。");
+
+            ClickChip(window, 1);
+
+            Assert.AreEqual(
+                Visibility.Visible,
+                hint!.Visibility,
+                "过滤空视图复用 SearchEmptyHint（「该分组暂无卡片」）。");
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                boardEmpty.Visibility,
+                "两空态同格互斥：chip 过滤接管后内容桶空态必须退位（修复前叠加）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_ChipFilterCancelOnEmptyPanelRestoresBoardEmptyState()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var hint = (Border)window.FindName("SearchEmptyHint");
+            var boardEmpty = (StackPanel)window.FindName("BoardEmptyState");
+
+            ClickChip(window, 1);
+            ClickChip(window, 1);
+
+            Assert.IsFalse(window.IsSubgroupFilterActive, "前置：再点同 chip＝取消过滤。");
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                hint!.Visibility,
+                "取消过滤后 SearchEmptyHint 退位。");
+            Assert.AreEqual(
+                Visibility.Visible,
+                boardEmpty!.Visibility,
+                "退位方向守卫：内容桶空态恢复在场（空面板回归原空态）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void Subgroup_GroupedEntryPartitionsAdjacentBySlotWithUnspecifiedFirst()
     {
         using var directory = new TestDirectory();
