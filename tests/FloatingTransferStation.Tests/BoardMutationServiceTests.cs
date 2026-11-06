@@ -852,6 +852,66 @@ public sealed class BoardMutationServiceTests
     }
 
     [TestMethod]
+    public async Task ClearNonPinned_UndoBatch_WithNotedSurvivors_RestoresExactBoardWithoutDuplicates()
+    {
+        // 2026-11-05 备注卡＝豁免幸存者（完全同置顶）：清空批整批撤销后各分类
+        // 顺序精确恢复，备注卡不丢不重、备注内容随批保留（锚点插回，契约 #11）。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var pinnedNoted = board.AddText("置顶且备注", BoardCategory.CustomerOriginal);
+        var expiredNoted = board.AddText("超龄备注", BoardCategory.CustomerOriginal);
+        var expiredNoteless = board.AddText("超龄无备注", BoardCategory.CustomerOriginal);
+        var freshNoteless = board.AddText("新鲜无备注", BoardCategory.CustomerOriginal);
+        var inboxExpiredNoteless = board.AddText("收件超龄无备注");
+        var inboxExpiredNoted = board.AddText("收件超龄备注");
+        board.SetPinnedMany([pinnedNoted.Id], true);
+        Assert.IsTrue(board.UpdateNote(pinnedNoted.Id, "置顶识别"));
+        Assert.IsTrue(board.UpdateNote(expiredNoted.Id, "图片识别"));
+        Assert.IsTrue(board.UpdateNote(inboxExpiredNoted.Id, "收件识别"));
+        var now = DateTimeOffset.UtcNow;
+        var cutoff = now - AutoCleanupSchedule.GetRetentionDuration(AutoCleanupRetention.TwentyFourHours);
+        board.SetItemCreatedAt(pinnedNoted.Id, cutoff);
+        board.SetItemCreatedAt(expiredNoted.Id, cutoff);
+        board.SetItemCreatedAt(expiredNoteless.Id, cutoff);
+        board.SetItemCreatedAt(freshNoteless.Id, cutoff.AddSeconds(1));
+        board.SetItemCreatedAt(inboxExpiredNoteless.Id, cutoff);
+        board.SetItemCreatedAt(inboxExpiredNoted.Id, cutoff);
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        var outcome = await service.ClearNonPinnedAsync(
+            AutoCleanupSchedule.SweepCategories,
+            cutoff);
+
+        Assert.IsTrue(outcome.Saved);
+        Assert.AreEqual(2, outcome.RemovedCount, "只有超龄且无备注的非置顶卡被清（备注与置顶幸存）。");
+        // 做旧经快照回合重建条目实例，按 Id 断言而非实例同一。
+        CollectionAssert.AreEqual(
+            new[] { pinnedNoted.Id, freshNoteless.Id, expiredNoted.Id },
+            board.Items(BoardCategory.CustomerOriginal).Select(item => item.Id).ToArray(),
+            "超龄备注卡、置顶∧备注叠加卡与未满期卡幸存。");
+        CollectionAssert.AreEqual(
+            new[] { inboxExpiredNoted.Id },
+            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
+
+        Assert.IsTrue(await service.UndoLastAsync(), "含备注幸存卡的清空批必须可整批撤销。");
+
+        CollectionAssert.AreEqual(
+            new[] { pinnedNoted.Id, freshNoteless.Id, expiredNoteless.Id, expiredNoted.Id },
+            board.Items(BoardCategory.CustomerOriginal).Select(item => item.Id).ToArray(),
+            "撤销后各分类顺序精确恢复、无重复条目。");
+        CollectionAssert.AreEqual(
+            new[] { inboxExpiredNoted.Id, inboxExpiredNoteless.Id },
+            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
+        var restoredNoted = board.FindItem(expiredNoted.Id);
+        Assert.IsNotNull(restoredNoted);
+        Assert.AreEqual("图片识别", restoredNoted.Note, "备注内容随撤销批保留。");
+        var restoredInboxNoted = board.FindItem(inboxExpiredNoted.Id);
+        Assert.IsNotNull(restoredInboxNoted);
+        Assert.AreEqual("收件识别", restoredInboxNoted.Note);
+    }
+
+    [TestMethod]
     [TestCategory("Adversarial")]
     public async Task ClearNonPinned_SaveFailure_WithExpiryCutoff_RestoresEveryCategoryWithoutUndoBatch()
     {

@@ -491,16 +491,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 清空非置顶前先取被清范围：既是状态提示的数量，也是空操作短路条件。
+        // 清空非置顶前先取被清范围（2026-11-05 起备注卡同置顶豁免，资格判定与
+        // BoardService.RemoveNonPinned 移除谓词同源）：既是状态提示的数量，也是
+        // 空操作短路条件。
         var nonPinnedIds = clearMode == TrashClearMode.NonPinned
             ? _board.Items(targetCategory)
-                .Where(item => !item.IsPinned)
+                .Where(BoardService.IsEligibleForNonPinnedRemoval)
                 .Select(item => item.Id)
                 .ToArray()
             : [];
         if (clearMode == TrashClearMode.NonPinned && nonPinnedIds.Length == 0)
         {
-            ShowStatus("当前分类没有非置顶内容可清空。");
+            ShowStatus("当前分类没有非置顶内容可清空（有备注的卡片保留）。");
             return;
         }
 
