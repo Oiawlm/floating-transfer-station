@@ -35,11 +35,11 @@ public partial class SettingsWindow : Window
     private bool _isDeepSeekKeyVisible;
     private bool _isTestingDeepSeekConnection;
 
-    // ---- 页脚关于区联系方式（W5 2026-11-05）----
+    // ---- 页脚关于区联系方式（W5 2026-11-05；2026-11-06 复制按钮删除，
+    //      反馈位改就微信号 Run 文本翻转）----
 
-    private const string WeChatCopyButtonText = "复制";
-    private const string WeChatCopiedButtonText = "已复制";
-    private const string WeChatCopyFailedButtonText = "复制失败";
+    private const string WeChatCopiedFeedbackText = "已复制";
+    private const string WeChatCopyFailedFeedbackText = "复制失败";
     private static readonly TimeSpan WeChatCopyFeedbackRevertDelay = TimeSpan.FromSeconds(1.6);
 
     private DispatcherTimer? _wechatCopyFeedbackTimer;
@@ -95,6 +95,8 @@ public partial class SettingsWindow : Window
         AutoCleanupToggle.IsChecked = host.CurrentPreferences.AutoCleanupEnabled;
         AiOrganizeEnabledToggle.IsChecked = host.CurrentPreferences.AiOrganizeEnabled;
         ReviewMarkdownViewToggle.IsChecked = host.CurrentPreferences.ReviewMarkdownViewEnabled;
+        // 图片拖出为文件（契约 #58 实验性第三项）：构造同步段回显。
+        DragOutAsFileToggle.IsChecked = host.CurrentPreferences.DragOutAsFileEnabled;
         // 子分组三态（契约 #57 实验性第二项）：枚举设置一律 ComboBox（仓库先例），
         /// 选中项按 Tag 匹配、不依赖下标。
         var subgroupItems = new[]
@@ -239,38 +241,50 @@ public partial class SettingsWindow : Window
             theme == DesignTheme.Dark);
     }
 
-    // ---- 页脚关于区联系方式（W5 2026-11-05；W3 2026-11-05 交互矩阵＋缩放入场）：
-    //         微信号展示、复制、二维码放大层 ----
+    // ---- 页脚关于区联系方式（W5 2026-11-05；W3 2026-11-05 交互矩阵＋缩放入场；
+    //      2026-11-06 右键二维码＝复制图片、复制按钮删除）：微信号展示、复制、
+    //      二维码放大层 ----
 
     private void WeChatQrButton_Click(object sender, RoutedEventArgs e) => ShowWeChatQrOverlay();
 
-    /// <summary>右键缩略二维码＝复制微信号（不放大）：与页脚复制同一缝与反馈位。</summary>
+    /// <summary>右键缩略二维码＝复制二维码图片（不放大）：与页脚微信号行共用
+    /// 反馈位（页脚微信号 Run），复制走图片写入缝。</summary>
     private void WeChatQrButton_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
-        ShowWeChatCopyFeedback(WeChatCopyButton, WriteWeChatIdToClipboard());
+        ShowWeChatCopyFeedback(WeChatIdRun, WriteWeChatQrImageToClipboard());
     }
 
-    /// <summary>页脚微信号行左/右键＝复制：同一处理器服两事件，反馈就地在相邻复制按钮。</summary>
+    /// <summary>页脚微信号行左/右键＝复制微信号文本：同一处理器服两事件，
+    /// 反馈就地翻转本行微信号 Run（2026-11-06 起文本复制唯一入口即本行）。</summary>
     private void WeChatIdFooterBlock_PointButtonUp(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
-        ShowWeChatCopyFeedback(WeChatCopyButton, WriteWeChatIdToClipboard());
+        ShowWeChatCopyFeedback(WeChatIdRun, WriteWeChatIdToClipboard());
     }
 
     /// <summary>放大态微信号行左/右键＝复制且不关层：e.Handled 阻断冒泡到遮罩
-    /// 关层（与复制按钮被 Button 消费同型），反馈就地在相邻复制按钮。</summary>
+    /// 关层（同 QR 卡右键复制被消费的形态），反馈就地翻转本行微信号 Run。</summary>
     private void WeChatIdLargeBlock_PointButtonUp(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
-        ShowWeChatCopyFeedback(WeChatCopyLargeButton, WriteWeChatIdToClipboard());
+        ShowWeChatCopyFeedback(WeChatIdLargeRun, WriteWeChatIdToClipboard());
+    }
+
+    /// <summary>右键放大图＝复制二维码图片且不关层：与缩略图右键同一缝（负载
+    /// 同为冻结位图），e.Handled 阻断冒泡到遮罩关层，反馈就地翻转放大态
+    /// 微信号 Run。</summary>
+    private void WeChatQrLargeCard_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        ShowWeChatCopyFeedback(WeChatIdLargeRun, WriteWeChatQrImageToClipboard());
     }
 
     private void WeChatQrOverlay_PointButtonUpCloses(object sender, MouseButtonEventArgs e)
     {
-        // 左/右键单击遮罩或卡片非按钮区域＝关闭（「任意单击关闭」对称语义）；
-        // 复制按钮的抬起被 Button 消费、放大态微信号行的抬起被其处理器
-        // e.Handled 消费，都不会冒泡到这里；关闭走 FadeAnimation 统一显隐管理。
+        // 左/右键单击遮罩、左键单击卡片＝关闭（「任意单击关闭」对称语义）；
+        // QR 卡右键的抬起被复制图片处理器 e.Handled 消费、放大态微信号行的抬起
+        // 被其处理器 e.Handled 消费，都不会冒泡到这里；关闭走 FadeAnimation 统一显隐管理。
         e.Handled = true;
         HideWeChatQrOverlay();
     }
@@ -279,6 +293,9 @@ public partial class SettingsWindow : Window
     {
         var animationsEnabled = _host.CurrentPreferences.AnimationsEnabled;
         FadeAnimation.SetAnimationsEnabled(WeChatQrOverlay, animationsEnabled);
+        // 收回曾把遮罩淡出改锚缩放同步时长（Hide），Show 开头复位回轻档 83ms
+        //（既有 DP、ApplyState 读取，零新机制）——入场淡入保持快速档（XAML 不动）。
+        FadeAnimation.SetDurationMs(WeChatQrOverlay, DesignTokens.FastDurationMs);
         FadeAnimation.SetIsActive(WeChatQrOverlay, true);
         if (animationsEnabled)
         {
@@ -290,71 +307,156 @@ public partial class SettingsWindow : Window
 
     private void HideWeChatQrOverlay()
     {
-        // 关层先复位变换：四属性清动画回恒等基值，与遮罩 83ms 淡出并行互不
-        // 残留（淡走 Opacity、缩放走 RenderTransform，分属不同属性）。
-        ResetQrZoomTransform();
-        FadeAnimation.SetAnimationsEnabled(WeChatQrOverlay, _host.CurrentPreferences.AnimationsEnabled);
+        var animationsEnabled = _host.CurrentPreferences.AnimationsEnabled;
+        FadeAnimation.SetAnimationsEnabled(WeChatQrOverlay, animationsEnabled);
+        if (animationsEnabled && MeasureQrSourceRect() is { } sourceRect)
+        {
+            // 收回＝从当下变换态动画回**当下实测**源矩形（「从哪来回哪去」）：
+            // 动态 From 是结构性质——每次收回都以被中断动画的当下值为起点
+            //（SnapshotAndReplace 替换式中断，可随时被再次交互替换）；遮罩淡出
+            // 时长同步缩放时长（先设再 IsActive，ApplyState 读取），整层一个
+            // 节奏收回，避免卡片在已塌遮罩上漂浮。
+            FadeAnimation.SetDurationMs(WeChatQrOverlay, DesignTokens.QrZoomOutMs);
+            AnimateQrZoom(
+                CurrentQrVisualRect(),
+                sourceRect,
+                FadeAnimation.QrZoomOutEasing,
+                DesignTokens.QrZoomOutMs,
+                FillBehavior.HoldEnd);
+        }
+        else
+        {
+            // 动效关（或求值不可达）＝即时塌缩：四属性清动画回恒等基值，与遮罩
+            // 淡出并行互不残留（淡走 Opacity、缩放走 RenderTransform，分属不同
+            // 属性）。
+            ResetQrZoomTransform();
+        }
+
         FadeAnimation.SetIsActive(WeChatQrOverlay, false);
     }
 
     /// <summary>
-    /// 放大层 QR 卡入场（W3 附录 A 规格）：from-rect→to-rect 逐轴插值——t=0
-    /// 卡片精确覆写页脚缩略图源矩形（卡片左下角对齐源左下角），四条显式
-    /// From/To 动画把 Scale→1、Translate→0（FillBehavior.Stop，终态回布局
-    /// 本态零残留）；时长锚 DesignTokens.QrZoomEntranceMs、缓动＝入场减速档
-    /// FadeAnimation.EnterEasing（iOS 照片 zoom-from-origin 本型）。求值不可达
-    /// 或几何非法时静默退化纯淡入，不 crash。
+    /// 放大层 QR 卡入场：共用缩放过渡路径 AnimateQrZoom——from＝当下实测缩略图
+    /// 源矩形、to＝恒等布局矩形、入场缓动/时长（实验性独立常量组）、
+    /// FillBehavior.Stop（终态回恒等基值零残留）。求值不可达或几何非法时静默
+    /// 退化纯淡入，不 crash。不先复位——可中断＝新动画替换（SnapshotAndReplace
+    /// 动态 From），不再用「移除再挂」式中断。
     /// </summary>
     private void PlayQrZoomEntrance()
     {
-        // 先复位再挂新（可中断）：动画进行中再开一律「先复位再挂新」。
-        ResetQrZoomTransform();
         WeChatQrOverlay.UpdateLayout();
+        if (MeasureQrSourceRect() is not { } source)
+        {
+            return;
+        }
 
-        Rect source;
+        var identityCard = new Rect(0, 0, WeChatQrLargeCard.ActualWidth, WeChatQrLargeCard.ActualHeight);
+        AnimateQrZoom(source, identityCard, FadeAnimation.QrZoomInEasing, DesignTokens.QrZoomInMs, FillBehavior.Stop);
+    }
+
+    /// <summary>当下实测页脚缩略图在 QR 卡布局坐标系中的源矩形（不缓存：窗口
+    /// 滚动/移动后收回仍回当下位置）。测量以遮罩为共同坐标基、再换回卡片布局
+    /// 原点——**剥掉 QR 卡自身 RenderTransform 的当下缩放态**（TransformToVisual
+    /// 会穿过卡片 RT，动画进行中直接测量会被自身动画放大），测量不受当下动画
+    /// 污染；求值不可达或几何非法返回 null（调用方静默退化）。</summary>
+    private Rect? MeasureQrSourceRect()
+    {
         try
         {
-            source = WeChatQrThumb.TransformToVisual(WeChatQrLargeCard).TransformBounds(
+            var thumbInOverlay = WeChatQrThumb.TransformToVisual(WeChatQrOverlay).TransformBounds(
                 new Rect(0, 0, WeChatQrThumb.ActualWidth, WeChatQrThumb.ActualHeight));
+            // 卡片布局原点（RT 无关）＝含 RT 的 card→遮罩原点 − RT 平移分量
+            //（遮罩/页脚两条链路都是纯平移布局、无缩放变换，尺寸直通不变）。
+            var cardOriginWithTransform = WeChatQrLargeCard.TransformToVisual(WeChatQrOverlay).Transform(
+                new Point(0, 0));
+            var source = new Rect(
+                thumbInOverlay.X - (cardOriginWithTransform.X - _qrZoomTranslate!.X),
+                thumbInOverlay.Y - (cardOriginWithTransform.Y - _qrZoomTranslate!.Y),
+                thumbInOverlay.Width,
+                thumbInOverlay.Height);
+            return source.Width > 0d && source.Height > 0d &&
+                   double.IsFinite(source.X) && double.IsFinite(source.Y)
+                ? source
+                : (Rect?)null;
         }
         catch (InvalidOperationException)
         {
-            return;
+            return null;
         }
+    }
 
+    /// <summary>当下渲染矩形＝变换反推 Rect(tX, tY, cardW·sX, cardH·sY)——动画
+    /// 中读取即当前插值态（收回的动态 From），零动画时即恒等布局矩形。</summary>
+    private Rect CurrentQrVisualRect() => new(
+        _qrZoomTranslate!.X,
+        _qrZoomTranslate.Y,
+        WeChatQrLargeCard.ActualWidth * _qrZoomScale!.ScaleX,
+        WeChatQrLargeCard.ActualHeight * _qrZoomScale.ScaleY);
+
+    /// <summary>
+    /// QR 卡缩放共用过渡（W3 附录 A；2026-11-06 起放大/收回同一方法）：「视觉
+    /// 矩形 from→to」同一进度 p 驱动——四条显式 From/To DoubleAnimation（先
+    /// Scale 后 Translate）同 duration＋同缓动＋同帧启动，矩形插值是结构性质
+    ///（原路返回不靠两套动画凑巧对称）；可中断＝SnapshotAndReplace 新动画替换；
+    /// fill=Stop 终态回恒等基值零残留，fill=HoldEnd 终值定格、Completed 生命
+    /// 周期复位清动画回恒等（遮罩此时已不可见——复位是终态卫生，不是中断手段）。
+    /// 求值不可达或几何非法静默退化（不动画），不 crash。
+    /// </summary>
+    private void AnimateQrZoom(Rect fromRect, Rect toRect, SplineEase easing, int durationMs, FillBehavior fill)
+    {
         var cardWidth = WeChatQrLargeCard.ActualWidth;
         var cardHeight = WeChatQrLargeCard.ActualHeight;
-        var scaleX0 = cardWidth > 0d ? source.Width / cardWidth : 0d;
-        var scaleY0 = cardHeight > 0d ? source.Height / cardHeight : 0d;
-        if (source.Width <= 0d || source.Height <= 0d ||
-            !double.IsFinite(scaleX0) || !double.IsFinite(scaleY0) ||
-            !double.IsFinite(source.X) || !double.IsFinite(source.Bottom))
+        var fromScaleX = cardWidth > 0d ? fromRect.Width / cardWidth : 0d;
+        var fromScaleY = cardHeight > 0d ? fromRect.Height / cardHeight : 0d;
+        var toScaleX = cardWidth > 0d ? toRect.Width / cardWidth : 0d;
+        var toScaleY = cardHeight > 0d ? toRect.Height / cardHeight : 0d;
+        if (cardWidth <= 0d || cardHeight <= 0d ||
+            fromRect.Width <= 0d || fromRect.Height <= 0d ||
+            toRect.Width <= 0d || toRect.Height <= 0d ||
+            !double.IsFinite(fromRect.X) || !double.IsFinite(fromRect.Y) ||
+            !double.IsFinite(toRect.X) || !double.IsFinite(toRect.Y) ||
+            !double.IsFinite(fromScaleX) || !double.IsFinite(fromScaleY) ||
+            !double.IsFinite(toScaleX) || !double.IsFinite(toScaleY))
         {
             return;
         }
 
-        var translateX0 = source.X;
-        var translateY0 = source.Bottom - (scaleY0 * cardHeight);
-        var duration = new Duration(TimeSpan.FromMilliseconds(DesignTokens.QrZoomEntranceMs));
+        var duration = new Duration(TimeSpan.FromMilliseconds(durationMs));
+        var translateXAnimation = CreateQrZoomAnimation(fromRect.X, toRect.X, duration, easing, fill);
+        // 卡片左下角对齐矩形左下角（W3 附录 A 同一语义）：tY = r.Bottom − sY·cardH。
+        var translateYAnimation = CreateQrZoomAnimation(
+            fromRect.Bottom - (fromScaleY * cardHeight),
+            toRect.Bottom - (toScaleY * cardHeight),
+            duration,
+            easing,
+            fill);
+        if (fill == FillBehavior.HoldEnd)
+        {
+            // 四条动画同 duration/同帧启动，挂任一条即整组终态；HoldEnd 会把
+            // 终值定格在属性上，Completed 时清动画回恒等基值（终态卫生）。
+            translateYAnimation.Completed += (_, _) => ResetQrZoomTransform();
+        }
+
         _qrZoomScale!.BeginAnimation(
             ScaleTransform.ScaleXProperty,
-            CreateQrZoomAnimation(scaleX0, 1d, duration),
+            CreateQrZoomAnimation(fromScaleX, toScaleX, duration, easing, fill),
             FadeAnimation.AnimationHandoffBehavior);
         _qrZoomScale.BeginAnimation(
             ScaleTransform.ScaleYProperty,
-            CreateQrZoomAnimation(scaleY0, 1d, duration),
+            CreateQrZoomAnimation(fromScaleY, toScaleY, duration, easing, fill),
             FadeAnimation.AnimationHandoffBehavior);
         _qrZoomTranslate!.BeginAnimation(
             TranslateTransform.XProperty,
-            CreateQrZoomAnimation(translateX0, 0d, duration),
+            translateXAnimation,
             FadeAnimation.AnimationHandoffBehavior);
         _qrZoomTranslate.BeginAnimation(
             TranslateTransform.YProperty,
-            CreateQrZoomAnimation(translateY0, 0d, duration),
+            translateYAnimation,
             FadeAnimation.AnimationHandoffBehavior);
     }
 
-    /// <summary>四属性先清动画回恒等基值（FadeAnimation.ApplyState 同型）。</summary>
+    /// <summary>四属性清动画回恒等基值（FadeAnimation.ApplyState 同型）——仅
+    /// 动效关塌缩与收回动画 Completed 终态复位两处调用，不作中断手段。</summary>
     private void ResetQrZoomTransform()
     {
         if (_qrZoomScale is null || _qrZoomTranslate is null)
@@ -368,23 +470,12 @@ public partial class SettingsWindow : Window
         _qrZoomTranslate.BeginAnimation(TranslateTransform.YProperty, null);
     }
 
-    private static DoubleAnimation CreateQrZoomAnimation(double from, double to, Duration duration) =>
+    private static DoubleAnimation CreateQrZoomAnimation(double from, double to, Duration duration, SplineEase easing, FillBehavior fill) =>
         new(from, to, duration)
         {
-            EasingFunction = FadeAnimation.EnterEasing,
-            FillBehavior = FillBehavior.Stop
+            EasingFunction = easing,
+            FillBehavior = fill
         };
-
-    /// <summary>页脚与放大层共用同一复制入口：经写入缝落剪贴板，就地轻量反馈。</summary>
-    private void WeChatCopyButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button copyButton)
-        {
-            return;
-        }
-
-        ShowWeChatCopyFeedback(copyButton, WriteWeChatIdToClipboard());
-    }
 
     private bool WriteWeChatIdToClipboard()
     {
@@ -407,12 +498,44 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// 复制反馈（轻档）：按钮短文案瞬时翻转（已复制/复制失败），延迟复位；
-    /// 计时器复位路径可被下一次点击覆盖，不产生并发复位。
+    /// 复制二维码图片：剪贴板负载＝缩略图与放大层共用的同一冻结位图实例
+    ///（DataObject.SetImage，同 DragPayloadService/InputDeliveryService 先例），
+    /// 经同一剪贴板写入缝落剪贴板、同异常捕获（失败如实反馈）。
     /// </summary>
-    private void ShowWeChatCopyFeedback(Button copyButton, bool succeeded)
+    private bool WriteWeChatQrImageToClipboard()
     {
-        copyButton.Content = succeeded ? WeChatCopiedButtonText : WeChatCopyFailedButtonText;
+        if (WeChatQrThumb.Source is not BitmapSource bitmap)
+        {
+            return false;
+        }
+
+        try
+        {
+            var data = new DataObject();
+            data.SetImage(bitmap);
+            if (ClipboardWriterOverride is { } writer)
+            {
+                return writer(data);
+            }
+
+            Clipboard.SetDataObject(data, true);
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is COMException or ExternalException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 复制反馈（轻档）：触发侧微信号 Run 文本瞬时翻转（已复制/复制失败），
+    /// 延迟复位回 ProductIdentity.WeChatId 单一来源；计时器复位路径可被下一次
+    /// 点击覆盖，不产生并发复位。
+    /// </summary>
+    private void ShowWeChatCopyFeedback(Run feedbackRun, bool succeeded)
+    {
+        feedbackRun.Text = succeeded ? WeChatCopiedFeedbackText : WeChatCopyFailedFeedbackText;
         _wechatCopyFeedbackTimer?.Stop();
         _wechatCopyFeedbackTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -421,7 +544,7 @@ public partial class SettingsWindow : Window
         _wechatCopyFeedbackTimer.Tick += (_, _) =>
         {
             _wechatCopyFeedbackTimer.Stop();
-            copyButton.Content = WeChatCopyButtonText;
+            feedbackRun.Text = ProductIdentity.WeChatId;
         };
         _wechatCopyFeedbackTimer.Start();
     }
@@ -1314,6 +1437,25 @@ public partial class SettingsWindow : Window
         }
 
         _host.ApplyPreferences(_host.CurrentPreferences with { ReviewMarkdownViewEnabled = enabled });
+    }
+
+    // ---- 实验性第三项（契约 #58）：图片拖出为文件。经 ApplyPreferences 唯一
+    // 管线即时生效＋原子持久化（契约 #5 同路）；开关状态在构造同步段回显。----
+
+    private void DragOutAsFileToggle_Checked(object sender, RoutedEventArgs e) =>
+        ApplyDragOutAsFilePreference(enabled: true);
+
+    private void DragOutAsFileToggle_Unchecked(object sender, RoutedEventArgs e) =>
+        ApplyDragOutAsFilePreference(enabled: false);
+
+    private void ApplyDragOutAsFilePreference(bool enabled)
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with { DragOutAsFileEnabled = enabled });
     }
 
     // ---- 实验性第二项（契约 #57）：分类内子分组三态。经 ApplyPreferences 唯一

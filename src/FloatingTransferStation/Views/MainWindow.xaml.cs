@@ -191,6 +191,9 @@ public partial class MainWindow : Window
         _clipboardCapture = clipboardCapture;
         _mutations = mutations;
         _dragPayload = dragPayload;
+        // 图片拖出为文件实验开关（契约 #58）：构造段逐项下发偏好——启动不走
+        // ApplyPreferences，漏本行＝重启后开关失效（沿 AnimationsPreference 先例）。
+        _dragPayload.ExternalFilePayloadsEnabled = _preferences.DragOutAsFileEnabled;
         _externalDropPayloadReader = externalDropPayloadReader;
         _externalDropImportService = externalDropImportService;
         _dailyReviews = dailyReviewStore ?? store as IDailyReviewStore;

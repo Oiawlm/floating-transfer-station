@@ -17,6 +17,11 @@ public static class FadeAnimation
     internal static readonly SplineEase EnterEasing = SplineEase.FromToken(DesignTokens.EnterEasingKeySpline);
     internal static readonly SplineEase ExitEasing = SplineEase.FromToken(DesignTokens.ExitEasingKeySpline);
 
+    // 二维码缩放过渡专用缓动（实验性独立常量组，不并入 Enter/Exit 两条通用曲线、
+    // 不进三档体系——数值源与声明见 DesignTokens 注记与契约 #24）。
+    internal static readonly SplineEase QrZoomInEasing = SplineEase.FromToken(DesignTokens.QrZoomInKeySpline);
+    internal static readonly SplineEase QrZoomOutEasing = SplineEase.FromToken(DesignTokens.QrZoomOutKeySpline);
+
     private static readonly DependencyProperty HideGenerationProperty = DependencyProperty.RegisterAttached(
         "HideGeneration",
         typeof(int),

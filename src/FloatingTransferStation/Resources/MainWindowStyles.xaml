@@ -966,15 +966,20 @@
               <RowDefinition Height="Auto" />
               <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            <!-- 行 0＝分区边界宿主（契约 #27，#57 修订泛化）：置顶|普通边界与子分组
-                 组边界共用同一 divider Line——可见性由模板触发器按 StartsNormalRegion/
-                 StartsSubgroupRegion 驱动（基态塌缩；Recycling 复用下随 DataContext
-                 重评，禁止代码后置逐容器设状态、哨兵数据项与第二套边界判定）；
-                 「四态外观」由 Style 槽位资源经 DynamicResource 承载（MainWindow 按
-                 偏好换装）。None 态零高+空描边＝零渲染，触发器命中也不占布局。
-                 子分组组头（契约 #57 形态②）：divider 上方小节标题，文本绑派生
-                 SubgroupHeader（命名组边界卡非 null、未指定组与普通卡恒 null），
-                 基态 Collapsed；与 divider 各自独立可见、互不占位。 -->
+            <!-- 行 0＝分区边界宿主（契约 #27，#57 修订泛化）：置顶|普通边界宿主
+                 PinnedDivider Line（可见性由模板触发器按 StartsNormalRegion 驱动，
+                 基态塌缩；Recycling 复用下随 DataContext 重评，禁止代码后置逐容器
+                 设状态、哨兵数据项与第二套边界判定）；「四态外观」由 Style 槽位
+                 资源经 DynamicResource 承载（MainWindow 按偏好换装），None 态零高
+                 +空描边＝零渲染，触发器命中也不占布局。2026-11-06 修订（#57）：
+                 子分组组边界改用同宿主独立 Line（SubgroupDivider）＋专用恒可见
+                 样式，与「置顶分隔」偏好解耦（组边界恒可见，视觉语言同源——同
+                 几何同 token，不经四态偏好槽位）；两触发结构性互斥（StartsNormal
+                 Region 要求前邻置顶、StartsSubgroupRegion 要求前邻非置顶，同卡
+                 不可能双触发）。子分组组头（契约 #57 形态②）：divider 上方小节
+                 标题，文本绑派生 SubgroupHeader（命名组边界卡非 null、未指定组
+                 与普通卡恒 null），基态 Collapsed；与 divider 各自独立可见、互不
+                 占位。 -->
             <Grid Grid.Row="0" IsHitTestVisible="False">
               <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -1010,6 +1015,18 @@
                     IsHitTestVisible="False"
                     Visibility="Collapsed"
                     Style="{DynamicResource PinnedDividerActiveStyle}" />
+              <!-- 子分组组边界（2026-11-06，#57）：与 PinnedDivider 同格（Grid.Row=1）
+                   独立 Line，两触发结构性互斥故同格不重叠渲染；专用样式不经偏好
+                   槽位，GroupedView 有指派组时恒可见。 -->
+              <Line x:Name="SubgroupDivider"
+                    Grid.Row="1"
+                    X1="0" Y1="0" X2="1" Y2="0"
+                    Stretch="Fill"
+                    UseLayoutRounding="True"
+                    SnapsToDevicePixels="True"
+                    IsHitTestVisible="False"
+                    Visibility="Collapsed"
+                    Style="{DynamicResource SubgroupDividerStyle}" />
             </Grid>
             <Border Grid.Row="1"
                     Background="{TemplateBinding Background}"
@@ -1023,11 +1040,11 @@
             <DataTrigger Binding="{Binding StartsNormalRegion}" Value="True">
               <Setter TargetName="PinnedDivider" Property="Visibility" Value="Visible" />
             </DataTrigger>
-            <!-- 子分组组边界（契约 #57）：divider 复用置顶分隔同一宿主与四态外观；
-                 组头可见性由 SubgroupHeaderText 自身样式按非空驱动（未指定组无组头，
-                 与 Off 观感最近）。 -->
+            <!-- 子分组组边界（2026-11-06 修订，#57）：独立 SubgroupDivider 恒可见
+                 样式（与置顶分隔偏好解耦）；组头可见性由 SubgroupHeaderText 自身
+                 样式按非空驱动（未指定组无组头，与 Off 观感最近）。 -->
             <DataTrigger Binding="{Binding StartsSubgroupRegion}" Value="True">
-              <Setter TargetName="PinnedDivider" Property="Visibility" Value="Visible" />
+              <Setter TargetName="SubgroupDivider" Property="Visibility" Value="Visible" />
             </DataTrigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -1052,6 +1069,19 @@
     <Setter Property="Margin" Value="12,8,12,2" />
     <Setter Property="Stroke" Value="{DynamicResource BorderBrush}" />
     <Setter Property="StrokeThickness" Value="1" />
+  </Style>
+
+  <!-- 子分组组边界专用样式（2026-11-06，#57）：与 PinnedDividerSolidStyle 同几何
+       同 token（视觉语言同源、不新增档位），但独立于「置顶分隔」偏好槽位——
+       GroupedView 有指派组时组边界恒可见，不受偏好「无」连坐（可见性只由
+       StartsSubgroupRegion 模板触发器驱动）。 -->
+  <Style x:Key="SubgroupDividerStyle" TargetType="Line">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Margin" Value="12,8,12,2" />
+    <Setter Property="Stroke" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="StrokeThickness" Value="1" />
+    <Setter Property="UseLayoutRounding" Value="True" />
+    <Setter Property="SnapsToDevicePixels" Value="True" />
   </Style>
 
   <Style x:Key="PinnedDividerDashedStyle" TargetType="Line">

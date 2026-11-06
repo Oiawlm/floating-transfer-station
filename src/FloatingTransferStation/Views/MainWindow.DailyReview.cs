@@ -52,7 +52,10 @@ public partial class MainWindow
         InsertionIndicator.Visibility = isReview || isLauncher ? Visibility.Collapsed : Visibility.Visible;
         // 内容桶空态随表面切换（契约 #33）：仅板面可见，记录/启动表面隐藏
         //（两者各有专属空态/内容宿主）；集合与搜索触发另行驱动本单点。
-        UpdateBoardEmptyState();
+        UpdateEmptyStates();
+        // 零指派引导条随表面切换重评估（2026-11-06，#57 可用性扩展）：GroupedView
+        // 仅内容桶表面可评估，切面（含切回板面）必须重评。
+        UpdateGroupedViewGuidance();
         // 记录空态随表面切换重评估（契约 #33 记录扩展）：宿主刚可见/隐藏时按
         // 当前编辑内容定可见性；日期装载与输入触发另行驱动同一单点。
         UpdateReviewEmptyState();

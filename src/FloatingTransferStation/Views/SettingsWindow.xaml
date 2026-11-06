@@ -193,25 +193,15 @@
         <Setter Property="Height" Value="34" />
       </Style>
 
-      <!-- 页脚联系方式小按钮（W5 2026-11-05）：动作按钮的紧凑文字形态，
-           反馈态（已复制/复制失败）由代码后置换 Content 承载，轻档动效走
-           FadeAnimation.IsActive 交叉淡入（同既有悬停语言）。 -->
-      <Style x:Key="FooterCopyButtonStyle" TargetType="Button" BasedOn="{StaticResource ThemedActionButtonStyle}">
-        <Setter Property="Height" Value="22" />
-        <Setter Property="Padding" Value="10,0" />
-        <Setter Property="FontSize" Value="12" />
-        <Setter Property="MinWidth" Value="56" />
-      </Style>
-
-      <!-- 页脚二维码缩略图（W5 2026-11-05）：白底静区是二维码可扫的结构要求
-           （主题不变量，非调色板颜色），控件级圆角＋既有描边/悬停语言；
-           单击弹设置窗内放大层（不新建窗口）。 -->
+      <!-- 页脚二维码缩略图（W5 2026-11-05；2026-11-06 右键改复制二维码图片）：
+           白底静区是二维码可扫的结构要求（主题不变量，非调色板颜色），控件级
+           圆角＋既有描边/悬停语言；单击弹设置窗内放大层（不新建窗口）。 -->
       <Style x:Key="WeChatQrThumbStyle" TargetType="Button">
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Focusable" Value="False" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="AutomationProperties.Name" Value="放大微信二维码" />
-        <Setter Property="ToolTip" Value="单击放大微信二维码，右键复制微信号" />
+        <Setter Property="ToolTip" Value="单击放大微信二维码，右键复制二维码图片" />
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="Button">
@@ -739,7 +729,29 @@
                               SelectionChanged="SubgroupModeComboBox_SelectionChanged" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="实验性功能，默认关闭。开启后可在内容分类（重要/待分类）内再分一层子分组：「按钮轨」在分类顶部显示四个分组按钮（单击筛选、双击改名、把卡片拖到按钮上归组），「视觉分组」把同组卡片相邻摆放并用分隔线与组名标出边界。默认关闭的原因：两种形态与分组数据模型仍在打磨。改动立即生效并自动保存；子分组归属保存在卡片数据里，关闭开关不会丢失已归组的内容。" />
+                             Text="实验性功能，默认关闭。开启后可在内容分类（重要/待分类）内再分一层子分组：「按钮轨」在分类顶部显示四个分组按钮（单击筛选、双击改名、把卡片拖到按钮上归组）；「视觉分组」把同组卡片相邻摆放并用分隔线与组名标出边界——两种形态需配合使用：归组入口只在「按钮轨」，「视觉分组」负责展示边界，内容都未分组时会在分类顶部提示分组方法。默认关闭的原因：两种形态与分组数据模型仍在打磨。改动立即生效并自动保存；子分组归属保存在卡片数据里，关闭开关不会丢失已归组的内容。" />
+                  <!-- 实验性第三项（2026-11-06，契约 #58）：图片拖出为文件——门控
+                       既有拖出能力（默认关＝对外剥离文件/位图形态，窗内拖放与
+                       剪贴板复制零变化）；即时生效＋原子保存（契约 #5 同路）。 -->
+                  <Grid Background="Transparent" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="图片拖出为文件"
+                               Style="{StaticResource RowCaptionStyle}"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center" />
+                    <CheckBox x:Name="DragOutAsFileToggle"
+                              Grid.Column="1"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              AutomationProperties.Name="图片拖出为文件"
+                              Checked="DragOutAsFileToggle_Checked"
+                              Unchecked="DragOutAsFileToggle_Unchecked" />
+                  </Grid>
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="实验性功能，默认关闭。开启后把图片卡（或纯图片多选）直接拖到文件夹或桌面，即复制出图片文件；只复制，受管图片库与应用内卡片不动。默认关闭的原因：对外拖出在不同目标应用的表现仍在打磨。关闭时窗内整理与剪贴板复制不受影响。改动立即生效并自动保存。" />
                 </StackPanel>
               </Border>
             </StackPanel>
@@ -1024,7 +1036,8 @@
               </TextBlock>
               <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                 <!-- 微信号行左右键皆复制（W3 2026-11-05）：透明底整行可命中＋手型
-                     光标，同一处理器服两事件；反馈就地在相邻复制按钮（零 toast）。 -->
+                     光标，同一处理器服两事件；反馈就地翻转本行微信号 Run
+                     （2026-11-06 起文本复制唯一入口即本行，零 toast）。 -->
                 <TextBlock x:Name="WeChatIdFooterBlock"
                            FontSize="12"
                            VerticalAlignment="Center"
@@ -1036,14 +1049,6 @@
                            MouseRightButtonUp="WeChatIdFooterBlock_PointButtonUp">
                   <Run Text="微信：" /><Run x:Name="WeChatIdRun" Foreground="{DynamicResource PrimaryTextBrush}" FontWeight="SemiBold" />
                 </TextBlock>
-                <Button x:Name="WeChatCopyButton"
-                        Style="{StaticResource FooterCopyButtonStyle}"
-                        Margin="8,0,0,0"
-                        VerticalAlignment="Center"
-                        Content="复制"
-                        ToolTip="复制微信号到剪贴板"
-                        AutomationProperties.Name="复制微信号"
-                        Click="WeChatCopyButton_Click" />
               </StackPanel>
             </StackPanel>
           </StackPanel>
@@ -1063,14 +1068,16 @@
               Panel.ZIndex="10"
               Style="{StaticResource SettingsShellOutlineStyle}" />
 
-      <!-- 微信二维码放大层（W5 2026-11-05；W3 2026-11-05 交互升级）：设置窗内
-           遮罩层（不新建窗口），遮罩用既有 WindowShellBrush 键（零新配色）；
-           左/右键单击遮罩或卡片非按钮区域＝关闭（两事件共用处理器，「任意单击
-           关闭」对称语义），复制按钮是独立职责入口不关闭、放大态微信号行左/右
-           键复制且不关层（其处理器 e.Handled 阻断冒泡）；显隐走 FadeAnimation
-           统一管理（轻档 83ms，动效关闭立即切换），动效开时 QR 卡自页脚缩略图
-           源位置缩放入场（WeChatQrLargeCard 渲染变换，代码后置驱动）；
-           Esc 关层优先于关窗（见 SettingsWindow_PreviewKeyDown）。 -->
+      <!-- 微信二维码放大层（W5 2026-11-05；W3 2026-11-05 交互升级；2026-11-06
+           右键二维码＝复制图片＋收回缩放动画）：设置窗内遮罩层（不新建窗口），遮罩用既有
+           WindowShellBrush 键（零新配色）；左/右键单击遮罩、左键单击卡片＝关闭（两事件
+           共用处理器，「任意单击关闭」对称语义），QR 卡右键＝复制二维码图片
+           （独立职责入口不关层）、放大态微信号行左/右键复制且不关层（其处理器
+           e.Handled 阻断冒泡）；显隐走 FadeAnimation 统一管理（入场轻档 83ms、
+           收回淡出时长同步缩放时长，动效关闭立即切换），动效开时 QR 卡自页脚
+           缩略图源位置缩放入场、关层自当下态原路缩回源位置（WeChatQrLargeCard
+           渲染变换，代码后置驱动，放大/收回同一插值路径）；Esc 关层优先于关窗
+           （见 SettingsWindow_PreviewKeyDown）。 -->
       <Grid x:Name="WeChatQrOverlay"
             Grid.RowSpan="3"
             Panel.ZIndex="20"
@@ -1097,11 +1104,13 @@
                        Margin="0,0,0,10" />
             <!-- QR 卡＝缩放入场动画元素（W3 附录 A）：312×312 白底正方形含 6px
                  静区，仅含 Image；渲染变换（Scale→Translate 组）由代码后置构造
-                 与驱动，布局一次到位恒定。 -->
+                 与驱动，布局一次到位恒定；右键＝复制二维码图片（不关层）。 -->
             <Border x:Name="WeChatQrLargeCard"
                     Background="White"
                     CornerRadius="4"
-                    Padding="6">
+                    Padding="6"
+                    ToolTip="右键复制二维码图片"
+                    MouseRightButtonUp="WeChatQrLargeCard_MouseRightButtonUp">
               <Image x:Name="WeChatQrLarge"
                      Width="300"
                      Height="300"
@@ -1112,8 +1121,8 @@
                         HorizontalAlignment="Center"
                         Margin="0,12,0,0">
               <!-- 放大态微信号行左右键皆复制且不关层（W3）：与页脚行同一处理器
-                   形态，e.Handled 阻断冒泡到遮罩关层（与复制按钮被 Button 消费
-                   同型）；反馈就地在相邻复制按钮。 -->
+                   形态，e.Handled 阻断冒泡到遮罩关层（同 QR 卡右键复制被消费
+                   的形态）；反馈就地翻转本行微信号 Run。 -->
               <TextBlock x:Name="WeChatIdLargeBlock"
                          FontSize="12"
                          VerticalAlignment="Center"
@@ -1125,14 +1134,6 @@
                          MouseRightButtonUp="WeChatIdLargeBlock_PointButtonUp">
                 <Run Text="微信：" /><Run x:Name="WeChatIdLargeRun" Foreground="{DynamicResource PrimaryTextBrush}" FontWeight="SemiBold" />
               </TextBlock>
-              <Button x:Name="WeChatCopyLargeButton"
-                      Style="{StaticResource FooterCopyButtonStyle}"
-                      Margin="8,0,0,0"
-                      VerticalAlignment="Center"
-                      Content="复制"
-                      ToolTip="复制微信号到剪贴板"
-                      AutomationProperties.Name="复制微信号"
-                      Click="WeChatCopyButton_Click" />
             </StackPanel>
             <TextBlock Text="扫码或加好友时请注明来意"
                        FontSize="12"

@@ -551,6 +551,43 @@
           </ItemsControl>
         </Border>
 
+        <!-- 视觉分组零指派引导条（2026-11-06，契约 #57 形态②扩展）：GroupedView
+             下按钮轨整行塌缩、本行行内空闲——引导条复用 Grid.Row=1 与卡片区
+             Row=2 零重叠不遮卡片。可见性唯一驱动＝UpdateGroupedViewGuidance
+             单点（GroupedView 且激活面板为内容桶、有卡且非置顶卡槽值 ≤1＝零组
+             边界渲染时可见；面板空让位 BoardEmptyState）。纯信息性：
+             IsHitTestVisible=False 命中穿透回 BoardList。 -->
+        <Border x:Name="GroupedViewGuidance"
+                Grid.Row="1"
+                Padding="12,2"
+                Background="Transparent"
+                IsHitTestVisible="False"
+                Visibility="Collapsed">
+          <StackPanel Orientation="Vertical">
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Margin="0,0,0,2">
+              <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                         FontSize="16"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         VerticalAlignment="Center"
+                         Text="&#xE8EC;" />
+              <TextBlock FontSize="12"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource PrimaryTextBrush}"
+                         VerticalAlignment="Center"
+                         Margin="6,0,0,0"
+                         Text="内容还没有分组" />
+            </StackPanel>
+            <TextBlock FontSize="11"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Text="先在「按钮轨」模式把卡片拖到分组按钮上，「视觉分组」会把同组卡片相邻摆放并标出组名" />
+          </StackPanel>
+        </Border>
+
         <ListBox x:Name="BoardList"
                  Grid.Row="2"
                  ItemsSource="{Binding ActivePanel.Items}"

@@ -95,7 +95,7 @@ public partial class MainWindow
         ClearUserSelection();
         _viewModel.EnterSearch();
         // 搜索态空集语义由 SearchEmptyHint 承载，内容桶空态让位（契约 #33）。
-        UpdateBoardEmptyState();
+        UpdateEmptyStates();
         UpdateSearchPresentation();
         ApplyBoardListFilter();
         FocusSearchInput();
@@ -110,7 +110,7 @@ public partial class MainWindow
         }
 
         _viewModel.ExitSearch();
-        UpdateBoardEmptyState();
+        UpdateEmptyStates();
         ClearSearchControls();
         UpdateSearchPresentation();
         ApplyBoardListFilter();
@@ -182,7 +182,7 @@ public partial class MainWindow
             BoardList.Items.Filter = null;
         }
 
-        UpdateSearchEmptyHint();
+        UpdateEmptyStates();
         // 过滤改变可见视图（进出搜索、改关键词/类型、chip 过滤切换共用本单点）：锚点
         // 被过滤移出视图即终结会话，仍在视图内则覆盖层重定位跟随。
         RefreshCardEditSession();
@@ -210,19 +210,5 @@ public partial class MainWindow
         return keyword.Length == 0 ||
             (boardItem.Kind == BoardItemKind.Text &&
              boardItem.Text?.Contains(keyword, StringComparison.OrdinalIgnoreCase) == true);
-    }
-
-    private void UpdateSearchEmptyHint()
-    {
-        // 空态提示单点（契约 #33 让位链扩展＝#57）：搜索态「无匹配结果」与 chip 过滤
-        // 空结果「该分组暂无卡片」复用同一元素、文案按来源切换；内容桶空态让位。
-        var searchVisible = _viewModel.IsSearchActive && BoardList.Items.IsEmpty;
-        var subgroupVisible = !_viewModel.IsSearchActive &&
-            IsSubgroupFilterActive &&
-            BoardList.Items.IsEmpty;
-        SearchEmptyHint.Visibility = searchVisible || subgroupVisible
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        SearchEmptyHintTitle.Text = _viewModel.IsSearchActive ? "无匹配结果" : "该分组暂无卡片";
     }
 }

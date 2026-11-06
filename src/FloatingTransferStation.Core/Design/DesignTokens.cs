@@ -73,9 +73,19 @@ public static class DesignTokens
     /// 取 120 覆盖手抖频率（≥4Hz 的断言间隔都低于它），又不至于让真离开的
     /// 高亮消退有可感知迟滞。</summary>
     public const int DropTargetWithdrawHoldMs = 120;
-    /// <summary>二维码放大层 QR 卡缩放入场（W3 2026-11-05）：场景常量不加档——
-    /// 直接锚 SlowDurationMs（仿 LaunchConfirmMs，永不加第四档）。</summary>
-    public const int QrZoomEntranceMs = SlowDurationMs;
+    /// <summary>二维码放大层 QR 卡缩放过渡（实验性，2026-11-06 工作流 B）：时长
+    /// 与缓动独立成组——不并入 83/167/250 三档体系、也不加第四档（档位制红线），
+    /// 仅本场景专用。数值源：入场曲线 (0.32,0.72,0,1)＝iOS 导航/照片缩放转场的
+    /// 非官方测量近似（ionic-framework#19789）；收回曲线 (0.25,0.1,0.25,1)＝
+    /// Apple 公开 kCAMediaTimingFunctionDefault（developer.apple.com/documentation/
+    /// quartzcore/camediatimingfunction）；时长初值＝FluidPhoto（开源 iOS Photos
+    /// 缩放复刻）实测放大 0.5s／收回 0.25s 收敛取整。实验期以真实录屏迭代微调
+    ///（入场 [320,480]ms、收回 [200,320]ms、控制点 ±0.05），终值回写本组与契约
+    /// #24（批次 2026-11-06-interaction-polish 工作流 B）。</summary>
+    public const int QrZoomInMs = 400;
+    public const int QrZoomOutMs = 250;
+    public const string QrZoomInKeySpline = "0.32,0.72,0,1";
+    public const string QrZoomOutKeySpline = "0.25,0.1,0.25,1";
 
     // 快捷启动（#30）：场景常量不加档——LaunchConfirmMs/ItemLandingMs 直接锚 SlowDurationMs。
     public const int LaunchConfirmMs = SlowDurationMs;

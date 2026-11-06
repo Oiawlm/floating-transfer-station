@@ -543,6 +543,79 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void Subgroup_ChipFilterOnEmptyPanelShowsHintWithoutBoardEmptyStateOverlap()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        // 面板本就空：内容桶空态已可见（BoardEmptyState），此时点 chip 进入过滤视图。
+        // 修复前 chip 单击路径只重评 SearchEmptyHint 的过滤空视图、从不重评
+        // BoardEmptyState——两元素同格（Grid.Row=2）叠加两段空态文字。
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var hint = (Border)window.FindName("SearchEmptyHint");
+            var boardEmpty = (StackPanel)window.FindName("BoardEmptyState");
+            Assert.AreEqual(
+                Visibility.Visible,
+                boardEmpty!.Visibility,
+                "前置：空面板内容桶空态在场。");
+
+            ClickChip(window, 1);
+
+            Assert.AreEqual(
+                Visibility.Visible,
+                hint!.Visibility,
+                "过滤空视图复用 SearchEmptyHint（「该分组暂无卡片」）。");
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                boardEmpty.Visibility,
+                "两空态同格互斥：chip 过滤接管后内容桶空态必须退位（修复前叠加）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_ChipFilterCancelOnEmptyPanelRestoresBoardEmptyState()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var hint = (Border)window.FindName("SearchEmptyHint");
+            var boardEmpty = (StackPanel)window.FindName("BoardEmptyState");
+
+            ClickChip(window, 1);
+            ClickChip(window, 1);
+
+            Assert.IsFalse(window.IsSubgroupFilterActive, "前置：再点同 chip＝取消过滤。");
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                hint!.Visibility,
+                "取消过滤后 SearchEmptyHint 退位。");
+            Assert.AreEqual(
+                Visibility.Visible,
+                boardEmpty!.Visibility,
+                "退位方向守卫：内容桶空态恢复在场（空面板回归原空态）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void Subgroup_GroupedEntryPartitionsAdjacentBySlotWithUnspecifiedFirst()
     {
         using var directory = new TestDirectory();
@@ -617,26 +690,199 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList")!;
 
             // 边界卡（槽一）容器：divider 与组头都宿主在容器模板行 0。
+            // 2026-11-06 修订（#57）：组边界改用同宿主独立 SubgroupDivider＋专用
+            // 恒可见样式（与「置顶分隔」偏好槽位解耦），改指涉对象不降强度。
             var boundaryItem = board.Items(BoardCategory.Inbox).Single(item => item.Subgroup == 1);
             var container = (ListBoxItem)list.ItemContainerGenerator.ContainerFromItem(boundaryItem)!;
             Assert.IsNotNull(container);
-            var divider = (Line?)container.Template!.FindName("PinnedDivider", container);
+            var divider = (Line?)container.Template!.FindName("SubgroupDivider", container);
             var header = (TextBlock?)container.Template!.FindName("SubgroupHeaderText", container);
-            Assert.IsNotNull(divider, "组边界复用置顶分隔同一 divider 宿主（禁第二套机制）。");
+            Assert.IsNotNull(divider, "组边界宿主在容器模板行 0 的独立 SubgroupDivider（禁第二套边界判定）。");
             Assert.IsNotNull(header);
             Assert.AreEqual(Visibility.Visible, divider.Visibility, "StartsSubgroupRegion 驱动 divider 可见。");
             Assert.AreEqual(Visibility.Visible, header.Visibility, "命名组显示组头。");
             Assert.AreEqual("重要", header.Text, "组头文本绑派生 SubgroupHeader。");
             Assert.AreSame(
-                window.Resources["PinnedDividerActiveStyle"],
+                window.Resources["SubgroupDividerStyle"],
                 divider.Style,
-                "组边界与置顶边界共用同一槽位样式（#27 修订面）。");
+                "组边界用专用恒可见样式（与置顶分隔偏好槽位解耦，视觉语言同源）。");
 
             // 非边界卡（未指定）divider 塌缩。
             var plainItem = board.Items(BoardCategory.Inbox).Single(item => item.Subgroup is null);
             var plainContainer = (ListBoxItem)list.ItemContainerGenerator.ContainerFromItem(plainItem)!;
-            var plainDivider = (Line?)plainContainer.Template!.FindName("PinnedDivider", plainContainer);
+            var plainDivider = (Line?)plainContainer.Template!.FindName("SubgroupDivider", plainContainer);
             Assert.AreEqual(Visibility.Collapsed, plainDivider!.Visibility);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_GroupDividerVisibleEvenWhenPinnedDividerPreferenceNone()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("槽一", BoardCategory.Inbox).Subgroup = 1;
+        board.AddText("未指定", BoardCategory.Inbox);
+        // InsertAtTop 逆序：物理 [未指定, 槽一]——槽一为组边界卡。
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.GroupedView);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            // 「置顶分隔＝无」偏好注入照既有置顶分隔样式用例口径（ApplyPreferences）；
+            // 显式保住 GroupedView（Default 的 SubgroupDisplay 是 Off，重下发不得回退形态）。
+            window.ApplyPreferences(AppPreferences.Default with
+            {
+                PinnedDivider = PinnedDividerStyle.None,
+                SubgroupDisplay = SubgroupDisplayMode.GroupedView
+            });
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList")!;
+
+            // 组边界与置顶分隔偏好解耦（2026-11-06，#57）：置顶 divider 走 None 态
+            // （零高+空描边）的同时，组边界 divider 恒可见——Stroke 非空且 1 DIP。
+            var boundaryItem = board.Items(BoardCategory.Inbox).Single(item => item.Subgroup == 1);
+            var container = (ListBoxItem)list.ItemContainerGenerator.ContainerFromItem(boundaryItem)!;
+            Assert.IsNotNull(container);
+            var pinned = (Line?)container.Template!.FindName("PinnedDivider", container);
+            var divider = (Line?)container.Template!.FindName("SubgroupDivider", container);
+            Assert.IsNotNull(pinned);
+            Assert.IsNotNull(divider);
+            Assert.AreSame(
+                window.FindResource("PinnedDividerNoneStyle"),
+                window.Resources["PinnedDividerActiveStyle"],
+                "前置：置顶分隔偏好＝无已换装槽位（连坐源就位）。");
+            Assert.AreEqual(Visibility.Collapsed, pinned!.Visibility, "前置：本卡非置顶边界，置顶 divider 塌缩（StartsNormalRegion 未触发）。");
+            Assert.AreEqual(Visibility.Visible, divider!.Visibility, "组边界不受置顶分隔偏好连坐（恒可见）。");
+            Assert.IsNotNull(divider.Stroke, "组边界描边非空（BorderBrush 实线）。");
+            Assert.AreSame(window.FindResource("BorderBrush"), divider.Stroke, "组边界用 BorderBrush（视觉语言与置顶分隔实线同源）。");
+            Assert.AreEqual(1d, divider.Height, "组边界 1 DIP（同几何 token）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_GroupedViewZeroBoundaryShowsGuidance()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox);
+        board.AddText("乙", BoardCategory.Inbox);
+        // 全部未指派：GroupedView 无组边界渲染——引导条在场，告知归组方法。
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.GroupedView);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var guidance = (Border)window.FindName("GroupedViewGuidance")!;
+
+            Assert.AreEqual(Visibility.Visible, guidance.Visibility, "零组边界（全未指派）＝引导条可见。");
+            Assert.IsFalse(guidance.IsHitTestVisible, "引导条纯信息性，命中穿透回 BoardList。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_GroupedViewSingleSlotStillShowsGuidance()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox).Subgroup = 2;
+        board.AddText("乙", BoardCategory.Inbox).Subgroup = 2;
+        // 全部同槽：非置顶卡槽值并集恰 1 个＝仍零组边界渲染——引导条保持在场。
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.GroupedView);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var guidance = (Border)window.FindName("GroupedViewGuidance")!;
+
+            Assert.AreEqual(Visibility.Visible, guidance.Visibility, "全部同槽（无边界）＝引导条可见。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_GroupedViewGuidanceHiddenWhenBoundariesForm()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox);
+        board.AddText("乙", BoardCategory.Inbox);
+        // 单槽零边界开局（进入分区为 no-op，零异步竞态）：引导条在场。
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.GroupedView);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var guidance = (Border)window.FindName("GroupedViewGuidance")!;
+            Assert.AreEqual(Visibility.Visible, guidance.Visibility, "前置：零边界，引导条在场。");
+
+            // 直改槽值（照 GroupedEntry 用例直改口径）再经模式单点重下发：Reindex
+            // 同步派生 ≥2 槽边界，引导条随即退位（不与边界信息双显）。
+            board.Items(BoardCategory.Inbox).Last().Subgroup = 2;
+            window.ApplyPreferences(
+                window.CurrentPreferences with { SubgroupDisplay = SubgroupDisplayMode.GroupedView });
+            CompleteLayout(window);
+
+            Assert.IsTrue(
+                board.Items(BoardCategory.Inbox).Select(item => item.Subgroup).Distinct().Count() >= 2,
+                "前置：≥2 槽（组边界已派生）。");
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                guidance.Visibility,
+                "组边界渲染后引导条退位。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_GroupedViewGuidanceYieldsToEmptyPanelState()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        // 空面板：内容桶空态语义优先，引导条让位。
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.GroupedView);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var guidance = (Border)window.FindName("GroupedViewGuidance")!;
+            var boardEmpty = (StackPanel)window.FindName("BoardEmptyState");
+
+            Assert.AreEqual(
+                Visibility.Visible,
+                boardEmpty!.Visibility,
+                "前置：空面板内容桶空态在场。");
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                guidance.Visibility,
+                "面板空＝引导条让位 BoardEmptyState。");
         }
         finally
         {

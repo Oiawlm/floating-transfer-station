@@ -16,13 +16,16 @@ namespace FloatingTransferStation.Tests;
 
 /// <summary>
 /// 设置窗页脚「关于」区联系方式（W5 2026-11-05；W3 2026-11-05 交互矩阵与
-/// 缩放入场）：微信号文本与二维码位图全部来自 ProductIdentity 单一来源
-///（页脚/放大层共用同一冻结位图实例）；「复制」经可注入剪贴板写入缝落盘
+/// 缩放入场；2026-11-06 右键二维码＝复制图片、复制按钮删除）：微信号文本与
+/// 二维码位图全部来自 ProductIdentity 单一来源（页脚/放大层共用同一冻结位图
+/// 实例）；复制（微信号文本与二维码图片）均经可注入剪贴板写入缝落盘
 ///（harness 密封缺省＝响亮失败 stub，契约 #53 口径——未显式声明写意图的
-/// 测试一旦触达真实剪贴板即失败），反馈为短文案瞬时翻转；放大层（设置窗
-/// 内遮罩，不新建窗口）从缩略图单击打开、左/右键单击遮罩任意处或 Esc 关闭
-///（Esc 只关层不关窗），层内附一致复制入口；微信号两态行左右键皆复制
-///（放大态复制不关层），动效开时 QR 卡自缩略图源位置缩放入场（可中断、
+/// 测试一旦触达真实剪贴板即失败），反馈为触发侧微信号 Run 文本瞬时翻转；
+/// 放大层（设置窗内遮罩，不新建窗口）从缩略图单击打开、左/右键单击遮罩
+/// 空白处或 Esc 关闭（Esc 只关层不关窗）；右键二维码（缩略图/放大图一致）
+/// ＝复制二维码图片且不弹层/不关层；微信号两态行左右键皆复制微信号文本
+///（放大态复制不关层），动效开时 QR 卡自缩略图源位置缩放入场、关层自当下态
+/// 原路缩回源位置（放大/收回共用同一进度 p 插值路径：可中断、动态 From、
 /// 终态恒等零残留），动效关＝变换恒等终态即定格。
 /// </summary>
 [TestClass]
@@ -184,45 +187,6 @@ public sealed class SettingsWindowContactTests
     }
 
     [STATestMethod]
-    public void FooterCopy_WritesWeChatIdThroughSeamWithTransientFeedback()
-    {
-        using var directory = new TestDirectory();
-        var preferencesStore = new RecordingPreferencesStore();
-        var window = CreateWindow(directory, preferencesStore);
-        try
-        {
-            var settings = OpenSettings(window);
-            CompleteLayout(settings);
-            DataObject? captured = null;
-            settings.ClipboardWriterOverride = data =>
-            {
-                captured = data;
-                return true;
-            };
-            var copy = (Button)settings.FindName("WeChatCopyButton")!;
-
-            copy.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-
-            Assert.IsNotNull(captured, "复制必须经写入缝（不触碰系统剪贴板）。");
-            Assert.AreEqual(
-                ProductIdentity.WeChatId,
-                (string)captured.GetData(DataFormats.UnicodeText)!,
-                "剪贴板负载必须是 ProductIdentity.WeChatId 全文。");
-            Assert.AreEqual("已复制", copy.Content, "复制成功给短文案瞬时反馈。");
-            PumpUntil(settings.Dispatcher, () => Equals(copy.Content, "复制"));
-            Assert.AreEqual("复制", copy.Content, "反馈延迟复位为常态文案。");
-
-            settings.ClipboardWriterOverride = _ => false;
-            copy.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            Assert.AreEqual("复制失败", copy.Content, "写入失败给失败反馈，不假装成功。");
-        }
-        finally
-        {
-            CloseAll(window);
-        }
-    }
-
-    [STATestMethod]
     public void QrOverlay_OpensFromThumbAndClosesOnAnyClick()
     {
         using var directory = new TestDirectory();
@@ -245,9 +209,16 @@ public sealed class SettingsWindowContactTests
             CompleteLayout(settings);
             Assert.IsInstanceOfType<BitmapImage>(((Image)settings.FindName("WeChatQrLarge")!).Source);
             Assert.AreEqual(
-                Visibility.Visible,
-                ((Button)settings.FindName("WeChatCopyLargeButton")!).Visibility,
-                "放大层内必须有一致复制入口。");
+                1,
+                ((System.Windows.Controls.Panel)((TextBlock)settings.FindName("WeChatIdFooterBlock")!).Parent).Children.Count,
+                "页脚微信号行是所在行唯一子元素（2026-11-06 复制按钮已删除，文本复制入口＝微信号行）。");
+            Assert.IsNotNull(
+                settings.FindName("WeChatIdLargeBlock"),
+                "放大态文本复制入口（微信号行）必须存在。");
+            Assert.AreEqual(
+                1,
+                ((System.Windows.Controls.Panel)((TextBlock)settings.FindName("WeChatIdLargeBlock")!).Parent).Children.Count,
+                "放大态微信号行是所在行唯一子元素（放大层复制按钮同裁决已删除）。");
 
             overlay.RaiseEvent(new MouseButtonEventArgs(
                 Mouse.PrimaryDevice,
@@ -265,48 +236,10 @@ public sealed class SettingsWindowContactTests
         }
     }
 
-    [STATestMethod]
-    public void QrOverlay_CopyEntrySharesTheSeamAndFeedback()
-    {
-        using var directory = new TestDirectory();
-        var preferencesStore = new RecordingPreferencesStore();
-        var window = CreateWindow(
-            directory,
-            preferencesStore,
-            preferencesStore.Seeded with { AnimationsEnabled = false });
-        try
-        {
-            var settings = OpenSettings(window);
-            CompleteLayout(settings);
-            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
-                new RoutedEventArgs(ButtonBase.ClickEvent));
-
-            DataObject? captured = null;
-            settings.ClipboardWriterOverride = data =>
-            {
-                captured = data;
-                return true;
-            };
-            var largeCopy = (Button)settings.FindName("WeChatCopyLargeButton")!;
-            largeCopy.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-
-            Assert.IsNotNull(captured, "放大层复制入口与页脚共用同一写入缝。");
-            Assert.AreEqual(ProductIdentity.WeChatId, (string)captured.GetData(DataFormats.UnicodeText)!);
-            Assert.AreEqual("已复制", largeCopy.Content, "放大层复制反馈就地在触发按钮上。");
-            Assert.AreEqual(
-                Visibility.Visible,
-                ((Grid)settings.FindName("WeChatQrOverlay")!).Visibility,
-                "复制按钮的抬起被 Button 消费，不得顺带关闭放大层。");
-        }
-        finally
-        {
-            CloseAll(window);
-        }
-    }
-
     /// <summary>W5 联系方式证据（FTS_W5_EVIDENCE_DIR 设置时产出真实 WPF 渲染
-    /// 截图）：浅/深主题设置窗页脚关于区（联系方式行＋复制按钮＋二维码缩略图）、
-    /// 复制反馈态与二维码放大层。复制走写入缝，不触碰系统剪贴板。</summary>
+    /// 截图）：浅/深主题设置窗页脚关于区（联系方式行＋二维码缩略图，无按钮态）、
+    /// 微信号行复制反馈态、缩略图右键复制反馈态、放大层与放大图右键复制反馈态
+    ///（层不关同证）、动效关开/关即时定格。复制走写入缝，不触碰系统剪贴板。</summary>
     [STATestMethod]
     public void Evidence_CaptureW5ContactScreens()
     {
@@ -328,16 +261,45 @@ public sealed class SettingsWindowContactTests
             SaveWindowShell(settings, evidenceDirectory!, "settings-footer-light.png");
             SaveFooterCrop(settings, evidenceDirectory!, "footer-contact-light.png");
 
-            ((Button)settings.FindName("WeChatCopyButton")!).RaiseEvent(
-                new RoutedEventArgs(ButtonBase.ClickEvent));
+            // 复制反馈态改行触发（2026-11-06：复制按钮删除，反馈就地翻转微信号 Run）。
+            RaisePointUp((TextBlock)settings.FindName("WeChatIdFooterBlock")!, UIElement.MouseLeftButtonUpEvent);
             CompleteLayout(settings);
             SaveFooterCrop(settings, evidenceDirectory!, "footer-contact-copied-light.png");
+            PumpUntil(settings.Dispatcher, () =>
+                ((Run)settings.FindName("WeChatIdRun")!).Text == ProductIdentity.WeChatId);
+
+            // 缩略图右键复制二维码图片 → 页脚 Run 反馈（2026-11-06 新交互证据）。
+            RaisePointUp((Button)settings.FindName("WeChatQrButton")!, UIElement.MouseRightButtonUpEvent);
+            CompleteLayout(settings);
+            SaveFooterCrop(settings, evidenceDirectory!, "footer-contact-qrcopied-light.png");
+            PumpUntil(settings.Dispatcher, () =>
+                ((Run)settings.FindName("WeChatIdRun")!).Text == ProductIdentity.WeChatId);
 
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
             PumpUntil(settings.Dispatcher, () => overlay.Opacity == 1d && overlay.Visibility == Visibility.Visible);
             SaveWindowShell(settings, evidenceDirectory!, "qr-overlay-light.png");
+
+            // 放大图右键复制 → 放大态 Run 反馈且层不关（2026-11-06 新交互证据）。
+            // 右键处理器同步翻转 Run 且不动透明度；UpdateLayout 只跑布局不泵
+            // 调度器（动画时钟完成处理不落地、1.6s 反馈复位不触发），翻转文本
+            // 与满帧层同帧入画——PushFrame 泵会拍到时钟收尾透明帧或复位常态帧。
+            RaisePointUp((Border)settings.FindName("WeChatQrLargeCard")!, UIElement.MouseRightButtonUpEvent);
+            settings.UpdateLayout();
+            SaveWindowShell(settings, evidenceDirectory!, "qr-overlay-qrcopied-light.png");
+            Assert.AreEqual(
+                Visibility.Visible,
+                overlay.Visibility,
+                "放大图右键复制不关层（证据帧同证）。");
+            Assert.AreEqual(
+                "已复制",
+                ((Run)settings.FindName("WeChatIdLargeRun")!).Text,
+                "证据帧同证：放大态 Run 已翻「已复制」。");
+            CompleteLayout(settings);
+            PumpUntil(settings.Dispatcher, () =>
+                ((Run)settings.FindName("WeChatIdLargeRun")!).Text == ProductIdentity.WeChatId);
+            PumpUntil(settings.Dispatcher, () => overlay.Opacity == 1d && overlay.Visibility == Visibility.Visible);
 
             overlay.RaiseEvent(new MouseButtonEventArgs(
                 Mouse.PrimaryDevice,
@@ -363,18 +325,48 @@ public sealed class SettingsWindowContactTests
         {
             CloseAll(window);
         }
+
+        // 动效关开/关即时定格（2026-11-06）：偏好动效关的独立窗口。
+        using var disabledDirectory = new TestDirectory();
+        var disabledStore = new RecordingPreferencesStore();
+        var disabledWindow = CreateWindow(
+            disabledDirectory,
+            disabledStore,
+            disabledStore.Seeded with { AnimationsEnabled = false });
+        try
+        {
+            var settings = OpenSettings(disabledWindow);
+            CompleteLayout(settings);
+            var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            CompleteLayout(settings);
+            Assert.AreEqual(Visibility.Visible, overlay.Visibility, "动效关＝打开即时可见。");
+            SaveWindowShell(settings, evidenceDirectory!, "contact-disabled-open-light.png");
+
+            RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
+            CompleteLayout(settings);
+            Assert.AreEqual(Visibility.Collapsed, overlay.Visibility, "动效关＝关闭即时塌缩。");
+            SaveWindowShell(settings, evidenceDirectory!, "contact-disabled-closed-light.png");
+        }
+        finally
+        {
+            CloseAll(disabledWindow);
+        }
     }
 
-    /// <summary>W3 缩放入场证据（FTS_W5_EVIDENCE_DIR 设置时产出真实 WPF 渲染
-    /// 截图）：浅/深主题放大过程多帧胶片（各≥6 帧覆盖 0→250ms，含 t=0 起始与
-    /// 终态）＋动效关终态截图。复制走写入缝，不触碰系统剪贴板。</summary>
+    /// <summary>W3 缩放过渡证据（FTS_W5_EVIDENCE_DIR 设置时产出真实 WPF 渲染
+    /// 截图）：浅/深主题放大过程多帧胶片（各≥6 帧覆盖 0→400ms 新入场时长，含
+    /// t=0 起始与终态）＋收回过程多帧胶片（开→动画满→关，各≥6 帧含 t=0 与
+    /// 终态塌缩帧）＋入场中途反向收回胶片（各≥6 帧）＋动效关开/关即时定格。
+    /// 复制走写入缝，不触碰系统剪贴板。</summary>
     [STATestMethod]
     public void Evidence_CaptureW3ZoomFrames()
     {
         var evidenceDirectory = Environment.GetEnvironmentVariable("FTS_W5_EVIDENCE_DIR");
         if (string.IsNullOrWhiteSpace(evidenceDirectory))
         {
-            Assert.Inconclusive("未设置 FTS_W5_EVIDENCE_DIR，跳过 W3 缩放入场证据产出。");
+            Assert.Inconclusive("未设置 FTS_W5_EVIDENCE_DIR，跳过 W3 缩放过渡证据产出。");
         }
 
         using var directory = new TestDirectory();
@@ -388,17 +380,20 @@ public sealed class SettingsWindowContactTests
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
 
             CaptureQrZoomFilm(settings, overlay, evidenceDirectory!, "zoom-light");
-            CloseQrOverlay(overlay);
+            CaptureQrZoomExitFilm(settings, overlay, evidenceDirectory!, "zoom-exit-light");
+            CaptureQrZoomReverseFilm(settings, overlay, evidenceDirectory!, "zoom-reverse-light");
             settings.ApplyTheme(DesignTheme.Dark);
             CompleteLayout(settings);
             CaptureQrZoomFilm(settings, overlay, evidenceDirectory!, "zoom-dark");
+            CaptureQrZoomExitFilm(settings, overlay, evidenceDirectory!, "zoom-exit-dark");
+            CaptureQrZoomReverseFilm(settings, overlay, evidenceDirectory!, "zoom-reverse-dark");
         }
         finally
         {
             CloseAll(window);
         }
 
-        // 动效关终态：偏好动效关的独立窗口，打开即定格。
+        // 动效关开/关即时定格：偏好动效关的独立窗口。
         using var disabledDirectory = new TestDirectory();
         var disabledStore = new RecordingPreferencesStore();
         var disabledWindow = CreateWindow(
@@ -409,10 +404,17 @@ public sealed class SettingsWindowContactTests
         {
             var settings = OpenSettings(disabledWindow);
             CompleteLayout(settings);
+            var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
             CompleteLayout(settings);
+            Assert.AreEqual(Visibility.Visible, overlay.Visibility, "动效关＝打开即时可见。");
             SaveWindowShell(settings, evidenceDirectory!, "zoom-disabled-final-light.png");
+
+            RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
+            CompleteLayout(settings);
+            Assert.AreEqual(Visibility.Collapsed, overlay.Visibility, "动效关＝关闭即时塌缩。");
+            SaveWindowShell(settings, evidenceDirectory!, "zoom-disabled-closed-light.png");
         }
         finally
         {
@@ -422,7 +424,7 @@ public sealed class SettingsWindowContactTests
 
     /// <summary>放大过程多帧胶片：起始帧（先泵 1ms 让动画时钟起步——同步渲染
     /// 会取挂钟前的基值，实时应用的首个合成帧同样先走时钟 tick，起始帧须等价）
-    /// ＋20ms 步进×12 帧覆盖 250ms 入场全程＋收尾终态帧。</summary>
+    /// ＋40ms 步进×12 帧覆盖 400ms 入场全程＋收尾终态帧。</summary>
     private static void CaptureQrZoomFilm(
         SettingsWindow settings,
         Grid overlay,
@@ -435,12 +437,60 @@ public sealed class SettingsWindowContactTests
         SaveWindowShell(settings, directory, $"{prefix}-frame-00.png");
         for (var step = 1; step <= 12; step++)
         {
-            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(20));
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(40));
             SaveWindowShell(settings, directory, $"{prefix}-frame-{step:00}.png");
         }
 
         PumpUntil(settings.Dispatcher, () => overlay.Opacity == 1d && overlay.Visibility == Visibility.Visible);
         SaveWindowShell(settings, directory, $"{prefix}-final.png");
+    }
+
+    /// <summary>收回过程多帧胶片：先泵过入场全程到恒等定格，单击关层后起始帧
+    ///（泵 1ms 同口径）＋40ms 步进×8 帧覆盖 250ms 收回全程＋终态塌缩帧。</summary>
+    private static void CaptureQrZoomExitFilm(
+        SettingsWindow settings,
+        Grid overlay,
+        string directory,
+        string prefix)
+    {
+        ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+            new RoutedEventArgs(ButtonBase.ClickEvent));
+        PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+        RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
+        PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(1));
+        SaveWindowShell(settings, directory, $"{prefix}-frame-00.png");
+        for (var step = 1; step <= 8; step++)
+        {
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(40));
+            SaveWindowShell(settings, directory, $"{prefix}-frame-{step:00}.png");
+        }
+
+        PumpUntil(settings.Dispatcher, () => overlay.Visibility == Visibility.Collapsed);
+        SaveWindowShell(settings, directory, $"{prefix}-collapsed.png");
+    }
+
+    /// <summary>入场中途反向收回胶片：泵入入场约 120ms 后单击关层，起始帧
+    ///（泵 1ms 同口径）＋40ms 步进×8 帧覆盖从当下态续收的飞行段＋终态塌缩帧。</summary>
+    private static void CaptureQrZoomReverseFilm(
+        SettingsWindow settings,
+        Grid overlay,
+        string directory,
+        string prefix)
+    {
+        ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+            new RoutedEventArgs(ButtonBase.ClickEvent));
+        PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(120));
+        RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
+        PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(1));
+        SaveWindowShell(settings, directory, $"{prefix}-frame-00.png");
+        for (var step = 1; step <= 8; step++)
+        {
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(40));
+            SaveWindowShell(settings, directory, $"{prefix}-frame-{step:00}.png");
+        }
+
+        PumpUntil(settings.Dispatcher, () => overlay.Visibility == Visibility.Collapsed);
+        SaveWindowShell(settings, directory, $"{prefix}-collapsed.png");
     }
 
     private static void CloseQrOverlay(Grid overlay)
@@ -547,10 +597,11 @@ public sealed class SettingsWindowContactTests
         }
     }
 
-    // ---- W3 2026-11-05：二维码/微信号交互矩阵与缩放入场（契约 #24 W3 修订）----
+    // ---- W3 2026-11-05：二维码/微信号交互矩阵与缩放入场（契约 #24 W3 修订；
+    //      2026-11-06 修订：右键二维码＝复制二维码图片、复制按钮删除；放大/收回共用插值路径的缩放过渡动画）----
 
     [STATestMethod]
-    public void QrThumb_RightClickCopiesWeChatIdWithoutOpeningOverlay()
+    public void QrThumb_RightClickCopiesQrImageWithoutOpeningOverlay()
     {
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
@@ -568,12 +619,18 @@ public sealed class SettingsWindowContactTests
 
             RaisePointUp((Button)settings.FindName("WeChatQrButton")!, UIElement.MouseRightButtonUpEvent);
 
-            Assert.IsNotNull(captured, "右键缩略图必须经写入缝复制微信号。");
-            Assert.AreEqual(ProductIdentity.WeChatId, (string)captured.GetData(DataFormats.UnicodeText)!);
+            Assert.IsNotNull(captured, "右键缩略图必须经写入缝复制二维码图片。");
+            Assert.IsNull(
+                captured.GetData(DataFormats.UnicodeText),
+                "右键二维码不再复制微信号文本（2026-11-06 矩阵改裁决，文本复制入口＝微信号行）。");
+            Assert.AreSame(
+                ((Image)settings.FindName("WeChatQrThumb")!).Source,
+                captured.GetData(DataFormats.Bitmap),
+                "剪贴板负载必须是缩略图/放大层共用的同一冻结位图实例。");
             Assert.AreEqual(
                 "已复制",
-                ((Button)settings.FindName("WeChatCopyButton")!).Content,
-                "反馈就地在页脚复制按钮（最近复制按钮翻转，零 toast）。");
+                ((Run)settings.FindName("WeChatIdRun")!).Text,
+                "反馈就地翻转页脚微信号 Run（触发侧宿主，零 toast）。");
             Assert.AreEqual(
                 Visibility.Collapsed,
                 ((Grid)settings.FindName("WeChatQrOverlay")!).Visibility,
@@ -604,11 +661,11 @@ public sealed class SettingsWindowContactTests
                 return true;
             };
             var footerRow = (TextBlock)settings.FindName("WeChatIdFooterBlock")!;
-            var copy = (Button)settings.FindName("WeChatCopyButton")!;
+            var footerRun = (Run)settings.FindName("WeChatIdRun")!;
 
             RaisePointUp(footerRow, UIElement.MouseLeftButtonUpEvent);
             Assert.IsNotNull(captured, "页脚微信号行左键必须经写入缝复制。");
-            Assert.AreEqual("已复制", copy.Content, "左键复制反馈就地在相邻复制按钮。");
+            Assert.AreEqual("已复制", footerRun.Text, "左键复制反馈就地翻转本行微信号 Run。");
 
             RaisePointUp(footerRow, UIElement.MouseRightButtonUpEvent);
             Assert.AreEqual(2, captureCount, "右键与左键同一处理器服两事件，都走写入缝。");
@@ -616,7 +673,15 @@ public sealed class SettingsWindowContactTests
                 ProductIdentity.WeChatId,
                 (string)captured!.GetData(DataFormats.UnicodeText)!,
                 "两键负载同为 ProductIdentity.WeChatId 全文。");
-            Assert.AreEqual("已复制", copy.Content, "右键复制反馈同位。");
+            Assert.AreEqual("已复制", footerRun.Text, "右键复制反馈同位。");
+            PumpUntil(settings.Dispatcher, () => footerRun.Text == ProductIdentity.WeChatId);
+            Assert.AreEqual(ProductIdentity.WeChatId, footerRun.Text, "反馈延迟复位回单一来源微信号。");
+
+            // 失败态（并入旧 FooterCopy_WritesWeChatIdThroughSeamWithTransientFeedback）：
+            // 缝返 false 翻「复制失败」，不假装成功。
+            settings.ClipboardWriterOverride = _ => false;
+            RaisePointUp(footerRow, UIElement.MouseRightButtonUpEvent);
+            Assert.AreEqual("复制失败", footerRun.Text, "写入失败给失败反馈，不假装成功。");
         }
         finally
         {
@@ -650,21 +715,72 @@ public sealed class SettingsWindowContactTests
                 return true;
             };
             var largeRow = (TextBlock)settings.FindName("WeChatIdLargeBlock")!;
-            var largeCopy = (Button)settings.FindName("WeChatCopyLargeButton")!;
+            var largeRun = (Run)settings.FindName("WeChatIdLargeRun")!;
 
             RaisePointUp(largeRow, UIElement.MouseLeftButtonUpEvent);
             Assert.IsNotNull(captured, "放大态微信号行左键必须经写入缝复制。");
-            Assert.AreEqual("已复制", largeCopy.Content, "放大态反馈就在放大层复制按钮。");
+            Assert.AreEqual(
+                ProductIdentity.WeChatId,
+                (string)captured.GetData(DataFormats.UnicodeText)!,
+                "放大层复制入口与页脚共用同一写入缝与负载（2026-11-06 并入旧层内复制一致性断言）。");
+            Assert.AreEqual("已复制", largeRun.Text, "放大态反馈就地翻转本行微信号 Run。");
             Assert.AreEqual(Visibility.Visible, overlay.Visibility, "左键复制不得关层（e.Handled 阻断冒泡）。");
 
             RaisePointUp(largeRow, UIElement.MouseRightButtonUpEvent);
             Assert.AreEqual(2, captureCount, "右键与左键同一处理器服两事件。");
             Assert.AreEqual(ProductIdentity.WeChatId, (string)captured!.GetData(DataFormats.UnicodeText)!);
-            Assert.AreEqual("已复制", largeCopy.Content, "右键复制反馈同位。");
+            Assert.AreEqual("已复制", largeRun.Text, "右键复制反馈同位。");
             Assert.AreEqual(
                 Visibility.Visible,
                 overlay.Visibility,
-                "右键复制同样不得关层（与复制按钮被 Button 消费同型）。");
+                "右键复制同样不得关层（e.Handled 阻断冒泡）。");
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    [STATestMethod]
+    public void OverlayQrImage_RightClickCopiesImageWithoutClosingLayer()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            preferencesStore.Seeded with { AnimationsEnabled = false });
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
+
+            DataObject? captured = null;
+            settings.ClipboardWriterOverride = data =>
+            {
+                captured = data;
+                return true;
+            };
+
+            RaisePointUp((Border)settings.FindName("WeChatQrLargeCard")!, UIElement.MouseRightButtonUpEvent);
+
+            Assert.IsNotNull(captured, "右键放大图必须经写入缝复制二维码图片。");
+            Assert.IsNull(captured.GetData(DataFormats.UnicodeText), "放大图右键＝复制图片，不带文本负载。");
+            Assert.AreSame(
+                ((Image)settings.FindName("WeChatQrLarge")!).Source,
+                captured.GetData(DataFormats.Bitmap),
+                "放大层右键负载与页脚缩略图同一冻结位图实例（两处右键一致）。");
+            Assert.AreEqual(
+                "已复制",
+                ((Run)settings.FindName("WeChatIdLargeRun")!).Text,
+                "反馈就地翻转放大态微信号 Run。");
+            Assert.AreEqual(
+                Visibility.Visible,
+                overlay.Visibility,
+                "放大图右键复制不得关层（e.Handled 阻断冒泡到遮罩关层）。");
         }
         finally
         {
@@ -733,10 +849,11 @@ public sealed class SettingsWindowContactTests
     }
 
     [STATestMethod]
-    public void QrOverlay_EscapeDuringZoomClosesImmediately()
+    public void QrOverlay_EscapeDuringEntranceStartsAnimatedExit()
     {
-        // 动效开：打开后不等 250ms 缩放入场完成立即 Esc——动画不阻断命中，
-        // 层立即进入关闭路径（可中断验证）。
+        // 动效开：打开后不等缩放入场完成立即 Esc——动画不阻断命中，层立即进入
+        // 关闭路径，且收回走动画（动态 From 续收）而非瞬回恒等（2026-11-06：
+        // 收回从瞬时切换改为共用路径的缩放动画）。
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
         var window = CreateWindow(directory, preferencesStore);
@@ -745,8 +862,12 @@ public sealed class SettingsWindowContactTests
             var settings = OpenSettings(window);
             CompleteLayout(settings);
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
+            var (scale, translate) = QrZoomTransforms(settings);
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
+            // 泵入入场约 1/4 处（400ms 入场）再 Esc：缩放已明显离开源尺寸，
+            // 收回才有可观测的飞行段（过早打断 From≈To 无动画可采样）。
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(100));
 
             var escape = new KeyEventArgs(
                 Keyboard.PrimaryDevice,
@@ -760,9 +881,147 @@ public sealed class SettingsWindowContactTests
             settings.RaiseEvent(escape);
 
             Assert.IsTrue(escape.Handled, "缩放入场进行中 Esc 仍被层立即消费。");
+            Assert.IsFalse(
+                FloatingTransferStation.Views.FadeAnimation.GetIsActive(overlay),
+                "Esc 后层立即进入关闭路径（IsActive 即刻翻 false）。");
+            // 收回途中采样：ScaleX 仍在飞行区间且单调递减（非瞬回恒等）。
+            var samples = SampleScaleDuringExit(settings, scale, pumpMs: 160);
+            Assert.IsTrue(
+                samples.Count >= 3,
+                $"采样器必须在收回途中取到值（时钟在泵内推进；采样数={samples.Count}）。");
+            Assert.IsTrue(
+                samples.All(value => value > 0.2d && value < 0.99d),
+                $"收回中途必须处于非恒等飞行态（未瞬回；采样={FormatSamples(samples)}）。");
+            Assert.IsTrue(
+                samples.Zip(samples.Skip(1), (a, b) => b <= a + 1e-6).All(pair => pair),
+                $"收回途中 ScaleX 必须单调递减（动画续收；采样={FormatSamples(samples)}）。");
+
             PumpUntil(settings.Dispatcher, () => overlay.Visibility == Visibility.Collapsed);
             Assert.AreEqual(Visibility.Collapsed, overlay.Visibility, "Esc 在动画中途立即关层。");
+            AssertQrTransformIdentity(scale, translate, "收回完成后四属性恒等（零残留）。");
             Assert.IsTrue(settings.IsVisible, "Esc 只关层，不得顺带关闭设置窗。");
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QrOverlay_ExitZoomAnimatesTowardSourceAndEndsAtIdentity()
+    {
+        // 动效开：入场动画满（恒等定格）后单击关层——收回自当下恒等态动画回
+        // 当下实测源矩形（共用同一插值路径原路返回），收途中非恒等递减，
+        // 终态塌缩＋四属性恒等（HoldEnd 终值经 Completed 生命周期复位）。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
+            var (scale, translate) = QrZoomTransforms(settings);
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            // 泵过入场全程（400ms 入场＋余量）到恒等定格。
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+            Assert.AreEqual(1d, scale.ScaleX, "入场完成应处于恒等态（收回起点）。");
+
+            RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
+            var samples = SampleScaleDuringExit(settings, scale, pumpMs: 160);
+            Assert.IsTrue(
+                samples.Count >= 3,
+                $"采样器必须在收回途中取到值（采样数={samples.Count}）。");
+            Assert.IsTrue(
+                samples.All(value => value > 0.19d && value < 0.99d),
+                $"收回中途必须非恒等（动画在飞；采样={FormatSamples(samples)}）。");
+            Assert.IsTrue(
+                samples.Zip(samples.Skip(1), (a, b) => b <= a + 1e-6).All(pair => pair),
+                $"收回途中 ScaleX 必须单调递减（原路缩回；采样={FormatSamples(samples)}）。");
+
+            PumpUntil(settings.Dispatcher, () => overlay.Visibility == Visibility.Collapsed);
+            Assert.AreEqual(Visibility.Collapsed, overlay.Visibility, "收回完成＝层塌缩。");
+            AssertQrTransformIdentity(scale, translate, "收回完成态四属性恒等（零终态残留）。");
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QrOverlay_ReverseDuringEntranceContinuesFromCurrentTransform()
+    {
+        // 动效开：入场中途（≈120ms）单击遮罩反向收回——新动画以当下插值态为
+        // 动态 From（SnapshotAndReplace 替换式中断），首采样仍在飞行区间未瞬跳
+        //（既不跳回源尺寸也不跳到恒等），最终恒等塌缩。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
+            var (scale, translate) = QrZoomTransforms(settings);
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(120));
+            var reversalSample = scale.ScaleX;
+            Assert.IsTrue(
+                reversalSample > 0.2d && reversalSample < 0.99d,
+                $"入场中途应处于非恒等飞行态（实测 ScaleX={reversalSample:0.###}）。");
+
+            RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
+            var samples = SampleScaleDuringExit(settings, scale, pumpMs: 120);
+            Assert.IsTrue(
+                samples.Count >= 2,
+                $"反向收回途中必须取到采样（采样数={samples.Count}）。");
+            Assert.IsTrue(
+                samples[0] > 0.2d && samples[0] < 0.99d,
+                $"反向收回首采样必须仍在飞行区间（动态 From 续收未瞬跳；采样={FormatSamples(samples)}）。");
+            Assert.IsTrue(
+                samples.Zip(samples.Skip(1), (a, b) => b <= a + 1e-6).All(pair => pair),
+                $"反向收回途中 ScaleX 必须递减（从当下态继续收；采样={FormatSamples(samples)}）。");
+
+            PumpUntil(settings.Dispatcher, () => overlay.Visibility == Visibility.Collapsed);
+            Assert.AreEqual(Visibility.Collapsed, overlay.Visibility, "反向收回完成＝层塌缩。");
+            AssertQrTransformIdentity(scale, translate, "反向收回完成态四属性恒等。");
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QrOverlay_CloseWithAnimationsDisabledCollapsesImmediatelyAtIdentity()
+    {
+        // 动效关：关层不走缩放路径——立即塌缩＋四属性恒等（即时定格语义）。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            preferencesStore.Seeded with { AnimationsEnabled = false });
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
+            var (scale, translate) = QrZoomTransforms(settings);
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert.AreEqual(Visibility.Visible, overlay.Visibility);
+
+            RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
+
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                overlay.Visibility,
+                "动效关＝关层立即塌缩（无收回动画、无淡出等待）。");
+            AssertQrTransformIdentity(scale, translate, "动效关＝塌缩即恒等（变换零残留）。");
         }
         finally
         {
@@ -774,8 +1033,8 @@ public sealed class SettingsWindowContactTests
     public void QrOverlay_ZoomCompletesAtIdentityTransform()
     {
         // 动效开：缩放入场期间以调度器采样器收中途值（PushFrame 长泵内条件
-        // 只在首尾被求值，中途态必须由 Timer 采样捕获），泵过 250ms 后断言
-        // Scale/Translate 回恒等基值（FillBehavior.Stop，零残留）。
+        // 只在首尾被求值，中途态必须由 Timer 采样捕获），泵过 400ms 入场全程
+        // 后断言 Scale/Translate 回恒等基值（FillBehavior.Stop，零残留）。
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
         var window = CreateWindow(directory, preferencesStore);
@@ -794,7 +1053,7 @@ public sealed class SettingsWindowContactTests
             sampler.Start();
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
-            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(400));
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
             sampler.Stop();
 
             Assert.IsTrue(
@@ -803,10 +1062,7 @@ public sealed class SettingsWindowContactTests
             Assert.IsTrue(
                 samples.Any(value => value > 0.1d && value < 0.99d),
                 $"入场中途必须采样到非恒等缩放态（动画确实在飞；采样={string.Join(",", samples.Select(v => v.ToString("0.###")))}）。");
-            Assert.AreEqual(1d, scale.ScaleX, "入场收尾 ScaleX 必须回到恒等（无残留变换）。");
-            Assert.AreEqual(1d, scale.ScaleY, "入场收尾 ScaleY 必须回到恒等（无残留变换）。");
-            Assert.AreEqual(0d, translate.X, "入场收尾 TranslateX 必须归零（终态＝布局本态）。");
-            Assert.AreEqual(0d, translate.Y, "入场收尾 TranslateY 必须归零（终态＝布局本态）。");
+            AssertQrTransformIdentity(scale, translate, "入场收尾必须回到恒等（无残留变换）。");
         }
         finally
         {
@@ -824,12 +1080,52 @@ public sealed class SettingsWindowContactTests
         });
     }
 
-    /// <summary>QR 卡缩放入场变换（构造函数建组：先 Scale 后 Translate，顺序冻结）。</summary>
+    /// <summary>QR 卡缩放过渡变换（构造函数建组：先 Scale 后 Translate，顺序冻结）。</summary>
     private static (ScaleTransform Scale, TranslateTransform Translate) QrZoomTransforms(SettingsWindow settings)
     {
         var card = (Border)settings.FindName("WeChatQrLargeCard")!;
         var group = (TransformGroup)card.RenderTransform!;
         return ((ScaleTransform)group.Children[0], (TranslateTransform)group.Children[1]);
+    }
+
+    /// <summary>收回途中 ScaleX 采样：Render 优先级 Timer 每 10ms 采一次、泵
+    /// pumpMs 后停（收回动画飞行段的当下插值态捕获，同 ZoomCompletes 口径）；
+    /// 收回启动后首个时钟 tick 之前读到的是恒等基值，先剥掉这类前置采样。</summary>
+    private static List<double> SampleScaleDuringExit(
+        SettingsWindow settings,
+        ScaleTransform scale,
+        int pumpMs)
+    {
+        var samples = new List<double>();
+        var sampler = new DispatcherTimer(DispatcherPriority.Render, settings.Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(10)
+        };
+        sampler.Tick += (_, _) => samples.Add(scale.ScaleX);
+        sampler.Start();
+        PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(pumpMs));
+        sampler.Stop();
+        while (samples.Count > 0 && samples[0] >= 0.999d)
+        {
+            samples.RemoveAt(0);
+        }
+
+        return samples;
+    }
+
+    private static string FormatSamples(List<double> samples) =>
+        string.Join(",", samples.Select(v => v.ToString("0.###")));
+
+    /// <summary>终态恒等断言（入场 FillBehavior.Stop 与收回 Completed 复位共用口径）。</summary>
+    private static void AssertQrTransformIdentity(
+        ScaleTransform scale,
+        TranslateTransform translate,
+        string message)
+    {
+        Assert.AreEqual(1d, scale.ScaleX, $"{message}（ScaleX）。");
+        Assert.AreEqual(1d, scale.ScaleY, $"{message}（ScaleY）。");
+        Assert.AreEqual(0d, translate.X, $"{message}（TranslateX）。");
+        Assert.AreEqual(0d, translate.Y, $"{message}（TranslateY）。");
     }
 
     // ---- 基建（按本测试套既有各文件自持 helper 的模式复制）----
