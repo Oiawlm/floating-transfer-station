@@ -315,6 +315,7 @@ $interactionTestPrefixes = @{
     'ReviewEditorEscape'     = @('ReviewEditor')
     'ReviewMarkdownView'     = @('ReviewMarkdownView')
     'ReviewNav'              = @('ReviewNav')
+    'ReviewViewport'         = @('ReviewViewport')
     'ScrollViewport'         = @('ScrollViewport')
     'Search'                 = @('Search')
     'SubgroupRail'           = @('Subgroup')
