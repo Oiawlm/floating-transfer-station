@@ -319,26 +319,34 @@ public sealed partial class MainWindowInteractionTests
             down[0].Type = InputMouse;
             down[0].Mi.DwFlags = MouseEventfLeftdown;
             Assert.AreEqual(1u, SendInput(1, down, System.Runtime.InteropServices.Marshal.SizeOf<INPUT>()), "真实按下注入必须成功。");
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(50));
-
-            // 快拖：连续步进位移（每步 −30 物理像素、步间短泵窗；第 7 步起反向＋50
-            // 模拟拖宽→拖窄快速往返），逐步断言拖拽全程右缘恒贴齐工作区右缘。
-            var dragX = (int)Math.Round(screen.X);
-            var dragY = (int)Math.Round(screen.Y);
-            for (var step = 1; step <= 12; step++)
+            try
             {
-                dragX += step < 7 ? -30 : 50;
-                Assert.IsTrue(SetCursorPos(dragX, dragY), "真实光标必须跟随快拖轨迹。");
-                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(15));
-                DpiGeometryAssert.AreEqual(work.Right, window.Left + window.Width, window, PixelQuantization.Pair,
-                    $"快拖第 {step} 步后右缘仍贴齐工作区右缘。");
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(50));
+
+                // 快拖：连续步进位移（每步 −30 物理像素、步间短泵窗；第 7 步起反向＋50
+                // 模拟拖宽→拖窄快速往返），逐步断言拖拽全程右缘恒贴齐工作区右缘。
+                var dragX = (int)Math.Round(screen.X);
+                var dragY = (int)Math.Round(screen.Y);
+                for (var step = 1; step <= 12; step++)
+                {
+                    dragX += step < 7 ? -30 : 50;
+                    Assert.IsTrue(SetCursorPos(dragX, dragY), "真实光标必须跟随快拖轨迹。");
+                    PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(15));
+                    DpiGeometryAssert.AreEqual(work.Right, window.Left + window.Width, window, PixelQuantization.Pair,
+                        $"快拖第 {step} 步后右缘仍贴齐工作区右缘。");
+                }
+
+                PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+            }
+            finally
+            {
+                // 中途断言失败也必须抬起真实按键：注入态左键泄漏会污染后续真实输入测试。
+                var up = new INPUT[1];
+                up[0].Type = InputMouse;
+                up[0].Mi.DwFlags = MouseEventfLeftup;
+                Assert.AreEqual(1u, SendInput(1, up, System.Runtime.InteropServices.Marshal.SizeOf<INPUT>()), "真实抬起注入必须成功。");
             }
 
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
-            var up = new INPUT[1];
-            up[0].Type = InputMouse;
-            up[0].Mi.DwFlags = MouseEventfLeftup;
-            Assert.AreEqual(1u, SendInput(1, up, System.Runtime.InteropServices.Marshal.SizeOf<INPUT>()), "真实抬起注入必须成功。");
             CompleteLayout(window);
 
             Assert.IsTrue(deltaCount > 0, "按下后必须产生 DragDelta（真实管线命中 Thumb）。");
