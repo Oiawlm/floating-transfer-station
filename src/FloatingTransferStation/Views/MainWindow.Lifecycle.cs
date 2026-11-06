@@ -17,13 +17,16 @@ namespace FloatingTransferStation.Views;
 public partial class MainWindow : Window
 {
 
+    // 尺寸拖拽的目标矩形统一经 ApplyPlacement（与启动/展开同一原子通道，契约 #6/#12）：
+    // 贴边左缘由目标宽度推导（WindowController.Expanded 的 Left＝工作区右缘−可见宽），
+    // 不读上次布局的 ActualWidth——快拖时陈旧宽度会把末帧宽度变化量固化为右缘空隙
+    // 或越屏（同帧多 delta 下尤其明显，2026-11-06 修复）。
     private void WidthThumb_DragDelta(object sender, DragDeltaEventArgs e)
     {
         var work = CurrentWorkArea();
         _settings = (_settings with { PanelWidth = _settings.PanelWidth - e.HorizontalChange })
             .Normalize(work.Width, work.Height);
-        Width = _settings.PanelWidth + WindowSettings.TabWidth;
-        DockRight();
+        ApplyPlacement(WindowController.Expanded(work, _settings));
     }
 
     private void HeightThumb_DragDelta(object sender, DragDeltaEventArgs e)
@@ -31,8 +34,7 @@ public partial class MainWindow : Window
         var work = CurrentWorkArea();
         _settings = (_settings with { WindowHeight = _settings.WindowHeight + e.VerticalChange })
             .Normalize(work.Width, work.Height);
-        Height = _settings.WindowHeight;
-        DockRight();
+        ApplyPlacement(WindowController.Expanded(work, _settings));
     }
 
     private void HeaderThumb_DragDelta(object sender, DragDeltaEventArgs e)
@@ -53,12 +55,6 @@ public partial class MainWindow : Window
         {
             ShowStatus("窗口尺寸暂未保存。");
         }
-    }
-
-    private void DockRight()
-    {
-        var work = CurrentWorkArea();
-        Left = work.Right - ActualWidth;
     }
 
     private void ReapplyCurrentPlacement()
