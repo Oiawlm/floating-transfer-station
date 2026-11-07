@@ -477,7 +477,7 @@ public sealed class DragPayloadServiceTests
         }
     }
 
-    // ---- AI 识图命名交付层（契约 #60，实验性默认关）：有 ImageTitle 且拖出文件
+    // ---- AI 识图命名交付层（契约 #61，实验性默认关）：有 ImageTitle 且拖出文件
     // 开关开＝临时副本按清洗名交付（受管本体绝不动、Preferred Copy 照旧、同批
     // 同名 -2 唯一化）；无名/开关关＝现状 Guid 名；剪贴板路径不连坐（临时文件
     // 生命周期无法绑定剪贴板会话）。----

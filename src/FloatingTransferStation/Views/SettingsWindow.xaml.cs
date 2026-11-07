@@ -1741,7 +1741,7 @@ public partial class SettingsWindow : Window
         _host.ApplyPreferences(_host.CurrentPreferences with { AiOrganizeEnabled = enabled });
     }
 
-    // ---- AI 识图命名（契约 #60，实验性默认关，独立于 AI 整理开关）：经
+    // ---- AI 识图命名（契约 #61，实验性默认关，独立于 AI 整理开关）：经
     // ApplyPreferences 唯一管线即时生效＋原子持久化（契约 #5 同路；调度器门控
     // 与翻转补扫由 MainWindow 侧 c2 管线承接）；开关状态在构造同步段回显。----
 

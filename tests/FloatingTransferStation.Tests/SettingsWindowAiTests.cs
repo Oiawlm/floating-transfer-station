@@ -408,7 +408,7 @@ public sealed class SettingsWindowAiTests
         }
     }
 
-    // ---- AI 识图命名（契约 #60，AiPage 第四卡，独立于 AI 整理开关）：默认关＋
+    // ---- AI 识图命名（契约 #61，AiPage 第四卡，独立于 AI 整理开关）：默认关＋
     // 即时生效＋重开回显；隐私披露逐字锁定；Key 卡置灰随「两 AI 开关」计算
     //（#29 修订：任一启用即可填 Key，提示词卡只随整理）。----
 
@@ -469,7 +469,7 @@ public sealed class SettingsWindowAiTests
             Assert.IsTrue(
                 FindDescendants<TextBlock>(card).Any(block =>
                     block.Text == "开启后，新收集的图片会发送至 DeepSeek 识别内容并自动命名（复用上方 DeepSeek API Key），卡片悬停可见名称，拖出即为该文件名；识别失败自动跳过，不会重试。"),
-                "隐私披露必须逐字呈现在卡内（契约 #60 锁定文案）。");
+                "隐私披露必须逐字呈现在卡内（契约 #61 锁定文案）。");
             Assert.IsTrue(
                 FindDescendants<TextBlock>(card).Any(block => block.Text.Contains("发送至 DeepSeek")),
                 "断言锚点：说明行必须含「发送至 DeepSeek」。");
@@ -563,7 +563,7 @@ public sealed class SettingsWindowAiTests
         }
     }
 
-    /// <summary>AI 识图命名卡证据（契约 #60，FTS_AI_EVIDENCE_DIR 设置时产出真实
+    /// <summary>AI 识图命名卡证据（契约 #61，FTS_AI_EVIDENCE_DIR 设置时产出真实
     /// WPF 渲染截图，浅色主题）：①默认关态（第四卡＋隐私披露可见）；②识图开＋
     /// 整理关＝Key 卡可用（两开关置灰联动）、提示词卡仍置灰。滚动锚＝页脚退出
     /// 钮（第四卡是 AI 页末卡，滚到页脚即整卡含说明行入视口）。</summary>

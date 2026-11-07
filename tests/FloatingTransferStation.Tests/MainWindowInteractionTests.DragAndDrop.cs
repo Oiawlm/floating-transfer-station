@@ -2498,7 +2498,7 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
-    // ---- AI 识图命名（契约 #60）：图片卡悬停可见名称——ToolTip 挂卡片容器
+    // ---- AI 识图命名（契约 #61）：图片卡悬停可见名称——ToolTip 挂卡片容器
     //（命中层祖先——缩略图在两列命中层之下、直接挂它永不触发，z 序不变量同
     // 备注条先例）绑定 ImageTitle（null 自动不显示），不改卡片布局；文字卡
     // Note ToolTip 不动。----
@@ -2536,7 +2536,7 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
-    /// <summary>AI 识图命名面板态证据（契约 #60，FTS_NOTE_EVIDENCE_DIR 设置时产
+    /// <summary>AI 识图命名面板态证据（契约 #61，FTS_NOTE_EVIDENCE_DIR 设置时产
     /// 出真实 WPF 渲染截图，复用单一来源环境变量先例）：①开关关（默认）＝图片卡
     /// 零命名零状态提示；②有名字图片卡真实光标悬停＝ToolTip 显示 AI 命名。</summary>
     [STATestMethod]
