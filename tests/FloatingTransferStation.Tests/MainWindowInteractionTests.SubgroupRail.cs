@@ -16,9 +16,9 @@ namespace FloatingTransferStation.Tests;
 
 /// <summary>
 /// 分类内子分组（实验性，契约 #57）窗口级回归：Off 等价、形态①按钮轨（渲染/
-/// 过滤/互斥/改名/拖卡归属/过滤态行为）、形态②视觉分组（进入分区/边界复用
-/// divider 宿主/组头/置顶不分组/纯重排）、模式切换零残留、撤销不回归与
-/// 双主题证据产出。
+/// 悬停过滤＋守卫链/单击设默认环/互斥/改名/拖卡归属/过滤态行为）、形态②视觉
+/// 分组（进入分区/边界复用 divider 宿主/组头/置顶不分组/纯重排）、模式切换零
+/// 残留、撤销不回归与双主题证据产出。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -68,6 +68,15 @@ public sealed partial class MainWindowInteractionTests
         chip.RaiseEvent(NewMouseButtonEventArgs(
             UIElement.MouseLeftButtonUpEvent,
             chip));
+        CompleteLayout(window);
+    }
+
+    /// <summary>合成悬停进入（照 DragAndDrop.cs :501 MouseEnter 合成先例）：契约 #57
+    /// 修订的进入驱动——悬停即按槽过滤。</summary>
+    private static void HoverChip(MainWindow window, int slot)
+    {
+        var chip = FindSubgroupChip(window, slot);
+        chip.RaiseEvent(NewMouseEventArgs(UIElement.MouseEnterEvent, chip));
         CompleteLayout(window);
     }
 
@@ -187,6 +196,10 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual("急件", chips[1].DisplayName, "自定义名经逐槽解析喂入。");
             Assert.AreEqual("不重要", chips[2].DisplayName);
             Assert.AreEqual("待办", chips[3].DisplayName);
+            foreach (var chip in chips)
+            {
+                Assert.IsFalse(chip.IsDefaultSubgroup, "装载期无默认子分组＝零环。");
+            }
 
             // 复盘表面零呈现：切到复盘标签轨必须塌缩。
             ExpandCategory(window, BoardCategory.Reference);
@@ -205,7 +218,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void Subgroup_ChipClickFiltersBySlotAndSecondClickRestores()
+    public void Subgroup_ChipHoverFiltersBySlot()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -223,22 +236,25 @@ public sealed partial class MainWindowInteractionTests
             var viewModel = (MainWindowViewModel)window.DataContext;
             Assert.AreEqual(3, list!.Items.OfType<BoardItem>().Count());
 
-            ClickChip(window, 1);
+            HoverChip(window, 1);
 
             Assert.IsTrue(window.IsSubgroupFilterActive);
             Assert.IsTrue(viewModel.SubgroupChips[1].IsFilterActive, "激活 chip 选中态。");
             CollectionAssert.AreEquivalent(
                 new[] { "甲", "乙" },
                 list.Items.OfType<BoardItem>().Select(item => item.Text).ToArray(),
-                "chip 单击按槽过滤（只经 Items.Filter 单点）。");
+                "chip 悬停按槽过滤（只经 Items.Filter 单点）。");
             Assert.AreEqual(3, viewModel.ActivePanel!.Items.Count, "源集合不得被过滤改动。");
             Assert.AreEqual(0, list.SelectedItems.Count, "进入过滤视图清空选择（#37 口径）。");
 
-            ClickChip(window, 1);
+            // 过滤退出＝引导条「清空」按钮（原「再点同 chip 取消」随单击过滤退役）。
+            ((Button)window.FindName("SearchClearFilterButton"))!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CompleteLayout(window);
 
             Assert.IsFalse(window.IsSubgroupFilterActive);
             Assert.IsFalse(viewModel.SubgroupChips[1].IsFilterActive);
-            Assert.AreEqual(3, list.Items.OfType<BoardItem>().Count(), "再点激活 chip＝取消过滤还原。");
+            Assert.AreEqual(3, list.Items.OfType<BoardItem>().Count(), "清空筛选＝取消过滤还原。");
             Assert.IsNull(list.Items.Filter);
         }
         finally
@@ -264,7 +280,7 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
             var viewModel = (MainWindowViewModel)window.DataContext;
 
-            ClickChip(window, 1);
+            HoverChip(window, 1);
             Assert.IsTrue(window.IsSubgroupFilterActive);
 
             // 搜索激活＝搜索谓词压倒，chip 过滤冻结让位（选中态保留）。
@@ -293,7 +309,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void Subgroup_ChipClickDuringSearchExitsSearchThenFilters()
+    public void Subgroup_ChipClickDuringSearchSetsDefaultWithoutTouchingSearch()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -316,15 +332,293 @@ public sealed partial class MainWindowInteractionTests
 
             ClickChip(window, 2);
 
-            Assert.IsFalse(viewModel.IsSearchActive, "搜索态下 chip 单击＝退出搜索（沿切分类先例）。");
+            Assert.IsTrue(viewModel.IsSearchActive, "搜索态 chip 单击＝仅设默认（不退搜索，#37 修订）。");
             Assert.AreEqual(
-                Visibility.Visible,
+                Visibility.Collapsed,
                 ((StackPanel)window.FindName("HeaderActions")).Visibility,
-                "头部操作区随搜索退出还原。");
-            Assert.IsTrue(window.IsSubgroupFilterActive);
+                "搜索条保持展开（头部操作区仍让位）。");
+            Assert.IsFalse(window.IsSubgroupFilterActive, "搜索态单击不进过滤。");
+            Assert.IsFalse(viewModel.SubgroupChips[2].IsFilterActive, "chip 选中态不因单击新增。");
             CollectionAssert.AreEquivalent(
-                new[] { "苹果一" },
-                list!.Items.OfType<BoardItem>().Select(item => item.Text).ToArray());
+                new[] { "苹果一", "苹果二" },
+                list!.Items.OfType<BoardItem>().Select(item => item.Text).ToArray(),
+                "搜索结果不受单击影响（两卡都命中关键词，过滤仍由搜索谓词承担）。");
+            Assert.IsTrue(viewModel.SubgroupChips[2].IsDefaultSubgroup, "单击已设默认子分组。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_ChipHoverSwitchesFilterWhenSlidingToAnotherChip()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
+        board.AddText("乙", BoardCategory.Inbox).Subgroup = 2;
+        board.AddText("丙", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            HoverChip(window, 1);
+            CollectionAssert.AreEquivalent(
+                new[] { "甲" },
+                list!.Items.OfType<BoardItem>().Select(item => item.Text).ToArray(),
+                "悬停即进入该槽。");
+
+            // 滑到其他 chip＝直接换组（对齐分类轨「途经即切」，无需先退出）。
+            HoverChip(window, 2);
+            CollectionAssert.AreEquivalent(
+                new[] { "乙" },
+                list.Items.OfType<BoardItem>().Select(item => item.Text).ToArray(),
+                "滑到其他 chip 即切换过滤。");
+            Assert.IsFalse(viewModel.SubgroupChips[1].IsFilterActive, "旧槽选中态让位。");
+            Assert.IsTrue(viewModel.SubgroupChips[2].IsFilterActive);
+            Assert.AreEqual(3, viewModel.ActivePanel!.Items.Count, "源集合不动。");
+
+            // 滑回已过滤槽＝幂等（不重复清选择/重过滤）。
+            var keptSelection = list.SelectedItems;
+            HoverChip(window, 2);
+            Assert.AreSame(keptSelection, list.SelectedItems, "同槽幂等。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_ChipHoverBlockedDuringNameEdit()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("内容", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            DoubleClickChip(window, 1);
+            Assert.IsTrue(viewModel.SubgroupChips[1].IsEditingName, "前置：改名会话中。");
+
+            HoverChip(window, 2);
+
+            Assert.IsFalse(window.IsSubgroupFilterActive, "改名会话中悬停不进入过滤。");
+            Assert.IsFalse(viewModel.SubgroupChips[2].IsFilterActive);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_ChipHoverBlockedDuringCardDrag()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
+        board.AddText("乙", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            InvokePrivate(window, "BeginPanelDrag");
+            HoverChip(window, 1);
+
+            Assert.IsFalse(window.IsSubgroupFilterActive, "拖拽在途悬停不进入过滤。");
+            Assert.IsFalse(viewModel.SubgroupChips[1].IsFilterActive);
+
+            // 拖拽会话结束后悬停恢复生效（守卫只挡在途）。
+            InvokePrivate(window, "EndPanelDrag");
+            CompleteLayout(window);
+            HoverChip(window, 1);
+            Assert.IsTrue(window.IsSubgroupFilterActive, "会话结束悬停即进入。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_ChipHoverBlockedWhileExternalDropRailVisible()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            // 外部拖入轨道可见（照 ExternalRail 先例：外部数据 DragEnter 换轨）。
+            var data = new DataObject(DataFormats.UnicodeText, "外部文本");
+            var tab = FindCategoryTab(
+                window,
+                viewModel.Categories.Single(category =>
+                    category.Category == BoardCategory.CustomerOriginal));
+            tab.RaiseEvent(NewDragEventArgs(data, DragDrop.DragEnterEvent, tab));
+            CompleteLayout(window);
+            Assert.IsTrue(viewModel.IsExternalDropRailVisible, "前置：外部拖放轨道在场。");
+
+            var chip = FindSubgroupChip(window, 1);
+            chip.RaiseEvent(NewMouseEventArgs(UIElement.MouseEnterEvent, chip));
+            CompleteLayout(window);
+
+            Assert.IsFalse(window.IsSubgroupFilterActive, "外部拖放轨道在场悬停不进入过滤。");
+            Assert.IsFalse(viewModel.SubgroupChips[1].IsFilterActive);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_ChipHoverBlockedWhileSearchActive()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("苹果一", BoardCategory.Inbox).Subgroup = 1;
+        board.AddText("苹果二", BoardCategory.Inbox).Subgroup = 1;
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            window.EnterSearchMode();
+            ((TextBox)window.FindName("SearchInput"))!.Text = "苹果";
+            CompleteLayout(window);
+
+            HoverChip(window, 1);
+
+            Assert.IsFalse(window.IsSubgroupFilterActive, "搜索态悬停不进入过滤（#37 搜索压倒）。");
+            Assert.IsFalse(viewModel.SubgroupChips[1].IsFilterActive, "搜索态不新增 chip 选中态。");
+            Assert.IsTrue(viewModel.IsSearchActive, "悬停不退出搜索。");
+            CollectionAssert.AreEquivalent(
+                new[] { "苹果一", "苹果二" },
+                list!.Items.OfType<BoardItem>().Select(item => item.Text).ToArray(),
+                "搜索结果不受悬停影响。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_ChipClickSetsDefaultSubgroupPerCategoryAndMovesRing()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox);
+        board.AddText("乙", BoardCategory.CustomerOriginal);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            ClickChip(window, 1);
+            Assert.IsTrue(viewModel.SubgroupChips[1].IsDefaultSubgroup, "单击设默认环。");
+            Assert.IsFalse(viewModel.SubgroupChips[3].IsDefaultSubgroup);
+
+            ClickChip(window, 3);
+            Assert.IsFalse(viewModel.SubgroupChips[1].IsDefaultSubgroup, "再单击他槽＝环移动。");
+            Assert.IsTrue(viewModel.SubgroupChips[3].IsDefaultSubgroup);
+
+            // 同槽再单击＝幂等（差分语义，环保持）。
+            ClickChip(window, 3);
+            Assert.IsTrue(viewModel.SubgroupChips[3].IsDefaultSubgroup);
+
+            // 每分类独立一份：重要分类无默认＝环清零；各自记忆、切回恢复。
+            ExpandCategory(window, BoardCategory.CustomerOriginal);
+            CompleteLayout(window);
+            foreach (var chip in viewModel.SubgroupChips)
+            {
+                Assert.IsFalse(chip.IsDefaultSubgroup, "重要分类未设默认＝零环。");
+            }
+
+            ClickChip(window, 2);
+            Assert.IsTrue(viewModel.SubgroupChips[2].IsDefaultSubgroup, "重要分类独立设默认。");
+
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            Assert.IsTrue(
+                viewModel.SubgroupChips[3].IsDefaultSubgroup,
+                "切回待分类恢复其默认环（每分类独立）。");
+            Assert.IsFalse(viewModel.SubgroupChips[2].IsDefaultSubgroup);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_DefaultSubgroupRingReusesCategoryMarkerStyle()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("内容", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var chipHost = FindSubgroupChip(window, 1);
+
+            // 环＝复用 #56 默认接收分类单圆环样式（同实例、同几何规格）。
+            var markerStyle = (Style)window.FindResource("CategoryDefaultMarkerStyle");
+            var marker = FindDescendants<System.Windows.Shapes.Path>(chipHost)
+                .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
+            var markerData = marker.Data.ToString();
+            StringAssert.Contains(markerData, "A8,8");
+            Assert.AreEqual(1.25d, marker.StrokeThickness);
+            Assert.AreEqual(10d, marker.Width);
+            Assert.AreEqual(10d, marker.Height);
+            Assert.AreSame(window.FindResource("AccentBrush"), marker.Stroke, "AccentBrush 主题自适应。");
+            Assert.AreEqual(1, Panel.GetZIndex(marker), "环在文字之上（照分类标记层序）。");
+            Assert.AreEqual(0d, marker.Opacity, "未设默认时环隐藏。");
+
+            ClickChip(window, 1);
+
+            Assert.IsTrue(viewModel.SubgroupChips[1].IsDefaultSubgroup);
+            Assert.AreEqual(1d, marker.Opacity, "设默认后环显示。");
         }
         finally
         {
@@ -359,6 +653,11 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(editor.IsKeyboardFocusWithin);
             Assert.AreEqual(0, editor.SelectionStart);
             Assert.AreEqual(chip.DisplayName.Length, editor.SelectionLength, "进入即全选（照分类改名先例）。");
+
+            // 改名会话中悬停不进入过滤（守卫链，契约 #57 修订）。
+            HoverChip(window, 2);
+            Assert.IsFalse(window.IsSubgroupFilterActive, "改名会话中 MouseEnter 不进入过滤。");
+            Assert.IsFalse(viewModel.SubgroupChips[2].IsFilterActive);
 
             // IME 组合守卫：组合期间的 Enter 不提交、不终结会话。
             editor.RaiseEvent(NewTextCompositionEventArgs(
@@ -435,6 +734,16 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             Assert.IsTrue(viewModel.SubgroupChips[2].IsDropTarget, "拖入 chip 高亮。");
 
+            // 拖拽在途守卫：拖卡滑过其他 chip 的 MouseEnter 不得切换过滤（契约 #57 修订）。
+            InvokePrivate(window, "BeginPanelDrag");
+            var passOverChip = FindSubgroupChip(window, 1);
+            passOverChip.RaiseEvent(NewMouseEventArgs(UIElement.MouseEnterEvent, passOverChip));
+            CompleteLayout(window);
+            Assert.IsFalse(window.IsSubgroupFilterActive, "拖拽在途 MouseEnter 不进入过滤。");
+            Assert.IsFalse(viewModel.SubgroupChips[1].IsFilterActive);
+            InvokePrivate(window, "EndPanelDrag");
+            CompleteLayout(window);
+
             chipHost.RaiseEvent(NewDragEventArgs(data, DragDrop.DropEvent, chipHost));
             // Drop 处理器内联启动变更管线（沿 CategoryTab_Drop 同法），泵调度器等落盘。
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(500));
@@ -474,7 +783,7 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
             var viewModel = (MainWindowViewModel)window.DataContext;
 
-            ClickChip(window, 1);
+            HoverChip(window, 1);
             Assert.IsTrue(window.IsSubgroupFilterActive, "拖放守卫前置＝过滤态谓词为真。");
 
             // Ctrl+A（沿 #37 口径禁用）：路由命令直达窗口 SelectAll 绑定。
@@ -488,7 +797,10 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "过滤态抑制自动收起。");
 
-            ClickChip(window, 1);
+            // 退出过滤＝引导条「清空」按钮（单击 toggle 已退役）。
+            ((Button)window.FindName("SearchClearFilterButton"))!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CompleteLayout(window);
             Assert.IsFalse(window.IsSubgroupFilterActive);
             ApplicationCommands.SelectAll.Execute(null, list);
             CompleteLayout(window);
@@ -523,7 +835,7 @@ public sealed partial class MainWindowInteractionTests
             var clearButton = (Button)window.FindName("SearchClearFilterButton");
             var list = (ListBox)window.FindName("BoardList");
 
-            ClickChip(window, 3);
+            HoverChip(window, 3);
 
             Assert.AreEqual(Visibility.Visible, hint!.Visibility, "空结果复用 SearchEmptyHint。");
             Assert.AreEqual("该分组暂无卡片", hintTitle!.Text, "文案按来源切换。");
@@ -547,8 +859,8 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
-        // 面板本就空：内容桶空态已可见（BoardEmptyState），此时点 chip 进入过滤视图。
-        // 修复前 chip 单击路径只重评 SearchEmptyHint 的过滤空视图、从不重评
+        // 面板本就空：内容桶空态已可见（BoardEmptyState），此时悬停 chip 进入过滤视图。
+        // 修复前进入路径只重评 SearchEmptyHint 的过滤空视图、从不重评
         // BoardEmptyState——两元素同格（Grid.Row=2）叠加两段空态文字。
         var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
 
@@ -564,7 +876,7 @@ public sealed partial class MainWindowInteractionTests
                 boardEmpty!.Visibility,
                 "前置：空面板内容桶空态在场。");
 
-            ClickChip(window, 1);
+            HoverChip(window, 1);
 
             Assert.AreEqual(
                 Visibility.Visible,
@@ -596,10 +908,12 @@ public sealed partial class MainWindowInteractionTests
             var hint = (Border)window.FindName("SearchEmptyHint");
             var boardEmpty = (StackPanel)window.FindName("BoardEmptyState");
 
-            ClickChip(window, 1);
-            ClickChip(window, 1);
+            HoverChip(window, 1);
+            ((Button)window.FindName("SearchClearFilterButton"))!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CompleteLayout(window);
 
-            Assert.IsFalse(window.IsSubgroupFilterActive, "前置：再点同 chip＝取消过滤。");
+            Assert.IsFalse(window.IsSubgroupFilterActive, "前置：引导条「清空」＝取消过滤。");
             Assert.AreEqual(
                 Visibility.Collapsed,
                 hint!.Visibility,
@@ -1024,8 +1338,11 @@ public sealed partial class MainWindowInteractionTests
             var list = (ListBox)window.FindName("BoardList");
             var viewModel = (MainWindowViewModel)window.DataContext;
 
-            ClickChip(window, 1);
+            HoverChip(window, 1);
             Assert.IsTrue(window.IsSubgroupFilterActive);
+            // 先设默认子分组（单击 chip 2）：模式切换不清理收集落点记忆（会话态）。
+            ClickChip(window, 2);
+            Assert.IsTrue(viewModel.SubgroupChips[2].IsDefaultSubgroup);
 
             // ChipRail→Off：轨塌缩＋过滤清除＋Filter 重评估，无残留。
             window.ApplyPreferences(
@@ -1042,13 +1359,14 @@ public sealed partial class MainWindowInteractionTests
                 Assert.IsFalse(item.StartsSubgroupRegion, "Off 派生标记清零。");
             }
 
-            // Off→ChipRail：轨出现，过滤保持清除。
+            // Off→ChipRail：轨出现，过滤保持清除，收集落点环不受模式切换影响。
             window.ApplyPreferences(
                 window.CurrentPreferences with { SubgroupDisplay = SubgroupDisplayMode.ChipRail });
             CompleteLayout(window);
             Assert.AreEqual(Visibility.Visible, FindSubgroupRail(window).Visibility);
             Assert.IsFalse(window.IsSubgroupFilterActive);
             Assert.IsNull(list.Items.Filter);
+            Assert.IsTrue(viewModel.SubgroupChips[2].IsDefaultSubgroup, "切回 ChipRail 默认环仍正确。");
         }
         finally
         {
@@ -1183,11 +1501,16 @@ public sealed partial class MainWindowInteractionTests
                 Assert.AreEqual(Visibility.Collapsed, FindSubgroupRail(window).Visibility);
                 SaveVisualEvidence(shell!, $"subgroup-off-{themeName}.png", "FTS_SUBGROUP_EVIDENCE_DIR");
 
-                // 按钮轨：头行下固定高四槽。
+                // 按钮轨：头行下固定高四槽＋收集落点环（单击设默认后右上角圆环）。
                 window.ApplyPreferences(
                     window.CurrentPreferences with { SubgroupDisplay = SubgroupDisplayMode.ChipRail });
                 CompleteLayout(window);
                 Assert.AreEqual(Visibility.Visible, FindSubgroupRail(window).Visibility);
+                ClickChip(window, 1);
+                CompleteLayout(window);
+                Assert.IsTrue(
+                    ((MainWindowViewModel)window.DataContext).SubgroupChips[1].IsDefaultSubgroup,
+                    "证据帧必须含收集落点环。");
                 SaveVisualEvidence(shell!, $"subgroup-chiprail-{themeName}.png", "FTS_SUBGROUP_EVIDENCE_DIR");
 
                 // 视觉分组：进入分区＋组边界 divider＋组头。

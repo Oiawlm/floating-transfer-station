@@ -101,6 +101,9 @@ public sealed partial class ClipboardCaptureServiceTests
             new[] { "new prompt", "older prompt" },
             board.Items(BoardCategory.CustomerOriginal).Select(item => item.Text).ToArray());
         Assert.IsTrue(board.Items(BoardCategory.Inbox).Count == 0);
+        Assert.IsNull(
+            board.Items(BoardCategory.CustomerOriginal).Single(item => item.Text == "new prompt").Subgroup,
+            "未设默认子分组＝落未指定组。");
     }
 
     [TestMethod]
@@ -147,6 +150,7 @@ public sealed partial class ClipboardCaptureServiceTests
 
         Assert.AreEqual(BoardItemKind.Image, board.Items(BoardCategory.CustomerOriginal).Single().Kind);
         Assert.IsTrue(board.Items(BoardCategory.Inbox).Count == 0);
+        Assert.IsNull(board.Items(BoardCategory.CustomerOriginal).Single().Subgroup, "未设默认子分组＝落未指定组。");
     }
 
     [TestMethod]
@@ -170,6 +174,60 @@ public sealed partial class ClipboardCaptureServiceTests
 
         Assert.AreEqual(BoardItemKind.Image, board.Items(BoardCategory.CustomerOriginal).Single().Kind);
         Assert.IsTrue(board.Items(BoardCategory.Inbox).Count == 0);
+        Assert.IsNull(board.Items(BoardCategory.CustomerOriginal).Single().Subgroup, "未设默认子分组＝落未指定组。");
+    }
+
+    [TestMethod]
+    public async Task HandleUpdate_TextWithDefaultSubgroupLandsInThatSubgroup()
+    {
+        using var directory = new TestDirectory();
+        var categoryState = new DefaultCaptureCategoryState();
+        categoryState.Set(BoardCategory.CustomerOriginal);
+        var subgroupState = new DefaultSubgroupState();
+        subgroupState.Set(BoardCategory.CustomerOriginal, 2);
+        var board = new BoardService();
+        var service = new ClipboardCaptureService(
+            new QueueClipboardReader(new ClipboardSnapshot(31, null, [], "新收集")),
+            new FakeImageNormalizer(directory.Root),
+            board,
+            new FakeBoardStore(directory.Root),
+            _ => { },
+            defaultCaptureCategory: categoryState,
+            defaultSubgroup: subgroupState);
+
+        await service.HandleClipboardUpdateAsync();
+
+        var captured = board.Items(BoardCategory.CustomerOriginal).Single();
+        Assert.AreEqual("新收集", captured.Text);
+        Assert.AreEqual(2, captured.Subgroup, "复制收集落入默认分类的默认子分组。");
+    }
+
+    [STATestMethod]
+    public async Task HandleUpdate_ImageWithDefaultSubgroupLandsInThatSubgroup()
+    {
+        using var directory = new TestDirectory();
+        var bitmap = BitmapSource.Create(
+            1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 0, 0, 0, 255 }, 4);
+        bitmap.Freeze();
+        var categoryState = new DefaultCaptureCategoryState();
+        categoryState.Set(BoardCategory.Inbox);
+        var subgroupState = new DefaultSubgroupState();
+        subgroupState.Set(BoardCategory.Inbox, 1);
+        var board = new BoardService();
+        var service = new ClipboardCaptureService(
+            new QueueClipboardReader(new ClipboardSnapshot(32, bitmap, [], null)),
+            new FakeImageNormalizer(directory.Root),
+            board,
+            new FakeBoardStore(directory.Root),
+            _ => { },
+            defaultCaptureCategory: categoryState,
+            defaultSubgroup: subgroupState);
+
+        await service.HandleClipboardUpdateAsync();
+
+        var captured = board.Items(BoardCategory.Inbox).Single();
+        Assert.AreEqual(BoardItemKind.Image, captured.Kind);
+        Assert.AreEqual(1, captured.Subgroup, "图片收集同样落入默认子分组。");
     }
 
     [TestMethod]
