@@ -374,7 +374,9 @@ internal static class AiImageNamingTriggerHarness
         BoardService board,
         IBoardStore store,
         List<string> messages,
-        List<Task> trackedRounds) => new(
+        List<Task> trackedRounds)
+    {
+        var scheduler = new AiImageNamingScheduler(
             new AiImageNamingOrganizer(new DeepSeekClient(new FailingHandler())),
             board,
             new BoardMutationService(board, store, _ => { }),
@@ -384,6 +386,9 @@ internal static class AiImageNamingTriggerHarness
             trackedRounds.Add,
             () => CancellationToken.None,
             dispatcher);
+        scheduler.Enabled = true;
+        return scheduler;
+    }
 
     private sealed class FailingHandler : HttpMessageHandler
     {
