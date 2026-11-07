@@ -27,6 +27,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _statusText = string.Empty;
     private bool _aiOrganizeEnabled = true;
     private bool _hasEnabledPluginActions;
+    private IReadOnlyList<SubgroupChipViewModel> _subgroupChips = Array.Empty<SubgroupChipViewModel>();
+    private readonly Dictionary<BoardCategory, IReadOnlyList<int>> _subgroupOrders = new();
 
     public MainWindowViewModel(
         BoardService board,
@@ -63,6 +65,13 @@ public sealed class MainWindowViewModel : ObservableObject
         _defaultCapturePanel = Categories.Single(
             category => category.Category == _defaultCaptureCategory.Current);
         _defaultCapturePanel.IsDefaultCapture = true;
+        // 槽序按初始设置逐内容桶种子（契约 #57 修订）：chip 集构造为恒等序，
+        // 首次 Activate 按激活分类的槽序重排（轨在面板激活前不可见，无中间帧）。
+        foreach (var category in BoardCategoryCatalog.Ordered.Where(BoardCategoryCatalog.IsContentBucket))
+        {
+            _subgroupOrders[category] = settings.SubgroupOrder(category);
+        }
+
         SubgroupChips = Enumerable.Range(0, SubgroupCatalog.SlotCount)
             .Select(slot => new SubgroupChipViewModel(slot))
             .ToArray();
@@ -70,9 +79,15 @@ public sealed class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// 子分组按钮轨 chip 集（契约 #57，形态①）：固定 4 槽实例（槽号即身份），
-    /// 显示名由窗口层按名清单逐槽解析喂值（<see cref="RefreshSubgroupChips"/>）。
+    /// 显示名由窗口层按名清单逐槽解析喂值（<see cref="RefreshSubgroupChips"/>）；
+    /// 集合顺序＝激活分类的槽序（<see cref="ApplySubgroupOrder"/> 重排，只复用
+    /// 既有实例、绝不新建），数组实例随重排替换并通知轨刷新。
     /// </summary>
-    public IReadOnlyList<SubgroupChipViewModel> SubgroupChips { get; }
+    public IReadOnlyList<SubgroupChipViewModel> SubgroupChips
+    {
+        get => _subgroupChips;
+        private set => SetProperty(ref _subgroupChips, value);
+    }
 
     /// <summary>
     /// 子分组呈现模式（契约 #57 三态，默认 Off）：由 ApplyPreferences 唯一管线
@@ -131,6 +146,53 @@ public sealed class MainWindowViewModel : ObservableObject
             .Select(category => _categories.Single(panel => panel.Category == category))
             .ToArray();
         OnPropertyChanged(nameof(Categories));
+    }
+
+    /// <summary>
+    /// 采纳某分类的子分组槽序（契约 #57 修订，镜像 <see cref="ApplyCategoryOrder"/>）：
+    /// 复用 4 个既有 chip 实例（槽号即身份，绝不新建），非法序（数量/槽号/重复不符
+    /// 或非内容桶分类）拒绝重排、保持现状；序有变且为激活分类时重建 <see
+    /// cref="SubgroupChips"/> 数组单次通知，非激活分类在下次 Activate 时生效。
+    /// </summary>
+    public void ApplySubgroupOrder(BoardCategory category, IReadOnlyList<int> order)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+        if (!BoardCategoryCatalog.IsContentBucket(category) ||
+            order.Count != SubgroupCatalog.SlotCount ||
+            order.Distinct().Count() != order.Count ||
+            order.Any(slot => !SubgroupCatalog.IsValidSlot(slot)))
+        {
+            return;
+        }
+
+        _subgroupOrders[category] = order.ToArray();
+        if (ActivePanel is { } panel && panel.Category == category)
+        {
+            ApplySubgroupChipsOrder(category);
+        }
+    }
+
+    /// <summary>分类当前的子分组槽序（宿主读取端，镜像 <see cref="Categories"/>
+    /// 暴露口径）：种子/采纳后的 VM 状态即已生效序——保存挂起期间也反映乐观目标
+    /// 序；未种子分类（非内容桶）回落恒等序。</summary>
+    public IReadOnlyList<int> SubgroupOrder(BoardCategory category) =>
+        _subgroupOrders.TryGetValue(category, out var order)
+            ? order
+            : Enumerable.Range(0, SubgroupCatalog.SlotCount).ToArray();
+
+    /// <summary>按分类槽序重排 chip 集（Activate 与采纳共用单点）：序未变不重建
+    /// （防每次激活重置轨容器）；无种子（非内容桶）保持现状（轨在该面板不可见）。</summary>
+    private void ApplySubgroupChipsOrder(BoardCategory category)
+    {
+        if (!_subgroupOrders.TryGetValue(category, out var order) ||
+            order.SequenceEqual(SubgroupChips.Select(chip => chip.Slot)))
+        {
+            return;
+        }
+
+        SubgroupChips = order
+            .Select(slot => SubgroupChips.Single(chip => chip.Slot == slot))
+            .ToArray();
     }
 
     public CategoryViewModel DefaultCapturePanel
@@ -240,9 +302,11 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         ActivePanel = activePanel;
-        // 子分组轨可见性随激活面板的内容桶角色翻转（契约 #57 作用域）；默认环按
-        // 新激活分类差分恢复（chip 实例跨分类共享，契约 #57 修订）。
+        // 子分组轨可见性随激活面板的内容桶角色翻转（契约 #57 作用域）；chip 集按
+        // 新激活分类的槽序重排＋默认环差分恢复（chip 实例跨分类共享，契约 #57 修订
+        // ——两消费同点合并，不造第二挂接）。
         OnPropertyChanged(nameof(IsSubgroupRailVisible));
+        ApplySubgroupChipsOrder(category);
         ApplyDefaultSubgroupSelection();
     }
 

@@ -318,6 +318,7 @@ $interactionTestPrefixes = @{
     'ReviewViewport'         = @('ReviewViewport')
     'ScrollViewport'         = @('ScrollViewport')
     'Search'                 = @('Search')
+    'SubgroupOrder'          = @('ApplySubgroupOrderAsync', 'SubgroupRail')
     'SubgroupRail'           = @('Subgroup')
     'SelectionAndDeletion'   = @('BatchPinButton', 'BatchPinCommand', 'BatchPinExecutionGuard', 'DeletePending', 'DeleteShortcut', 'EmptyListBackgroundClearsSelectionWithoutChangingPanelOrScroll', 'Escape', 'HeaderClear', 'HeaderDeleteFailureRestoresMixedSelectionAndSuccessDeletesOnlySelection', 'HeaderDeleteWithoutSelection', 'HeaderDeleteWithoutSelectionFailureRestoresCategoryAndNewItemStaysUnselected', 'PinButton', 'SelectAllCommand', 'SelectedCountBadge', 'SelectionButtonTogglesPersistentTwoSignalFeedback', 'SelectionSurvivesAutoCollapseButClearsOnUserCategorySwitch', 'Shortcut', 'TrashButton')
     'TopmostImeSuppression'  = @('TopmostReassert')

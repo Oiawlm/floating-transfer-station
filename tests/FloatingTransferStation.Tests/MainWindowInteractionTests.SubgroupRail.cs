@@ -192,10 +192,11 @@ public sealed partial class MainWindowInteractionTests
                 "轨高＝结构常量（不随过滤态/名称变化）。");
             var chips = viewModel.SubgroupChips;
             Assert.AreEqual(4, chips.Count, "固定 4 槽（不加不减）。");
-            Assert.AreEqual("待分类", chips[0].DisplayName);
-            Assert.AreEqual("急件", chips[1].DisplayName, "自定义名经逐槽解析喂入。");
-            Assert.AreEqual("不重要", chips[2].DisplayName);
-            Assert.AreEqual("待办", chips[3].DisplayName);
+            // 按槽寻位断言（契约 #57 修订）：集合顺序＝激活分类槽序，不再假设恒等序。
+            Assert.AreEqual("待分类", chips.Single(chip => chip.Slot == 0).DisplayName);
+            Assert.AreEqual("急件", chips.Single(chip => chip.Slot == 1).DisplayName, "自定义名经逐槽解析喂入。");
+            Assert.AreEqual("不重要", chips.Single(chip => chip.Slot == 2).DisplayName);
+            Assert.AreEqual("待办", chips.Single(chip => chip.Slot == 3).DisplayName);
             foreach (var chip in chips)
             {
                 Assert.IsFalse(chip.IsDefaultSubgroup, "装载期无默认子分组＝零环。");

@@ -460,6 +460,42 @@
                              Text="拖拽调整标签顺序。" />
                 </StackPanel>
               </Border>
+              <!-- 子分组顺序（契约 #57 修订，#21「标签顺序」节模式镜像）：每个内容
+                   分类一个小节（标题＝分类名，四行槽序编辑；行全部代码后置构造，
+                   XAML 无硬编码行）；门控＝SubgroupDisplay≠Off——整卡代码后置置灰
+                   非隐藏（SetSubgroupOrderAvailability，照 SetAiOrganizeAreasAvailability
+                   先例），关闭态说明行切为引导句。 -->
+              <Border x:Name="SubgroupOrderCard" Style="{StaticResource SettingsCardStyle}">
+                <StackPanel>
+                  <TextBlock Text="子分组顺序" Style="{StaticResource SectionTitleStyle}" />
+                  <TextBlock x:Name="SubgroupOrderTitleCustomerOriginal" Style="{StaticResource RowCaptionStyle}" Margin="0,2,0,0" />
+                  <Grid ClipToBounds="True">
+                    <StackPanel x:Name="SubgroupOrderListCustomerOriginal" />
+                    <Border x:Name="SubgroupOrderIndicatorCustomerOriginal"
+                            Height="2"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Top"
+                            Background="{DynamicResource AccentBrush}"
+                            Visibility="Collapsed"
+                            IsHitTestVisible="False" />
+                  </Grid>
+                  <TextBlock x:Name="SubgroupOrderTitleInbox" Style="{StaticResource RowCaptionStyle}" Margin="0,10,0,0" />
+                  <Grid ClipToBounds="True">
+                    <StackPanel x:Name="SubgroupOrderListInbox" />
+                    <Border x:Name="SubgroupOrderIndicatorInbox"
+                            Height="2"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Top"
+                            Background="{DynamicResource AccentBrush}"
+                            Visibility="Collapsed"
+                            IsHitTestVisible="False" />
+                  </Grid>
+                  <TextBlock x:Name="SubgroupOrderNote"
+                             Style="{StaticResource NoteCaptionStyle}"
+                             Text="调整每个分类内四个分组的显示顺序。"
+                             ToolTip="顺序只影响分组按钮与分组显示，不改卡片归属；重置窗口设置不会清除。拖动把手或用上移/下移按钮，Esc 取消拖动。" />
+                </StackPanel>
+              </Border>
               <Border Style="{StaticResource SettingsCardStyle}">
                 <StackPanel>
                   <TextBlock Text="内容复制" Style="{StaticResource SectionTitleStyle}" />

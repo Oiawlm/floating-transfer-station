@@ -61,4 +61,17 @@ public interface ISettingsHost
     /// settings.json 原子持久化完成；持久化失败回滚内存与显示顺序并经状态条提示。
     /// </summary>
     Task ApplyCategoryOrderAsync(IReadOnlyList<BoardCategory> displayOrder);
+
+    /// <summary>当前分类的子分组槽序（契约 #57 修订）：设置页「子分组顺序」节的渲染来源。</summary>
+    IReadOnlyList<int> CurrentSubgroupOrder(BoardCategory category);
+
+    /// <summary>子分组槽显示名（名清单逐槽解析），设置页顺序列表按它呈现。</summary>
+    string SubgroupDisplayName(BoardCategory category, int slot);
+
+    /// <summary>
+    /// 采纳某分类新的子分组槽序（乐观提交契约，镜像 <see cref="ApplyCategoryOrderAsync"/>）：
+    /// 同步应用内存与显示顺序（首个 await 之前生效——chip 轨与设置行已是目标序）；
+    /// 返回任务完成＝settings.json 原子持久化完成；持久化失败回滚内存与显示顺序并经状态条提示。
+    /// </summary>
+    Task ApplySubgroupOrderAsync(BoardCategory category, IReadOnlyList<int> order);
 }

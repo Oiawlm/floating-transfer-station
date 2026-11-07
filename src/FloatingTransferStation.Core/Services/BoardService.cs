@@ -157,9 +157,12 @@ public sealed class BoardService
         var current = _items[category].ToArray();
         var pinnedCount = current.TakeWhile(item => item.IsPinned).Count();
         var normal = current.Skip(pinnedCount).ToArray();
-        // null（未指定）→0 居首，槽 0–3 →1–4 升序；OrderBy 稳定＝组内既有相对序。
+        // null（未指定）→0 恒居首，槽→该分类槽序清单 IndexOf+1（契约 #57 修订：槽序
+        // 可调；名清单快照同源携带槽序，读取端整单校验非法回落恒等序）；OrderBy
+        // 稳定＝组内既有相对序。
+        var subgroupOrder = _subgroupNamesSource?.SubgroupOrder(category);
         var partitioned = normal
-            .OrderBy(item => item.Subgroup is { } slot ? slot + 1 : 0)
+            .OrderBy(item => item.Subgroup is { } slot ? SubgroupPartitionKey(subgroupOrder, slot) : 0)
             .ToArray();
         if (partitioned.SequenceEqual(normal))
         {
@@ -168,6 +171,24 @@ public sealed class BoardService
 
         ReorderCategory(category, current.Take(pinnedCount).Concat(partitioned));
         return new BoardSubgroupPartition(true, category, current);
+    }
+
+    /// <summary>槽序分区键：槽在其分类槽序清单中的位置+1；清单缺失（快照未喂）或
+    /// 槽不在清单内（不可达——读取端整单校验保证排列完备）恒等回落槽号+1。</summary>
+    private static int SubgroupPartitionKey(IReadOnlyList<int>? order, int slot)
+    {
+        if (order is not null)
+        {
+            for (var index = 0; index < order.Count; index++)
+            {
+                if (order[index] == slot)
+                {
+                    return index + 1;
+                }
+            }
+        }
+
+        return slot + 1;
     }
 
     public void Undo(BoardSubgroupPartition change)

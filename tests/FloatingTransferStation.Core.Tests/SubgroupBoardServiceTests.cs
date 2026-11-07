@@ -159,6 +159,84 @@ public sealed class SubgroupBoardServiceTests
     }
 
     [TestMethod]
+    public void PartitionNormalRegionBySubgroup_FollowsCustomOrderWithNullFirst()
+    {
+        var board = new BoardService();
+        var pinned = board.AddText("置顶", BoardCategory.Inbox);
+        pinned.Subgroup = 2;
+        board.SetPinnedMany([pinned.Id], true);
+        var slotOneFirst = board.AddText("槽一先", BoardCategory.Inbox);
+        var slotTwoFirst = board.AddText("槽二先", BoardCategory.Inbox);
+        var unspecified = board.AddText("未指定", BoardCategory.Inbox);
+        var slotOneSecond = board.AddText("槽一后", BoardCategory.Inbox);
+        var slotZero = board.AddText("槽零", BoardCategory.Inbox);
+        // 物理顺序：置顶, 槽零, 槽一后, 未指定, 槽二先, 槽一先。
+        slotOneFirst.Subgroup = 1;
+        slotOneSecond.Subgroup = 1;
+        slotTwoFirst.Subgroup = 2;
+        slotZero.Subgroup = 0;
+        unspecified.Subgroup = null;
+        // 自定义槽序 [2, 0, 3, 1]：组间序＝槽 2 → 槽 0 → 槽 3 → 槽 1；null 恒居首。
+        var settings = WindowSettings.Default.WithSubgroupOrder(BoardCategory.Inbox, [2, 0, 3, 1]);
+        board.SetSubgroupDisplay(SubgroupDisplayMode.GroupedView, settings);
+
+        var change = board.PartitionNormalRegionBySubgroup(BoardCategory.Inbox);
+
+        Assert.IsTrue(change.Changed);
+        var after = board.Items(BoardCategory.Inbox).ToArray();
+        Assert.AreEqual(6, after.Length);
+        Assert.AreSame(pinned, after[0], "置顶区不动（置顶优先不分组）。");
+        Assert.AreSame(unspecified, after[1], "未指定 null 恒居首（身份外兜底组）。");
+        Assert.AreSame(slotTwoFirst, after[2], "槽 2 按自定义序居组间首位。");
+        Assert.AreSame(slotZero, after[3], "槽 0 次之。");
+        Assert.AreSame(slotOneSecond, after[4], "槽 1 组内保持既有相对序（槽一后物理在槽一先前）。");
+        Assert.AreSame(slotOneFirst, after[5]);
+        CollectionAssert.AreEqual(
+            new int?[] { null, 2, 0, 1, 1 },
+            after.Skip(1).Select(item => item.Subgroup).ToArray(),
+            "组间序逐卡等于用户槽序（槽 3 无成员不占位）。");
+
+        // 幂等：已按用户序聚簇再分区＝no-op。
+        Assert.IsFalse(board.PartitionNormalRegionBySubgroup(BoardCategory.Inbox).Changed);
+    }
+
+    [TestMethod]
+    public async Task PartitionNormalRegionBySubgroup_CustomOrderIsUndoableAndPersists()
+    {
+        var board = new BoardService();
+        var first = board.AddText("一", BoardCategory.Inbox);
+        var second = board.AddText("二", BoardCategory.Inbox);
+        var third = board.AddText("三", BoardCategory.Inbox);
+        // 物理 [三, 二, 一]；槽 1→0→1，自定义序 [1, 0, 3, 2] 下组间＝槽 1 先于槽 0。
+        first.Subgroup = 1;
+        second.Subgroup = 0;
+        third.Subgroup = 1;
+        var originalIds = board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray();
+        var settings = WindowSettings.Default.WithSubgroupOrder(BoardCategory.Inbox, [1, 0, 3, 2]);
+        board.SetSubgroupDisplay(SubgroupDisplayMode.GroupedView, settings);
+        var store = new CapturingStore();
+        var service = new BoardMutationService(board, store, _ => { });
+
+        Assert.IsTrue(await service.PartitionSubgroupsAsync(BoardCategory.Inbox));
+        var persistedIds = store.Saved[0].Items
+            .Where(item => item.Category == BoardCategory.Inbox)
+            .OrderBy(item => item.Order)
+            .Select(item => item.Id)
+            .ToArray();
+        CollectionAssert.AreEqual(
+            new[] { third.Id, first.Id, second.Id },
+            persistedIds,
+            "落盘 Order 按自定义槽序聚簇（槽 1 组先于槽 0 组、组内保持物理相对序）。");
+        CollectionAssert.AreNotEqual(originalIds, persistedIds);
+
+        Assert.IsTrue(await service.UndoLastAsync());
+        CollectionAssert.AreEqual(
+            originalIds,
+            board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray(),
+            "撤销恢复分区前顺序（自定义序只改键、不改可撤销性）。");
+    }
+
+    [TestMethod]
     public async Task AssignSubgroup_BatchUpdatesFieldAndPersists()
     {
         var board = new BoardService();
