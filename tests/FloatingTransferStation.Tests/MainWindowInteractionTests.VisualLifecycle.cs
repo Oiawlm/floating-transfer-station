@@ -251,12 +251,84 @@ public sealed partial class MainWindowInteractionTests
             foreach (var category in viewModel.Categories)
             {
                 var tab = FindCategoryTab(window, category);
-                // 2026-11-05 W2 重设计：标记改为单段圆弧紫色圆环（原三同心圆靶心）。
+                // 2026-11-05 W2 重设计：标记改为单段圆弧紫色圆环（原三同心圆靶心）；
+                // 2026-11-07 #56 修订改双态环语法——内容桶恒环（默认接收紫、另一灰）、
+                // 记录/启动无环（None）。
                 var marker = FindDescendants<System.Windows.Shapes.Path>(tab)
                     .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
                 StringAssert.Contains(marker.Data.ToString(), "A8,8");
                 Assert.AreEqual(1.25d, marker.StrokeThickness);
-                Assert.AreEqual(category.IsDefaultCapture ? 1d : 0d, marker.Opacity);
+                Assert.AreEqual(
+                    category.DefaultMarkerState == DefaultMarkerState.None ? 0d : 1d,
+                    marker.Opacity,
+                    $"{category.Category} 环态＝{category.DefaultMarkerState}。");
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CategoryTab_ContentBucketTabsAlwaysRingPurpleOrGray()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var markerStyle = (Style)window.FindResource("CategoryDefaultMarkerStyle");
+            var accent = window.FindResource("AccentBrush");
+            var secondary = window.FindResource("SecondaryTextBrush");
+
+            foreach (var category in viewModel.Categories.Where(
+                         candidate => BoardCategoryCatalog.IsContentBucket(candidate.Category)))
+            {
+                var marker = FindDescendants<System.Windows.Shapes.Path>(FindCategoryTab(window, category))
+                    .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
+                Assert.AreEqual(1d, marker.Opacity, "内容桶恒有环（单击即可设默认接收＝具备落点能力）。");
+                Assert.AreSame(
+                    category.IsDefaultCapture ? accent : secondary,
+                    marker.Stroke,
+                    category.IsDefaultCapture ? "默认接收＝紫（Active）。" : "另一内容桶＝灰（Inactive）。");
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CategoryTab_RecordsAndLauncherTabsNeverRing()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var markerStyle = (Style)window.FindResource("CategoryDefaultMarkerStyle");
+
+            foreach (var category in viewModel.Categories.Where(
+                         candidate => !BoardCategoryCatalog.IsContentBucket(candidate.Category)))
+            {
+                Assert.AreEqual(
+                    DefaultMarkerState.None,
+                    category.DefaultMarkerState,
+                    "记录/启动永不具备落点能力（#4/#30）。");
+                var marker = FindDescendants<System.Windows.Shapes.Path>(FindCategoryTab(window, category))
+                    .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
+                Assert.AreEqual(
+                    0d,
+                    marker.Opacity,
+                    "记录/启动无环——灰环会被误读为「有能力未启用」＝噪音。");
             }
         }
         finally
