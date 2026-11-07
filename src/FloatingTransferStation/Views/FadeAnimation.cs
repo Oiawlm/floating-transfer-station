@@ -46,6 +46,16 @@ public static class FadeAnimation
         typeof(FadeAnimation),
         new PropertyMetadata(DesignTokens.FadeVisibilityMs));
 
+    /// <summary>可选出场缓动 token（三次贝塞尔控制点串，如 QrZoomOutKeySpline）：
+    /// 默认 null＝通用加速曲线 ExitEasing，既有消费者零行为变化；淡出方向
+    /// （to&lt;from）时由 ApplyState 读取并构造 SplineEase——供需要「整层一个
+    /// 节奏收回」（同曲线同时长）的编排指定场景专用出场曲线。</summary>
+    public static readonly DependencyProperty ExitEaseTokenProperty = DependencyProperty.RegisterAttached(
+        "ExitEaseToken",
+        typeof(string),
+        typeof(FadeAnimation),
+        new PropertyMetadata(null));
+
     public static readonly DependencyProperty ManageVisibilityProperty = DependencyProperty.RegisterAttached(
         "ManageVisibility",
         typeof(bool),
@@ -69,6 +79,12 @@ public static class FadeAnimation
 
     public static void SetDurationMs(DependencyObject element, int value) =>
         element.SetValue(DurationMsProperty, value);
+
+    public static string? GetExitEaseToken(DependencyObject element) =>
+        (string?)element.GetValue(ExitEaseTokenProperty);
+
+    public static void SetExitEaseToken(DependencyObject element, string? value) =>
+        element.SetValue(ExitEaseTokenProperty, value);
 
     public static bool GetManageVisibility(DependencyObject element) =>
         (bool)element.GetValue(ManageVisibilityProperty);
@@ -128,6 +144,14 @@ public static class FadeAnimation
         }
 
         var animation = CreateOpacityAnimation(currentOpacity, targetOpacity, GetDurationMs(element));
+        // 可选出场曲线 token：淡出方向（to<from）且调用方显式指定时覆盖通用
+        // 加速曲线（默认 null 零波及）；CreateOpacityAnimation 签名保持不变——
+        // 既有反射锁定测试（MainWindowInteractionTests.MotionTransitions）零波及。
+        if (targetOpacity < currentOpacity && GetExitEaseToken(element) is { } exitEaseToken)
+        {
+            animation.EasingFunction = SplineEase.FromToken(exitEaseToken);
+        }
+
         if (GetManageVisibility(element) && !isActive)
         {
             var generation = (int)element.GetValue(HideGenerationProperty) + 1;

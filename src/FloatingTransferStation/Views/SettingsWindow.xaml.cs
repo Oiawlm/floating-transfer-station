@@ -48,6 +48,11 @@ public partial class SettingsWindow : Window
     // 建组挂到 WeChatQrOverlayCard（外层整卡容器）。
     private ScaleTransform? _qrZoomScale;
     private TranslateTransform? _qrZoomTranslate;
+    /// <summary>QR 层生命周期代数（同 FadeAnimation.HideGeneration 口径）：每次
+    /// 开层自增——单一完成点的回调（容器 translateY Completed／退化卡片淡出
+    /// Completed）只对发起那次关层的代数生效，替换式中断后残留的旧时钟回调
+    /// （含已入队未分发的 Completed）不得塌缩重开后的层。</summary>
+    private int _qrLifecycleGeneration;
 
     // QR 过渡文字/缩略图不透明度终态口径：文字关闭静止基值 0（XAML 同款）与
     // 全显定格 1；缩略图终态恒 1（ResetQrTransitionState 固定写全显）。
@@ -302,15 +307,22 @@ public partial class SettingsWindow : Window
     private void ShowWeChatQrOverlay()
     {
         var animationsEnabled = _host.CurrentPreferences.AnimationsEnabled;
-        FadeAnimation.SetAnimationsEnabled(WeChatQrOverlay, animationsEnabled);
-        // 收回曾把遮罩淡出改锚缩放同步时长（Hide），Show 开头复位回轻档 83ms
-        //（既有 DP、ApplyState 读取，零新机制）——入场淡入保持快速档（XAML 不动）。
-        FadeAnimation.SetDurationMs(WeChatQrOverlay, DesignTokens.FastDurationMs);
-        FadeAnimation.SetIsActive(WeChatQrOverlay, true);
+        // 根 Grid 只承载布局＋命中＋Visibility（结构拆分后无 Opacity 编排）；
+        // 显隐淡入淡出＝遮罩纱的 FadeAnimation，层可见性由编排自身即时开
+        //（关闭时经单一完成点收口，见 HideWeChatQrOverlay）。
+        WeChatQrOverlay.Visibility = Visibility.Visible;
+        // 开层自增生命周期代数：作废关层途中残留的旧时钟完成回调（再开不被
+        // 掉队回调塌缩——同 FadeAnimation.HideGeneration 的防掉队口径）。
+        _qrLifecycleGeneration++;
+        FadeAnimation.SetAnimationsEnabled(WeChatQrScrim, animationsEnabled);
+        // 收回曾把遮罩纱淡出改锚缩放同步时长（Hide），Show 开头复位回轻档 83ms
+        //（既有 DP、ApplyState 读取，零新机制）——入场淡入保持快速档。
+        FadeAnimation.SetDurationMs(WeChatQrScrim, DesignTokens.FastDurationMs);
+        FadeAnimation.SetIsActive(WeChatQrScrim, true);
         if (animationsEnabled)
         {
-            // 容器级过渡与遮罩淡入同帧挂上（遮罩 Opacity 起点为 0、From 即时生效，
-            // 无满尺寸闪帧）；动效关＝跳过编排（三对象定格全显终态）。
+            // 容器级过渡与遮罩纱淡入同帧挂上（遮罩纱起点 0、From 即时生效，
+            // 无满尺寸闪帧）；动效关＝跳过编排（对象定格全显终态）。
             PlayQrZoomEntrance();
         }
         else
@@ -322,35 +334,50 @@ public partial class SettingsWindow : Window
     private void HideWeChatQrOverlay()
     {
         var animationsEnabled = _host.CurrentPreferences.AnimationsEnabled;
-        FadeAnimation.SetAnimationsEnabled(WeChatQrOverlay, animationsEnabled);
-        if (animationsEnabled && MeasureQrSourceRect() is { } sourceRect)
+        FadeAnimation.SetAnimationsEnabled(WeChatQrScrim, animationsEnabled);
+        if (animationsEnabled)
         {
-            // 收回＝从当下变换态动画回**当下实测**源矩形（「从哪来回哪去」）：
-            // 动态 From 是结构性质——每次收回都以被中断动画的当下值为起点
-            //（SnapshotAndReplace 替换式中断，可随时被再次交互替换）；遮罩淡出
-            // 时长同步缩放时长（先设再 IsActive，ApplyState 读取），整层一个
-            // 节奏收回，避免容器在已塌遮罩上漂浮。编排反向重排（Q5：文字层与
-            // 缩略图层不续走）：文字先隐（显式 From 当下值→0 快速淡出）、缩略图
-            // 末段回显（From 当下值→1，容器落位前后恰接管防双影）。
-            FadeAnimation.SetDurationMs(WeChatQrOverlay, DesignTokens.QrZoomOutMs);
-            AnimateQrZoom(
-                CurrentQrVisualRect(),
-                sourceRect,
-                FadeAnimation.QrZoomOutEasing,
-                DesignTokens.QrZoomOutMs,
-                FillBehavior.HoldEnd);
-            PlayQrTextExit();
-            PlayQrThumbExit();
+            // 遮罩纱与容器整层一个节奏收回：时长复位**先于** Measure 判定（R4——
+            // 退化路径不再沿用上次 Show 的过期 83ms），出场曲线由 XAML
+            // ExitEaseToken＝QrZoomOutKeySpline（同容器减速曲线、末端水平，
+            // 消除末段斜率骤曝 R2）。
+            FadeAnimation.SetDurationMs(WeChatQrScrim, DesignTokens.QrZoomOutMs);
+            if (MeasureQrSourceRect() is { } sourceRect)
+            {
+                // 正常路径：收回＝从当下变换态动画回**当下实测**源矩形（「从哪来
+                // 回哪去」；动态 From 是结构性质——SnapshotAndReplace 替换式中断，
+                // 可随时被再次交互替换）。编排反向重排（Q5：文字层与缩略图层不
+                // 续走）：文字先隐（显式 From 当下值→0 快速淡出）、卡片全程可见
+                // 飞回（收回关键帧 90ms 归位后持稳 1）、缩略图先清隐再于
+                // QrThumbRevealBeginMs（95% 回程）起与卡片同窗线性换手（对齐落位）。
+                AnimateQrZoom(
+                    CurrentQrVisualRect(),
+                    sourceRect,
+                    FadeAnimation.QrZoomOutEasing,
+                    DesignTokens.QrZoomOutMs,
+                    FillBehavior.HoldEnd);
+                PlayQrTextExit();
+                PlayQrCardExit();
+                PlayQrThumbExit();
+            }
+            else
+            {
+                // 退化路径（R4，求值不可达）：纯淡出——容器快照当下值定基后清动画
+                //（定格在飞、禁瞬时恒等）、卡片自当下值线性淡出，卡片淡出
+                // Completed＝退化路径完成点；终态与正常路径逐值一致。
+                PlayQrDegradedExit();
+            }
+
+            FadeAnimation.SetIsActive(WeChatQrScrim, false);
         }
         else
         {
-            // 动效关（或求值不可达）＝即时塌缩：三对象定格关闭静止基值（容器
-            // 四属性恒等、文字 0、缩略图 1），与遮罩淡出并行互不残留（淡走
-            // Opacity、过渡走 RenderTransform，分属不同属性）。
+            // 动效关＝即时塌缩：对象定格关闭静止基值（容器恒等、文字 0、卡片 0、
+            // 缩略图 1），遮罩纱即时归零（FadeAnimation 即时分支），层即时收起。
             ResetQrTransitionState(QrTextClosedOpacity);
+            FadeAnimation.SetIsActive(WeChatQrScrim, false);
+            WeChatQrOverlay.Visibility = Visibility.Collapsed;
         }
-
-        FadeAnimation.SetIsActive(WeChatQrOverlay, false);
     }
 
     /// <summary>
@@ -372,15 +399,33 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        var fromRect = inFlight ? CurrentQrVisualRect() : source;
         PlayQrTextEntrance();
+        PlayQrCardEntrance();
         PlayQrThumbEntrance();
         var identityCard = new Rect(0, 0, WeChatQrOverlayCard.ActualWidth, WeChatQrOverlayCard.ActualHeight);
         AnimateQrZoom(
-            inFlight ? CurrentQrVisualRect() : source,
+            fromRect,
             identityCard,
             FadeAnimation.QrZoomInEasing,
             DesignTokens.QrZoomInMs,
             FillBehavior.Stop);
+    }
+
+    /// <summary>卡片入场编排（自持不透明度，结构拆分后与遮罩纱兄弟）：显式 From＝
+    /// 当下值→1、83ms、EnterEasing——与遮罩纱淡入同曲线同时长（兄弟不相乘、无
+    /// 双重变淡，入场视觉与旧根淡入等价；From＝当下值＝收回途中再开自当下可见度
+    /// 续走，不瞬跳）；fill=Stop 终态落基值 1（动效关开层与退化开层经
+    /// ResetQrTransitionState 定格 1）。</summary>
+    private void PlayQrCardEntrance()
+    {
+        var current = WeChatQrOverlayCard.Opacity;
+        WeChatQrOverlayCard.BeginAnimation(UIElement.OpacityProperty, null);
+        WeChatQrOverlayCard.SetValue(UIElement.OpacityProperty, QrTextShownOpacity);
+        WeChatQrOverlayCard.BeginAnimation(
+            UIElement.OpacityProperty,
+            CreateQrOpacityAnimation(current, QrTextShownOpacity, DesignTokens.FastDurationMs, FadeAnimation.EnterEasing),
+            FadeAnimation.AnimationHandoffBehavior);
     }
 
     /// <summary>文字三元素（标题/微信号行/尾注）开层编排（Q5：不续走，按开层
@@ -440,31 +485,115 @@ public partial class SettingsWindow : Window
             FadeAnimation.AnimationHandoffBehavior);
     }
 
-    /// <summary>缩略图关层回显编排：BeginTime＝收回末段（容器已飞回源位、恰
-    /// 接管遮住落点），等待期定格当下值（基值＝当下值）防提前回显双影；显式
-    /// From＝当下值→1，fill=HoldEnd 定格 1、Completed 卫生清动画置基值 1。</summary>
+    /// <summary>卡片收回编排（自持不透明度，收回关键帧全线性）：[0:当下值]→
+    /// [90ms:1]（归位段，时长复用 QrTextFadeOutMs＝与文字先隐同族）→[180ms:1]
+    ///（持稳：飞行期卡片全程可见——「回退动画看得见地回到原位」）→[250ms:0]
+    ///（交接段：与缩略图回显同窗线性换手）；HoldEnd 定格、终态卫生经单一完成点
+    /// 回基值 1（中断由 SnapshotAndReplace 天然安全——被替换动画不触发回调）。</summary>
+    private void PlayQrCardExit()
+    {
+        var current = WeChatQrOverlayCard.Opacity;
+        WeChatQrOverlayCard.BeginAnimation(UIElement.OpacityProperty, null);
+        WeChatQrOverlayCard.SetValue(UIElement.OpacityProperty, QrTextShownOpacity);
+        WeChatQrOverlayCard.BeginAnimation(
+            UIElement.OpacityProperty,
+            CreateQrExitKeyFrames(current, QrTextShownOpacity, QrTextClosedOpacity),
+            FadeAnimation.AnimationHandoffBehavior);
+    }
+
+    /// <summary>缩略图收回编排（收回关键帧全线性，与卡片同时间轴）：[0:当下值]→
+    /// [90ms:0]（清除段：杀中途半显值贯穿 R3 与动效关会话残留 1 的 R5）→
+    /// [180ms:0]（持隐至 QrThumbRevealBeginMs＝95% 回程，容器已≈落位才交接）→
+    /// [250ms:1]（回显段：与卡片 1→0 同窗线性交叉，落位点合成存在感恒≈1——
+    /// 无台阶、无空窗、无双影）。</summary>
     private void PlayQrThumbExit()
     {
         var current = WeChatQrButton.Opacity;
         WeChatQrButton.BeginAnimation(UIElement.OpacityProperty, null);
-        WeChatQrButton.SetValue(UIElement.OpacityProperty, current);
-        var animation = CreateQrOpacityAnimation(
-            current, QrTextShownOpacity, DesignTokens.QrThumbFadeMs, FadeAnimation.EnterEasing, FillBehavior.HoldEnd);
-        animation.BeginTime = TimeSpan.FromMilliseconds(DesignTokens.QrZoomOutMs - DesignTokens.QrThumbFadeMs);
-        animation.Completed += (_, _) =>
+        WeChatQrButton.SetValue(UIElement.OpacityProperty, QrTextShownOpacity);
+        WeChatQrButton.BeginAnimation(
+            UIElement.OpacityProperty,
+            CreateQrExitKeyFrames(current, QrTextClosedOpacity, QrTextShownOpacity),
+            FadeAnimation.AnimationHandoffBehavior);
+    }
+
+    /// <summary>收回两段式关键帧（全线性，时间轴＝QrTextFadeOutMs→
+    /// QrThumbRevealBeginMs→QrZoomOutMs）：首键＝当下值续走，中段持稳值与末段
+    /// 换手值随调用方（卡片持稳 1/换手 0；缩略图持隐 0/换手 1）。</summary>
+    private static DoubleAnimationUsingKeyFrames CreateQrExitKeyFrames(double current, double holdValue, double endValue)
+    {
+        var frames = new DoubleAnimationUsingKeyFrames { FillBehavior = FillBehavior.HoldEnd };
+        frames.KeyFrames.Add(new LinearDoubleKeyFrame(current, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+        frames.KeyFrames.Add(new LinearDoubleKeyFrame(holdValue, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(DesignTokens.QrTextFadeOutMs))));
+        frames.KeyFrames.Add(new LinearDoubleKeyFrame(holdValue, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(DesignTokens.QrThumbRevealBeginMs))));
+        frames.KeyFrames.Add(new LinearDoubleKeyFrame(endValue, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(DesignTokens.QrZoomOutMs))));
+        return frames;
+    }
+
+    /// <summary>退化路径收回（R4，Measure 求值不可达＝动效开但几何非法）：纯淡出
+    /// ——容器**快照当下值定基后清动画**（定格在飞、禁瞬时归恒等——居中放大位
+    /// 原位闪现的单点故障）；卡片自当下值线性淡出 QrZoomOutMs（其 Completed＝
+    /// 退化路径单一完成点：层塌缩＋终态卫生含容器显式归恒等，与正常路径逐值
+    /// 一致）；缩略图同窗线性归 1、文字先隐复用正常路径编排；遮罩纱同时长
+    /// 淡出（Hide 已设时长与 ExitEaseToken）。再开时容器按飞行续走判定自
+    /// 快照基值继续（IsQrContainerInFlight），不瞬跳。</summary>
+    private void PlayQrDegradedExit()
+    {
+        var scaleX = _qrZoomScale!.ScaleX;
+        var scaleY = _qrZoomScale.ScaleY;
+        var translateX = _qrZoomTranslate!.X;
+        var translateY = _qrZoomTranslate.Y;
+        _qrZoomScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        _qrZoomScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        _qrZoomTranslate.BeginAnimation(TranslateTransform.XProperty, null);
+        _qrZoomTranslate.BeginAnimation(TranslateTransform.YProperty, null);
+        _qrZoomScale.ScaleX = scaleX;
+        _qrZoomScale.ScaleY = scaleY;
+        _qrZoomTranslate.X = translateX;
+        _qrZoomTranslate.Y = translateY;
+
+        PlayQrTextExit();
+        var cardCurrent = WeChatQrOverlayCard.Opacity;
+        WeChatQrOverlayCard.BeginAnimation(UIElement.OpacityProperty, null);
+        WeChatQrOverlayCard.SetValue(UIElement.OpacityProperty, QrTextClosedOpacity);
+        var cardFade = new DoubleAnimation(cardCurrent, QrTextClosedOpacity, TimeSpan.FromMilliseconds(DesignTokens.QrZoomOutMs))
         {
-            WeChatQrButton.BeginAnimation(UIElement.OpacityProperty, null);
-            WeChatQrButton.SetValue(UIElement.OpacityProperty, QrTextShownOpacity);
+            FillBehavior = FillBehavior.HoldEnd
         };
-        WeChatQrButton.BeginAnimation(UIElement.OpacityProperty, animation, FadeAnimation.AnimationHandoffBehavior);
+        // 完成点带代数守卫（同正常路径口径）：退化收回途中再开＝卡片淡出被替换，
+        // 掉队回调不得塌缩重开后的层。
+        var generation = _qrLifecycleGeneration;
+        cardFade.Completed += (_, _) =>
+        {
+            if (generation != _qrLifecycleGeneration)
+            {
+                return;
+            }
+
+            WeChatQrOverlay.Visibility = Visibility.Collapsed;
+            ResetQrTransitionState(QrTextClosedOpacity);
+        };
+        WeChatQrOverlayCard.BeginAnimation(UIElement.OpacityProperty, cardFade, FadeAnimation.AnimationHandoffBehavior);
+
+        var thumbCurrent = WeChatQrButton.Opacity;
+        WeChatQrButton.BeginAnimation(UIElement.OpacityProperty, null);
+        WeChatQrButton.SetValue(UIElement.OpacityProperty, QrTextShownOpacity);
+        WeChatQrButton.BeginAnimation(
+            UIElement.OpacityProperty,
+            new DoubleAnimation(thumbCurrent, QrTextShownOpacity, TimeSpan.FromMilliseconds(DesignTokens.QrZoomOutMs))
+            {
+                FillBehavior = FillBehavior.HoldEnd
+            },
+            FadeAnimation.AnimationHandoffBehavior);
     }
 
     /// <summary>文字三元素快照（标题/微信号行/尾注：容器级过渡的延迟浮现面）。</summary>
     private UIElement[] QrTextElements() => [WeChatQrTitle, WeChatIdLargeBlock, WeChatQrFootnote];
 
     /// <summary>容器四属性是否偏离恒等基值（＝有过渡动画在飞或定格未复位）：
-    /// 入场 From 选择的续走判据——飞行中再开自当下渲染矩形继续，静止态自缩略图
-    /// 源矩形起飞。基值只经构造与终态卫生写恒等值，逐值精确比较可靠。</summary>
+    /// 入场 From 选择的续走判据——飞行中再开（含退化收回的飞行态快照定基）自
+    /// 当下渲染矩形继续，静止态自缩略图源矩形起飞。基值只经构造、终态卫生与
+    /// 退化快照写入，逐值精确比较可靠。</summary>
     private bool IsQrContainerInFlight() =>
         _qrZoomScale!.ScaleX != 1d || _qrZoomScale.ScaleY != 1d ||
         _qrZoomTranslate!.X != 0d || _qrZoomTranslate.Y != 0d;
@@ -560,9 +689,32 @@ public partial class SettingsWindow : Window
             fill);
         if (fill == FillBehavior.HoldEnd)
         {
-            // 四条动画同 duration/同帧启动，挂任一条即整组终态；HoldEnd 会把
-            // 终值定格在属性上，Completed 时清动画回恒等基值（终态卫生）。
-            translateYAnimation.Completed += (_, _) => ResetQrTransitionState(QrTextClosedOpacity);
+            // 单一完成点（R6 结构性消除）：收回四条动画同 duration/同帧启动，容器
+            // translateY Completed＝正常路径唯一生命周期载体——同一分发帧内层塌缩
+            // ＋终态卫生（卡片/缩略图关键帧同时长同帧完成，错帧闪窗被结构性关闭）。
+            // 代数守卫：SnapshotAndReplace 被替换的旧时钟不触发 Completed，但已
+            // 入队未分发的回调仍可能掉队到达——再开自增代数后本回调须作废
+            //（同 FadeAnimation.HideGeneration 的防掉队口径，重开不被塌缩）。
+            var generation = _qrLifecycleGeneration;
+            translateYAnimation.Completed += (_, _) =>
+            {
+                if (generation != _qrLifecycleGeneration)
+                {
+                    return;
+                }
+
+                WeChatQrOverlay.Visibility = Visibility.Collapsed;
+                ResetQrTransitionState(QrTextClosedOpacity);
+            };
+        }
+        else
+        {
+            // fill=Stop 终态回恒等基值：显式归一（退化路径可能残留飞行态本地基值，
+            // 依赖「基值未被改写」的隐式假设不再成立——入场完成必须定格恒等）。
+            _qrZoomScale!.ScaleX = 1d;
+            _qrZoomScale.ScaleY = 1d;
+            _qrZoomTranslate!.X = 0d;
+            _qrZoomTranslate.Y = 0d;
         }
 
         _qrZoomScale!.BeginAnimation(
@@ -584,9 +736,11 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>全对象终态卫生（原 ResetQrZoomTransform 扩展更名）：容器四属性
-    /// 清动画回恒等基值，文字三元素与缩略图清动画定格 textOpacity——关闭终态
-    ///（收回 Completed/动效关塌缩/求值不可达）传 0（关闭静止基值）、动效关开层
-    /// 与退化开层传 1（全显定格）；仅终态卫生，不作中断手段。</summary>
+    /// 清动画后**显式归恒等基值**（退化路径曾把容器定格在飞行态本地基值，清动画
+    /// 后不得依赖基值未漂移的隐式假设），文字三元素与卡片清动画定格 textOpacity
+    ///（卡片随层可见性：关闭终态 0＝层隐藏即隐、再开入场自 0 淡入；动效关/退化
+    /// 开层 1＝全显），缩略图恒定格 1（关闭静止态＝页脚回显）；仅终态卫生，
+    /// 不作中断手段。</summary>
     private void ResetQrTransitionState(double textOpacity)
     {
         if (_qrZoomScale is null || _qrZoomTranslate is null)
@@ -598,11 +752,18 @@ public partial class SettingsWindow : Window
         _qrZoomScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
         _qrZoomTranslate.BeginAnimation(TranslateTransform.XProperty, null);
         _qrZoomTranslate.BeginAnimation(TranslateTransform.YProperty, null);
+        _qrZoomScale.ScaleX = 1d;
+        _qrZoomScale.ScaleY = 1d;
+        _qrZoomTranslate.X = 0d;
+        _qrZoomTranslate.Y = 0d;
         foreach (var text in QrTextElements())
         {
             text.BeginAnimation(UIElement.OpacityProperty, null);
             text.SetValue(UIElement.OpacityProperty, textOpacity);
         }
+
+        WeChatQrOverlayCard.BeginAnimation(UIElement.OpacityProperty, null);
+        WeChatQrOverlayCard.SetValue(UIElement.OpacityProperty, textOpacity);
 
         WeChatQrButton.BeginAnimation(UIElement.OpacityProperty, null);
         WeChatQrButton.SetValue(UIElement.OpacityProperty, QrTextShownOpacity);

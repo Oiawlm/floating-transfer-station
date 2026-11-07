@@ -83,10 +83,11 @@ public static class DesignTokens
     /// quartzcore/camediatimingfunction）；时长与文字编排＝Material container
     /// transform/fade-through（m3.material.io/styles/motion/transitions、
     /// vocab.design/container-transform）：入场 450ms（长档下限）、文字 270ms 起
-    /// 180ms 淡入（≈60% 进度、落位时可读）、收回文字 90ms 先隐、缩略图 150ms
-    /// 防双影回显。实验期以真实录屏迭代微调（入场 [380,520]ms、文字起淡 55–70%
-    /// 进度、收回 [200,320]ms、控制点 ±0.05），终值回写本组与契约 #24（批次
-    /// 2026-11-06-consistency-batch 工作流 B）。</summary>
+    /// 180ms 淡入（≈60% 进度、落位时可读）、收回文字 90ms 先隐。实验期以真实
+    /// 录屏迭代微调（入场 [380,520]ms、文字起淡 55–70% 进度、收回 [200,320]ms、
+    /// 控制点 ±0.05），终值回写本组与契约 #24（批次 2026-11-06-consistency-batch
+    /// 工作流 B；2026-11-08 关闭回退重编排补收回交接两常量，批次
+    /// 2026-11-07-multi-feature-batch d1）。</summary>
     public const int QrZoomInMs = 450;
     public const int QrZoomOutMs = 250;
     public const string QrZoomInKeySpline = "0.32,0.72,0,1";
@@ -94,7 +95,16 @@ public static class DesignTokens
     public const int QrTextFadeInBeginMs = 270;
     public const int QrTextFadeInMs = 180;
     public const int QrTextFadeOutMs = 90;
+    /// <summary>缩略图入场防双影淡出时长（开层期缩略图自当下值隐没；收回回显
+    /// 时点由 QrThumbRevealBeginMs/QrHandoverFadeMs 编排，不用本常量）。</summary>
     public const int QrThumbFadeMs = 150;
+    /// <summary>缩略图收回回显起点（ms，自关层起）：QrZoomOutKeySpline 反解 95%
+    /// 回程＝x≈0.722×QrZoomOutMs≈180.5ms，取整 180——容器已 ≈1.05× 落位尺寸，
+    /// 此前缩略图持隐（对齐落位，防飞行中段双影闪现）。</summary>
+    public const int QrThumbRevealBeginMs = 180;
+    /// <summary>收回交接段时长（ms）＝QrZoomOutMs−QrThumbRevealBeginMs：卡片
+    /// 1→0 与缩略图 0→1 同窗线性交叉，落位点合成存在感恒≈1（无台阶/空窗/双影）。</summary>
+    public const int QrHandoverFadeMs = QrZoomOutMs - QrThumbRevealBeginMs;
 
     // 快捷启动（#30）：场景常量不加档——LaunchConfirmMs/ItemLandingMs 直接锚 SlowDurationMs。
     public const int LaunchConfirmMs = SlowDurationMs;
