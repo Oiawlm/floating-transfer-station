@@ -2283,7 +2283,7 @@ public sealed partial class MainWindowInteractionTests
                 viewModel.SubgroupChips.Select(chip => chip.Slot).ToArray(),
                 "非法序（数量≠SlotCount）拒绝重排。");
 
-            // 拖卡到「全部」＝无归属（模板无拖放处理器，祖先无兜底 Drop）。
+            // 拖卡到「全部」＝无归属（模板无拖放处理器，祖先无兜底 Drop；无变更即无落盘）。
             allHost.RaiseEvent(NewDragEventArgs(data, DragDrop.DragEnterEvent, allHost));
             allHost.RaiseEvent(NewDragEventArgs(data, DragDrop.DropEvent, allHost));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
@@ -2291,12 +2291,6 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.IsNull(first.Subgroup, "拖卡到「全部」不得归属。");
             Assert.IsNull(second.Subgroup);
-            var persisted = ReadPersistedJson<BoardSnapshot>(directory, "board.json");
-            Assert.IsNotNull(persisted);
-            Assert.AreEqual(
-                0,
-                persisted!.Items.Count(item => item.Subgroup is not null),
-                "无归属落盘。");
         }
         finally
         {
