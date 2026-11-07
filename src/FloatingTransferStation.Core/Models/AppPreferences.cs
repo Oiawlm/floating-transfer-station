@@ -135,21 +135,26 @@ public enum SubgroupDisplayMode
 /// 解析时名字不在系统字体清单（含被卸载）按未配置回落默认；旧配置缺字段
 /// 免迁移回落 null，老用户升级零感知。图标字体（Segoe Fluent Icons）不随本偏好变化。
 /// 记录 Markdown 阅读视图开关（2026-11-03 实验性；默认关＝零打扰，沿 AI 整理
-/// 开关先例）：开启后记录表面出现「阅读｜编辑」切换，阅读态为只读 Markdown
-/// 渲染（子集见 MarkdownDocumentMapper）；关闭＝记录表面与现状逐像素一致。
-/// 只门控呈现面——保存/防抖/合并/Esc 契约（#4/#20）不随本开关变化；旧配置
-/// 缺字段免迁移回落关闭，老用户升级零感知。
+/// 开关先例；2026-11-07 起默认开启——存量显式 false 经一次性偏好迁移（契约 59）
+/// 统一置开；旧配置缺字段免迁移回落开启（构造默认））：开启后记录表面出现
+/// 「阅读｜编辑」切换，阅读态为只读 Markdown 渲染（子集见 MarkdownDocumentMapper）；
+/// 关闭＝记录表面与现状逐像素一致。只门控呈现面——保存/防抖/合并/Esc 契约
+/// （#4/#20）不随本开关变化。
 /// 分类内子分组（2026-11-05 实验性，契约 #57）：三态偏好 SubgroupDisplay
 /// （Off/ChipRail/GroupedView，默认 Off＝零打扰，沿实验开关先例）——两种形态
 /// 互斥、开关只切呈现与派生面；数据（BoardItem.Subgroup 槽）与名清单
 /// （settings.SubgroupNames）独立持久化，关闭＝轨塌缩+过滤清除、布局行为与
 /// 现状等价。旧配置缺字段免迁移回落 Off，老用户升级零感知。
 /// 图片拖出为文件开关（2026-11-06 实验性，契约 #58；默认关＝零打扰，沿记录
-/// Markdown 阅读视图先例）：开启后把图片卡（或纯图片多选）拖到文件夹或桌面
-/// 即复制出图片文件（只复制，受管库与应用内卡片不动）；关闭＝图片卡拖出剥离
-/// 外部文件/位图形态，窗内整理与剪贴板复制不受影响。只门控拖出载荷构造
-/// （DragPayloadService 单点），不改窗内拖放与剪贴板语义；旧配置缺字段
-/// 免迁移回落关闭，老用户升级零感知。
+/// Markdown 阅读视图先例；2026-11-07 起默认开启——存量显式 false 经一次性偏好
+/// 迁移（契约 59）统一置开；旧配置缺字段免迁移回落开启（构造默认））：开启后
+/// 把图片卡（或纯图片多选）拖到文件夹或桌面即复制出图片文件（只复制，受管库
+/// 与应用内卡片不动）；关闭＝图片卡拖出剥离外部文件/位图形态，窗内整理与
+/// 剪贴板复制不受影响。只门控拖出载荷构造（DragPayloadService 单点），不改
+/// 窗内拖放与剪贴板语义。
+/// 一次性偏好迁移版本戳（ExperimentalDefaultsMigration）：0＝未迁移，1＝实验
+/// 开关默认开启迁移已完成；启动装载后判定，戳 ≥ 1 后不再改动偏好——迁移后
+/// 用户显式关闭永不复翻。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -178,9 +183,10 @@ public sealed record AppPreferences(
     bool AiOrganizeEnabled = false,
     bool AiImageNamingEnabled = false,
     string? InterfaceFont = null,
-    bool ReviewMarkdownViewEnabled = false,
+    bool ReviewMarkdownViewEnabled = true,
     SubgroupDisplayMode SubgroupDisplay = SubgroupDisplayMode.Off,
-    bool DragOutAsFileEnabled = false)
+    bool DragOutAsFileEnabled = true,
+    int ExperimentalDefaultsMigrationVersion = 0)
 {
     public static AppPreferences Default { get; } = new();
 }
