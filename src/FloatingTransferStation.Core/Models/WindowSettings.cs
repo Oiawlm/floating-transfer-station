@@ -8,7 +8,8 @@ public sealed record WindowSettings(
     int ReviewMigrationVersion = 0,
     int CategoryNameMigrationVersion = 0,
     IReadOnlyList<BoardCategory>? CategoryOrder = null,
-    Dictionary<BoardCategory, IReadOnlyList<string>>? SubgroupNames = null)
+    Dictionary<BoardCategory, IReadOnlyList<string>>? SubgroupNames = null,
+    Dictionary<BoardCategory, IReadOnlyList<int>>? SubgroupOrders = null)
 {
     // 标签轨道宽＝内容无关的结构常量（2026-11-04 回归修复，设计契约 #54）：
     // 2026-11-03 W7（Issue #280）曾为四字默认名「快捷启动」单行显示加宽到 66，
@@ -141,6 +142,58 @@ public sealed record WindowSettings(
             ? raw
             : string.Empty;
 
+    /// <summary>
+    /// 子分组槽序解析（契约 #57 修订，照 <see cref="DisplayOrder"/> 的整单校验回落
+    /// 口径）：null（未定制）或该分类清单非法（数量≠槽数、槽号重复/越界/负值）
+    /// 一律该分类回落恒等序 0..3；每分类独立互不连坐。槽序与槽名/归属解耦
+    /// （槽号恒为身份，顺序是独立清单、零迁移）；消费面只认本方法。
+    /// </summary>
+    public IReadOnlyList<int> SubgroupOrder(BoardCategory category)
+    {
+        if (!BoardCategoryCatalog.IsDefined(category))
+        {
+            throw new ArgumentOutOfRangeException(nameof(category), category, null);
+        }
+
+        if (SubgroupOrders is not null &&
+            SubgroupOrders.TryGetValue(category, out var order) &&
+            order is not null &&
+            order.Count == SubgroupCatalog.SlotCount &&
+            order.All(slot => SubgroupCatalog.IsValidSlot(slot)) &&
+            order.Distinct().Count() == order.Count)
+        {
+            return order;
+        }
+
+        return Enumerable.Range(0, SubgroupCatalog.SlotCount).ToArray();
+    }
+
+    /// <summary>采纳单个分类的子分组槽序（契约 #57 修订，镜像 <see
+    /// cref="WithSubgroupName"/>）：只改目标分类、其余分类原值不动（含未定制
+    /// 空位），与槽名/归属解耦；分类或槽序非法时抛参数异常（调用方先归一）。</summary>
+    public WindowSettings WithSubgroupOrder(BoardCategory category, IReadOnlyList<int> order)
+    {
+        if (!BoardCategoryCatalog.IsDefined(category))
+        {
+            throw new ArgumentOutOfRangeException(nameof(category), category, null);
+        }
+
+        if (order.Count != SubgroupCatalog.SlotCount ||
+            order.Distinct().Count() != order.Count ||
+            order.Any(slot => !SubgroupCatalog.IsValidSlot(slot)))
+        {
+            throw new ArgumentException(
+                "Subgroup order must be a permutation of the subgroup slots.",
+                nameof(order));
+        }
+
+        var orders = SubgroupOrders is null
+            ? new Dictionary<BoardCategory, IReadOnlyList<int>>()
+            : new Dictionary<BoardCategory, IReadOnlyList<int>>(SubgroupOrders);
+        orders[category] = order.ToArray();
+        return this with { SubgroupOrders = orders };
+    }
+
     public WindowSettings WithCategoryName(BoardCategory category, string name)
     {
         if (!BoardCategoryCatalog.IsDefined(category))
@@ -169,7 +222,8 @@ public sealed record WindowSettings(
             ReviewMigrationVersion = ReviewMigrationVersion,
             CategoryNameMigrationVersion = CategoryNameMigrationVersion,
             CategoryOrder = CategoryOrder is null ? null : new List<BoardCategory>(CategoryOrder),
-            SubgroupNames = SubgroupNames is null ? null : new(SubgroupNames)
+            SubgroupNames = SubgroupNames is null ? null : new(SubgroupNames),
+            SubgroupOrders = SubgroupOrders is null ? null : new(SubgroupOrders)
         })
             .Normalize(workAreaWidth, workAreaHeight);
 
