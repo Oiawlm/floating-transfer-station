@@ -275,9 +275,39 @@ public sealed class BoardMutationService
         }, cancellationToken);
 
     /// <summary>
+    /// 就地更新图片卡的 AI 命名标题并原子持久化（照 <see cref="UpdateItemNoteAsync"/>
+    /// 元数据形态）：标题是图片卡元数据，卡片内容语义零变化，不进撤销栈（元数据
+    /// 更新先例）。保存失败时还原原标题并提示。
+    /// </summary>
+    public Task<bool> UpdateItemImageTitleAsync(
+        Guid itemId,
+        string? title,
+        CancellationToken cancellationToken = default) =>
+        _operationGate.RunAsync(async () =>
+        {
+            var item = _board.FindItem(itemId);
+            if (item is not { Kind: BoardItemKind.Image })
+            {
+                return false;
+            }
+
+            var original = item.ImageTitle;
+            if (string.Equals(original, title, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return await SaveItemFieldChangeAsync(
+                cancellationToken,
+                apply: () => _board.UpdateImageTitle(itemId, title),
+                restore: () => _board.UpdateImageTitle(itemId, original),
+                failureStatus: "图片命名未保存，已还原。");
+        }, cancellationToken);
+
+    /// <summary>
     /// 单条目字段变更的共享保存路径：应用变更→原子快照→保存失败还原变更并
-    /// 提示（正文与备注更新的唯一持久化实现，不平行复制两套保存管线）。其他
-    /// 异常同样先还原再抛出，不把半变更状态留给调用方。
+    /// 提示（正文、备注与图片标题更新的唯一持久化实现，不平行复制多套保存
+    /// 管线）。其他异常同样先还原再抛出，不把半变更状态留给调用方。
     /// </summary>
     private async Task<bool> SaveItemFieldChangeAsync(
         CancellationToken cancellationToken,

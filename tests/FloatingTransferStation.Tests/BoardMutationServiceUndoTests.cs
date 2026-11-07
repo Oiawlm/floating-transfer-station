@@ -573,4 +573,54 @@ public sealed class BoardMutationServiceUndoTests
         var image = board.AddImage(Guid.NewGuid(), "images/no-text-edit.png", imagePath);
         Assert.IsFalse(await service.UpdateItemTextAsync(image.Id, "图片卡不可文本编辑"));
     }
+
+    [TestMethod]
+    public async Task UpdateItemImageTitle_PersistsAtomicallyAndRevertsOnSaveFailure()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var imagePath = Path.Combine(directory.Root, "naming.png");
+        await File.WriteAllBytesAsync(imagePath, [0x89, 0x50, 0x4E, 0x47]);
+        var image = board.AddImage(Guid.NewGuid(), "images/naming.png", imagePath);
+        var store = new MutationStore(directory.Root);
+        var messages = new List<string>();
+        var service = new BoardMutationService(board, store, messages.Add);
+
+        Assert.IsFalse(await service.UpdateItemImageTitleAsync(Guid.NewGuid(), "不存在的条目"));
+        Assert.IsTrue(await service.UpdateItemImageTitleAsync(image.Id, null), "同标题不应触发保存。");
+        Assert.AreEqual(0, store.SaveCount);
+
+        Assert.IsTrue(await service.UpdateItemImageTitleAsync(image.Id, "白色咖啡杯"));
+        Assert.AreEqual("白色咖啡杯", board.FindItem(image.Id)!.ImageTitle);
+        Assert.AreEqual(1, store.SaveCount);
+        Assert.AreEqual(
+            "白色咖啡杯",
+            store.LastPersistedSnapshot!.Items.Single(item => item.Id == image.Id).ImageTitle,
+            "标题必须随原子快照持久化。");
+
+        store.FailSave = true;
+        Assert.IsFalse(await service.UpdateItemImageTitleAsync(image.Id, "不会被保存的标题"));
+        Assert.AreEqual("白色咖啡杯", board.FindItem(image.Id)!.ImageTitle, "保存失败必须还原原标题。");
+        CollectionAssert.AreEqual(new[] { "图片命名未保存，已还原。" }, messages);
+
+        Assert.IsFalse(await service.UpdateItemImageTitleAsync(board.AddText("文字卡").Id, "文字卡无标题"));
+    }
+
+    [TestMethod]
+    public async Task UpdateItemImageTitle_DoesNotEnterUndoStack()
+    {
+        // 元数据更新先例（照 UpdateItemNote）：AI 命名标题不进撤销栈——用户
+        // 无需对自动命名的元数据做 Ctrl+Z。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var imagePath = Path.Combine(directory.Root, "undo-naming.png");
+        await File.WriteAllBytesAsync(imagePath, [0x89, 0x50, 0x4E, 0x47]);
+        var image = board.AddImage(Guid.NewGuid(), "images/undo-naming.png", imagePath);
+        var store = new MutationStore(directory.Root);
+        var service = new BoardMutationService(board, store, _ => { });
+
+        Assert.IsTrue(await service.UpdateItemImageTitleAsync(image.Id, "第一次命名"));
+        Assert.IsTrue(await service.UpdateItemImageTitleAsync(image.Id, "第二次命名"));
+        Assert.AreEqual(0, service.PendingUndoCount);
+    }
 }

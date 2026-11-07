@@ -11,6 +11,7 @@ public sealed class ExternalDropImportService
     private readonly BoardOperationGate _operationGate;
     private readonly PluginCatalog? _pluginCatalog;
     private readonly DefaultSubgroupState _defaultSubgroup;
+    private readonly AiImageNamingScheduler? _aiImageNaming;
 
     public ExternalDropImportService(
         IImageNormalizer normalizer,
@@ -19,7 +20,8 @@ public sealed class ExternalDropImportService
         Action<string> showStatus,
         BoardOperationGate? operationGate = null,
         PluginCatalog? pluginCatalog = null,
-        DefaultSubgroupState? defaultSubgroup = null)
+        DefaultSubgroupState? defaultSubgroup = null,
+        AiImageNamingScheduler? aiImageNaming = null)
     {
         _normalizer = normalizer;
         _board = board;
@@ -28,6 +30,9 @@ public sealed class ExternalDropImportService
         _operationGate = operationGate ?? new BoardOperationGate();
         _pluginCatalog = pluginCatalog;
         _defaultSubgroup = defaultSubgroup ?? new DefaultSubgroupState();
+        // AI 识图命名调度（可注入，null＝零行为）：导入管线只经「提交成功→TryEnqueue」
+        // 一点触发，开关判断唯一存在于调度器，本管线零开关感知。
+        _aiImageNaming = aiImageNaming;
     }
 
     public async Task<bool> ImportAsync(
@@ -60,7 +65,7 @@ public sealed class ExternalDropImportService
         try
         {
             await NormalizeAsync(payload, storedImages, cancellationToken);
-            return await _operationGate.RunAsync(async () =>
+            var committed = await _operationGate.RunAsync(async () =>
             {
                 try
                 {
@@ -78,6 +83,20 @@ public sealed class ExternalDropImportService
                     throw;
                 }
             }, cancellationToken);
+            if (committed)
+            {
+                // AI 识图命名触发（门外、导入成功后）：逐卡 TryEnqueue（文字卡由调度器
+                // 守卫自然跳过）；开关判断唯一存在于调度器，本管线零开关感知。
+                if (_aiImageNaming is { } scheduler)
+                {
+                    foreach (var itemId in addedItemIds)
+                    {
+                        scheduler.TryEnqueue(itemId);
+                    }
+                }
+            }
+
+            return committed;
         }
         catch (OperationCanceledException)
         {

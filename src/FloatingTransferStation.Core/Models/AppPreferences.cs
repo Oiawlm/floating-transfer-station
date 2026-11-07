@@ -124,6 +124,11 @@ public enum SubgroupDisplayMode
 /// 提示也不弹）、设置页 Key/提示词/测试连接区置灰（已存 Key 与自定义提示词
 /// 原样保留，只停用不删除）；只门控入口与设置面，不改 AI 服务、提示词与密钥
 /// 存储逻辑。旧配置缺字段免迁移回落关闭。
+/// AI 识图命名开关（实验性，沿 AI 整理总开关先例默认关 = AI 零打扰）：开启后
+/// 图片卡入库与存量补扫经后台调度器识别命名（复用 DeepSeek 同 Key 同模型，
+/// 无 Key 时仅状态条提示零请求）；关闭＝采集/导入/存量扫描入口零动作零请求。
+/// 开关判断唯一存在于调度器（门控单点），管线与 UI 零开关感知；旧配置缺字段
+/// 免迁移回落关闭，老用户升级零感知。
 /// 界面字体（2026-10-25 自定义字体全链路；null = 默认微软雅黑回退链
 /// Microsoft YaHei UI → Microsoft YaHei，2026-11-02 起改链）：
 /// 字体族名（Fonts.SystemFontFamilies 的 Source 串），不随应用分发字体文件；
@@ -171,6 +176,7 @@ public sealed record AppPreferences(
     IReadOnlyList<string>? LauncherDiscoveryFolders = null,
     LauncherColumnStrategy LauncherColumnStrategy = LauncherColumnStrategy.Adaptive,
     bool AiOrganizeEnabled = false,
+    bool AiImageNamingEnabled = false,
     string? InterfaceFont = null,
     bool ReviewMarkdownViewEnabled = false,
     SubgroupDisplayMode SubgroupDisplay = SubgroupDisplayMode.Off,
