@@ -13,6 +13,7 @@ public sealed class ClipboardCaptureService
     private readonly IReadOnlyList<TimeSpan> _retryDelays;
     private readonly BoardOperationGate _operationGate;
     private readonly DefaultCaptureCategoryState _defaultCaptureCategory;
+    private readonly DefaultSubgroupState _defaultSubgroup;
     private readonly PluginCatalog? _pluginCatalog;
     private readonly CaptureDeduplicationGate? _deduplicationGate;
     private readonly object _queueLock = new();
@@ -51,6 +52,7 @@ public sealed class ClipboardCaptureService
             new[] { TimeSpan.FromMilliseconds(25), TimeSpan.FromMilliseconds(75), TimeSpan.FromMilliseconds(150) };
         _operationGate = operationGate ?? new BoardOperationGate();
         _defaultCaptureCategory = defaultCaptureCategory ?? new DefaultCaptureCategoryState();
+        _defaultSubgroup = defaultSubgroup ?? new DefaultSubgroupState();
         _pluginCatalog = pluginCatalog;
         _deduplicationGate = deduplicationGate;
         _maximumPendingCaptures = maximumPendingCaptures;
@@ -59,7 +61,11 @@ public sealed class ClipboardCaptureService
 
     public Task HandleClipboardUpdateAsync(CancellationToken cancellationToken = default)
     {
+        // 默认落点在入口一次冻结成对（契约 #57 修订）：分类与子分组同一时刻求值，
+        // 后续 Set 不影响已入队采集（沿 Freeze 测试口径）；子分组未设＝null 落
+        // 未指定组。Add* 调用点不再二次求值。
         var targetCategory = _defaultCaptureCategory.Current;
+        var targetSubgroup = _defaultSubgroup.Current(targetCategory);
         var sequenceHint = _reader.GetSequenceNumber();
         Task predecessor;
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -94,6 +100,7 @@ public sealed class ClipboardCaptureService
 
         return HandleReservedUpdateAsync(
             targetCategory,
+            targetSubgroup,
             predecessor,
             completion,
             sequenceHint,
@@ -138,6 +145,7 @@ public sealed class ClipboardCaptureService
 
     private async Task HandleReservedUpdateAsync(
         BoardCategory targetCategory,
+        int? targetSubgroup,
         Task predecessor,
         TaskCompletionSource completion,
         uint? sequenceHint,
@@ -176,7 +184,7 @@ public sealed class ClipboardCaptureService
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            await ProcessSnapshotAsync(snapshot, targetCategory, cancellationToken);
+            await ProcessSnapshotAsync(snapshot, targetCategory, targetSubgroup, cancellationToken);
         }
         finally
         {
@@ -232,11 +240,16 @@ public sealed class ClipboardCaptureService
     private async Task ProcessSnapshotAsync(
         ClipboardSnapshot snapshot,
         BoardCategory targetCategory,
+        int? targetSubgroup,
         CancellationToken cancellationToken)
     {
         if (snapshot.ImageCandidates.Count > 0)
         {
-            await ImportClipboardImageAsync(snapshot.ImageCandidates, targetCategory, cancellationToken);
+            await ImportClipboardImageAsync(
+                snapshot.ImageCandidates,
+                targetCategory,
+                targetSubgroup,
+                cancellationToken);
             return;
         }
 
@@ -246,14 +259,14 @@ public sealed class ClipboardCaptureService
                 .Where(ImageFileSupport.IsSupported)
                 .Where(File.Exists)
                 .ToArray();
-            await ImportFilesAsync(imageFiles, targetCategory, cancellationToken);
+            await ImportFilesAsync(imageFiles, targetCategory, targetSubgroup, cancellationToken);
 
             return;
         }
 
         if (!string.IsNullOrWhiteSpace(snapshot.Text))
         {
-            await ImportTextAsync(snapshot.Text, targetCategory, cancellationToken);
+            await ImportTextAsync(snapshot.Text, targetCategory, targetSubgroup, cancellationToken);
         }
     }
 
@@ -283,6 +296,7 @@ public sealed class ClipboardCaptureService
     private async Task ImportTextAsync(
         string text,
         BoardCategory targetCategory,
+        int? targetSubgroup,
         CancellationToken cancellationToken)
     {
         // 启用的文本整理插件在入库前应用；每次采集取最新管线快照，
@@ -302,7 +316,7 @@ public sealed class ClipboardCaptureService
                 return true;
             }
 
-            var item = _board.AddText(cleaned, targetCategory);
+            var item = _board.AddText(cleaned, targetCategory, subgroup: targetSubgroup);
             try
             {
                 await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);
@@ -326,13 +340,14 @@ public sealed class ClipboardCaptureService
     private async Task ImportClipboardImageAsync(
         IReadOnlyList<ClipboardImageCandidate> candidates,
         BoardCategory targetCategory,
+        int? targetSubgroup,
         CancellationToken cancellationToken)
     {
         try
         {
             var stored = await _normalizer.NormalizeClipboardAsync(candidates, cancellationToken: cancellationToken);
             var fingerprint = CapturedContentFingerprint.ForImageFile(stored.AbsolutePath);
-            await CommitImageAsync(stored, targetCategory, fingerprint, cancellationToken);
+            await CommitImageAsync(stored, targetCategory, targetSubgroup, fingerprint, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -343,6 +358,7 @@ public sealed class ClipboardCaptureService
     private async Task ImportFilesAsync(
         IReadOnlyList<string> paths,
         BoardCategory targetCategory,
+        int? targetSubgroup,
         CancellationToken cancellationToken)
     {
         var storedImages = new List<StoredImage>();
@@ -384,7 +400,7 @@ public sealed class ClipboardCaptureService
                     fingerprint = CapturedContentFingerprint.ForImageFile(storedImages[0].AbsolutePath);
                 }
 
-                await CommitImagesAsync(storedImages, targetCategory, fingerprint, cancellationToken);
+                await CommitImagesAsync(storedImages, targetCategory, targetSubgroup, fingerprint, cancellationToken);
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -401,13 +417,15 @@ public sealed class ClipboardCaptureService
     private Task CommitImageAsync(
         StoredImage stored,
         BoardCategory targetCategory,
+        int? targetSubgroup,
         CapturedContentFingerprint? fingerprint,
         CancellationToken cancellationToken) =>
-        CommitImagesAsync([stored], targetCategory, fingerprint, cancellationToken);
+        CommitImagesAsync([stored], targetCategory, targetSubgroup, fingerprint, cancellationToken);
 
     private async Task CommitImagesAsync(
         IReadOnlyList<StoredImage> storedImages,
         BoardCategory targetCategory,
+        int? targetSubgroup,
         CapturedContentFingerprint? fingerprint,
         CancellationToken cancellationToken)
     {
@@ -432,7 +450,11 @@ public sealed class ClipboardCaptureService
                     {
                         var stored = storedImages[index];
                         addedItemIds.Add(_board.AddImage(
-                            stored.Id, stored.RelativePath, stored.AbsolutePath, targetCategory).Id);
+                            stored.Id,
+                            stored.RelativePath,
+                            stored.AbsolutePath,
+                            targetCategory,
+                            subgroup: targetSubgroup).Id);
                     }
 
                     await _store.SaveBoardAsync(_board.CreateSnapshot(), cancellationToken);

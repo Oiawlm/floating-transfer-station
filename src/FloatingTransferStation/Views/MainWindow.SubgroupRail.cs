@@ -9,13 +9,16 @@ using FloatingTransferStation.ViewModels;
 namespace FloatingTransferStation.Views;
 
 /// <summary>
-/// 分类内子分组·形态①按钮轨（实验性，契约 #57）：单击 chip＝按槽过滤（再点还原）、
-/// 双击 chip＝改名（照 <see cref="MainWindow.CategoryEditing"/> 全套会话机器）、
-/// 拖卡片到 chip＝批量归属该槽（照「拖卡入标签=移动分类」先例）。过滤与搜索互斥
-/// （搜索激活＝chip 过滤冻结让位、chip 选中态保留、退出搜索自动恢复；搜索态下
-/// chip 单击＝退出搜索并应用 chip 过滤）；过滤只经 BoardList.Items.Filter 单点
-/// （ApplyBoardListFilter，契约 #37 扩展）。无「全部/未指定」chip；实验期无取消
-/// 归属手势（拖到其他 chip 可覆盖，README 与契约登记）。
+/// 分类内子分组·形态①按钮轨（实验性，契约 #57 修订）：悬停 chip＝按槽过滤
+/// （对齐分类轨「悬停即进入」展开态先例，零防抖；守卫链＝改名会话中/拖拽在途/
+/// 外部拖放轨道可见/搜索激活任一不进入——搜索压倒沿用 #37）、单击 chip＝设该
+/// 分类收集落点子分组（照「单击标签＝设默认接收分类」先例，原单击过滤 toggle
+/// 退役；搜索态单击＝仅设默认，不退搜索不动过滤）、双击 chip＝改名（照
+/// <see cref="MainWindow.CategoryEditing"/> 全套会话机器）、拖卡片到 chip＝批量
+/// 归属该槽（照「拖卡入标签=移动分类」先例）。过滤只经 BoardList.Items.Filter
+/// 单点（ApplyBoardListFilter，契约 #37 扩展）；退出＝引导条「清空」/Esc/切分类/
+/// 模式切换。无「全部/未指定」chip；实验期无取消归属手势（拖到其他 chip 可覆盖，
+/// README 与契约登记）。
 /// </summary>
 public partial class MainWindow
 {
@@ -49,7 +52,38 @@ public partial class MainWindow
             true);
     }
 
-    // ---- 单击过滤 / 双击改名（照分类轨「Down 承载双击、Up 承载单击」先例） ----
+    // ---- 悬停过滤 / 单击设默认 / 双击改名（照分类轨「MouseEnter 悬停即进入、
+    // Up 承载单击、Down 承载双击」先例） ----
+
+    private void SubgroupChip_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (sender is not Border { DataContext: SubgroupChipViewModel chip })
+        {
+            return;
+        }
+
+        // 交互记账挂在真实 MouseEnter 事件（照 CategoryTab_MouseEnter 先例，契约 #26）。
+        NoteUserInteraction();
+        // 守卫链（对齐 EvaluateHoverIntent 结构，不新造状态机）：改名会话中/拖拽在途
+        //（拖卡滑过 chip 也触发 MouseEnter，必须挡）/外部拖放轨道可见/搜索激活
+        //（#37 搜索压倒——悬停不进入、不退搜索）任一成立即不进入。
+        if (_isClosing ||
+            IsSubgroupNameEditActive() ||
+            _panelState.IsDragInProgress ||
+            _viewModel.IsExternalDropRailVisible ||
+            _viewModel.IsSearchActive)
+        {
+            return;
+        }
+
+        // 同槽幂等：滑回已过滤 chip 不重复清选择/重过滤。
+        if (_subgroupFilterSlot == chip.Slot)
+        {
+            return;
+        }
+
+        SetSubgroupFilter(chip);
+    }
 
     private void SubgroupChip_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -80,10 +114,17 @@ public partial class MainWindow
         }
 
         e.Handled = true;
-        ToggleSubgroupFilter(chip);
+        // 单击＝设该分类的收集落点子分组（照分类轨「单击标签＝设默认接收分类」先例；
+        // 搜索态单击＝仅设默认——不退搜索、不动过滤，#37 修订）。角色闸同置：
+        // 记录/启动标签绝不成为落点，Core 侧 Set 守卫为纵深。
+        if (_viewModel.ActivePanel is { } panel &&
+            BoardCategoryCatalog.IsContentBucket(panel.Category))
+        {
+            _viewModel.SetDefaultSubgroup(panel.Category, chip.Slot);
+        }
     }
 
-    private void ToggleSubgroupFilter(SubgroupChipViewModel chip)
+    private void SetSubgroupFilter(SubgroupChipViewModel chip)
     {
         if (_isClosing ||
             _viewModel.ActivePanel is not { } panel ||
@@ -92,21 +133,10 @@ public partial class MainWindow
             return;
         }
 
-        // 搜索态下 chip 单击＝退出搜索并应用 chip 过滤（沿「切换分类退出搜索」先例）。
-        if (_viewModel.IsSearchActive)
-        {
-            ExitSearchMode();
-        }
-
-        var activating = _subgroupFilterSlot != chip.Slot;
-        _subgroupFilterSlot = activating ? chip.Slot : null;
+        _subgroupFilterSlot = chip.Slot;
         ApplySubgroupFilterSelection();
-        if (activating)
-        {
-            // 进入过滤视图＝清空选择（沿 #37 进入搜索口径；过滤视图的选择范围无意义）。
-            ClearUserSelection();
-        }
-
+        // 进入过滤视图＝清空选择（沿 #37 进入搜索口径；过滤视图的选择范围无意义）。
+        ClearUserSelection();
         ApplyBoardListFilter();
     }
 

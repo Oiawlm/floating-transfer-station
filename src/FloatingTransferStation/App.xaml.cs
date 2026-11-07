@@ -107,6 +107,9 @@ public partial class App : Application
             void ShowStatus(string message) => window?.ShowStatus(message);
             var boardOperationGate = new BoardOperationGate();
             var defaultCaptureCategory = new DefaultCaptureCategoryState();
+            // 收集落点子分组（契约 #57 修订，会话态）：镜像 defaultCaptureCategory 装配
+            // ——同一单例注入捕获/外部导入/VM 三处（环差分与落点求值共享一份状态）。
+            var defaultSubgroup = new DefaultSubgroupState();
             var captureDeduplicationGate = new CaptureDeduplicationGate();
             var windowsDataImageReader = new WindowsDataImageReader();
             var externalDropPayloadReader = new ExternalDropPayloadReader(
@@ -120,7 +123,8 @@ public partial class App : Application
                 operationGate: boardOperationGate,
                 defaultCaptureCategory: defaultCaptureCategory,
                 pluginCatalog: pluginCatalog,
-                deduplicationGate: captureDeduplicationGate);
+                deduplicationGate: captureDeduplicationGate,
+                defaultSubgroup: defaultSubgroup);
             var mutations = new BoardMutationService(board, store, ShowStatus, boardOperationGate);
             var externalDropImport = new ExternalDropImportService(
                 normalizer,
@@ -128,7 +132,8 @@ public partial class App : Application
                 store,
                 ShowStatus,
                 boardOperationGate,
-                pluginCatalog);
+                pluginCatalog,
+                defaultSubgroup);
             // DeepSeek 接入地基（1.27.0）：显式装配，别处不做隐藏加密调用或请求构造。
             // AI 整理编排（1.41.0）复用同一客户端实例（契约 #28 唯一模型口径）。
             var secretProtector = new DpapiSecretProtector();
@@ -162,7 +167,8 @@ public partial class App : Application
                 launcherStore: store,
                 launcherDiscoveryStore: store,
                 appLauncher: new FloatingTransferStation.Services.AppLauncher(
-                    packagedActivator: new FloatingTransferStation.Launcher.ShellPackagedAppActivator().Activate));
+                    packagedActivator: new FloatingTransferStation.Launcher.ShellPackagedAppActivator().Activate),
+                defaultSubgroup: defaultSubgroup);
             MainWindow = window;
             // 先显示收起态窗口：分类轨只依赖已装载的偏好与设置，板面数据转入
             // 后台装载，大数据量不再拖住启动到可见的时间（见 LoadBoardInBackgroundAsync）。

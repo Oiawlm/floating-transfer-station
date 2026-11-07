@@ -45,8 +45,11 @@ public sealed class DefaultSubgroupStateTests
             () => state.Set(BoardCategory.Inbox, SubgroupCatalog.SlotCount),
             "越界槽拒绝（固定 4 槽）。");
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(
-            () => state.Current(BoardCategory.Reference),
-            "非内容桶读取同守卫（纵深）。");
+            () => state.Current((BoardCategory)99),
+            "未定义分类读取拒绝（数组界守卫）。");
+        Assert.IsNull(
+            state.Current(BoardCategory.Reference),
+            "定义但非内容桶＝无默认子分组语义，读取返回 null（调用方免前置角色闸）。");
     }
 
     [TestMethod]

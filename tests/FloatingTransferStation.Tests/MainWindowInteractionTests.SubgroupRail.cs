@@ -338,10 +338,11 @@ public sealed partial class MainWindowInteractionTests
                 ((StackPanel)window.FindName("HeaderActions")).Visibility,
                 "搜索条保持展开（头部操作区仍让位）。");
             Assert.IsFalse(window.IsSubgroupFilterActive, "搜索态单击不进过滤。");
+            Assert.IsFalse(viewModel.SubgroupChips[2].IsFilterActive, "chip 选中态不因单击新增。");
             CollectionAssert.AreEquivalent(
-                new[] { "苹果一" },
+                new[] { "苹果一", "苹果二" },
                 list!.Items.OfType<BoardItem>().Select(item => item.Text).ToArray(),
-                "搜索结果不受单击影响。");
+                "搜索结果不受单击影响（两卡都命中关键词，过滤仍由搜索谓词承担）。");
             Assert.IsTrue(viewModel.SubgroupChips[2].IsDefaultSubgroup, "单击已设默认子分组。");
         }
         finally

@@ -16,11 +16,16 @@ public sealed class DefaultSubgroupState
 
     public int? Current(BoardCategory category)
     {
-        // 纵深守卫（镜像 Set）：非内容桶没有默认子分组语义（轨/环零呈现）。
-        if (!BoardCategoryCatalog.IsDefined(category) ||
-            !BoardCategoryCatalog.IsContentBucket(category))
+        if (!BoardCategoryCatalog.IsDefined(category))
         {
             throw new ArgumentOutOfRangeException(nameof(category));
+        }
+
+        // 定义但非内容桶（记录/启动）无默认子分组语义（轨/环零呈现）：返回 null，
+        // 调用方（外部导入等接受任意定义分类的入口）无需前置角色闸。
+        if (!BoardCategoryCatalog.IsContentBucket(category))
+        {
+            return null;
         }
 
         var slot = Volatile.Read(ref _current[(int)category]);
