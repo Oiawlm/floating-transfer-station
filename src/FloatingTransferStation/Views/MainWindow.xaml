@@ -176,6 +176,37 @@
           </Grid>
         </Border>
       </DataTemplate>
+      <!-- 子分组「全部」伪 chip（实验性，契约 #57 修订；实验开关默认关）：恒居轨首、
+           无槽身份——不参与槽序拖排/改名/拖放归属/默认落点（无环、无编辑器）；悬停＝
+           进入全量过滤视图（Filter=null＋全 chip 激活态），单击无操作。视觉复用槽
+           chip 样式族（容器/hover/激活层/文字按 IsFilterActive 同名鸭子类型命中）。 -->
+      <DataTemplate x:Key="SubgroupAllChipTemplate"
+                    DataType="{x:Type vm:SubgroupAllChipViewModel}">
+        <Border x:Name="ChipSurface"
+                Style="{StaticResource SubgroupChipContainerStyle}"
+                Tag="{x:Static models:SubgroupCatalog.AllChipName}"
+                MouseEnter="SubgroupAllChip_MouseEnter">
+          <Grid Background="Transparent">
+            <Border x:Name="ChipHoverLayer"
+                    Background="{DynamicResource HoverSurfaceBrush}"
+                    CornerRadius="6"
+                    Opacity="0"
+                    IsHitTestVisible="False"
+                    views:FadeAnimation.IsActive="{Binding IsMouseOver, ElementName=ChipSurface}"
+                    views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                    views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+            <Border Style="{StaticResource SubgroupChipActiveLayerStyle}" />
+            <TextBlock Text="{Binding DisplayName}"
+                       Style="{StaticResource SubgroupChipLabelTextStyle}" />
+          </Grid>
+        </Border>
+      </DataTemplate>
+      <!-- 轨投影混合槽 chip 与「全部」伪 chip（契约 #57 修订）：按数据上下文类型
+           分派模板（选择器见 SubgroupChipTemplateSelector.cs）；槽交互全套只挂
+           槽模板，伪 chip 只承载悬停进入。 -->
+      <views:SubgroupChipTemplateSelector x:Key="SubgroupChipTemplateSelector"
+                                          SlotTemplate="{StaticResource SubgroupChipTemplate}"
+                                          AllTemplate="{StaticResource SubgroupAllChipTemplate}" />
     </ResourceDictionary>
   </Window.Resources>
 
@@ -531,9 +562,10 @@
 
         <!-- 子分组按钮轨（实验性，契约 #57 修订）：ChipRail 模式且激活面板为
              内容桶才可见（VM IsSubgroupRailVisible 唯一驱动；复盘/启动表面零呈现）；
-             悬停即按槽过滤、单击设收集落点（右上角圆环，每分类独立记忆）；
-             四槽 UniformGrid（不加不减不排序）。Off/GroupedView＝整行 Collapsed
-             零占位，BoardList 几何与现状逐 DIP 一致。 -->
+             悬停即按槽过滤、单击设收集落点（右上角圆环，每分类独立记忆）；槽序
+             UniformGrid（不加不减，序可调）。实验开关开启时首枚「全部」伪 chip 恒居
+             首（悬停＝全量视图，单击无操作；列数 4→5 等分，轨道高/面板宽零变化）；
+             Off/GroupedView＝整行 Collapsed 零占位，BoardList 几何与现状逐 DIP 一致。 -->
         <Border x:Name="SubgroupRail"
                 Grid.Row="1"
                 Height="{x:Static models:WindowSettings.SubgroupRailHeight}"
@@ -549,13 +581,13 @@
               </Style.Triggers>
             </Style>
           </Border.Style>
-          <ItemsControl ItemsSource="{Binding SubgroupChips}"
-                        ItemTemplate="{StaticResource SubgroupChipTemplate}"
+          <ItemsControl ItemsSource="{Binding SubgroupRailItems}"
+                        ItemTemplateSelector="{StaticResource SubgroupChipTemplateSelector}"
                         Background="Transparent"
                         Focusable="False">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
-                <UniformGrid Columns="{x:Static models:SubgroupCatalog.SlotCount}" />
+                <UniformGrid Columns="{Binding SubgroupRailColumnCount}" />
               </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
           </ItemsControl>

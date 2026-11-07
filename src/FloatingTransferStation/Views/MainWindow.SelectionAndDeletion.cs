@@ -57,9 +57,10 @@ public partial class MainWindow : Window
             ExitSearchMode();
         }
 
-        // 子分组 chip 过滤（契约 #57）：切换分类＝清过滤（沿搜索先例）；先在旧面板
+        // 子分组 chip 过滤（契约 #57 修订④）：切换分类＝清过滤（沿搜索先例）；守卫走
+        // IsSubgroupFilterActive 谓词单点（槽过滤或「全部」全量态都清）；先在旧面板
         // 的集合视图上移除 Filter（每分类独立视图，残留会作用于该分类再次激活）。
-        if (_subgroupFilterSlot is not null && _viewModel.ActivePanel?.Category != category)
+        if (IsSubgroupFilterActive && _viewModel.ActivePanel?.Category != category)
         {
             ClearSubgroupFilter(reapplyFilter: true);
         }

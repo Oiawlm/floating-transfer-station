@@ -155,8 +155,9 @@ public partial class MainWindow
     /// <summary>
     /// 把当前过滤条件应用到 BoardList 的集合视图（唯一过滤单点，契约 #37 扩展＝#57）：
     /// 只读过滤，不改源集合、板序、置顶分区与持久化。裁决序——搜索激活＝搜索谓词
-    /// 压倒（chip 过滤冻结让位、选中态保留）；否则 chip 过滤（item.Subgroup==激活槽，
-    /// 形态①）；否则移除过滤还原完整列表。
+    /// 压倒（chip 过滤冻结让位、选中态保留）；否则槽过滤（item.Subgroup==激活槽，
+    /// 形态①，模式判防全量态取值 NRE）；否则「全部」全量态或无过滤＝Filter=null
+    /// 还原完整列表（全量视图与根态同列表，仅以全 chip 激活态区分）。
     /// </summary>
     private void ApplyBoardListFilter()
     {
@@ -172,9 +173,8 @@ public partial class MainWindow
         {
             BoardList.Items.Filter = item => MatchesSearchFilter(item, keyword, type);
         }
-        else if (!searchActive && IsSubgroupFilterActive)
+        else if (!searchActive && _subgroupFilterSlot is { } slot)
         {
-            var slot = _subgroupFilterSlot!.Value;
             BoardList.Items.Filter = item => item is BoardItem boardItem && boardItem.Subgroup == slot;
         }
         else

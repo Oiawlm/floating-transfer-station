@@ -85,10 +85,12 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>空态可见性唯一求值点（契约 #33，2026-11-06 收敛修订）：从当前状态
+    /// <summary>空态可见性唯一求值点（契约 #33，2026-11-06 收敛修订；2026-11-07
+    /// 谓词分化修订）：从当前状态
     /// 一次算出并应用 SearchEmptyHint 与 BoardEmptyState 两元素——同格（Grid.Row=2）
-    /// 设计互斥（搜索态「无匹配结果」与 chip 过滤空结果「该分组暂无卡片」的空集
-    /// 语义由 SearchEmptyHint 承载、文案按来源切换，#57 扩展；内容桶空态让位），
+    /// 设计互斥（搜索态「无匹配结果」与槽过滤空结果「该分组暂无卡片」的空集
+    /// 语义由 SearchEmptyHint 承载、文案按来源切换，#57 扩展；内容桶空态让位——
+    /// 让位谓词＝仅槽过滤：「全部」全量态与根态内容等价，空分类走 BoardEmptyState），
     /// 收敛前的两分离更新点触发路径不成并集——chip 单击等纯过滤路径只重评空集臂、
     /// 从不重评内容桶臂，空面板上点
     /// 分组按钮即两段空态文字同格叠加（用户实证）；收敛后全部状态迁移路径（表面
@@ -112,7 +114,7 @@ public partial class MainWindow
         var boardVisible = panel is not null &&
             BoardCategoryCatalog.IsContentBucket(panel.Category) &&
             !_viewModel.IsSearchActive &&
-            !IsSubgroupFilterActive &&
+            _subgroupFilterSlot is null &&
             panel.Items.Count == 0;
         BoardEmptyState.SetCurrentValue(VisibilityProperty, boardVisible ? Visibility.Visible : Visibility.Collapsed);
         if (boardVisible && panel is not null)
@@ -125,8 +127,10 @@ public partial class MainWindow
         }
 
         var searchVisible = _viewModel.IsSearchActive && BoardList.Items.IsEmpty;
+        // 让位谓词＝仅槽过滤（契约 #33 修订口径）：「全部」全量态与根态内容等价——
+        // 空分类走 BoardEmptyState，不让位「该分组暂无卡片」。
         var subgroupVisible = !_viewModel.IsSearchActive &&
-            IsSubgroupFilterActive &&
+            _subgroupFilterSlot is not null &&
             BoardList.Items.IsEmpty;
         SearchEmptyHint.SetCurrentValue(VisibilityProperty, searchVisible || subgroupVisible
             ? Visibility.Visible
