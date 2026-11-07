@@ -91,6 +91,69 @@ public partial class MainWindow : Window, ISettingsHost
         }
     }
 
+    /// <summary>当前分类的子分组槽序（契约 #57 修订，镜像 <see cref="CurrentDisplayOrder"/>
+    /// 的 VM 读取口径）：设置页「子分组顺序」节的渲染来源——保存挂起期间即乐观
+    /// 目标序。</summary>
+    public IReadOnlyList<int> CurrentSubgroupOrder(BoardCategory category) =>
+        _viewModel.SubgroupOrder(category);
+
+    /// <summary>子分组槽显示名（名清单逐槽解析），设置页顺序列表按它呈现。</summary>
+    public string SubgroupDisplayName(BoardCategory category, int slot) =>
+        _settings.SubgroupName(category, slot);
+
+    /// <summary>
+    /// 采纳某分类新的子分组槽序（乐观提交契约，镜像 <see cref="ApplyCategoryOrderAsync"/>）：
+    /// 同步应用内存与显示顺序（首个 await 之前生效——chip 轨与 BoardService 槽序快照
+    /// 已是目标序）；返回任务完成＝settings.json 原子持久化完成；持久化失败回滚内存
+    /// 与显示顺序并经状态条提示。
+    /// </summary>
+    public async Task ApplySubgroupOrderAsync(BoardCategory category, IReadOnlyList<int> order)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+        var operation = ApplySubgroupOrderCoreAsync(category, order);
+        TrackPendingOperation(operation);
+        await operation;
+    }
+
+    private async Task ApplySubgroupOrderCoreAsync(BoardCategory category, IReadOnlyList<int> order)
+    {
+        // 乐观上屏（镜像 ApplyCategoryOrderCoreAsync）：经读取端整单校验收敛后同步
+        // 应用——chip 轨重排＋BoardService 名单/槽序快照重喂（组头与下次进入分区
+        // 的组间序随新序；已分区内容不自动重整，沿 #57「进入时一次分区」），保存
+        // 挂起期间消费面已是目标序。
+        var updated = _settings.WithSubgroupOrder(category, order);
+        var committedOrder = updated.SubgroupOrder(category);
+        _viewModel.ApplySubgroupOrder(category, committedOrder);
+        _board.SetSubgroupDisplay(_viewModel.SubgroupDisplay, updated);
+        await _settingsSaveGate.WaitAsync();
+        try
+        {
+            var originalOrders = _settings.SubgroupOrders;
+            _settings = _settings.WithSubgroupOrder(category, order);
+            try
+            {
+                await _store.SaveSettingsAsync(_settings);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // 只回写槽序字段（字段级回滚，保存挂起期间其他设置突变保留）。
+                _settings = _settings with { SubgroupOrders = originalOrders };
+                // 回滚守卫：仅当该分类槽序仍停留在本次提交序时才回滚，防旧提交的
+                // 失败踩掉其后已生效的新提交。
+                if (CurrentSubgroupOrder(category).SequenceEqual(committedOrder))
+                {
+                    _viewModel.ApplySubgroupOrder(category, _settings.SubgroupOrder(category));
+                }
+
+                ShowStatus("子分组顺序暂未保存。");
+            }
+        }
+        finally
+        {
+            _settingsSaveGate.Release();
+        }
+    }
+
     /// <summary>
     /// 启用/禁用插件：立即重建采集管线并异步原子持久化；
     /// 持久化失败经状态条提示，界面开关状态保持本次选择。

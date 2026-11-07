@@ -223,6 +223,9 @@ public partial class SettingsWindow : Window
         };
         PopulatePluginSection();
         PopulateCategoryOrderSection();
+        // 子分组顺序节（契约 #57 修订）：构造回显＋按当前三态门控（Off＝置灰）。
+        PopulateSubgroupOrderSection();
+        SetSubgroupOrderAvailability(host.CurrentPreferences.SubgroupDisplay);
         Owner = host.HostWindow;
         // 安全网钳位必须挂在构造函数：SizeToContent 的测量与尺寸变化事件在
         // SourceInitialized 之前就已全部发生（探针实测 Loaded 先于 SourceInitialized），
@@ -874,6 +877,15 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        if (e.Key == Key.Escape && _subgroupOrderDrag is not null)
+        {
+            // 拖拽会话中的 Esc 属「子分组顺序」节：回弹原序不提交，与「标签顺序」
+            // 节会话并列同序（先于关窗路径消费）。
+            e.Handled = true;
+            CancelSubgroupOrderDrag();
+            return;
+        }
+
         if (e.Key == Key.Escape && WeChatQrOverlay.Visibility == Visibility.Visible)
         {
             // 二维码放大层打开时的 Esc 只关层（与「单击任意处关闭」同语义），
@@ -1470,6 +1482,8 @@ public partial class SettingsWindow : Window
         }
 
         _host.ApplyPreferences(_host.CurrentPreferences with { SubgroupDisplay = mode });
+        // 顺序节门控联动（契约 #57 修订）：即时生效后同步置灰/解灰。
+        SetSubgroupOrderAvailability(mode);
     }
 
     private void SetAiOrganizeAreasAvailability(bool enabled)
