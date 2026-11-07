@@ -64,7 +64,10 @@ public sealed class MainWindowViewModel : ObservableObject
         ApplyCategoryOrder(settings.DisplayOrder);
         _defaultCapturePanel = Categories.Single(
             category => category.Category == _defaultCaptureCategory.Current);
-        _defaultCapturePanel.IsDefaultCapture = true;
+        foreach (var panel in Categories)
+        {
+            SetDefaultCaptureMarker(panel, ReferenceEquals(panel, _defaultCapturePanel));
+        }
         // 槽序按初始设置逐内容桶种子（契约 #57 修订）：chip 集构造为恒等序，
         // 首次 Activate 按激活分类的槽序重排（轨在面板激活前不可见，无中间帧）。
         foreach (var category in BoardCategoryCatalog.Ordered.Where(BoardCategoryCatalog.IsContentBucket))
@@ -347,11 +350,32 @@ public sealed class MainWindowViewModel : ObservableObject
         var selected = Categories.Single(panel => panel.Category == category);
         foreach (var panel in Categories)
         {
-            panel.IsDefaultCapture = ReferenceEquals(panel, selected);
+            SetDefaultCaptureMarker(panel, ReferenceEquals(panel, selected));
         }
 
         DefaultCapturePanel = selected;
+        // 默认分类迁移会翻转激活轨 chip 的紫/灰（紫 iff 激活分类=默认接收分类，
+        // #56 修订）：激活面板为内容桶时重算 chip 环态（轨可见才呈现）。
+        if (ActivePanel is { } active && BoardCategoryCatalog.IsContentBucket(active.Category))
+        {
+            ApplyDefaultSubgroupSelection();
+        }
+
         return true;
+    }
+
+    /// <summary>默认接收差分同点双写（#56 修订）：<see cref="CategoryViewModel.IsDefaultCapture"/>
+    /// （空态文案矩阵依赖）与环态 <see cref="CategoryViewModel.DefaultMarkerState"/> 一起喂值
+    /// ——内容桶两枚恒环（默认接收 Active、另一 Inactive），记录/启动永不具备
+    /// 落点能力恒 None（灰环会被误读为「有能力未启用」＝噪音）。</summary>
+    private static void SetDefaultCaptureMarker(CategoryViewModel panel, bool isDefaultCapture)
+    {
+        panel.IsDefaultCapture = isDefaultCapture;
+        panel.DefaultMarkerState = isDefaultCapture
+            ? DefaultMarkerState.Active
+            : BoardCategoryCatalog.IsContentBucket(panel.Category)
+                ? DefaultMarkerState.Inactive
+                : DefaultMarkerState.None;
     }
 
     /// <summary>设收集落点子分组（契约 #57 修订，镜像 <see cref="SetDefaultCaptureCategory"/>）：
@@ -373,17 +397,23 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>chip 默认环差分单点：按激活面板（内容桶）解析该分类当前默认槽；
-    /// 面板非内容桶或未设默认时全清零（轨不可见，状态兜底）。Current 读取仅限
-    /// 环恢复（落点求值在两管线入口，契约 #57 修订）。</summary>
+    /// 轨可见时每 chip 恒有环（#56 修订）——紫 iff 激活分类=默认接收分类且该
+    /// chip 为其默认子分组，其余灰（未设默认时该分类全部灰）；面板非内容桶
+    /// （轨不可见）全 None 兜底。Current 读取仅限环恢复（落点求值在两管线入口，
+    /// 契约 #57 修订）。</summary>
     private void ApplyDefaultSubgroupSelection()
     {
         var category = ActivePanel?.Category;
-        var current = category is { } value && BoardCategoryCatalog.IsContentBucket(value)
-            ? _defaultSubgroup.Current(value)
-            : null;
+        var isContentBucket = category is { } value && BoardCategoryCatalog.IsContentBucket(value);
+        var isDefaultCaptureCategory = isContentBucket && category == _defaultCaptureCategory.Current;
+        var current = isContentBucket ? _defaultSubgroup.Current(category.GetValueOrDefault()) : null;
         foreach (var chip in SubgroupChips)
         {
-            chip.IsDefaultSubgroup = chip.Slot == current;
+            chip.DefaultMarkerState = isDefaultCaptureCategory && chip.Slot == current
+                ? DefaultMarkerState.Active
+                : isContentBucket
+                    ? DefaultMarkerState.Inactive
+                    : DefaultMarkerState.None;
         }
     }
 

@@ -159,10 +159,10 @@
                     views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
             <Border Style="{StaticResource SubgroupChipActiveLayerStyle}" />
             <Border Style="{StaticResource SubgroupChipDropTargetLayerStyle}" />
-            <!-- 收集落点子分组环（契约 #57 修订）：复用 #56 默认接收分类单圆环
-                 （样式零改、同 Data 同规格），每分类独立记忆；显隐由本模板
-                 IsDefaultSubgroup 触发驱动（样式内 IsDefaultCapture 触发在 chip
-                 数据上下文不命中，环显隐单点在此）。 -->
+            <!-- 收集落点子分组环（契约 #57 修订＋#56 双态环语法）：复用 #56
+                 默认接收分类单圆环（同 Data 同规格），每分类独立记忆；环态由
+                 样式 DefaultMarkerState 触发器统一驱动——两宿主属性同名，
+                 样式触发器在 chip 数据上下文同样命中，环显隐单点回归样式。 -->
             <Path x:Name="DefaultSubgroupMarker"
                   Style="{StaticResource CategoryDefaultMarkerStyle}"
                   Data="M12,4 A8,8 0 1 1 11.99,4 Z" />
@@ -175,11 +175,6 @@
                      LostKeyboardFocus="SubgroupChipNameEditor_LostKeyboardFocus" />
           </Grid>
         </Border>
-        <DataTemplate.Triggers>
-          <DataTrigger Binding="{Binding IsDefaultSubgroup}" Value="True">
-            <Setter TargetName="DefaultSubgroupMarker" Property="Opacity" Value="1" />
-          </DataTrigger>
-        </DataTemplate.Triggers>
       </DataTemplate>
     </ResourceDictionary>
   </Window.Resources>

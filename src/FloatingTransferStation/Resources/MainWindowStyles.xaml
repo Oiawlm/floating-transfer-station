@@ -737,10 +737,14 @@
             Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
   </Style>
 
-  <!-- 默认接收分类标记（2026-11-05 W2 重设计）：单段圆弧紫色圆环（原三同心圆
-       靶心嵌套多层、观感差且偏大），缩小为 10×10 + 1.25 描边——脱离头部按钮
-       图标 14.5 规范（登记见 docs/design.md §五·D）；显隐唯一条件
-       IsDefaultCapture 与位置/层级语义不变。 -->
+  <!-- 默认接收分类标记（2026-11-05 W2 重设计；2026-11-07 #56 修订改双态环
+       语法）：单段圆弧描边圆环（原三同心圆靶心嵌套多层、观感差且偏大），
+       10×10 + 1.25 描边——脱离头部按钮图标 14.5 规范（登记见
+       docs/design.md §五·D）。凡具备落点能力的位置恒有环（几何/位置/层级
+       不变）：Active＝有效默认落点（紫，沿用基值 AccentBrush）、Inactive＝
+       具备能力但非当前（灰，SecondaryTextBrush）、None＝永不具备落点能力
+       （无环，基值 Opacity 0）；环态与用色由两枚 DefaultMarkerState
+       DataTrigger 单点驱动（主标签与子分组 chip 两宿主同名属性）。 -->
   <Style x:Key="CategoryDefaultMarkerStyle" TargetType="Path">
     <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
     <Setter Property="StrokeThickness" Value="1.25" />
@@ -757,8 +761,12 @@
     <Setter Property="IsHitTestVisible" Value="False" />
     <Setter Property="Panel.ZIndex" Value="1" />
     <Style.Triggers>
-      <DataTrigger Binding="{Binding IsDefaultCapture}" Value="True">
+      <DataTrigger Binding="{Binding DefaultMarkerState}" Value="Active">
         <Setter Property="Opacity" Value="1" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding DefaultMarkerState}" Value="Inactive">
+        <Setter Property="Opacity" Value="1" />
+        <Setter Property="Stroke" Value="{DynamicResource SecondaryTextBrush}" />
       </DataTrigger>
     </Style.Triggers>
   </Style>
