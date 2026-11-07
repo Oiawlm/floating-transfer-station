@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.Views;
@@ -1372,6 +1373,230 @@ public sealed class SettingsWindowContactTests
         {
             CloseAll(window);
         }
+    }
+
+    // ---- d1 2026-11-08：关闭回退「对齐落位」重编排阈值断言（report-plan-d.md
+    //      §三.8 A-E；契约 #24 修订，Issue #325）——时间轴由容器几何反解，
+    //      消除挂钟与采样抖动（10ms 网格确定性采样，不真起渲染帧循环）----
+
+    [STATestMethod]
+    public void QrOverlay_ExitThumbStaysHiddenUntilContainerNearlyHome()
+    {
+        // A 防提前回显：容器回程进度 p<0.85（仍≈1.6× 落位尺寸）的任意采样点，
+        // 缩略图 Opacity≤0.10——缩略图回显必须等到容器接近落位（对齐落位），
+        // 不得在飞行中段半显与飞行大卡同屏双影（根因 R1）。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
+            var button = (Button)settings.FindName("WeChatQrButton")!;
+            var card = (Border)settings.FindName("WeChatQrOverlayCard")!;
+            var (scale, _) = QrZoomTransforms(settings);
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+            // 收回终末比例＝页脚缩略图按钮含框宽/容器宽（纯平移链路宽度直通；
+            // 必须开层后测——容器 Collapsed 不参与布局）。
+            var landingScale = button.ActualWidth / card.ActualWidth;
+
+            RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
+            var samples = SampleQrExitChoreography(settings, scale, overlay, 260);
+            Assert.IsTrue(
+                samples.Count >= 8,
+                $"收回段必须被采样捕获（采样数={samples.Count}）。");
+            var early = samples
+                .Select(s => QrExitProgressOf(s.ScaleX, landingScale))
+                .Where(p => p < 0.85d)
+                .ToList();
+            Assert.IsTrue(
+                early.Count >= 2,
+                "必须采到容器未近落位的早段样本（防空洞通过）。");
+            foreach (var (sample, progress) in samples.Zip(
+                samples.Select(s => QrExitProgressOf(s.ScaleX, landingScale))))
+            {
+                if (progress < 0.85d)
+                {
+                    Assert.IsTrue(
+                        sample.ThumbOpacity <= 0.10d,
+                        $"A 防提前回显：容器回程 p={progress:0.###}（<0.85，t≈{QrExitProgressToMs(progress):0}ms）"
+                        + $"时缩略图 Opacity={sample.ThumbOpacity:0.###}，不得 >0.10（飞行中段双影）。");
+                }
+            }
+
+            PumpUntil(settings.Dispatcher, () => overlay.Visibility == Visibility.Collapsed);
+            Assert.AreEqual(
+                1d,
+                ((System.Windows.UIElement)settings.FindName("WeChatQrButton")!).Opacity,
+                "收回完成后缩略图回显终态 1。");
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QrOverlay_ExitMaskFadesWithoutLateBurst()
+    {
+        // C 无末段骤曝：收回期遮罩任意相邻采样的每 10ms 降幅≤0.09（率≤0.009/ms），
+        // 且 t=200ms 时遮罩≤0.06——遮罩淡出须与容器同用减速曲线（末端水平），
+        // 不得在末段斜率骤增让整窗亮度跳变（根因 R2）。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
+            var button = (Button)settings.FindName("WeChatQrButton")!;
+            var card = (Border)settings.FindName("WeChatQrOverlayCard")!;
+            var (scale, _) = QrZoomTransforms(settings);
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+            var landingScale = button.ActualWidth / card.ActualWidth;
+
+            RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
+            var samples = SampleQrExitChoreography(settings, scale, overlay, 260);
+            Assert.IsTrue(
+                samples.Count >= 8,
+                $"收回段必须被采样捕获（采样数={samples.Count}）。");
+            var timeline = QrExitTimeline(samples, landingScale);
+            for (var index = 1; index < timeline.Count; index++)
+            {
+                var (previousTime, previousSample) = timeline[index - 1];
+                var (time, sample) = timeline[index];
+                if (time - previousTime < 1d)
+                {
+                    continue;
+                }
+
+                var ratePerMs = (previousSample.MaskOpacity - sample.MaskOpacity) / (time - previousTime);
+                Assert.IsTrue(
+                    ratePerMs <= 0.009d,
+                    $"C 无末段骤曝：相邻采样遮罩降幅率={ratePerMs:0.0000}/ms（t≈{previousTime:0}→{time:0}ms，"
+                    + $"折算 10ms Δ={ratePerMs * 10d:0.000}），不得超过 0.09/10ms。");
+            }
+
+            var maskAt200 = QrInterpAtTimeline(timeline, 200d, s => s.MaskOpacity);
+            Assert.IsTrue(
+                maskAt200 <= 0.06d,
+                $"C 无末段骤曝：t=200ms 遮罩插值={maskAt200:0.000}，须 ≤0.06（末端水平无骤塌）。");
+
+            PumpUntil(settings.Dispatcher, () => overlay.Visibility == Visibility.Collapsed);
+            Assert.AreEqual(0d, overlay.Opacity, "收回完成后遮罩归零。");
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    /// <summary>收回编排采样四元组：容器 ScaleX＋缩略图/遮罩/卡片 Opacity 同步采样。</summary>
+    private sealed record QrExitChoreographySample(
+        double ScaleX,
+        double ThumbOpacity,
+        double MaskOpacity,
+        double CardOpacity);
+
+    /// <summary>收回编排多属性确定性采样：Render 优先级 10ms DispatcherTimer 在
+    /// PushFrame 泵内同步采四属性（同 ZoomCompletes 口径、不真起渲染帧循环）；
+    /// 收回启动前的前置采样（ScaleX 恒等基值）剥除，同 SampleScaleDuringExit。
+    /// 时间轴不经挂钟——由容器进度反解（QrExitProgressToMs）。</summary>
+    private static List<QrExitChoreographySample> SampleQrExitChoreography(
+        SettingsWindow settings,
+        ScaleTransform scale,
+        UIElement mask,
+        int pumpMs)
+    {
+        var thumb = (System.Windows.UIElement)settings.FindName("WeChatQrButton")!;
+        var card = (System.Windows.UIElement)settings.FindName("WeChatQrOverlayCard")!;
+        var samples = new List<QrExitChoreographySample>();
+        var sampler = new DispatcherTimer(DispatcherPriority.Render, settings.Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(10)
+        };
+        sampler.Tick += (_, _) => samples.Add(new QrExitChoreographySample(
+            scale.ScaleX, thumb.Opacity, mask.Opacity, card.Opacity));
+        sampler.Start();
+        PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(pumpMs));
+        sampler.Stop();
+        while (samples.Count > 0 && samples[0].ScaleX >= 0.999d)
+        {
+            samples.RemoveAt(0);
+        }
+
+        return samples;
+    }
+
+    /// <summary>容器收回进度 p＝(1−ScaleX)/(1−终末比例)（起点恒等 1、终点落位比例
+    /// landingScale 的线性映射，与 QrZoomOutKeySpline 施于时间的口径一致）。</summary>
+    private static double QrExitProgressOf(double scaleX, double landingScale) =>
+        Math.Clamp((1d - scaleX) / (1d - landingScale), 0d, 1d);
+
+    /// <summary>容器收回进度 p→动画时间（ms）：QrZoomOutKeySpline 反解（曲线单调，
+    /// 二分 40 次）——采样时间轴由容器几何反解，消除挂钟/采样抖动。</summary>
+    private static double QrExitProgressToMs(double progress)
+    {
+        var easing = SplineEase.FromToken(DesignTokens.QrZoomOutKeySpline);
+        var low = 0d;
+        var high = 1d;
+        for (var index = 0; index < 40; index++)
+        {
+            var mid = (low + high) / 2d;
+            if (easing.Ease(mid) < progress)
+            {
+                low = mid;
+            }
+            else
+            {
+                high = mid;
+            }
+        }
+
+        return (low + high) / 2d * DesignTokens.QrZoomOutMs;
+    }
+
+    /// <summary>采样时间轴：每样本配反解时间（升序；同段线性关键帧上插值精确）。</summary>
+    private static List<(double TimeMs, QrExitChoreographySample Sample)> QrExitTimeline(
+        List<QrExitChoreographySample> samples,
+        double landingScale) =>
+        samples.Select(s => (QrExitProgressToMs(QrExitProgressOf(s.ScaleX, landingScale)), s)).ToList();
+
+    /// <summary>时间轴上取 tMs 处的线性插值（括号样本同关键帧段内插值精确；
+    /// 越界取端值）。</summary>
+    private static double QrInterpAtTimeline(
+        List<(double TimeMs, QrExitChoreographySample Sample)> timeline,
+        double tMs,
+        Func<QrExitChoreographySample, double> pick)
+    {
+        if (tMs <= timeline[0].TimeMs)
+        {
+            return pick(timeline[0].Sample);
+        }
+
+        for (var index = 1; index < timeline.Count; index++)
+        {
+            if (timeline[index].TimeMs >= tMs)
+            {
+                var (previousTime, previousSample) = timeline[index - 1];
+                var (time, sample) = timeline[index];
+                if (time <= previousTime)
+                {
+                    return pick(sample);
+                }
+
+                var weight = (tMs - previousTime) / (time - previousTime);
+                return pick(previousSample) + ((pick(sample) - pick(previousSample)) * weight);
+            }
+        }
+
+        return pick(timeline[^1].Sample);
     }
 
     private static void RaisePointUp(UIElement target, RoutedEvent routedEvent)
