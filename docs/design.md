@@ -80,7 +80,7 @@
 | 启动后排队收起延迟（#30） | LaunchCollapseDelayMs | 250（时序性延迟，减动效保留） |
 | 单击启动重入门闩（#30） | LaunchReentryLatchMs | 500 |
 | 瓦片入场交错步长/封顶（#30） | TileEntranceStaggerMs / TileEntranceStaggerCap | 40 / 8（min(i,8)×40ms） |
-| 二维码容器过渡（独立组，契约 #24，不进三档） | QrZoomInMs/QrZoomOutMs/QrTextFadeInBeginMs/QrTextFadeInMs/QrTextFadeOutMs/QrThumbFadeMs | 450/250/270/180/90/150 |
+| 二维码容器过渡（独立组，契约 #24，不进三档） | QrZoomInMs/QrZoomOutMs/QrTextFadeInBeginMs/QrTextFadeInMs/QrTextFadeOutMs/QrThumbFadeMs/QrThumbRevealBeginMs/QrHandoverFadeMs | 450/250/270/180/90/150/180/70（后两枚＝收回交接：缩略图回显起点（95% 回程反解）与换手段时长，Issue #325） |
 
 ## 三、缓动曲线
 
@@ -89,6 +89,8 @@
 | 入场（减速） | `0,0,0,1` |
 | 出场（加速） | `1,0,1,1` |
 | 减弱动效 | Linear |
+
+二维码遮罩纱收回与容器同用 `QrZoomOutKeySpline`（组内专用，经 `FadeAnimation.ExitEaseToken` 指定，不新增通用曲线；Issue #325）。
 
 ## 四、圆角
 
