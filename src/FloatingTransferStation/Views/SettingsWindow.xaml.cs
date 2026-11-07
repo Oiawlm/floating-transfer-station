@@ -1679,7 +1679,7 @@ public partial class SettingsWindow : Window
 
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = "选择内容存储文件夹（将在其中创建「悬浮中转站」文件夹）"
+            Title = "选择新位置（将在其中创建「悬浮中转站」文件夹）"
         };
         if (dialog.ShowDialog(this) != true || string.IsNullOrWhiteSpace(dialog.FolderName))
         {
@@ -1695,7 +1695,7 @@ public partial class SettingsWindow : Window
 
         var confirmed = MessageBox.Show(
             this,
-            $"内容存储位置将变更：\n\n当前位置：{_host.DataDirectory}\n新位置：{preview.TargetDataDirectory}\n数据体积：约 {FormatByteSize(preview.SizeBytes)}\n\n迁移完成并登记后应用会自动重启；旧目录会在下次启动并通过安全校验后自动清理。\n\n现在开始迁移？",
+            $"内容将迁移到新位置：\n\n旧位置：{_host.DataDirectory}\n新位置：{preview.TargetDataDirectory}\n共约 {FormatByteSize(preview.SizeBytes)}\n\n迁移完成后应用会自动重启；旧位置确认安全后，会在下次启动时自动清理。\n\n现在开始？",
             "更改内容存储位置",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question,
@@ -1793,11 +1793,11 @@ public partial class SettingsWindow : Window
 
         if (catalog.Entries.Count == 0)
         {
-            PluginHelpText.Text = "未发现插件。把插件文件夹放入下面的目录后重启应用即可出现。";
+            PluginHelpText.Text = "未发现插件。把插件文件夹放入下方目录，点「重新扫描」即可。";
             return;
         }
 
-        PluginHelpText.Text = "插件默认关闭；启用后立即生效并自动保存。放入用户目录的同名插件会覆盖内建版本。";
+        PluginHelpText.Text = "插件默认关闭，启用立即生效；同名用户插件覆盖内建版本。";
     }
 
     private Border CreatePluginRow(PluginEntry entry)

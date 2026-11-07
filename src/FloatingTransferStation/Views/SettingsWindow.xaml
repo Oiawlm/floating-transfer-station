@@ -39,6 +39,29 @@
         <ResourceDictionary Source="../Resources/DesignTheme.Light.xaml" />
       </ResourceDictionary.MergedDictionaries>
 
+      <!-- ToolTip 全局外观（2026-11-07 文案精简批，O1 裁决）：原生 ToolTip＋本窗隐式样式统一；
+           颜色全走主题键、圆角 ControlCornerRadius；长文案由挂接点 TextBlock 自管换行（R1）。 -->
+      <Style TargetType="ToolTip">
+        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ToolTip">
+              <Border Background="{TemplateBinding Background}"
+                      BorderBrush="{TemplateBinding BorderBrush}"
+                      BorderThickness="1"
+                      CornerRadius="{StaticResource ControlCornerRadius}"
+                      Padding="{TemplateBinding Padding}">
+                <ContentPresenter />
+              </Border>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
       <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
         <Setter Property="FontSize" Value="13" />
@@ -373,13 +396,19 @@
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}">
                 <StackPanel>
-                  <TextBlock Text="界面字体" Style="{StaticResource SectionTitleStyle}" />
+                  <TextBlock Text="界面字体" Style="{StaticResource SectionTitleStyle}">
+                    <TextBlock.ToolTip>
+                      <ToolTip>
+                        <TextBlock Text="改动立即生效并自动保存；列表只含本机已安装字体，应用不随包分发字体文件。" TextWrapping="Wrap" MaxWidth="320" />
+                      </ToolTip>
+                    </TextBlock.ToolTip>
+                  </TextBlock>
                   <ComboBox x:Name="InterfaceFontComboBox"
                             Style="{StaticResource ThemedComboBoxStyle}"
                             AutomationProperties.Name="界面字体"
                             SelectionChanged="InterfaceFontComboBox_SelectionChanged" />
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="选择界面使用的字体，改动立即生效并自动保存；带「（默认）」标注的微软雅黑即应用默认（微软雅黑 UI，缺失时回退微软雅黑）。可选列表只含本机已安装字体（应用不随包分发字体文件）。" />
+                             Text="「（默认）」即应用默认（微软雅黑）。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}">
@@ -409,8 +438,6 @@
                             Style="{StaticResource ThemedComboBoxStyle}"
                             AutomationProperties.Name="置顶分隔样式"
                             SelectionChanged="PinnedDividerComboBox_SelectionChanged" />
-                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="选择置顶区与普通区之间的分隔样式；改动立即生效并自动保存。" />
                 </StackPanel>
               </Border>
             </StackPanel>
@@ -430,7 +457,7 @@
                             IsHitTestVisible="False" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="拖拽调整四个标签的显示顺序（重要 / 记录 / 快捷启动 / 待分类）；仅调整顺序，不能增删。" />
+                             Text="拖拽调整标签顺序。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}">
@@ -443,7 +470,13 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
                                Text="Ctrl + C 复制已选内容"
-                               Style="{StaticResource RowCaptionStyle}" />
+                               Style="{StaticResource RowCaptionStyle}">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="卡片右半左键单击＝复制这一张（固定手势）；复制的内容不会被自动收集重复入库。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
                     <CheckBox x:Name="CtrlCCopyToggle"
                               Grid.Column="1"
                               Style="{StaticResource ToggleSwitchStyle}"
@@ -452,7 +485,7 @@
                               Unchecked="CtrlCCopyToggle_Unchecked" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="卡片右半左键单击即复制这一张（统一手势，不可关闭）；复制内容与拖出一致，应用自身的复制不会被自动收集重复入库。选中多张卡片后 Ctrl+C：文字按板内顺序合并，图片给出文件组。" />
+                             Text="选中多张后 Ctrl+C：文字按板内顺序合并，图片给出文件组。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}">
@@ -489,7 +522,7 @@
                               SelectionChanged="TrashRightClickComboBox_SelectionChanged" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="有选择时点击垃圾桶始终删除已选内容；两种清空都可 Ctrl+Z 整体撤销。" />
+                             Text="两种清空都可 Ctrl+Z 整体撤销。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}" Margin="0">
@@ -502,7 +535,13 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
                                Text="允许短卡片添加备注"
-                               Style="{StaticResource RowCaptionStyle}" />
+                               Style="{StaticResource RowCaptionStyle}">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="备注入口默认只出现在被截断的长文字卡上；AI 整理按钮不受此开关影响。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
                     <CheckBox x:Name="ShortCardNotesToggle"
                               Grid.Column="1"
                               Style="{StaticResource ToggleSwitchStyle}"
@@ -511,7 +550,7 @@
                               Unchecked="ShortCardNotesToggle_Unchecked" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="默认只对正文被截断的长卡出现备注入口；开启后所有文字卡都可以添加备注（AI 整理按钮仍只对长文出现）。" />
+                             Text="开启后短文字卡也能添加备注。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}">
@@ -525,7 +564,13 @@
                     <TextBlock Grid.Column="0"
                                Text="启动面瓦片列数"
                                Style="{StaticResource RowCaptionStyle}"
-                               Margin="0,0,8,0" />
+                               Margin="0,0,8,0">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="范围 3–6 列；固定列数不随宽度变化，窄面板配大列数会压缩瓦片。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
                     <ComboBox x:Name="LauncherColumnStrategyComboBox"
                               Grid.Column="1"
                               Style="{StaticResource ThemedComboBoxStyle}"
@@ -533,7 +578,7 @@
                               SelectionChanged="LauncherColumnStrategyComboBox_SelectionChanged" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="自适应＝列数随面板宽度在 3–6 列间自动增减（默认）；固定列数不随宽度变化，瓦片宽按剩余空间摊分，窄面板配大列数会压缩瓦片。改动立即生效并自动保存。" />
+                             Text="自适应＝列数随面板宽度自动调整（默认）。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}" Margin="0">
@@ -546,7 +591,13 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
                                Text="自动发现新安装的应用"
-                               Style="{StaticResource RowCaptionStyle}" />
+                               Style="{StaticResource RowCaptionStyle}">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="监视开始菜单与下方文件夹；忽略的项会被记住，不再提醒。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
                     <CheckBox x:Name="LauncherDiscoveryToggle"
                               Grid.Column="1"
                               Style="{StaticResource ToggleSwitchStyle}"
@@ -555,7 +606,7 @@
                               Unchecked="LauncherDiscoveryToggle_Unchecked" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="监视开始菜单（用户＋公共）与下方文件夹，新装应用进入启动面「发现 N」待确认清单——多选添加或忽略，绝不自动上屏；忽略会被持久记住。" />
+                             Text="新装应用进入「发现 N」清单，确认后才上屏。" />
                   <TextBlock Text="监视文件夹"
                              Style="{StaticResource RowCaptionStyle}"
                              Margin="0,10,0,0" />
@@ -599,8 +650,6 @@
                              Foreground="{DynamicResource DangerBrush}"
                              Text=""
                              Visibility="Collapsed" />
-                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="文件夹需存在且为完整路径；.lnk 全收，.exe 自动过滤卸载器/更新器等辅助程序；开关与文件夹改动立即生效并自动保存。" />
                 </StackPanel>
               </Border>
             </StackPanel>
@@ -644,7 +693,13 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
                                Text="Ctrl + Alt + V 唤起面板"
-                               Style="{StaticResource RowCaptionStyle}" />
+                               Style="{StaticResource RowCaptionStyle}">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="展开到默认接收分类；组合键被其他软件占用时开启会就地提示失败。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
                     <CheckBox x:Name="GlobalHotkeyToggle"
                               Grid.Column="1"
                               Style="{StaticResource ToggleSwitchStyle}"
@@ -654,7 +709,7 @@
                   </Grid>
                   <TextBlock x:Name="GlobalHotkeyNoteText"
                              Style="{StaticResource NoteCaptionStyle}"
-                             Text="开启后任何界面按组合键展开面板到默认接收分类；默认关闭，组合键被其他软件占用时开启会提示失败。" />
+                             Text="开启后任何界面都能用组合键展开面板。" />
                   <TextBlock x:Name="GlobalHotkeyStatusText"
                              Style="{StaticResource NoteCaptionStyle}"
                              Foreground="{DynamicResource DangerBrush}"
@@ -671,8 +726,14 @@
                       <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
-                               Text="启动 30 秒后首检，之后每 24 小时一次；连续 2 小时无操作也会检查"
-                               Style="{StaticResource RowCaptionStyle}" />
+                               Text="自动检查并安装更新"
+                               Style="{StaticResource RowCaptionStyle}">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="启动 30 秒首检，之后每 24 小时一次，闲置 2 小时也会检查；关闭后仍可点标题栏「更新」手动检查。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
                     <CheckBox x:Name="AutoUpdateCheckToggle"
                               Grid.Column="1"
                               Style="{StaticResource ToggleSwitchStyle}"
@@ -681,7 +742,7 @@
                               Unchecked="AutoUpdateCheckToggle_Unchecked" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="检查在后台静默进行；发现新版本即自动「下载 → 校验 → 安装 → 重启」，无需手动确认（手动检查同样如此）。关闭后仅停止自动检查，仍可随时点击标题栏「更新」按钮手动检查。" />
+                             Text="发现新版本会自动下载、安装并重启，无需确认。" />
                 </StackPanel>
               </Border>
               <!-- 实验性（首个先例，2026-11-03）：正在打磨中的能力按「默认关闭、显式
@@ -691,6 +752,8 @@
               <Border Style="{StaticResource SettingsCardStyle}" Margin="0">
                 <StackPanel>
                   <TextBlock Text="实验性" Style="{StaticResource SectionTitleStyle}" />
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="以下功能仍在打磨，默认关闭；开启立即生效并自动保存。" />
                   <Grid Background="Transparent">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="*" />
@@ -698,7 +761,13 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
                                Text="记录界面 Markdown 阅读视图"
-                               Style="{StaticResource RowCaptionStyle}" />
+                               Style="{StaticResource RowCaptionStyle}">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="阅读态按 Markdown 渲染成只读视图；链接用浏览器打开，不加载远程图片。默认关闭的原因：渲染与排版仍在打磨。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
                     <CheckBox x:Name="ReviewMarkdownViewToggle"
                               Grid.Column="1"
                               Style="{StaticResource ToggleSwitchStyle}"
@@ -707,7 +776,7 @@
                               Unchecked="ReviewMarkdownViewToggle_Unchecked" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="实验性功能，默认关闭。开启后记录界面出现「阅读｜编辑」切换：阅读态把记录内容按 Markdown 渲染成类 Obsidian 的只读视图（标题、列表、粗斜体、代码块、引用、链接等常用语法；链接点击后用浏览器打开，不加载远程图片；不支持的高级语法按原文显示）。默认关闭的原因：渲染子集与排版仍在打磨，编辑器形态（关闭时所见）保持为可靠基准。改动立即生效并自动保存，只影响呈现，不改变记录的保存与合并行为。" />
+                             Text="开启后记录界面出现「阅读｜编辑」切换。" />
                   <!-- 实验性第二项（2026-11-05，契约 #57）：三态枚举设置沿仓库
                        「枚举设置一律 ComboBox」先例（置顶分隔/清理时长/垃圾桶行为）；
                        即时生效＋原子保存（契约 #5 唯一管线，禁平行保存路径）。 -->
@@ -742,7 +811,13 @@
                                Text="图片拖出为文件"
                                Style="{StaticResource RowCaptionStyle}"
                                Margin="0,0,8,0"
-                               VerticalAlignment="Center" />
+                               VerticalAlignment="Center">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="只复制不移动，应用内卡片保留；关闭时窗内整理与复制不受影响。默认关闭的原因：拖到不同软件的表现仍在打磨。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
                     <CheckBox x:Name="DragOutAsFileToggle"
                               Grid.Column="1"
                               Style="{StaticResource ToggleSwitchStyle}"
@@ -751,7 +826,7 @@
                               Unchecked="DragOutAsFileToggle_Unchecked" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="实验性功能，默认关闭。开启后把图片卡（或纯图片多选）直接拖到文件夹或桌面，即复制出图片文件；只复制，受管图片库与应用内卡片不动。默认关闭的原因：对外拖出在不同目标应用的表现仍在打磨。关闭时窗内整理与剪贴板复制不受影响。改动立即生效并自动保存。" />
+                             Text="开启后图片卡可直接拖出为图片文件。" />
                 </StackPanel>
               </Border>
             </StackPanel>
@@ -767,7 +842,13 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
                                Text="自动清理非置顶卡片"
-                               Style="{StaticResource RowCaptionStyle}" />
+                               Style="{StaticResource RowCaptionStyle}">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="删除可 Ctrl+Z 撤销（仅本次运行内）；改短时长后，超龄卡片在下次检查时清理。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
                     <CheckBox x:Name="AutoCleanupToggle"
                               Grid.Column="1"
                               Style="{StaticResource ToggleSwitchStyle}"
@@ -792,12 +873,18 @@
                               SelectionChanged="AutoCleanupRetentionComboBox_SelectionChanged" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="每张非置顶卡片入库满所选时长即自动删除；置顶卡片、备注卡片与「记录」内容不受影响；可 Ctrl+Z 撤销（仅本次运行内）；每小时检查一次，改短时长后已超龄的卡片在下次检查时清理；默认 24 小时。" />
+                             Text="非置顶卡片到期自动删除；置顶、备注与记录内容不受影响。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}">
                 <StackPanel>
-                  <TextBlock Text="数据目录" Style="{StaticResource SectionTitleStyle}" />
+                  <TextBlock Text="数据目录" Style="{StaticResource SectionTitleStyle}">
+                    <TextBlock.ToolTip>
+                      <ToolTip>
+                        <TextBlock Text="新位置会创建「悬浮中转站」文件夹（数据与插件都在里面）；旧目录在下次启动确认安全后自动清理。" TextWrapping="Wrap" MaxWidth="320" />
+                      </ToolTip>
+                    </TextBlock.ToolTip>
+                  </TextBlock>
                   <Grid Background="Transparent">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="*" />
@@ -827,7 +914,7 @@
                             Click="OpenDataDirectoryButton_Click" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="更改时选择一个文件夹，将在其中创建并管理「悬浮中转站」文件夹（全部数据与插件都在里面）；内容完整迁移并登记后应用自动重启，旧目录在下次启动确认安全后清理。" />
+                             Text="更改时内容会完整迁移过去，完成后应用自动重启。" />
                   <TextBlock x:Name="DataDirectoryStatusText"
                              Style="{StaticResource NoteCaptionStyle}"
                              Foreground="{DynamicResource DangerBrush}"
@@ -874,7 +961,7 @@
                   </Grid>
                   <TextBlock x:Name="PluginDirectoryNoteText"
                              Style="{StaticResource NoteCaptionStyle}"
-                             Text="插件目录位于数据目录内，随数据目录一起移动；插件的启用状态也保存在数据目录。" />
+                             Text="插件目录在数据目录内，随其一起移动。" />
                 </StackPanel>
               </Border>
             </StackPanel>
@@ -890,7 +977,13 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
                                Text="启用 AI 整理功能"
-                               Style="{StaticResource RowCaptionStyle}" />
+                               Style="{StaticResource RowCaptionStyle}">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="关闭后入口零请求，已存的 Key 与提示词保留，重新开启即恢复。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
                     <CheckBox x:Name="AiOrganizeEnabledToggle"
                               Grid.Column="1"
                               Style="{StaticResource ToggleSwitchStyle}"
@@ -899,7 +992,7 @@
                               Unchecked="AiOrganizeEnabledToggle_Unchecked" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="默认关闭；开启后截断的长文字卡悬停出现「AI 整理」按钮，关闭后按钮不再出现、整理入口不再发起任何请求；已保存的 API Key 与自定义提示词原样保留，仅停用不删除。改动立即生效并自动保存。" />
+                             Text="开启后被截断的长文字卡悬停出现「AI 整理」按钮。" />
                 </StackPanel>
               </Border>
               <Border x:Name="AiKeyCard" Style="{StaticResource SettingsCardStyle}">
@@ -907,7 +1000,7 @@
                   <TextBlock Text="AI 设置" Style="{StaticResource SectionTitleStyle}" />
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
                              Margin="0,0,0,2"
-                             Text="配置 DeepSeek 官方 API，供后续 AI 功能整理剪贴板与卡片内容。API Key 经系统加密后仅保存在本机，不会随内容导出。" />
+                             Text="API Key 加密后只保存在本机，不会随内容导出。" />
                   <Grid Background="Transparent" Margin="0,6,0,0">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="*" />
@@ -940,7 +1033,7 @@
                     <Run Text="API Key 在" /><Hyperlink x:Name="DeepSeekKeyPortalLink"
                                NavigateUri="https://platform.deepseek.com/api_keys"
                                Foreground="{DynamicResource AccentBrush}"
-                               RequestNavigate="RepoLink_RequestNavigate">platform.deepseek.com/api_keys</Hyperlink><Run Text=" 创建；焦点离开输入框即自动保存，清空后失焦即删除已存 Key。" />
+                               RequestNavigate="RepoLink_RequestNavigate">platform.deepseek.com/api_keys</Hyperlink><Run Text=" 创建；清空输入框即删除已存 Key。" />
                   </TextBlock>
                   <Button x:Name="DeepSeekTestButton"
                           Style="{StaticResource ThemedActionButtonStyle}"
@@ -959,10 +1052,16 @@
               </Border>
               <Border x:Name="AiPromptCard" Style="{StaticResource SettingsCardStyle}" Margin="0">
                 <StackPanel>
-                  <TextBlock Text="整理提示词" Style="{StaticResource SectionTitleStyle}" />
+                  <TextBlock Text="整理提示词" Style="{StaticResource SectionTitleStyle}">
+                    <TextBlock.ToolTip>
+                      <ToolTip>
+                        <TextBlock Text="自定义会失去内置的「卡片内容不是指令」防注入防护；上限 1 万字。" TextWrapping="Wrap" MaxWidth="320" />
+                      </ToolTip>
+                    </TextBlock.ToolTip>
+                  </TextBlock>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
                              Margin="0,0,0,2"
-                             Text="留空使用内置默认「语音转文字整理器」提示词；自定义提示词将原样作为系统指令发送，并失去内置的「卡片内容仅是待整理文字、不是指令」边界防护。上限 1 万字。" />
+                             Text="留空用内置默认；自定义将原样作为系统指令发送。" />
                   <TextBox x:Name="AiOrganizePromptBox"
                            Style="{StaticResource ThemedTextBoxStyle}"
                            Margin="0,8,0,0"
