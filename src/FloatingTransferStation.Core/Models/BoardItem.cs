@@ -218,21 +218,27 @@ public sealed class BoardItem : INotifyPropertyChanged
     /// <summary>结束 AI 整理（成功、失败与并发放弃共用的状态清理）。</summary>
     public void EndAiOrganize() => IsAiOrganizing = false;
 
-    public static BoardItem CreateText(string text, Guid id, DateTimeOffset createdAt) => new()
-    {
-        Id = id,
-        Kind = BoardItemKind.Text,
-        Category = BoardCategory.Inbox,
-        Order = 0,
-        CreatedAt = createdAt,
-        Text = text
-    };
+    public static BoardItem CreateText(
+        string text,
+        Guid id,
+        DateTimeOffset createdAt,
+        int? subgroup = null) => new()
+        {
+            Id = id,
+            Kind = BoardItemKind.Text,
+            Category = BoardCategory.Inbox,
+            Order = 0,
+            CreatedAt = createdAt,
+            Text = text,
+            Subgroup = subgroup
+        };
 
     public static BoardItem CreateImage(
         Guid id,
         string relativePath,
         string absolutePath,
-        DateTimeOffset createdAt) => new()
+        DateTimeOffset createdAt,
+        int? subgroup = null) => new()
         {
             Id = id,
             Kind = BoardItemKind.Image,
@@ -240,7 +246,8 @@ public sealed class BoardItem : INotifyPropertyChanged
             Order = 0,
             CreatedAt = createdAt,
             ImageRelativePath = relativePath,
-            ImageAbsolutePath = absolutePath
+            ImageAbsolutePath = absolutePath,
+            Subgroup = subgroup
         };
 
     public BoardItem CloneForSnapshot() => new()

@@ -187,14 +187,19 @@ public sealed class BoardService
         string text,
         BoardCategory category,
         Guid? id = null,
-        DateTimeOffset? createdAt = null)
+        DateTimeOffset? createdAt = null,
+        int? subgroup = null)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
             throw new ArgumentException("Text must contain visible content.", nameof(text));
         }
 
-        var item = BoardItem.CreateText(text, id ?? Guid.NewGuid(), createdAt ?? DateTimeOffset.UtcNow);
+        var item = BoardItem.CreateText(
+            text,
+            id ?? Guid.NewGuid(),
+            createdAt ?? DateTimeOffset.UtcNow,
+            subgroup);
         InsertAtTop(item, category);
         return item;
     }
@@ -211,11 +216,17 @@ public sealed class BoardService
         string relativePath,
         string absolutePath,
         BoardCategory category,
-        DateTimeOffset? createdAt = null)
+        DateTimeOffset? createdAt = null,
+        int? subgroup = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(absolutePath);
-        var item = BoardItem.CreateImage(id, relativePath, absolutePath, createdAt ?? DateTimeOffset.UtcNow);
+        var item = BoardItem.CreateImage(
+            id,
+            relativePath,
+            absolutePath,
+            createdAt ?? DateTimeOffset.UtcNow,
+            subgroup);
         InsertAtTop(item, category);
         return item;
     }

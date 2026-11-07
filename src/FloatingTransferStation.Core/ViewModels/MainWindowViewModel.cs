@@ -14,6 +14,7 @@ public enum SearchTypeFilter
 public sealed class MainWindowViewModel : ObservableObject
 {
     private readonly DefaultCaptureCategoryState _defaultCaptureCategory;
+    private readonly DefaultSubgroupState _defaultSubgroup;
     private CategoryViewModel? _activePanel;
     private CategoryViewModel _defaultCapturePanel;
     private bool _isExternalDropRailVisible;
@@ -29,17 +30,20 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public MainWindowViewModel(
         BoardService board,
-        DefaultCaptureCategoryState? defaultCaptureCategory = null)
-        : this(board, WindowSettings.Default, defaultCaptureCategory)
+        DefaultCaptureCategoryState? defaultCaptureCategory = null,
+        DefaultSubgroupState? defaultSubgroup = null)
+        : this(board, WindowSettings.Default, defaultCaptureCategory, defaultSubgroup)
     {
     }
 
     public MainWindowViewModel(
         BoardService board,
         WindowSettings settings,
-        DefaultCaptureCategoryState? defaultCaptureCategory = null)
+        DefaultCaptureCategoryState? defaultCaptureCategory = null,
+        DefaultSubgroupState? defaultSubgroup = null)
     {
         _defaultCaptureCategory = defaultCaptureCategory ?? new DefaultCaptureCategoryState();
+        _defaultSubgroup = defaultSubgroup ?? new DefaultSubgroupState();
         // 装载期修复（#30）：默认接收只能落在内容桶——历史会话态指向非内容桶
         // （如旧版本设到 Prompt 槽位）时归位 Inbox，保证收起把手与默认接收标记
         // （靶心 Path 图标，2026-11-03 前为字符「◎」）不落在记录/启动标签上。
@@ -236,8 +240,10 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         ActivePanel = activePanel;
-        // 子分组轨可见性随激活面板的内容桶角色翻转（契约 #57 作用域）。
+        // 子分组轨可见性随激活面板的内容桶角色翻转（契约 #57 作用域）；默认环按
+        // 新激活分类差分恢复（chip 实例跨分类共享，契约 #57 修订）。
         OnPropertyChanged(nameof(IsSubgroupRailVisible));
+        ApplyDefaultSubgroupSelection();
     }
 
     public void SetPanelExpanded(bool isExpanded)
@@ -282,6 +288,39 @@ public sealed class MainWindowViewModel : ObservableObject
 
         DefaultCapturePanel = selected;
         return true;
+    }
+
+    /// <summary>设收集落点子分组（契约 #57 修订，镜像 <see cref="SetDefaultCaptureCategory"/>）：
+    /// state.Set 同值短路；变更后差分刷新 chip 默认环——chip 实例跨分类共享，环只在
+    /// 激活面板＝该分类时呈现。</summary>
+    public bool SetDefaultSubgroup(BoardCategory category, int slot)
+    {
+        if (!_defaultSubgroup.Set(category, slot))
+        {
+            return false;
+        }
+
+        if (ActivePanel is { } panel && panel.Category == category)
+        {
+            ApplyDefaultSubgroupSelection();
+        }
+
+        return true;
+    }
+
+    /// <summary>chip 默认环差分单点：按激活面板（内容桶）解析该分类当前默认槽；
+    /// 面板非内容桶或未设默认时全清零（轨不可见，状态兜底）。Current 读取仅限
+    /// 环恢复（落点求值在两管线入口，契约 #57 修订）。</summary>
+    private void ApplyDefaultSubgroupSelection()
+    {
+        var category = ActivePanel?.Category;
+        var current = category is { } value && BoardCategoryCatalog.IsContentBucket(value)
+            ? _defaultSubgroup.Current(value)
+            : null;
+        foreach (var chip in SubgroupChips)
+        {
+            chip.IsDefaultSubgroup = chip.Slot == current;
+        }
     }
 
     public void ShowStatus(string message) => StatusText = message;

@@ -32,8 +32,38 @@ public sealed class ExternalDropImportServiceTests
         CollectionAssert.AreEqual(
             new[] { "new prompt", existing.Text },
             board.Items(BoardCategory.CustomerOriginal).Select(item => item.Text).ToArray());
+        Assert.IsNull(
+            board.Items(BoardCategory.CustomerOriginal).Single(item => item.Text == "new prompt").Subgroup,
+            "未设默认子分组＝落未指定组。");
         Assert.AreEqual(1, store.SaveCount);
         Assert.IsEmpty(messages);
+    }
+
+    [TestMethod]
+    public async Task ImportText_LandsInCategoryDefaultSubgroupWhenSet()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var store = new RecordingBoardStore(directory.Root);
+        var messages = new List<string>();
+        var defaultSubgroup = new DefaultSubgroupState();
+        defaultSubgroup.Set(BoardCategory.CustomerOriginal, 3);
+        var service = CreateService(
+            directory.Root,
+            board,
+            store,
+            messages,
+            defaultSubgroup: defaultSubgroup);
+
+        var imported = await service.ImportAsync(
+            new ExternalDropPayload.Text("外部拖入"),
+            BoardCategory.CustomerOriginal);
+
+        Assert.IsTrue(imported);
+        Assert.AreEqual(
+            3,
+            board.Items(BoardCategory.CustomerOriginal).Single(item => item.Text == "外部拖入").Subgroup,
+            "外部拖入落该分类的默认子分组。");
     }
 
     [TestMethod]
@@ -391,16 +421,23 @@ public sealed class ExternalDropImportServiceTests
         string root,
         BoardService board,
         IBoardStore store,
-        List<string> messages) =>
-        CreateService(board, store, messages, new RecordingImageNormalizer(root));
+        List<string> messages,
+        DefaultSubgroupState? defaultSubgroup = null) =>
+        CreateService(
+            board,
+            store,
+            messages,
+            new RecordingImageNormalizer(root),
+            defaultSubgroup: defaultSubgroup);
 
     private static ExternalDropImportService CreateService(
         BoardService board,
         IBoardStore store,
         List<string> messages,
         IImageNormalizer normalizer,
-        BoardOperationGate? gate = null) =>
-        new(normalizer, board, store, messages.Add, gate);
+        BoardOperationGate? gate = null,
+        DefaultSubgroupState? defaultSubgroup = null) =>
+        new(normalizer, board, store, messages.Add, gate, defaultSubgroup: defaultSubgroup);
 
     private static string[] CreateSourceFiles(string root, params string[] names)
     {
