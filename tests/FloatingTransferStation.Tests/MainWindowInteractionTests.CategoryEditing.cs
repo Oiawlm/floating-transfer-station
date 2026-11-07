@@ -47,7 +47,10 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(1.25d, marker.StrokeThickness);
             Assert.AreEqual(10d, marker.Width);
             Assert.AreEqual(10d, marker.Height);
-            Assert.AreEqual(customer.IsDefaultCapture ? 1d : 0d, marker.Opacity);
+            Assert.AreEqual(
+                customer.DefaultMarkerState == DefaultMarkerState.None ? 0d : 1d,
+                marker.Opacity,
+                "环语法三态（#56 修订）：内容桶恒环，改名会话不吞环。");
             Assert.IsTrue(
                 Panel.GetZIndex(marker) > Panel.GetZIndex(FindDescendants<TextBox>(customerTab).Single()));
         }
