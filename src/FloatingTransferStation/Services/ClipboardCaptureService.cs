@@ -16,6 +16,7 @@ public sealed class ClipboardCaptureService
     private readonly DefaultSubgroupState _defaultSubgroup;
     private readonly PluginCatalog? _pluginCatalog;
     private readonly CaptureDeduplicationGate? _deduplicationGate;
+    private readonly AiImageNamingScheduler? _aiImageNaming;
     private readonly object _queueLock = new();
     private readonly HashSet<uint> _pendingSequences = [];
     private readonly int _maximumPendingCaptures;
@@ -38,6 +39,7 @@ public sealed class ClipboardCaptureService
         PluginCatalog? pluginCatalog = null,
         DefaultSubgroupState? defaultSubgroup = null,
         CaptureDeduplicationGate? deduplicationGate = null,
+        AiImageNamingScheduler? aiImageNaming = null,
         int maximumPendingCaptures = 16,
         long maximumPendingBytes = 256L * 1024 * 1024)
     {
@@ -55,6 +57,9 @@ public sealed class ClipboardCaptureService
         _defaultSubgroup = defaultSubgroup ?? new DefaultSubgroupState();
         _pluginCatalog = pluginCatalog;
         _deduplicationGate = deduplicationGate;
+        // AI 识图命名调度（可注入，null＝零行为）：采集管线只经「提交成功→TryEnqueue」
+        // 一点触发，开关判断唯一存在于调度器，本管线零开关感知。
+        _aiImageNaming = aiImageNaming;
         _maximumPendingCaptures = maximumPendingCaptures;
         _maximumPendingBytes = maximumPendingBytes;
     }
@@ -430,6 +435,7 @@ public sealed class ClipboardCaptureService
         CancellationToken cancellationToken)
     {
         var suppressed = false;
+        var addedItemIds = new List<Guid>();
         try
         {
             await _operationGate.RunAsync(async () =>
@@ -443,7 +449,6 @@ public sealed class ClipboardCaptureService
                     return false;
                 }
 
-                var addedItemIds = new List<Guid>();
                 try
                 {
                     for (var index = storedImages.Count - 1; index >= 0; index--)
@@ -494,6 +499,17 @@ public sealed class ClipboardCaptureService
             }
 
             _showStatus("与最近收集的内容相同，未重复收集。");
+            return;
+        }
+
+        // AI 识图命名触发（门外、提交成功且未去重后）：逐卡 TryEnqueue；开关判断
+        // 唯一存在于调度器（关＝零动作），本管线零开关感知。
+        if (_aiImageNaming is { } scheduler)
+        {
+            foreach (var itemId in addedItemIds)
+            {
+                scheduler.TryEnqueue(itemId);
+            }
         }
     }
 }

@@ -50,6 +50,7 @@ public partial class MainWindow : Window
     private readonly DragPayloadService _dragPayload;
     private readonly ExternalDropPayloadReader _externalDropPayloadReader;
     private readonly ExternalDropImportService _externalDropImportService;
+    private readonly AiImageNamingScheduler _aiImageNamingScheduler;
     private readonly PanelStateMachine _panelState = new();
     private readonly CategoryScrollState _scrollState = new();
     private readonly DispatcherTimer _expandIntentTimer;
@@ -146,7 +147,8 @@ public partial class MainWindow : Window
         ILauncherDiscoveryStore? launcherDiscoveryStore = null,
         InputDeliveryService? inputDelivery = null,
         Func<DateTimeOffset>? updateClock = null,
-        DefaultSubgroupState? defaultSubgroup = null)
+        DefaultSubgroupState? defaultSubgroup = null,
+        AiImageNamingScheduler? aiImageNamingScheduler = null)
     {
         InitializeComponent();
         _preferences = preferences ?? AppPreferences.Default;
@@ -195,6 +197,21 @@ public partial class MainWindow : Window
         // 图片拖出为文件实验开关（契约 #58）：构造段逐项下发偏好——启动不走
         // ApplyPreferences，漏本行＝重启后开关失效（沿 AnimationsPreference 先例）。
         _dragPayload.ExternalFilePayloadsEnabled = _preferences.DragOutAsFileEnabled;
+        // AI 识图命名调度（c2）：组合根注入与两条采集管线共享的实例；测试未注入时
+        // 用窗口自有依赖兜底（与 _aiTextOrganizer 同法：生产显式装配、测试注入）。
+        _aiImageNamingScheduler = aiImageNamingScheduler ?? new AiImageNamingScheduler(
+            new AiImageNamingOrganizer(_deepSeekClient),
+            _board,
+            _mutations,
+            _secretProtector,
+            () => _preferences,
+            ShowStatus,
+            TrackPendingOperation,
+            () => _windowOperationCancellation.Token,
+            Dispatcher);
+        // AI 识图命名开关构造段镜像：启动不走 ApplyPreferences，漏本行＝重启后
+        // 开关失效（沿上方 DragOut 镜像先例，#58 教训）。
+        _aiImageNamingScheduler.Enabled = _preferences.AiImageNamingEnabled;
         _externalDropPayloadReader = externalDropPayloadReader;
         _externalDropImportService = externalDropImportService;
         _dailyReviews = dailyReviewStore ?? store as IDailyReviewStore;
@@ -516,7 +533,10 @@ public partial class MainWindow : Window
             _windowOperationCancellation.Token));
     }
 
-    private void TrackPendingOperation(Task operation)
+    /// <summary>当前窗口操作令牌（组合根闭包按次读取最新值；搬迁恢复会整体替换令牌源）。</summary>
+    internal CancellationToken WindowOperationToken => _windowOperationCancellation.Token;
+
+    internal void TrackPendingOperation(Task operation)
     {
         lock (_pendingOperationsLock)
         {

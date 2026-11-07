@@ -34,12 +34,18 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// 板面后台装载成功的回调（App 装载成功路径经 Dispatcher 调用）：置装载闸门
-    /// 并立即补跑一次巡检。装载失败路径不调用 → 本会话绝不清扫。
+    /// 并立即补跑一次巡检；AI 识图命名存量补扫延后到空闲（沿全量图片修复扫描的
+    /// ApplicationIdle 先例）。装载失败路径不调用 → 本会话绝不清扫、零补扫。
     /// </summary>
     internal void OnBoardLoadCompleted()
     {
         _boardLoadSucceeded = true;
         RunAutoCleanupCheck();
+        // AI 识图命名存量补扫：Enabled=false 时 TryEnqueue 自零动作；会话级尝试
+        // 标记防重（开关翻转补扫与本触发天然去重）。
+        Dispatcher.InvokeAsync(
+            _aiImageNamingScheduler.EnqueueExistingUnnamedImages,
+            DispatcherPriority.ApplicationIdle);
     }
 
     private void RunAutoCleanupCheck()

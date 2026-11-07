@@ -436,8 +436,49 @@ public sealed class ExternalDropImportServiceTests
         List<string> messages,
         IImageNormalizer normalizer,
         BoardOperationGate? gate = null,
-        DefaultSubgroupState? defaultSubgroup = null) =>
-        new(normalizer, board, store, messages.Add, gate, defaultSubgroup: defaultSubgroup);
+        DefaultSubgroupState? defaultSubgroup = null,
+        AiImageNamingScheduler? aiImageNaming = null) =>
+        new(
+            normalizer,
+            board,
+            store,
+            messages.Add,
+            gate,
+            defaultSubgroup: defaultSubgroup,
+            aiImageNaming: aiImageNaming);
+
+    [TestMethod]
+    public async Task ImportAsync_ImageImportSuccessTriggersAiNamingEnqueue()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var store = new RecordingBoardStore(directory.Root);
+        var pipelineMessages = new List<string>();
+        var schedulerMessages = new List<string>();
+        var trackedRounds = new List<Task>();
+        using var dispatcherThread = new StaDispatcherThread();
+        var scheduler = AiImageNamingTriggerHarness.CreateEnabledNoKeyScheduler(
+            dispatcherThread.Dispatcher, board, store, schedulerMessages, trackedRounds);
+        var service = CreateService(
+            board,
+            store,
+            pipelineMessages,
+            new RecordingImageNormalizer(directory.Root),
+            aiImageNaming: scheduler);
+
+        var imported = await service.ImportAsync(
+            new ExternalDropPayload.ImageCandidates(
+                [ClipboardImageCandidate.FromEncoded("PNG", [0x89, 0x50, 0x4E, 0x47])]),
+            BoardCategory.CustomerOriginal);
+
+        Assert.IsTrue(imported);
+        Assert.AreEqual(1, trackedRounds.Count, "导入成功必须触发 AI 命名入队。");
+        await trackedRounds[0].WaitAsync(TimeSpan.FromSeconds(30));
+        CollectionAssert.AreEqual(
+            new[] { "尚未配置 DeepSeek API Key：设置 → AI 设置。" },
+            schedulerMessages,
+            "触发后的排空轮次按无 Key 路径收尾（状态条恰一次、零请求）。");
+    }
 
     private static string[] CreateSourceFiles(string root, params string[] names)
     {

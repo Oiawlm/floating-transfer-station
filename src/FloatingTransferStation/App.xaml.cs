@@ -114,6 +114,26 @@ public partial class App : Application
             var windowsDataImageReader = new WindowsDataImageReader();
             var externalDropPayloadReader = new ExternalDropPayloadReader(
                 windowsDataImageReader);
+            var mutations = new BoardMutationService(board, store, ShowStatus, boardOperationGate);
+            // DeepSeek 接入地基（1.27.0）：显式装配，别处不做隐藏加密调用或请求构造。
+            // AI 整理编排（1.41.0）复用同一客户端实例（契约 #28 唯一模型口径）。
+            var secretProtector = new DpapiSecretProtector();
+            var deepSeekClient = new DeepSeekClient();
+            var aiTextOrganizer = new AiTextOrganizer(deepSeekClient);
+            // AI 识图命名调度（c2 管线接线）：唯一编排点，两条采集管线与主窗共享同一
+            // 实例（门控镜像由主窗 ApplyPreferences/构造段下发）。闭包沿上方 ShowStatus
+            // 先例——window 构造完成后自然生效；操作令牌按次读当前值（搬迁恢复会整体
+            // 替换令牌源）。
+            var aiImageNaming = new AiImageNamingScheduler(
+                new AiImageNamingOrganizer(deepSeekClient),
+                board,
+                mutations,
+                secretProtector,
+                () => window?.CurrentPreferences ?? preferences,
+                ShowStatus,
+                task => window?.TrackPendingOperation(task),
+                () => window?.WindowOperationToken ?? CancellationToken.None,
+                Dispatcher);
             var clipboardCapture = new ClipboardCaptureService(
                 new WpfClipboardReader(windowsDataImageReader),
                 normalizer,
@@ -124,8 +144,8 @@ public partial class App : Application
                 defaultCaptureCategory: defaultCaptureCategory,
                 pluginCatalog: pluginCatalog,
                 deduplicationGate: captureDeduplicationGate,
-                defaultSubgroup: defaultSubgroup);
-            var mutations = new BoardMutationService(board, store, ShowStatus, boardOperationGate);
+                defaultSubgroup: defaultSubgroup,
+                aiImageNaming: aiImageNaming);
             var externalDropImport = new ExternalDropImportService(
                 normalizer,
                 board,
@@ -133,12 +153,8 @@ public partial class App : Application
                 ShowStatus,
                 boardOperationGate,
                 pluginCatalog,
-                defaultSubgroup);
-            // DeepSeek 接入地基（1.27.0）：显式装配，别处不做隐藏加密调用或请求构造。
-            // AI 整理编排（1.41.0）复用同一客户端实例（契约 #28 唯一模型口径）。
-            var secretProtector = new DpapiSecretProtector();
-            var deepSeekClient = new DeepSeekClient();
-            var aiTextOrganizer = new AiTextOrganizer(deepSeekClient);
+                defaultSubgroup,
+                aiImageNaming);
             // 检查更新与一键更新（契约 #26）：更新服务组合根装配单例，UI 只做接线。
             var updateService = new UpdateService();
             window = new MainWindow(
@@ -168,7 +184,8 @@ public partial class App : Application
                 launcherDiscoveryStore: store,
                 appLauncher: new FloatingTransferStation.Services.AppLauncher(
                     packagedActivator: new FloatingTransferStation.Launcher.ShellPackagedAppActivator().Activate),
-                defaultSubgroup: defaultSubgroup);
+                defaultSubgroup: defaultSubgroup,
+                aiImageNamingScheduler: aiImageNaming);
             MainWindow = window;
             // 先显示收起态窗口：分类轨只依赖已装载的偏好与设置，板面数据转入
             // 后台装载，大数据量不再拖住启动到可见的时间（见 LoadBoardInBackgroundAsync）。

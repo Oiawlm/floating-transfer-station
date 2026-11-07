@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Threading;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 
@@ -262,9 +263,11 @@ public partial class MainWindow : Window, ISettingsHost
         settings.Show();
     }
 
-    /// <summary>立即应用偏好（主题/界面字体/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/AI 整理开关/启动·自动发现/启动器列数策略/记录 Markdown 阅读视图/分类内子分组/图片拖出为文件）并异步原子持久化；持久化失败经状态条提示。</summary>
+    /// <summary>立即应用偏好（主题/界面字体/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/AI 整理开关/AI 识图命名开关/启动·自动发现/启动器列数策略/记录 Markdown 阅读视图/分类内子分组/图片拖出为文件）并异步原子持久化；持久化失败经状态条提示。</summary>
     public void ApplyPreferences(AppPreferences preferences)
     {
+        // 开关翻转基准在整体换基前捕获：false→true 翻转触发存量未命名图片补扫。
+        var aiImageNamingWasEnabled = _preferences.AiImageNamingEnabled;
         _preferences = preferences;
         ApplyThemePreference(preferences.ThemeMode);
         ApplyInterfaceFontPreference(preferences.InterfaceFont);
@@ -275,6 +278,17 @@ public partial class MainWindow : Window, ISettingsHost
         _viewModel.ShortCardNotesEnabled = preferences.ShortCardNotesEnabled;
         _viewModel.AiOrganizeEnabled = preferences.AiOrganizeEnabled;
         _dragPayload.ExternalFilePayloadsEnabled = preferences.DragOutAsFileEnabled;
+        // AI 识图命名开关（#5 唯一管线）：门控镜像即时下发到调度器（唯一开关判断点）；
+        // false→true 翻转＝补扫一轮存量未命名图片（ApplicationIdle，沿装载补扫先例，
+        // 会话级尝试标记防重）。
+        _aiImageNamingScheduler.Enabled = preferences.AiImageNamingEnabled;
+        if (preferences.AiImageNamingEnabled && !aiImageNamingWasEnabled)
+        {
+            Dispatcher.InvokeAsync(
+                _aiImageNamingScheduler.EnqueueExistingUnnamedImages,
+                DispatcherPriority.ApplicationIdle);
+        }
+
         ApplySubgroupDisplayPreference(preferences.SubgroupDisplay);
         ApplyReviewMarkdownViewPreference();
         ApplyLauncherDiscoveryPreference(preferences);

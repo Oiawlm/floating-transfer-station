@@ -694,6 +694,56 @@ public sealed class AppPreferencesTests
     }
 
     [TestMethod]
+    public void Default_DisablesAiImageNaming()
+    {
+        Assert.IsFalse(
+            AppPreferences.Default.AiImageNamingEnabled,
+            "AI 识图命名开关默认关闭（AI 功能默认零打扰，沿 AI 整理总开关先例）。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesAiImageNamingEnabled()
+    {
+        // LocalStore 以 camelCase + 字符串枚举持久化：往返与键名一起验证
+        // （关与开两态都走一遍，锁 camelCase 落盘形态）。
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        foreach (var enabled in new[] { false, true })
+        {
+            var preferences = AppPreferences.Default with { AiImageNamingEnabled = enabled };
+
+            var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+            StringAssert.Contains(serialized, "\"aiImageNamingEnabled\"", "落盘键名必须是 camelCase。");
+            var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+            Assert.AreEqual(preferences, restored);
+            Assert.AreEqual(enabled, restored!.AiImageNamingEnabled);
+        }
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutAiImageNamingField_FallsBackToDisabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","aiOrganizeEnabled":true}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsFalse(
+            restored.AiImageNamingEnabled,
+            "旧 preferences.json 缺字段时必须回落到默认关闭（老用户升级零感知）。");
+        Assert.IsTrue(restored.AiOrganizeEnabled, "测试数据里的旧字段语义不受新字段影响。");
+    }
+
+    [TestMethod]
     public void Default_UsesDefaultInterfaceFont()
     {
         Assert.IsNull(

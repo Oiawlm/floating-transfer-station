@@ -560,6 +560,23 @@ public sealed class BoardService
         return true;
     }
 
+    /// <summary>
+    /// 就地更新图片卡 AI 命名标题(null=清除)。仅改标题元数据,不动内容、分类、
+    /// 顺序与置顶;标题只经 BoardMutationService 唯一落板管线写入(空串在模型
+    /// setter 归一为 null)。找不到条目或条目不是图片卡时返回 false。
+    /// </summary>
+    public bool UpdateImageTitle(Guid itemId, string? title)
+    {
+        var item = FindItem(itemId);
+        if (item is not { Kind: BoardItemKind.Image })
+        {
+            return false;
+        }
+
+        item.ImageTitle = title;
+        return true;
+    }
+
     public BoardItem? FindItem(Guid itemId)
     {
         foreach (var collection in _items.Values)
