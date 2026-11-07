@@ -398,6 +398,126 @@ public sealed class SettingsWindowAiTests
         }
     }
 
+    // ---- AI 识图命名（契约 #60，AiPage 第四卡，独立于 AI 整理开关）：默认关＋
+    // 即时生效＋重开回显；隐私披露逐字锁定；Key 卡置灰随「两 AI 开关」计算
+    //（#29 修订：任一启用即可填 Key，提示词卡只随整理）。----
+
+    [STATestMethod]
+    public void AiImageNamingToggle_DefaultsOffAppliesImmediatelyAndPersistsAcrossReopen()
+    {
+        using var directory = new TestDirectory();
+        var protector = new FakeSecretProtector();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with
+            {
+                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey)
+            }
+        };
+        var window = CreateWindow(directory, preferencesStore, protector);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var toggle = (CheckBox)settings.FindName("AiImageNamingToggle")!;
+            Assert.IsTrue(toggle.IsChecked == false, "默认关＝零打扰（AI 识图命名是显式增值功能）。");
+
+            toggle.IsChecked = true;
+            PumpUntil(settings.Dispatcher, () => preferencesStore.LastSaved?.AiImageNamingEnabled == true);
+            Assert.IsTrue(preferencesStore.LastSaved!.AiImageNamingEnabled, "开＝必须即时经 ApplyPreferences 持久化。");
+
+            settings.Close();
+            var reopened = OpenSettings(window);
+            CompleteLayout(reopened);
+            var reopenedToggle = (CheckBox)reopened.FindName("AiImageNamingToggle")!;
+            Assert.IsTrue(reopenedToggle.IsChecked == true, "重开设置窗必须回显开启态。");
+
+            reopenedToggle.IsChecked = false;
+            PumpUntil(reopened.Dispatcher, () => preferencesStore.LastSaved?.AiImageNamingEnabled == false);
+            Assert.IsFalse(preferencesStore.LastSaved!.AiImageNamingEnabled, "关＝必须持久化。");
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    [STATestMethod]
+    public void AiPage_ShowsImageNamingCardWithPrivacyDisclosure()
+    {
+        using var directory = new TestDirectory();
+        var protector = new FakeSecretProtector();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, protector);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var card = (Border)settings.FindName("AiImageNamingCard")!;
+            Assert.IsNotNull(card, "AiPage 第四卡「AI 识图命名」必须存在。");
+            Assert.IsTrue(card.IsEnabled, "识图命名卡恒可用（自身开关独立于整理总开关）。");
+            Assert.IsTrue(
+                FindDescendants<TextBlock>(card).Any(block =>
+                    block.Text == "开启后，新收集的图片会发送至 DeepSeek 识别内容并自动命名（复用上方 DeepSeek API Key），卡片悬停可见名称，拖出即为该文件名；识别失败自动跳过，不会重试。"),
+                "隐私披露必须逐字呈现在卡内（契约 #60 锁定文案）。");
+            Assert.IsTrue(
+                FindDescendants<TextBlock>(card).Any(block => block.Text.Contains("发送至 DeepSeek")),
+                "断言锚点：说明行必须含「发送至 DeepSeek」。");
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    [STATestMethod]
+    public void AiKeyCard_EnabledWhenEitherAiFeatureOn()
+    {
+        using var directory = new TestDirectory();
+        var protector = new FakeSecretProtector();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with
+            {
+                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey),
+                AiOrganizeEnabled = false,
+                AiImageNamingEnabled = true
+            }
+        };
+        var window = CreateWindow(directory, preferencesStore, protector);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var organizeToggle = (CheckBox)settings.FindName("AiOrganizeEnabledToggle")!;
+            var namingToggle = (CheckBox)settings.FindName("AiImageNamingToggle")!;
+            var keyCard = (Border)settings.FindName("AiKeyCard")!;
+            var promptCard = (Border)settings.FindName("AiPromptCard")!;
+            var namingCard = (Border)settings.FindName("AiImageNamingCard")!;
+            Assert.IsTrue(
+                organizeToggle.IsChecked == false && namingToggle.IsChecked == true,
+                "前置：整理关＋识图开。");
+            Assert.IsTrue(keyCard.IsEnabled, "任一 AI 功能启用＝Key 卡可填（Key 是共享资源，否则开识图但 Key 灰＝交互死锁）。");
+            Assert.IsFalse(promptCard.IsEnabled, "整理提示词卡只随整理开关置灰。");
+            Assert.IsTrue(namingCard.IsEnabled, "识图命名卡恒可用。");
+
+            namingToggle.IsChecked = false;
+            PumpUntil(settings.Dispatcher, () => preferencesStore.LastSaved?.AiImageNamingEnabled == false);
+            Assert.IsFalse(keyCard.IsEnabled, "两 AI 开关均关＝Key 卡置灰。");
+            Assert.IsFalse(promptCard.IsEnabled, "提示词卡保持置灰。");
+
+            organizeToggle.IsChecked = true;
+            PumpUntil(settings.Dispatcher, () => preferencesStore.LastSaved?.AiOrganizeEnabled == true);
+            Assert.IsTrue(keyCard.IsEnabled, "整理开＝Key 卡恢复可用。");
+            Assert.IsTrue(promptCard.IsEnabled, "整理开＝提示词卡恢复可用。");
+            Assert.IsTrue(namingCard.IsEnabled, "识图命名卡全程恒可用。");
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
     /// <summary>AI 整理总开关关闭态证据（FTS_AI_EVIDENCE_DIR 设置时产出真实 WPF
     /// 渲染截图）：AI 设置页总开关关＝Key 卡与整理提示词卡整卡置灰。</summary>
     [STATestMethod]
@@ -431,6 +551,58 @@ public sealed class SettingsWindowAiTests
         {
             CloseQuietly(window);
         }
+    }
+
+    /// <summary>AI 识图命名卡证据（契约 #60，FTS_AI_EVIDENCE_DIR 设置时产出真实
+    /// WPF 渲染截图，浅色主题）：①默认关态（第四卡＋隐私披露可见）；②识图开＋
+    /// 整理关＝Key 卡可用（两开关置灰联动）、提示词卡仍置灰。滚动锚＝页脚退出
+    /// 钮（第四卡是 AI 页末卡，滚到页脚即整卡含说明行入视口）。</summary>
+    [STATestMethod]
+    public void Evidence_CaptureAiImageNamingCardScreens()
+    {
+        var evidenceDirectory = Environment.GetEnvironmentVariable("FTS_AI_EVIDENCE_DIR");
+        if (string.IsNullOrWhiteSpace(evidenceDirectory))
+        {
+            Assert.Inconclusive("未设置 FTS_AI_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        var protector = new FakeSecretProtector();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with
+            {
+                DeepSeekApiKeyProtected = protector.Protect(PlainFakeKey)
+            }
+        };
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, preferencesStore, protector);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var namingToggle = (CheckBox)settings.FindName("AiImageNamingToggle")!;
+            RevealAiNamingCard(settings);
+            SaveWindowShell(settings, evidenceDirectory!, "evidence-c3-settings-off.png");
+
+            namingToggle.IsChecked = true;
+            PumpUntil(settings.Dispatcher, () => preferencesStore.LastSaved?.AiImageNamingEnabled == true);
+            RevealAiNamingCard(settings);
+            SaveWindowShell(settings, evidenceDirectory!, "evidence-c3-settings-on.png");
+        }
+        finally
+        {
+            CloseQuietly(window);
+        }
+    }
+
+    /// <summary>把「AI 识图命名」卡滚入视野（第四卡是 AI 页末卡：内容滚动视口
+    /// 滚到底即整卡含隐私说明行入视口——页脚退出钮在视口外常驻，BringIntoView
+    /// 对其无效），并完成布局。外层视口在可视树枚举序先于嵌套内层（如提示词
+    /// 编辑框自带滚动条），First() 恰取外层。</summary>
+    private static void RevealAiNamingCard(Window settings)
+    {
+        FindDescendants<ScrollViewer>(settings).First().ScrollToEnd();
+        CompleteLayout(settings);
     }
 
     // ---- 整理提示词编辑卡（1.52.0，契约 #29 修订）----

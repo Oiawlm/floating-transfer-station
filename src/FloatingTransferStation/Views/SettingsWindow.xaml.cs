@@ -100,6 +100,8 @@ public partial class SettingsWindow : Window
         LauncherDiscoveryToggle.IsChecked = host.CurrentPreferences.LauncherDiscoveryEnabled;
         AutoCleanupToggle.IsChecked = host.CurrentPreferences.AutoCleanupEnabled;
         AiOrganizeEnabledToggle.IsChecked = host.CurrentPreferences.AiOrganizeEnabled;
+        // AI 识图命名（#60，实验性默认关，独立于 AI 整理开关）：构造同步段回显。
+        AiImageNamingToggle.IsChecked = host.CurrentPreferences.AiImageNamingEnabled;
         ReviewMarkdownViewToggle.IsChecked = host.CurrentPreferences.ReviewMarkdownViewEnabled;
         // 图片拖出为文件（契约 #58 实验性第三项）：构造同步段回显。
         DragOutAsFileToggle.IsChecked = host.CurrentPreferences.DragOutAsFileEnabled;
@@ -115,7 +117,9 @@ public partial class SettingsWindow : Window
         SubgroupModeComboBox.SelectedItem = subgroupItems.Single(item =>
             item.Tag is SubgroupDisplayMode mode &&
             mode == host.CurrentPreferences.SubgroupDisplay);
-        SetAiOrganizeAreasAvailability(host.CurrentPreferences.AiOrganizeEnabled);
+        SetAiOrganizeAreasAvailability(
+            host.CurrentPreferences.AiOrganizeEnabled,
+            host.CurrentPreferences.AiImageNamingEnabled);
         // 档位显示文案由唯一映射派生（全仓小时数字面量只允许出现在映射与测试期望），
         // 枚举序≠显示序（零值是默认档 24h），选中项一律按 Tag 匹配、不依赖下标；
         // 总开关关闭时下拉置灰（档位仍照常持久化）。
@@ -1570,8 +1574,29 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        SetAiOrganizeAreasAvailability(enabled);
+        SetAiOrganizeAreasAvailability(enabled, _host.CurrentPreferences.AiImageNamingEnabled);
         _host.ApplyPreferences(_host.CurrentPreferences with { AiOrganizeEnabled = enabled });
+    }
+
+    // ---- AI 识图命名（契约 #60，实验性默认关，独立于 AI 整理开关）：经
+    // ApplyPreferences 唯一管线即时生效＋原子持久化（契约 #5 同路；调度器门控
+    // 与翻转补扫由 MainWindow 侧 c2 管线承接）；开关状态在构造同步段回显。----
+
+    private void AiImageNamingToggle_Checked(object sender, RoutedEventArgs e) =>
+        ApplyAiImageNamingPreference(enabled: true);
+
+    private void AiImageNamingToggle_Unchecked(object sender, RoutedEventArgs e) =>
+        ApplyAiImageNamingPreference(enabled: false);
+
+    private void ApplyAiImageNamingPreference(bool enabled)
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        SetAiOrganizeAreasAvailability(_host.CurrentPreferences.AiOrganizeEnabled, enabled);
+        _host.ApplyPreferences(_host.CurrentPreferences with { AiImageNamingEnabled = enabled });
     }
 
     // ---- 实验性（首个先例，2026-11-03）：记录 Markdown 阅读视图。经 ApplyPreferences
@@ -1628,10 +1653,15 @@ public partial class SettingsWindow : Window
         SetSubgroupOrderAvailability(mode);
     }
 
-    private void SetAiOrganizeAreasAvailability(bool enabled)
+    /// <summary>
+    /// AI 页置灰联动（契约 #29 修订，2026-11-07）：Key 是两 AI 功能的共享资源，
+    /// 任一启用即可填写；整理提示词只服务 AI 整理；识图命名卡恒可用（自身开关
+    /// 独立于整理总开关）。两开关事件与构造回显都会在此刷新。
+    /// </summary>
+    private void SetAiOrganizeAreasAvailability(bool organizeEnabled, bool imageNamingEnabled)
     {
-        AiKeyCard.IsEnabled = enabled;
-        AiPromptCard.IsEnabled = enabled;
+        AiKeyCard.IsEnabled = organizeEnabled || imageNamingEnabled;
+        AiPromptCard.IsEnabled = organizeEnabled;
     }
 
     /// <summary>

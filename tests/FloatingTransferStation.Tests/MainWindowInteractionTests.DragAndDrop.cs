@@ -5,6 +5,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using FloatingTransferStation.Controls;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -2485,6 +2486,112 @@ public sealed partial class MainWindowInteractionTests
         }
         finally
         {
+            CloseWindow(window);
+        }
+    }
+
+    // ---- AI 识图命名（契约 #60）：图片卡悬停可见名称——ToolTip 挂卡片容器
+    //（命中层祖先——缩略图在两列命中层之下、直接挂它永不触发，z 序不变量同
+    // 备注条先例）绑定 ImageTitle（null 自动不显示），不改卡片布局；文字卡
+    // Note ToolTip 不动。----
+
+    [STATestMethod]
+    public void ImageCard_ThumbnailToolTipBindsImageTitle()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var titled = AddImageCard(directory, board, "titled-tooltip.png");
+        titled.ImageTitle = "产品官网首页截图";
+        var untitled = AddImageCard(directory, board, "untitled-tooltip.png");
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(board, store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            Assert.IsTrue(
+                FindDescendants<Border>(ContainerOf(window, titled))
+                    .Any(border => Equals(border.ToolTip, "产品官网首页截图")),
+                "有名字图片卡悬停必须显示 AI 命名（ToolTip 挂卡片容器＝命中层祖先）。");
+
+            Assert.IsFalse(
+                FindDescendants<Border>(ContainerOf(window, untitled))
+                    .Any(border => border.ToolTip is not null),
+                "未命名图片不得出现空 ToolTip（null 自动不显示）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>AI 识图命名面板态证据（契约 #60，FTS_NOTE_EVIDENCE_DIR 设置时产
+    /// 出真实 WPF 渲染截图，复用单一来源环境变量先例）：①开关关（默认）＝图片卡
+    /// 零命名零状态提示；②有名字图片卡真实光标悬停＝ToolTip 显示 AI 命名。</summary>
+    [STATestMethod]
+    public void ImageCard_EvidenceNamingOffBoardAndTitleToolTip()
+    {
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_NOTE_EVIDENCE_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_NOTE_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var titled = AddImageCard(directory, board, "evidence-titled.png");
+        titled.ImageTitle = "产品官网首页截图";
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(
+            board,
+            store,
+            WindowSettings.Default,
+            new DefaultCaptureCategoryState(),
+            new ImageNormalizer(store.ImagesDirectory),
+            preferences: AppPreferences.Default);
+        var savedCursor = SaveCursorPosition();
+
+        try
+        {
+            window.Show();
+            window.Topmost = true;
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            // ①开关关（默认）：两卡在板、零命名零状态提示。
+            Assert.AreEqual(
+                string.Empty,
+                StatusOf(window),
+                "关＝零状态提示（无 Key 提示/汇总都不会出现）。");
+            SaveVisualEvidence(
+                (Border)window.FindName("WindowShell"),
+                "evidence-c3-off.png",
+                "FTS_NOTE_EVIDENCE_DIR");
+
+            // ②真实光标悬停有名字图片卡：ToolTip 呈现 AI 命名（系统初始延迟
+            // 约 500ms，泵 2000ms 覆盖弹出）。ToolTip 弹在独立 Popup HWND，
+            // RenderTargetBitmap 拍不到——改屏幕级截图（窗口物理边界
+            // CopyFromScreen）后按图像核验；先断言悬停确实命中卡片容器。
+            var container = ContainerOf(window, titled);
+            HoverRealAt(window, container, new Point(24, container.ActualHeight * 0.8));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            var owner = FindDescendants<Border>(container)
+                .Single(border => Equals(border.ToolTip, titled.ImageTitle));
+            Assert.IsTrue(
+                owner.IsMouseOver,
+                "真实光标悬停必须命中卡片容器（ToolTip 的宿主）。");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(1700));
+            SaveScreenRegionEvidence(
+                window,
+                "evidence-c3-tooltip-hover.png",
+                "FTS_NOTE_EVIDENCE_DIR");
+        }
+        finally
+        {
+            RestoreCursorPosition(savedCursor);
             CloseWindow(window);
         }
     }

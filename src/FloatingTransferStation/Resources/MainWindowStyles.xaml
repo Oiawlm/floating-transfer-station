@@ -2060,7 +2060,12 @@
   <DataTemplate DataType="{x:Type models:BoardItem}">
     <Grid Style="{StaticResource CardRootStyle}">
       <Border Style="{StaticResource CardShadowLayerStyle}" />
-      <Border Style="{StaticResource CardContainerStyle}">
+      <!-- AI 识图命名（#60）：悬停卡片可见名称——ToolTip 挂卡片容器（命中层
+           祖先）：缩略图在两列命中层之下、直接挂它永不触发（z 序不变量同备注
+           条先例）；ImageTitle null（未命名/文字卡）自动不显示，按钮自身
+           ToolTip 沿祖先链更近、优先不受影响，不改卡片布局。 -->
+      <Border Style="{StaticResource CardContainerStyle}"
+              ToolTip="{Binding ImageTitle}">
         <Grid Background="Transparent">
           <Border x:Name="CardHoverFillLayer"
                   Background="{DynamicResource HoverSurfaceBrush}"
