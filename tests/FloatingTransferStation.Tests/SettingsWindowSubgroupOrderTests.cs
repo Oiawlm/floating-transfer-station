@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
@@ -522,6 +523,10 @@ public sealed class SettingsWindowSubgroupOrderTests
 
             Assert.IsFalse(card.IsEnabled, "Off＝整卡置灰（非隐藏）。");
             Assert.AreEqual(
+                0.6,
+                card.Opacity,
+                "Off＝整卡灰（共享样式禁用态）。");
+            Assert.AreEqual(
                 Visibility.Visible,
                 card.Visibility,
                 "置灰非隐藏：行仍渲染（结构在、交互禁）。");
@@ -538,6 +543,10 @@ public sealed class SettingsWindowSubgroupOrderTests
 
             Assert.IsTrue(card.IsEnabled, "切到按钮轨即解灰。");
             Assert.AreEqual(
+                1.0,
+                card.Opacity,
+                "切到按钮轨即整卡恢复全不透明（触发器退出）。");
+            Assert.AreEqual(
                 "调整每个分类内四个分组的显示顺序。",
                 note.Text,
                 "解灰后说明行复原。");
@@ -547,6 +556,102 @@ public sealed class SettingsWindowSubgroupOrderTests
         {
             CloseAll(window);
         }
+    }
+
+    /// <summary>共享卡片样式禁用态证据（FTS_DISABLED_CARD_EVIDENCE_DIR 设置时产出
+    /// 真实 WPF 渲染截图）：「面板 → 子分组顺序」卡 Off 态整卡灰（浅/深主题）＋
+    /// AI 页总开关关＝Key/整理提示词两卡整卡灰（置灰非隐藏，行与说明仍渲染）。</summary>
+    [STATestMethod]
+    public void Evidence_CaptureDisabledCardScreens()
+    {
+        var evidenceDirectory = Environment.GetEnvironmentVariable("FTS_DISABLED_CARD_EVIDENCE_DIR");
+        if (string.IsNullOrWhiteSpace(evidenceDirectory))
+        {
+            Assert.Inconclusive("未设置 FTS_DISABLED_CARD_EVIDENCE_DIR，跳过禁用卡片证据产出。");
+        }
+
+        using var directory = new TestDirectory();
+        var (window, store) = CreateContext(
+            directory,
+            s => s,
+            preferences: AppPreferences.Default with
+            {
+                SubgroupDisplay = SubgroupDisplayMode.Off,
+                AiOrganizeEnabled = false
+            });
+
+        try
+        {
+            window.Show();
+            var settings = OpenSettingsWindow(window);
+            CompleteLayout(window);
+
+            CaptureSubgroupCardScene(settings, evidenceDirectory!, "subgroup-card-light.png");
+            CaptureAiCardsScene(settings, evidenceDirectory!, "ai-cards-light.png");
+
+            settings.ApplyTheme(DesignTheme.Dark);
+            CompleteLayout(window);
+            CaptureSubgroupCardScene(settings, evidenceDirectory!, "subgroup-card-dark.png");
+            _ = store;
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    /// <summary>导航到「面板」页并把「子分组顺序」卡滚入视野后截整窗（置灰断言
+    /// 随证据帧同证）。页切换有 167ms 淡入（AnimatePageIn），切换后先泵过动画
+    /// 时长再取帧，否则截到近透明的入场起点。</summary>
+    private static void CaptureSubgroupCardScene(
+        SettingsWindow settings,
+        string directory,
+        string fileName)
+    {
+        ((RadioButton)settings.FindName("SettingsNavPanel")!).IsChecked = true;
+        PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(250));
+        var card = (Border)settings.FindName("SubgroupOrderCard")!;
+        card.BringIntoView();
+        CompleteLayout(settings);
+        Assert.IsFalse(card.IsEnabled, "Off＝整卡置灰（证据帧同证）。");
+        SaveWindowShell(settings, directory, fileName);
+    }
+
+    /// <summary>导航到「AI」页并把 Key 卡滚入视野（Key/整理提示词两卡同帧入画）
+    /// 后截整窗（总开关关＝两卡置灰随证据帧同证）；切换后先泵过页淡入时长。</summary>
+    private static void CaptureAiCardsScene(
+        SettingsWindow settings,
+        string directory,
+        string fileName)
+    {
+        ((RadioButton)settings.FindName("SettingsNavAi")!).IsChecked = true;
+        PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(250));
+        ((Border)settings.FindName("AiKeyCard")!).BringIntoView();
+        CompleteLayout(settings);
+        Assert.IsFalse(
+            ((Border)settings.FindName("AiKeyCard")!).IsEnabled,
+            "总开关关＝Key 卡置灰（证据帧同证）。");
+        Assert.IsFalse(
+            ((Border)settings.FindName("AiPromptCard")!).IsEnabled,
+            "总开关关＝整理提示词卡置灰（证据帧同证）。");
+        SaveWindowShell(settings, directory, fileName);
+    }
+
+    private static void SaveWindowShell(Window settings, string directory, string fileName)
+    {
+        Directory.CreateDirectory(directory);
+        var shell = (Border)settings.FindName("WindowShell")!;
+        var bitmap = new RenderTargetBitmap(
+            (int)Math.Ceiling(shell.ActualWidth),
+            (int)Math.Ceiling(shell.ActualHeight),
+            96,
+            96,
+            PixelFormats.Pbgra32);
+        bitmap.Render(shell);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(Path.Combine(directory, fileName));
+        encoder.Save(stream);
     }
 
     /// <summary>真实消息直驱把首行拖到落点索引 2 后投递抬起消息（镜像标签顺序节

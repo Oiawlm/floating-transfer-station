@@ -355,9 +355,11 @@ public sealed class SettingsWindowAiTests
             toggle.IsChecked = false;
             PumpUntil(settings.Dispatcher, () => preferencesStore.LastSaved is not null);
             Assert.IsFalse(keyCard.IsEnabled, "关＝Key 卡整卡置灰。");
+            Assert.AreEqual(0.6, keyCard.Opacity, "关＝Key 卡整卡灰（共享样式禁用态）。");
             Assert.IsFalse(KeyBox(settings).IsEnabled, "关＝Key 输入框置灰。");
             Assert.IsFalse(TestButton(settings).IsEnabled, "关＝测试连接置灰。");
             Assert.IsFalse(promptCard.IsEnabled, "关＝整理提示词卡整卡置灰。");
+            Assert.AreEqual(0.6, promptCard.Opacity, "关＝提示词卡整卡灰（共享样式禁用态）。");
             Assert.IsFalse(PromptBox(settings).IsEnabled, "关＝提示词编辑框置灰。");
             Assert.IsFalse(preferencesStore.LastSaved!.AiOrganizeEnabled, "关＝必须持久化。");
             Assert.IsNotNull(
@@ -388,9 +390,17 @@ public sealed class SettingsWindowAiTests
             Assert.IsTrue(
                 ((Border)reopened.FindName("AiKeyCard")!).IsEnabled,
                 "开＝Key 卡恢复可用。");
+            Assert.AreEqual(
+                1.0,
+                ((Border)reopened.FindName("AiKeyCard")!).Opacity,
+                "开＝Key 卡恢复全不透明。");
             Assert.IsTrue(
                 ((Border)reopened.FindName("AiPromptCard")!).IsEnabled,
                 "开＝提示词卡恢复可用。");
+            Assert.AreEqual(
+                1.0,
+                ((Border)reopened.FindName("AiPromptCard")!).Opacity,
+                "开＝提示词卡恢复全不透明。");
         }
         finally
         {
