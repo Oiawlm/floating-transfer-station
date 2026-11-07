@@ -7,6 +7,7 @@ public sealed class CategoryViewModel : ObservableObject
 {
     private bool _isActive;
     private bool _isDefaultCapture;
+    private DefaultMarkerState _defaultMarkerState;
     private bool _isDropTarget;
     private string _displayName;
     private string _draftName;
@@ -60,6 +61,16 @@ public sealed class CategoryViewModel : ObservableObject
     {
         get => _isDefaultCapture;
         set => SetProperty(ref _isDefaultCapture, value);
+    }
+
+    /// <summary>默认接收标记环态（契约 #56 修订）：内容桶恒环（默认接收
+    /// <see cref="DefaultMarkerState.Active"/>、另一内容桶 Inactive），记录/启动
+    /// 永不具备落点能力恒 None；由 VM 与 <see cref="IsDefaultCapture"/> 同点
+    /// 双写（空态文案矩阵仍读后者），样式触发器单点消费。</summary>
+    public DefaultMarkerState DefaultMarkerState
+    {
+        get => _defaultMarkerState;
+        set => SetProperty(ref _defaultMarkerState, value);
     }
 
     public void BeginNameEdit()

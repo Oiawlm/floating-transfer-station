@@ -14,7 +14,7 @@ public sealed class SubgroupChipViewModel : ObservableObject
     private string _draftName;
     private bool _isEditingName;
     private bool _isFilterActive;
-    private bool _isDefaultSubgroup;
+    private DefaultMarkerState _defaultMarkerState;
     private bool _isDropTarget;
 
     public SubgroupChipViewModel(int slot)
@@ -51,13 +51,14 @@ public sealed class SubgroupChipViewModel : ObservableObject
         set => SetProperty(ref _isFilterActive, value);
     }
 
-    /// <summary>收集落点子分组标记（契约 #57 修订）：chip 右上角圆环（复用 #56
-    /// 分类默认标记规格）；chip 实例跨分类共享，本态由 VM 按激活分类差分派发
-    /// （照 IsFilterActive 先例，窗口层喂值）。</summary>
-    public bool IsDefaultSubgroup
+    /// <summary>收集落点子分组环态（契约 #57 修订＋#56 双态环语法）：chip 右上角
+    /// 圆环复用 #56 分类默认标记规格——轨可见时每 chip 恒有环（紫 iff 激活分类为
+    /// 默认接收分类且本 chip 为其默认子分组，其余灰）；chip 实例跨分类共享，
+    /// 本态由 VM 按激活分类差分派发（照 IsFilterActive 先例，窗口层喂值）。</summary>
+    public DefaultMarkerState DefaultMarkerState
     {
-        get => _isDefaultSubgroup;
-        set => SetProperty(ref _isDefaultSubgroup, value);
+        get => _defaultMarkerState;
+        set => SetProperty(ref _defaultMarkerState, value);
     }
 
     /// <summary>拖卡归属高亮（窗口层差分应用，照分类标签 IsDropTarget 先例）。</summary>
