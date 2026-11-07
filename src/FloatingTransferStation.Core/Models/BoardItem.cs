@@ -24,7 +24,9 @@ public sealed class BoardItem : INotifyPropertyChanged
     private bool _isEditingNote;
     private string? _draftNote;
     private bool _isAiOrganizing;
+    private bool _isAiNaming;
     private string? _note;
+    private string? _imageTitle;
     private string? _text;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -113,6 +115,18 @@ public sealed class BoardItem : INotifyPropertyChanged
 
     [JsonIgnore]
     public string? ImageAbsolutePath { get; set; }
+
+    /// <summary>
+    /// AI 识图命名的图片标题（仅图片卡元数据）：null=未命名；拖出交付与
+    /// ToolTip 的单一事实源；不参与搜索。持久化字段（board.json，免迁移照
+    /// <see cref="Note"/> 口径——旧 JSON 缺字段读为 null，SchemaVersion 不动），
+    /// 标题只经落板管线写入（创建工厂不加参），空串一律归一为 null。
+    /// </summary>
+    public string? ImageTitle
+    {
+        get => _imageTitle;
+        set => SetProperty(ref _imageTitle, string.IsNullOrEmpty(value) ? null : value);
+    }
 
     /// <summary>
     /// 就地编辑会话标志（1.22.0 起编辑器移入卡片 DataTemplate，由条目状态驱动
@@ -218,6 +232,24 @@ public sealed class BoardItem : INotifyPropertyChanged
     /// <summary>结束 AI 整理（成功、失败与并发放弃共用的状态清理）。</summary>
     public void EndAiOrganize() => IsAiOrganizing = false;
 
+    /// <summary>
+    /// AI 识图命名在途标志（会话状态，照 <see cref="IsAiOrganizing"/> 惯例：
+    /// 挂条目、虚拟化回收不错乱、不持久化）。驱动命名任务的每卡单飞防抖
+    /// （重入由调度器入口守卫丢弃），跨卡允许排队。
+    /// </summary>
+    [JsonIgnore]
+    public bool IsAiNaming
+    {
+        get => _isAiNaming;
+        private set => SetProperty(ref _isAiNaming, value);
+    }
+
+    /// <summary>进入 AI 识图命名。</summary>
+    public void BeginAiNaming() => IsAiNaming = true;
+
+    /// <summary>结束 AI 识图命名（成功、失败与放弃共用的状态清理）。</summary>
+    public void EndAiNaming() => IsAiNaming = false;
+
     public static BoardItem CreateText(
         string text,
         Guid id,
@@ -261,6 +293,7 @@ public sealed class BoardItem : INotifyPropertyChanged
         Note = Note,
         Subgroup = Subgroup,
         ImageRelativePath = ImageRelativePath,
+        ImageTitle = ImageTitle,
         IsPinned = IsPinned,
         ImageAbsolutePath = ImageAbsolutePath
     };

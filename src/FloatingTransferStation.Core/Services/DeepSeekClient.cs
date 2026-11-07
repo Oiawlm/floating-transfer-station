@@ -8,10 +8,111 @@ using System.Text.Json.Serialization;
 
 namespace FloatingTransferStation.Services;
 
-/// <summary>DeepSeek chat completion 的一条消息（OpenAI 兼容格式）。</summary>
-public sealed record DeepSeekChatMessage(
-    [property: JsonPropertyName("role")] string Role,
-    [property: JsonPropertyName("content")] string Content);
+/// <summary>DeepSeek 视觉消息里 image_url 格的内层载荷：url 可为 data: Base64 或 https 地址。</summary>
+public sealed record DeepSeekImageUrl([property: JsonPropertyName("url")] string Url);
+
+/// <summary>
+/// DeepSeek 多模态 content parts 数组的一格：文本格（type=text）或图片格
+/// （type=image_url）。静态工厂保证 type 与载荷字段成对出现——文本格只带
+/// text、图片格只带 image_url，序列化时另一侧按 WhenWritingNull 省略。
+/// </summary>
+public sealed record DeepSeekContentPart
+{
+    private const string TextType = "text";
+    private const string ImageUrlType = "image_url";
+
+    [JsonPropertyName("type")]
+    public string Type { get; }
+
+    [JsonPropertyName("text")]
+    public string? Text { get; }
+
+    [JsonPropertyName("image_url")]
+    public DeepSeekImageUrl? ImageUrl { get; }
+
+    private DeepSeekContentPart(string type, string? text, DeepSeekImageUrl? imageUrl)
+    {
+        Type = type;
+        Text = text;
+        ImageUrl = imageUrl;
+    }
+
+    /// <summary>文本格（type=text）。</summary>
+    public static DeepSeekContentPart FromText(string text) => new(TextType, text, null);
+
+    /// <summary>图片格（type=image_url）：url 接受 data: Base64 或 https 地址。</summary>
+    public static DeepSeekContentPart FromImageUrl(string url) => new(ImageUrlType, null, new DeepSeekImageUrl(url));
+}
+
+/// <summary>
+/// DeepSeek chat completion 的一条消息（OpenAI 兼容格式）：content 既可为纯
+/// 文本（字符串），也可为多模态 content parts 数组（识图输入，deepseek-flash
+/// 2026-08-21 起支持图片输入）——构造时二选一，都空/都填抛
+/// <see cref="ArgumentException"/>；线上形状由 <see cref="DeepSeekChatMessageConverter"/>
+/// 统一裁决（挂在本类型上，对任意序列化上下文生效，含请求侧 RequestJsonOptions）。
+/// </summary>
+[JsonConverter(typeof(DeepSeekChatMessageConverter))]
+public sealed record DeepSeekChatMessage
+{
+    public string Role { get; }
+    public string? Content { get; }
+    public IReadOnlyList<DeepSeekContentPart>? ContentParts { get; }
+
+    public DeepSeekChatMessage(
+        string Role,
+        string? Content = null,
+        IReadOnlyList<DeepSeekContentPart>? ContentParts = null)
+    {
+        if (Content is null == ContentParts is null)
+        {
+            throw new ArgumentException("content 字符串与 content parts 必须恰选其一。");
+        }
+
+        this.Role = Role;
+        this.Content = Content;
+        this.ContentParts = ContentParts;
+    }
+}
+
+/// <summary>
+/// <see cref="DeepSeekChatMessage"/> 的序列化形状裁决：content parts 非空→
+/// <c>content</c> 写数组，否则写字符串（两种形态互斥由消息构造保证）。只写
+/// 不读——请求 DTO 从不反序列化。
+/// </summary>
+public sealed class DeepSeekChatMessageConverter : JsonConverter<DeepSeekChatMessage>
+{
+    public override DeepSeekChatMessage Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options) =>
+        throw new NotSupportedException("DeepSeek 请求消息不做反序列化。");
+
+    public override void Write(
+        Utf8JsonWriter writer,
+        DeepSeekChatMessage value,
+        JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("role", value.Role);
+        writer.WritePropertyName("content");
+        if (value.ContentParts is null)
+        {
+            writer.WriteStringValue(value.Content);
+        }
+        else
+        {
+            writer.WriteStartArray();
+            foreach (var part in value.ContentParts)
+            {
+                JsonSerializer.Serialize(writer, part, options);
+            }
+
+            writer.WriteEndArray();
+        }
+
+        writer.WriteEndObject();
+    }
+}
 
 /// <summary>
 /// DeepSeek 思维链开关，对应请求体 <c>thinking</c> 对象的 <c>type</c> 字段。

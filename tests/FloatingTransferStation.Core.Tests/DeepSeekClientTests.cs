@@ -449,6 +449,79 @@ public sealed class DeepSeekClientTests
         Assert.IsFalse(result.ErrorMessage.Contains("ing key"), "错误消息不得包含 API Key 片段。");
     }
 
+    [TestMethod]
+    public async Task ChatAsync_ContentPartsMessage_SerializesImageAndTextPartsArray()
+    {
+        // 识图消息形态（deepseek-flash 2026-08-21 起支持图片输入）：content 写成
+        // content parts 数组，图片格带 image_url.url（data: Base64 可用）。
+        var handler = RespondWith(HttpStatusCode.OK, SuccessBody());
+        var client = new DeepSeekClient(handler);
+
+        await client.ChatAsync(
+            new DeepSeekChatRequest(
+                DeepSeekClient.DefaultModel,
+                [
+                    new DeepSeekChatMessage(
+                        "user",
+                        ContentParts:
+                        [
+                            DeepSeekContentPart.FromImageUrl("data:image/jpeg;base64,QUJD"),
+                            DeepSeekContentPart.FromText("给这张图片起一个名字。")
+                        ])
+                ]),
+            ApiKey);
+
+        var content = JsonDocument.Parse(handler.LastRequestBody!).RootElement
+            .GetProperty("messages")[0].GetProperty("content");
+        Assert.AreEqual(JsonValueKind.Array, content.ValueKind, "content parts 消息的 content 必须是数组。");
+        Assert.AreEqual(2, content.GetArrayLength());
+        Assert.AreEqual("image_url", content[0].GetProperty("type").GetString());
+        Assert.AreEqual(
+            "data:image/jpeg;base64,QUJD",
+            content[0].GetProperty("image_url").GetProperty("url").GetString());
+        Assert.IsFalse(content[0].TryGetProperty("text", out _), "图片格不得携带 text 字段。");
+        Assert.AreEqual("text", content[1].GetProperty("type").GetString());
+        Assert.AreEqual("给这张图片起一个名字。", content[1].GetProperty("text").GetString());
+        Assert.IsFalse(content[1].TryGetProperty("image_url", out _), "文本格不得携带 image_url 字段。");
+    }
+
+    [TestMethod]
+    public async Task ChatAsync_MixedStringAndPartsMessages_KeepBothContentShapes()
+    {
+        // 字符串消息零回归：同一请求里 system 仍是纯字符串 content、user 是数组
+        // ——自定义转换器只按各消息自身的非空侧写形状。
+        var handler = RespondWith(HttpStatusCode.OK, SuccessBody());
+        var client = new DeepSeekClient(handler);
+
+        await client.ChatAsync(
+            new DeepSeekChatRequest(
+                DeepSeekClient.DefaultModel,
+                [
+                    new DeepSeekChatMessage("system", "你是图片命名助手。"),
+                    new DeepSeekChatMessage("user", ContentParts: [DeepSeekContentPart.FromText("看图。")])
+                ]),
+            ApiKey);
+
+        var messages = JsonDocument.Parse(handler.LastRequestBody!).RootElement.GetProperty("messages");
+        Assert.AreEqual("system", messages[0].GetProperty("role").GetString());
+        Assert.AreEqual(JsonValueKind.String, messages[0].GetProperty("content").ValueKind);
+        Assert.AreEqual("你是图片命名助手。", messages[0].GetProperty("content").GetString());
+        Assert.AreEqual("user", messages[1].GetProperty("role").GetString());
+        Assert.AreEqual(JsonValueKind.Array, messages[1].GetProperty("content").ValueKind);
+        Assert.AreEqual("看图。", messages[1].GetProperty("content")[0].GetProperty("text").GetString());
+    }
+
+    [TestMethod]
+    public void ChatMessage_ConstructorRequiresExactlyOneContentForm()
+    {
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new DeepSeekChatMessage("user"),
+            "content 与 content parts 都空必须抛。");
+        Assert.ThrowsExactly<ArgumentException>(
+            () => new DeepSeekChatMessage("user", "文本", []),
+            "content 与 content parts 都填必须抛。");
+    }
+
     private static string ModelsBody() => """
         {"object":"list","data":[{"id":"deepseek-flash","object":"model","owned_by":"deepseek"}]}
         """;

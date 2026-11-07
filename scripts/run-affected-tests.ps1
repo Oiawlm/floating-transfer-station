@@ -153,6 +153,13 @@ $overrides = @(
     # Core 服务显式覆写（约定派生前的特例：文件 stem 不等于/窄于测试类名）
     @{ Name = 'Core.AiOrganizePrompt'; Filter = 'FullyQualifiedName~AiTextOrganizer'; Globs = @(
         'src/FloatingTransferStation.Core/Services/AiOrganizePrompt.cs') },
+    # AI 识图命名三件套（2026-11-08，c1）：提示词常量与缩略编码器无同名测试类，
+    # 锁定面＝AiImageNamingOrganizerTests（system 提示词逐字锁定＋编码失败/图片
+    # 缺失零请求守卫），照 Core.AiOrganizePrompt 的「文件→编排器测试族」先例。
+    @{ Name = 'Core.AiImageNamingPrompt'; Filter = 'FullyQualifiedName~AiImageNaming'; Globs = @(
+        'src/FloatingTransferStation.Core/Services/AiImageNamingPrompt.cs') },
+    @{ Name = 'Core.AiImageNamingEncoder'; Filter = 'FullyQualifiedName~AiImageNaming'; Globs = @(
+        'src/FloatingTransferStation.Core/Services/AiImageNamingEncoder.cs') },
     # 原子写契约（实现＋接口，2026-10-27 F2 缩圈 §三.D）：接口消费面＝Core.Tests×5（恒跑基线已覆盖）
     # ＋App 侧 LocalStore 36＋DataDirectoryChange 5——有限族可枚举、无共享 harness 间接。
     @{ Name = 'Core.AtomicTextWriter'; Filter = 'FullyQualifiedName~LocalStore|FullyQualifiedName~DataDirectoryChange'; Globs = @(
