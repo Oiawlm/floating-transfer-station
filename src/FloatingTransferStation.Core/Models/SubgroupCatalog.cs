@@ -12,6 +12,11 @@ public static class SubgroupCatalog
 {
     public const int SlotCount = 4;
 
+    /// <summary>「全部」伪 chip 显示名（契约 #57 修订，实验开关默认关）：开关开启
+    /// 时恒居轨首的聚合视图入口，无槽身份——不参与槽序拖排/改名/拖放归属/默认
+    /// 落点。两字恒容于开启后的五列等分（最小面板每 chip ≈57 DIP）。</summary>
+    public const string AllChipName = "全部";
+
     /// <summary>
     /// 子分组名上限（裁决＝3 字符）：最小面板 310 → 轨可用宽约 260 DIP、四槽
     /// UniformGrid 各约 65 DIP，3 字×12px＝36 加内边距充裕、4 字溢出；默认集

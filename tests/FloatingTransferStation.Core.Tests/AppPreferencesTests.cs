@@ -883,6 +883,53 @@ public sealed class AppPreferencesTests
     }
 
     [TestMethod]
+    public void Default_DisablesSubgroupAllChip()
+    {
+        Assert.IsFalse(
+            AppPreferences.Default.SubgroupAllChipEnabled,
+            "默认关闭（2026-11-07 起，实验性；聚合视图交互仍在打磨）。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesSubgroupAllChipEnabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        foreach (var enabled in new[] { false, true })
+        {
+            var preferences = AppPreferences.Default with { SubgroupAllChipEnabled = enabled };
+
+            var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+            StringAssert.Contains(serialized, "\"subgroupAllChipEnabled\"", "落盘键名必须是 subgroupAllChipEnabled（camelCase）。");
+            var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+            Assert.AreEqual(preferences, restored);
+            Assert.AreEqual(enabled, restored!.SubgroupAllChipEnabled);
+        }
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutSubgroupAllChipField_FallsBackToDisabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","interfaceFont":null}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsFalse(
+            restored.SubgroupAllChipEnabled,
+            "缺字段回落构造默认＝关闭。");
+    }
+
+    [TestMethod]
     public void Default_ZeroExperimentalDefaultsMigrationStamp()
     {
         Assert.AreEqual(

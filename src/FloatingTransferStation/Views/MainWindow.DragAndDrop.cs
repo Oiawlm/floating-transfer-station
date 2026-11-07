@@ -62,6 +62,9 @@ public partial class MainWindow : Window
         finally
         {
             EndPanelDrag();
+            // AI 命名临时副本清理（#60 唯一调用点）：DoDragDrop 同步返回时 Shell
+            // Drop 目标已完成复制，生命周期单点自持在 DragPayloadService 内。
+            _dragPayload.ClearTemporaryDeliveryFiles();
             ResetCardPressState();
         }
     }

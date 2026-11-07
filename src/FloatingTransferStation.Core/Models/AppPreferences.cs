@@ -186,6 +186,7 @@ public sealed record AppPreferences(
     bool ReviewMarkdownViewEnabled = true,
     SubgroupDisplayMode SubgroupDisplay = SubgroupDisplayMode.Off,
     bool DragOutAsFileEnabled = true,
+    bool SubgroupAllChipEnabled = false,
     int ExperimentalDefaultsMigrationVersion = 0)
 {
     public static AppPreferences Default { get; } = new();

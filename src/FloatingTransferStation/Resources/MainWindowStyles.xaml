@@ -603,11 +603,12 @@
          标签不再整圈紫框，聚焦反馈由编辑器自身的 Themed 描边承载。 -->
   </Style>
 
-  <!-- 子分组 chip 样式族（实验性，契约 #57 形态①，2026-11-05）：视觉沿分类轨
-       标签语言（边框/圆角/hover/激活 accent）。四槽 UniformGrid 各约 65 DIP
-       （最小面板 310−页边 24≈286÷4），3 字×12px＝36＋内边距充裕；名称上限 3
-       字符由编辑器 MaxLength 单一来源承载（备注 120 先例），设置侧 LimitName
-       归一。 -->
+  <!-- 子分组 chip 样式族（实验性，契约 #57 形态①，2026-11-05；2026-11-07 修订：
+       「全部」伪 chip 复用同族样式——鸭子类型按 IsFilterActive 同名命中）：视觉沿
+       分类轨标签语言（边框/圆角/hover/激活 accent）。四槽 UniformGrid 各约 65 DIP
+       （最小面板 310−页边 24≈286÷4）；实验开关开启后五列等分 ≈57 DIP，3 字×12px
+       ＝36＋内边距仍容纳；名称上限 3 字符由编辑器 MaxLength 单一来源承载（备注
+       120 先例），设置侧 LimitName 归一。 -->
   <Style x:Key="SubgroupChipContainerStyle" TargetType="Border">
     <Setter Property="Margin" Value="2,4" />
     <Setter Property="Background" Value="Transparent" />
@@ -2068,7 +2069,12 @@
   <DataTemplate DataType="{x:Type models:BoardItem}">
     <Grid Style="{StaticResource CardRootStyle}">
       <Border Style="{StaticResource CardShadowLayerStyle}" />
-      <Border Style="{StaticResource CardContainerStyle}">
+      <!-- AI 识图命名（#60）：悬停卡片可见名称——ToolTip 挂卡片容器（命中层
+           祖先）：缩略图在两列命中层之下、直接挂它永不触发（z 序不变量同备注
+           条先例）；ImageTitle null（未命名/文字卡）自动不显示，按钮自身
+           ToolTip 沿祖先链更近、优先不受影响，不改卡片布局。 -->
+      <Border Style="{StaticResource CardContainerStyle}"
+              ToolTip="{Binding ImageTitle}">
         <Grid Background="Transparent">
           <Border x:Name="CardHoverFillLayer"
                   Background="{DynamicResource HoverSurfaceBrush}"

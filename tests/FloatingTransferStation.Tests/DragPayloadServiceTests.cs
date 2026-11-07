@@ -477,6 +477,159 @@ public sealed class DragPayloadServiceTests
         }
     }
 
+    // ---- AI 识图命名交付层（契约 #61，实验性默认关）：有 ImageTitle 且拖出文件
+    // 开关开＝临时副本按清洗名交付（受管本体绝不动、Preferred Copy 照旧、同批
+    // 同名 -2 唯一化）；无名/开关关＝现状 Guid 名；剪贴板路径不连坐（临时文件
+    // 生命周期无法绑定剪贴板会话）。----
+
+    [STATestMethod]
+    public void BuildDrag_TitledImageDeliversTemporaryCopyWithSanitizedName()
+    {
+        using var directory = new TestDirectory();
+        var item = CreateManagedImage(directory, "titled.png");
+        // 标题混入非法字符（/）验证入副本前二次清洗；盐防跨次运行残留文件撞名。
+        item.ImageTitle = $"蓝色图表{TitleSalt()}/第二版";
+        var service = new DragPayloadService { ExternalFilePayloadsEnabled = true };
+        var expectedBase = FileNameSanitizer.Sanitize(item.ImageTitle)!;
+
+        try
+        {
+            var data = service.BuildDrag(item);
+
+            Assert.AreEqual(item.Id, service.GetInternalItemId(data));
+            var delivered = data.GetFileDropList().Cast<string>().ToArray();
+            Assert.AreEqual(1, delivered.Length);
+            Assert.AreEqual(
+                Path.Combine(Path.GetTempPath(), DragPayloadService.DeliveryCopyDirectoryName),
+                Path.GetDirectoryName(delivered[0]),
+                "FileDropList 必须指向临时交付目录。");
+            Assert.AreEqual($"{expectedBase}.png", Path.GetFileName(delivered[0]), "交付文件名必须是清洗名。");
+            Assert.IsTrue(File.Exists(delivered[0]), "临时副本必须真实落盘。");
+            Assert.IsTrue(File.Exists(item.ImageAbsolutePath!), "受管本体必须原位保留（绝不改名/移动）。");
+            CollectionAssert.AreEqual(
+                File.ReadAllBytes(item.ImageAbsolutePath!),
+                File.ReadAllBytes(delivered[0]),
+                "副本内容必须与受管本体逐字节一致。");
+            Assert.IsTrue(data.GetDataPresent(DataFormats.Bitmap));
+            var bytes = ((MemoryStream)data.GetData(DragPayloadService.PreferredDropEffectFormat)!).ToArray();
+            Assert.AreEqual((int)DragDropEffects.Copy, BitConverter.ToInt32(bytes, 0), "Preferred DropEffect(Copy) 声明照旧。");
+        }
+        finally
+        {
+            service.ClearTemporaryDeliveryFiles();
+        }
+    }
+
+    [STATestMethod]
+    public void BuildDrag_UntitledImageKeepsManagedGuidPath()
+    {
+        using var directory = new TestDirectory();
+        var item = CreateManagedImage(directory, "untitled.png");
+        var service = new DragPayloadService { ExternalFilePayloadsEnabled = true };
+
+        var data = service.BuildDrag(item);
+
+        CollectionAssert.AreEqual(
+            new[] { item.ImageAbsolutePath! },
+            data.GetFileDropList().Cast<string>().ToArray(),
+            "无名图片＝现状受管本体路径（Guid 名）。");
+        Assert.IsTrue(data.GetDataPresent(DataFormats.Bitmap));
+    }
+
+    [STATestMethod]
+    public void BuildDrag_DisabledKeepsInternalIdOnly()
+    {
+        using var directory = new TestDirectory();
+        var item = CreateManagedImage(directory, "titled-gated.png");
+        item.ImageTitle = $"已命名但开关关{TitleSalt()}";
+        var service = new DragPayloadService();
+
+        var data = service.BuildDrag(item);
+
+        Assert.AreEqual(item.Id, service.GetInternalItemId(data), "有名字开关关＝门控单点优先，仅内部 ID。");
+        Assert.IsFalse(data.GetDataPresent(DataFormats.FileDrop), "关＝不创建临时副本、不交付文件组。");
+        Assert.IsFalse(data.GetDataPresent(DataFormats.Bitmap));
+        Assert.IsFalse(data.GetDataPresent(DragPayloadService.PreferredDropEffectFormat));
+    }
+
+    [STATestMethod]
+    public void BuildDragBatch_TitledBatchDeliversUniqueNames()
+    {
+        using var directory = new TestDirectory();
+        var title = $"同名图{TitleSalt()}";
+        var first = CreateManagedImage(directory, "titled-batch-first.png");
+        var second = CreateManagedImage(directory, "titled-batch-second.png");
+        first.ImageTitle = title;
+        second.ImageTitle = title;
+        var service = new DragPayloadService { ExternalFilePayloadsEnabled = true };
+
+        try
+        {
+            var data = service.BuildDragBatch([second, first]);
+
+            CollectionAssert.AreEqual(
+                new[] { second.Id, first.Id },
+                service.GetInternalItemIds(data)!.ToArray());
+            var files = data.GetFileDropList().Cast<string>().ToArray();
+            Assert.AreEqual(2, files.Length);
+            Assert.AreEqual($"{title}.png", Path.GetFileName(files[0]), "按板内序：先者占基名。");
+            Assert.AreEqual($"{title}-2.png", Path.GetFileName(files[1]), "同批同名：后者 -2 递增唯一化。");
+            Assert.IsTrue(File.Exists(files[0]) && File.Exists(files[1]), "两个临时副本都真实落盘。");
+            CollectionAssert.AreEqual(
+                File.ReadAllBytes(second.ImageAbsolutePath!),
+                File.ReadAllBytes(files[0]),
+                "各副本内容与对应受管本体一致。");
+        }
+        finally
+        {
+            service.ClearTemporaryDeliveryFiles();
+        }
+    }
+
+    [STATestMethod]
+    public void BuildClipboardPayload_TitledImageStillUsesManagedPath()
+    {
+        using var directory = new TestDirectory();
+        var first = CreateManagedImage(directory, "clipboard-titled-first.png");
+        var second = CreateManagedImage(directory, "clipboard-titled-second.png");
+        first.ImageTitle = $"剪贴板不连坐{TitleSalt()}";
+        second.ImageTitle = $"剪贴板批量{TitleSalt()}";
+        var service = new DragPayloadService();
+
+        var single = service.BuildClipboardPayload([first]);
+        CollectionAssert.AreEqual(
+            new[] { first.ImageAbsolutePath! },
+            single.GetFileDropList().Cast<string>().ToArray(),
+            "单张剪贴板＝受管本体路径（Guid 名，不用命名副本）。");
+
+        var batch = service.BuildClipboardPayload([first, second]);
+        CollectionAssert.AreEqual(
+            new[] { first.ImageAbsolutePath!, second.ImageAbsolutePath! },
+            batch.GetFileDropList().Cast<string>().ToArray(),
+            "纯图片批剪贴板＝受管本体路径按序（不连坐锁定）。");
+    }
+
+    [STATestMethod]
+    public void ClearTemporaryDeliveryFiles_DeletesRecordedCopies()
+    {
+        using var directory = new TestDirectory();
+        var item = CreateManagedImage(directory, "cleanup.png");
+        item.ImageTitle = $"清理记账{TitleSalt()}";
+        var service = new DragPayloadService { ExternalFilePayloadsEnabled = true };
+
+        var data = service.BuildDrag(item);
+        var delivered = data.GetFileDropList().Cast<string>().Single();
+        Assert.IsTrue(File.Exists(delivered), "前置：副本已落盘。");
+
+        service.ClearTemporaryDeliveryFiles();
+        Assert.IsFalse(File.Exists(delivered), "清理后副本必须删除。");
+        service.ClearTemporaryDeliveryFiles();
+        Assert.IsFalse(File.Exists(delivered), "重复调用幂等（账本已空零动作零抛）。");
+    }
+
+    /// <summary>跨次运行防撞名的标题盐（清洗产物仍为合法文件名字符）。</summary>
+    private static string TitleSalt() => Guid.NewGuid().ToString("N")[..8];
+
     private static BoardItem CreateManagedImage(TestDirectory directory, string fileName)
     {
         var path = Path.Combine(directory.Root, fileName);

@@ -839,6 +839,33 @@ public sealed partial class MainWindowInteractionTests
         encoder.Save(stream);
     }
 
+    /// <summary>
+    /// 屏幕级证据截图（窗口物理边界 CopyFromScreen）：ToolTip 等 Popup HWND
+    /// 独立于窗口视觉树，RenderTargetBitmap（SaveVisualEvidence）拍不到——
+    /// 需要拍到弹出层的证据用本辅助；区域圈在窗口边界内、不外泄桌面内容。
+    /// </summary>
+    private static void SaveScreenRegionEvidence(
+        Window window,
+        string fileName,
+        string environmentVariable)
+    {
+        var directory = Environment.GetEnvironmentVariable(environmentVariable);
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(directory);
+        var transform = PresentationSource.FromVisual(window)!.CompositionTarget!.TransformToDevice;
+        var topLeft = window.PointToScreen(new Point(0, 0));
+        var width = (int)Math.Ceiling(window.ActualWidth * transform.M11);
+        var height = (int)Math.Ceiling(window.ActualHeight * transform.M22);
+        using var bitmap = new System.Drawing.Bitmap(width, height);
+        using var graphics = System.Drawing.Graphics.FromImage(bitmap);
+        graphics.CopyFromScreen((int)topLeft.X, (int)topLeft.Y, 0, 0, new System.Drawing.Size(width, height));
+        bitmap.Save(Path.Combine(directory, fileName), System.Drawing.Imaging.ImageFormat.Png);
+    }
+
     private static void WriteAnimatedGif(string path)
     {
         using var image = new SixLabors.ImageSharp.Image<

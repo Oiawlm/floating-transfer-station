@@ -798,7 +798,7 @@
                 <StackPanel>
                   <TextBlock Text="实验性" Style="{StaticResource SectionTitleStyle}" />
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="以下功能仍在打磨：Markdown 阅读视图与图片拖出为文件默认开启，分类内子分组默认关闭；调整立即生效并自动保存。" />
+                             Text="以下功能仍在打磨：Markdown 阅读视图与图片拖出为文件默认开启，分类内子分组与其「全部」按钮默认关闭；调整立即生效并自动保存。" />
                   <Grid Background="Transparent">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="*" />
@@ -874,6 +874,35 @@
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
                              Text="开启后图片卡可直接拖出为图片文件。" />
+                  <!-- 实验性第四项（2026-11-07，契约 #57 修订）：子分组「全部」
+                       聚合视图——开关开启后按钮轨首枚出现「全部」伪 chip，悬停即
+                       显示该分类全部卡片（含未分组）；默认关＝聚合视图交互仍在
+                       打磨。即时生效＋原子保存（契约 #5 同路）。 -->
+                  <Grid Background="Transparent" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="子分组「全部」按钮"
+                               Style="{StaticResource RowCaptionStyle}"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="实验性功能，默认关闭：聚合视图交互仍在打磨。开启后子分组轨首枚出现「全部」，悬停即显示该分类全部卡片（含未分组）。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
+                    <CheckBox x:Name="SubgroupAllChipToggle"
+                              Grid.Column="1"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              AutomationProperties.Name="子分组「全部」按钮"
+                              Checked="SubgroupAllChipToggle_Checked"
+                              Unchecked="SubgroupAllChipToggle_Unchecked" />
+                  </Grid>
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="开启后子分组轨首枚出现「全部」，悬停即显示该分类全部卡片（含未分组）。" />
                 </StackPanel>
               </Border>
             </StackPanel>
@@ -1146,6 +1175,34 @@
                   </StackPanel>
                 </StackPanel>
               </Border>
+              <Border x:Name="AiImageNamingCard" Style="{StaticResource SettingsCardStyle}" Margin="0">
+                <StackPanel>
+                  <TextBlock Text="AI 识图命名" Style="{StaticResource SectionTitleStyle}" />
+                  <Grid Background="Transparent">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="启用 AI 识图命名"
+                               Style="{StaticResource RowCaptionStyle}">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="开启后新收集的图片会自动识别命名；关闭后不再发送任何图片。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
+                    <CheckBox x:Name="AiImageNamingToggle"
+                              Grid.Column="1"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              AutomationProperties.Name="启用 AI 识图命名"
+                              Checked="AiImageNamingToggle_Checked"
+                              Unchecked="AiImageNamingToggle_Unchecked" />
+                  </Grid>
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="开启后，新收集的图片会发送至 DeepSeek 识别内容并自动命名（复用上方 DeepSeek API Key），卡片悬停可见名称，拖出即为该文件名；识别失败自动跳过，不会重试。" />
+                </StackPanel>
+              </Border>
             </StackPanel>
           </Grid>
         </ScrollViewer>
@@ -1215,32 +1272,44 @@
               Style="{StaticResource SettingsShellOutlineStyle}" />
 
       <!-- 微信二维码放大层（W5 2026-11-05；W3 2026-11-05 交互升级；2026-11-06
-           右键二维码＝复制图片＋收回缩放动画）：设置窗内遮罩层（不新建窗口），遮罩用既有
-           WindowShellBrush 键（零新配色）；左/右键单击遮罩、左键单击卡片＝关闭（两事件
+           右键二维码＝复制图片＋收回缩放动画；2026-11-08 关闭回退重编排）：设置窗内
+           遮罩层（不新建窗口）；左/右键单击遮罩、左键单击卡片＝关闭（两事件
            共用处理器，「任意单击关闭」对称语义），QR 卡右键＝复制二维码图片
            （独立职责入口不关层）、放大态微信号行左/右键复制且不关层（其处理器
-           e.Handled 阻断冒泡）；显隐走 FadeAnimation 统一管理（入场轻档 83ms、
-           收回淡出时长同步缩放时长，动效关闭立即切换），动效开时**外层整卡容器**
-           自页脚缩略图含框位置飞入落位（container transform：框随二维码一起走、
-           方→矩形形变、标题/微信号行/尾注三文字元素落位后段浮现）、关层自当下态
-           原路飞回源位置（WeChatQrOverlayCard 渲染变换，代码后置驱动，放大/收回
-           同一插值路径）；Esc 关层优先于关窗（见 SettingsWindow_PreviewKeyDown）。 -->
+           e.Handled 阻断冒泡）。结构拆分（消除原位闪现的根因修复）：根 Grid 只
+           承载布局＋命中冒泡＋Visibility 生命周期（不再挂 Opacity 淡出——卡片
+           可见度曾被遮罩曲线绑架）；遮罩纱 WeChatQrScrim 兄弟承载全窗命中面与
+           WindowShellBrush 底色（零新配色），Opacity 显隐走 FadeAnimation（入场
+           轻档 83ms；收回时长由代码后置同步缩放时长、出场曲线经 ExitEaseToken
+           指定 QrZoomOutKeySpline——与容器收回同曲线同时长，末段无骤曝；不挂
+           ManageVisibility——层塌缩由 QR 编排单一完成点收口）。动效开时**外层
+           整卡容器**自页脚缩略图含框位置飞入落位（container transform：框随二维
+           码一起走、方→矩形形变、标题/微信号行/尾注三文字元素落位后段浮现）、
+           关层自当下态原路飞回源位置（WeChatQrOverlayCard 渲染变换，代码后置
+           驱动，放大/收回同一插值路径；卡片自持 Opacity 与缩略图在收回末段
+           对齐落位线性换手）；Esc 关层优先于关窗（见 SettingsWindow_PreviewKeyDown）。 -->
       <Grid x:Name="WeChatQrOverlay"
             Grid.RowSpan="3"
             Panel.ZIndex="20"
-            Background="{DynamicResource WindowShellBrush}"
             Visibility="Collapsed"
-            Opacity="0"
-            views:FadeAnimation.ManageVisibility="True"
-            views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FastDurationMs}"
             MouseLeftButtonUp="WeChatQrOverlay_PointButtonUpCloses"
             MouseRightButtonUp="WeChatQrOverlay_PointButtonUpCloses">
+        <!-- 遮罩纱（2026-11-08 结构拆分）：铺满＝全窗命中面（命中冒泡至根处理器，
+             点击语义不变）；Opacity 基值 0，入场/收回均走 FadeAnimation。 -->
+        <Border x:Name="WeChatQrScrim"
+                Background="{DynamicResource WindowShellBrush}"
+                Opacity="0"
+                views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FastDurationMs}"
+                views:FadeAnimation.ExitEaseToken="{x:Static design:DesignTokens.QrZoomOutKeySpline}" />
         <!-- 外层居中卡容器＝过渡动画元素（2026-11-06 容器级 container transform）：
              含边框与文字子树整卡参与飞行，from＝页脚缩略图按钮含框外接矩形、
              to＝本容器恒等布局矩形，方→矩形形变由 ScaleX≠ScaleY 结构性承载；
              渲染变换（Scale→Translate 组）由代码后置构造与驱动，布局一次到位
-             恒定、动画不改布局矩形。 -->
+             恒定、动画不改布局矩形。自持 Opacity（基值 0）：入场 0→1 与遮罩纱
+             同帧同曲线同时长（兄弟不相乘、无双重变淡）；收回全程可见飞回，
+             末段与缩略图换手——代码后置编排。 -->
         <Border x:Name="WeChatQrOverlayCard"
+                Opacity="0"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 Background="{DynamicResource CardBrush}"
