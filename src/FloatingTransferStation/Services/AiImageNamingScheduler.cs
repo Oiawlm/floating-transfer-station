@@ -67,9 +67,9 @@ public sealed class AiImageNamingScheduler(
     public bool Enabled { get; set; }
 
     /// <summary>
-    /// 入队一张待命名图片卡：开关关＝零动作；卡不存在/非图片/已有名/已在命名
-    /// ＝跳过；会话内已尝试过＝跳过（失败卡本会话不重试）。未在排空则启动一轮
-    /// 并经 trackOperation 挂入退出排空（TrackPendingOperation）。
+    /// 入队一张待命名图片卡：开关关＝零动作；卡不存在、非图片卡、已有名或已在
+    /// 命名＝跳过；会话内已尝试过＝跳过（失败卡本会话不重试）。未在排空则启动
+    /// 一轮并经 trackOperation 挂入退出排空（TrackPendingOperation）。
     /// </summary>
     public void TryEnqueue(Guid itemId)
     {
