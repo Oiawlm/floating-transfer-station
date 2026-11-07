@@ -15,18 +15,19 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 设置窗页脚「关于」区联系方式（W5 2026-11-05；W3 2026-11-05 交互矩阵与
-/// 缩放入场；2026-11-06 右键二维码＝复制图片、复制按钮删除）：微信号文本与
-/// 二维码位图全部来自 ProductIdentity 单一来源（页脚/放大层共用同一冻结位图
-/// 实例）；复制（微信号文本与二维码图片）均经可注入剪贴板写入缝落盘
-///（harness 密封缺省＝响亮失败 stub，契约 #53 口径——未显式声明写意图的
+/// 设置窗页脚「关于」区联系方式（W5 2026-11-05；W3 2026-11-05 交互矩阵；
+/// 2026-11-06 右键二维码＝复制图片、复制按钮删除；2026-11-07 容器级过渡）：
+/// 微信号文本与二维码位图全部来自 ProductIdentity 单一来源（页脚/放大层共用
+/// 同一冻结位图实例）；复制（微信号文本与二维码图片）均经可注入剪贴板写入缝
+/// 落盘（harness 密封缺省＝响亮失败 stub，契约 #53 口径——未显式声明写意图的
 /// 测试一旦触达真实剪贴板即失败），反馈为触发侧微信号 Run 文本瞬时翻转；
-/// 放大层（设置窗内遮罩，不新建窗口）从缩略图单击打开、左/右键单击遮罩
-/// 空白处或 Esc 关闭（Esc 只关层不关窗）；右键二维码（缩略图/放大图一致）
-/// ＝复制二维码图片且不弹层/不关层；微信号两态行左右键皆复制微信号文本
-///（放大态复制不关层），动效开时 QR 卡自缩略图源位置缩放入场、关层自当下态
-/// 原路缩回源位置（放大/收回共用同一进度 p 插值路径：可中断、动态 From、
-/// 终态恒等零残留），动效关＝变换恒等终态即定格。
+/// 放大层（设置窗内遮罩，不新建窗口）从缩略图单击打开、左/右键单击遮罩空白处
+/// 或 Esc 关闭（Esc 只关层不关窗）；右键二维码（缩略图/放大图一致）＝复制
+/// 二维码图片且不弹层/不关层；微信号两态行左右键皆复制微信号文本（放大态复制
+/// 不关层），动效开时**外层整卡容器**自缩略图按钮含框源位置飞入落位（容器级
+/// container transform：方→矩形形变、文字三元素落位后段浮现、缩略图防双影
+/// 淡出）、关层自当下态原路飞回源位置（放大/收回共用同一进度 p 插值路径：
+/// 可中断、动态 From/续走、终态恒等零残留），动效关＝三对象定格终态。
 /// </summary>
 [TestClass]
 public sealed class SettingsWindowContactTests
@@ -279,6 +280,7 @@ public sealed class SettingsWindowContactTests
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
             PumpUntil(settings.Dispatcher, () => overlay.Opacity == 1d && overlay.Visibility == Visibility.Visible);
+            PumpUntilQrTextShown(settings);
             SaveWindowShell(settings, evidenceDirectory!, "qr-overlay-light.png");
 
             // 放大图右键复制 → 放大态 Run 反馈且层不关（2026-11-06 新交互证据）。
@@ -319,6 +321,7 @@ public sealed class SettingsWindowContactTests
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
             PumpUntil(settings.Dispatcher, () => overlay.Opacity == 1d && overlay.Visibility == Visibility.Visible);
+            PumpUntilQrTextShown(settings);
             SaveWindowShell(settings, evidenceDirectory!, "qr-overlay-dark.png");
         }
         finally
@@ -355,18 +358,19 @@ public sealed class SettingsWindowContactTests
         }
     }
 
-    /// <summary>W3 缩放过渡证据（FTS_W5_EVIDENCE_DIR 设置时产出真实 WPF 渲染
-    /// 截图）：浅/深主题放大过程多帧胶片（各≥6 帧覆盖 0→400ms 新入场时长，含
-    /// t=0 起始与终态）＋收回过程多帧胶片（开→动画满→关，各≥6 帧含 t=0 与
-    /// 终态塌缩帧）＋入场中途反向收回胶片（各≥6 帧）＋动效关开/关即时定格。
-    /// 复制走写入缝，不触碰系统剪贴板。</summary>
+    /// <summary>W3→容器级过渡证据（FTS_W5_EVIDENCE_DIR 设置时产出真实 WPF 渲染
+    /// 截图）：浅/深主题放大过程多帧胶片（各≥6 帧覆盖 0→450ms 容器入场全程
+    /// 含文字 270ms 起浮现段，含 t=0 起始与终态）＋收回过程多帧胶片（开→动画满
+    /// →关，各≥6 帧覆盖 0→250ms 收回全程含文字 90ms 先隐与缩略图 100→250ms
+    /// 回显段，含 t=0 与终态塌缩帧）＋入场中途反向收回胶片（各≥6 帧）＋动效关
+    /// 开/关即时定格。复制走写入缝，不触碰系统剪贴板。</summary>
     [STATestMethod]
-    public void Evidence_CaptureW3ZoomFrames()
+    public void Evidence_CaptureQrContainerFrames()
     {
         var evidenceDirectory = Environment.GetEnvironmentVariable("FTS_W5_EVIDENCE_DIR");
         if (string.IsNullOrWhiteSpace(evidenceDirectory))
         {
-            Assert.Inconclusive("未设置 FTS_W5_EVIDENCE_DIR，跳过 W3 缩放过渡证据产出。");
+            Assert.Inconclusive("未设置 FTS_W5_EVIDENCE_DIR，跳过容器级过渡证据产出。");
         }
 
         using var directory = new TestDirectory();
@@ -379,14 +383,14 @@ public sealed class SettingsWindowContactTests
             CompleteLayout(settings);
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
 
-            CaptureQrZoomFilm(settings, overlay, evidenceDirectory!, "zoom-light");
-            CaptureQrZoomExitFilm(settings, overlay, evidenceDirectory!, "zoom-exit-light");
-            CaptureQrZoomReverseFilm(settings, overlay, evidenceDirectory!, "zoom-reverse-light");
+            CaptureQrContainerFilm(settings, overlay, evidenceDirectory!, "container-light");
+            CaptureQrContainerExitFilm(settings, overlay, evidenceDirectory!, "container-exit-light");
+            CaptureQrContainerReverseFilm(settings, overlay, evidenceDirectory!, "container-reverse-light");
             settings.ApplyTheme(DesignTheme.Dark);
             CompleteLayout(settings);
-            CaptureQrZoomFilm(settings, overlay, evidenceDirectory!, "zoom-dark");
-            CaptureQrZoomExitFilm(settings, overlay, evidenceDirectory!, "zoom-exit-dark");
-            CaptureQrZoomReverseFilm(settings, overlay, evidenceDirectory!, "zoom-reverse-dark");
+            CaptureQrContainerFilm(settings, overlay, evidenceDirectory!, "container-dark");
+            CaptureQrContainerExitFilm(settings, overlay, evidenceDirectory!, "container-exit-dark");
+            CaptureQrContainerReverseFilm(settings, overlay, evidenceDirectory!, "container-reverse-dark");
         }
         finally
         {
@@ -409,12 +413,12 @@ public sealed class SettingsWindowContactTests
                 new RoutedEventArgs(ButtonBase.ClickEvent));
             CompleteLayout(settings);
             Assert.AreEqual(Visibility.Visible, overlay.Visibility, "动效关＝打开即时可见。");
-            SaveWindowShell(settings, evidenceDirectory!, "zoom-disabled-final-light.png");
+            SaveWindowShell(settings, evidenceDirectory!, "container-disabled-final-light.png");
 
             RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
             CompleteLayout(settings);
             Assert.AreEqual(Visibility.Collapsed, overlay.Visibility, "动效关＝关闭即时塌缩。");
-            SaveWindowShell(settings, evidenceDirectory!, "zoom-disabled-closed-light.png");
+            SaveWindowShell(settings, evidenceDirectory!, "container-disabled-closed-light.png");
         }
         finally
         {
@@ -424,8 +428,9 @@ public sealed class SettingsWindowContactTests
 
     /// <summary>放大过程多帧胶片：起始帧（先泵 1ms 让动画时钟起步——同步渲染
     /// 会取挂钟前的基值，实时应用的首个合成帧同样先走时钟 tick，起始帧须等价）
-    /// ＋40ms 步进×12 帧覆盖 400ms 入场全程＋收尾终态帧。</summary>
-    private static void CaptureQrZoomFilm(
+    /// ＋40ms 步进×12 帧覆盖 450ms 容器入场全程（280ms 步进起可对照文字浮现）
+    /// ＋收尾终态帧。</summary>
+    private static void CaptureQrContainerFilm(
         SettingsWindow settings,
         Grid overlay,
         string directory,
@@ -446,8 +451,9 @@ public sealed class SettingsWindowContactTests
     }
 
     /// <summary>收回过程多帧胶片：先泵过入场全程到恒等定格，单击关层后起始帧
-    ///（泵 1ms 同口径）＋40ms 步进×8 帧覆盖 250ms 收回全程＋终态塌缩帧。</summary>
-    private static void CaptureQrZoomExitFilm(
+    ///（泵 1ms 同口径）＋40ms 步进×8 帧覆盖 250ms 收回全程（文字 90ms 先隐、
+    /// 缩略图 100ms 起回显可对照）＋终态塌缩帧。</summary>
+    private static void CaptureQrContainerExitFilm(
         SettingsWindow settings,
         Grid overlay,
         string directory,
@@ -471,7 +477,7 @@ public sealed class SettingsWindowContactTests
 
     /// <summary>入场中途反向收回胶片：泵入入场约 120ms 后单击关层，起始帧
     ///（泵 1ms 同口径）＋40ms 步进×8 帧覆盖从当下态续收的飞行段＋终态塌缩帧。</summary>
-    private static void CaptureQrZoomReverseFilm(
+    private static void CaptureQrContainerReverseFilm(
         SettingsWindow settings,
         Grid overlay,
         string directory,
@@ -511,6 +517,16 @@ public sealed class SettingsWindowContactTests
         };
         timer.Start();
         Dispatcher.PushFrame(frame);
+    }
+
+    /// <summary>泵到容器级过渡文字三元素全部落位（延迟淡入 270→450ms 完成，
+    /// Completed 卫生置基值 1）：证据截图须拍全显层而非飞行中层。</summary>
+    private static void PumpUntilQrTextShown(SettingsWindow settings)
+    {
+        PumpUntil(settings.Dispatcher, () =>
+            ((System.Windows.UIElement)settings.FindName("WeChatQrTitle")!).Opacity == 1d &&
+            ((System.Windows.UIElement)settings.FindName("WeChatIdLargeBlock")!).Opacity == 1d &&
+            ((System.Windows.UIElement)settings.FindName("WeChatQrFootnote")!).Opacity == 1d);
     }
 
     private static void SaveWindowShell(Window settings, string directory, string fileName)
@@ -598,7 +614,8 @@ public sealed class SettingsWindowContactTests
     }
 
     // ---- W3 2026-11-05：二维码/微信号交互矩阵与缩放入场（契约 #24 W3 修订；
-    //      2026-11-06 修订：右键二维码＝复制二维码图片、复制按钮删除；放大/收回共用插值路径的缩放过渡动画）----
+    //      2026-11-06 修订：右键二维码＝复制二维码图片、复制按钮删除；放大/收回共用插值路径的缩放过渡动画；
+    //      2026-11-07 修订：容器级 container transform——动画对象＝外层整卡、文字后段浮现、缩略图防双影）----
 
     [STATestMethod]
     public void QrThumb_RightClickCopiesQrImageWithoutOpeningOverlay()
@@ -837,10 +854,24 @@ public sealed class SettingsWindowContactTests
             CompleteLayout(settings);
 
             var (scale, translate) = QrZoomTransforms(settings);
-            Assert.AreEqual(1d, scale.ScaleX, "动效关＝跳过缩放（ScaleX 恒等）。");
-            Assert.AreEqual(1d, scale.ScaleY, "动效关＝跳过缩放（ScaleY 恒等）。");
-            Assert.AreEqual(0d, translate.X, "动效关＝跳过缩放（TranslateX 恒等）。");
-            Assert.AreEqual(0d, translate.Y, "动效关＝跳过缩放（TranslateY 恒等）。");
+            Assert.AreEqual(1d, scale.ScaleX, "动效关＝跳过过渡（ScaleX 恒等）。");
+            Assert.AreEqual(1d, scale.ScaleY, "动效关＝跳过过渡（ScaleY 恒等）。");
+            Assert.AreEqual(0d, translate.X, "动效关＝跳过过渡（TranslateX 恒等）。");
+            Assert.AreEqual(0d, translate.Y, "动效关＝跳过过渡（TranslateY 恒等）。");
+            // 容器级过渡新增：文字三元素与缩略图同帧定格全显（容器含文字子树，
+            // 文字基值 XAML 为 0、动效关路径必须显式置 1 才可见）。
+            foreach (var name in new[] { "WeChatQrTitle", "WeChatIdLargeBlock", "WeChatQrFootnote" })
+            {
+                Assert.AreEqual(
+                    1d,
+                    ((System.Windows.UIElement)settings.FindName(name)!).Opacity,
+                    $"动效关＝文字元素 {name} 定格全显。");
+            }
+
+            Assert.AreEqual(
+                1d,
+                ((System.Windows.UIElement)settings.FindName("WeChatQrButton")!).Opacity,
+                "动效关＝缩略图定格全显（无双影淡出编排）。");
         }
         finally
         {
@@ -851,9 +882,9 @@ public sealed class SettingsWindowContactTests
     [STATestMethod]
     public void QrOverlay_EscapeDuringEntranceStartsAnimatedExit()
     {
-        // 动效开：打开后不等缩放入场完成立即 Esc——动画不阻断命中，层立即进入
+        // 动效开：打开后不等容器入场完成立即 Esc——动画不阻断命中，层立即进入
         // 关闭路径，且收回走动画（动态 From 续收）而非瞬回恒等（2026-11-06：
-        // 收回从瞬时切换改为共用路径的缩放动画）。
+        // 收回从瞬时切换改为共用路径的过渡动画）。
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
         var window = CreateWindow(directory, preferencesStore);
@@ -865,7 +896,7 @@ public sealed class SettingsWindowContactTests
             var (scale, translate) = QrZoomTransforms(settings);
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
-            // 泵入入场约 1/4 处（400ms 入场）再 Esc：缩放已明显离开源尺寸，
+            // 泵入入场约 1/4 处（450ms 入场）再 Esc：缩放已明显离开源尺寸，
             // 收回才有可观测的飞行段（过早打断 From≈To 无动画可采样）。
             PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(100));
 
@@ -890,8 +921,8 @@ public sealed class SettingsWindowContactTests
                 samples.Count >= 3,
                 $"采样器必须在收回途中取到值（时钟在泵内推进；采样数={samples.Count}）。");
             Assert.IsTrue(
-                samples.All(value => value > 0.2d && value < 0.99d),
-                $"收回中途必须处于非恒等飞行态（未瞬回；采样={FormatSamples(samples)}）。");
+                samples.All(value => value > 0.19d && value < 0.99d),
+                $"收回中途必须处于非恒等飞行态（未瞬回；下界＝按钮含框/容器宽比≈0.19；采样={FormatSamples(samples)}）。");
             Assert.IsTrue(
                 samples.Zip(samples.Skip(1), (a, b) => b <= a + 1e-6).All(pair => pair),
                 $"收回途中 ScaleX 必须单调递减（动画续收；采样={FormatSamples(samples)}）。");
@@ -924,7 +955,7 @@ public sealed class SettingsWindowContactTests
             var (scale, translate) = QrZoomTransforms(settings);
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
-            // 泵过入场全程（400ms 入场＋余量）到恒等定格。
+            // 泵过入场全程（450ms 入场＋余量）到恒等定格。
             PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
             Assert.AreEqual(1d, scale.ScaleX, "入场完成应处于恒等态（收回起点）。");
 
@@ -935,7 +966,7 @@ public sealed class SettingsWindowContactTests
                 $"采样器必须在收回途中取到值（采样数={samples.Count}）。");
             Assert.IsTrue(
                 samples.All(value => value > 0.19d && value < 0.99d),
-                $"收回中途必须非恒等（动画在飞；采样={FormatSamples(samples)}）。");
+                $"收回中途必须非恒等（动画在飞；下界＝按钮含框/容器宽比≈0.19；采样={FormatSamples(samples)}）。");
             Assert.IsTrue(
                 samples.Zip(samples.Skip(1), (a, b) => b <= a + 1e-6).All(pair => pair),
                 $"收回途中 ScaleX 必须单调递减（原路缩回；采样={FormatSamples(samples)}）。");
@@ -1032,8 +1063,8 @@ public sealed class SettingsWindowContactTests
     [STATestMethod]
     public void QrOverlay_ZoomCompletesAtIdentityTransform()
     {
-        // 动效开：缩放入场期间以调度器采样器收中途值（PushFrame 长泵内条件
-        // 只在首尾被求值，中途态必须由 Timer 采样捕获），泵过 400ms 入场全程
+        // 动效开：容器入场期间以调度器采样器收中途值（PushFrame 长泵内条件
+        // 只在首尾被求值，中途态必须由 Timer 采样捕获），泵过 450ms 入场全程
         // 后断言 Scale/Translate 回恒等基值（FillBehavior.Stop，零残留）。
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
@@ -1070,6 +1101,279 @@ public sealed class SettingsWindowContactTests
         }
     }
 
+    [STATestMethod]
+    public void QrOverlay_ContainerEntranceStartsAtThumbFrameGeometry()
+    {
+        // 动效开（2026-11-07 容器级几何断言）：入场起飞段采样≈按钮含框/容器外接
+        // 矩形比例（from＝页脚缩略图按钮含框外接矩形，ScaleX/Y 各自独立），
+        // |sX−sY| 显著非零＝方→矩形形变由 ScaleX≠ScaleY 结构性承载；终态恒等。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var card = (Border)settings.FindName("WeChatQrOverlayCard")!;
+            var button = (Button)settings.FindName("WeChatQrButton")!;
+            var (scale, translate) = QrZoomTransforms(settings);
+
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            // 期望比例必须在开层之后取——容器首次开层前 Collapsed 不参与布局
+            //（ActualWidth=0）；开层路径 UpdateLayout 后尺寸即定稿。
+            var expectedScaleX = button.ActualWidth / card.ActualWidth;
+            var expectedScaleY = button.ActualHeight / card.ActualHeight;
+            // 起飞窗采样：Render 优先级 Timer 捕获入场早段（PushFrame 长泵内裸读
+            // 只见动画首尾提交值，中途态必须由 Timer 采样捕获——ZoomCompletes 口
+            // 径）；取 sX 落入「期望比例＋(0, 0.11]」的首个样本为贴地窗，比例断言
+            // 窗口化以吸收采样时钟抖动。
+            var fromSample = (Sx: 0d, Sy: 0d);
+            var captured = false;
+            var sampler = new DispatcherTimer(DispatcherPriority.Render, settings.Dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(5)
+            };
+            sampler.Tick += (_, _) =>
+            {
+                if (!captured &&
+                    scale.ScaleX > expectedScaleX && scale.ScaleX <= expectedScaleX + 0.11)
+                {
+                    fromSample = (scale.ScaleX, scale.ScaleY);
+                    captured = true;
+                    sampler.Stop();
+                }
+            };
+            sampler.Start();
+            PumpUntil(settings.Dispatcher, () => captured);
+            sampler.Stop();
+
+            Assert.IsTrue(
+                captured,
+                "入场早段必须被采样捕获（sX 须落入期望比例＋(0, 0.11] 窗口）。");
+            Assert.IsTrue(
+                fromSample.Sx >= expectedScaleX - 0.005,
+                $"贴地窗 sX 必须≥按钮含框宽/容器宽（实测 {fromSample.Sx:0.###}，期望≈{expectedScaleX:0.###}）。");
+            Assert.IsTrue(
+                fromSample.Sy >= expectedScaleY - 0.005 &&
+                fromSample.Sy <= expectedScaleY + 0.13,
+                $"贴地窗 sY 必须≈按钮含框高/容器高（实测 {fromSample.Sy:0.###}，期望≈{expectedScaleY:0.###}）。");
+            Assert.IsTrue(
+                Math.Abs(fromSample.Sx - fromSample.Sy) > 0.015,
+                $"from 几何必须非等比（方→矩形形变；实测 sX={fromSample.Sx:0.###}、sY={fromSample.Sy:0.###}）。");
+
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+            AssertQrTransformIdentity(scale, translate, "容器入场收尾回到恒等（终态零残留）。");
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QrOverlay_TextFadesInAfterContainerDeparture()
+    {
+        // 动效开（2026-11-07 文字编排时序断言）：飞行早段文字三元素仍为基值 0
+        // 且容器在飞；270ms 起延迟淡入（总进度≈60%）后段可见；落位后文字定格
+        // 基值 1（HoldEnd＋Completed 卫生）。容器尺寸布局恒定，文字只动 Opacity。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var title = (System.Windows.UIElement)settings.FindName("WeChatQrTitle")!;
+            var idRow = (System.Windows.UIElement)settings.FindName("WeChatIdLargeBlock")!;
+            var footnote = (System.Windows.UIElement)settings.FindName("WeChatQrFootnote")!;
+            var (scale, translate) = QrZoomTransforms(settings);
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+
+            // t≈120ms：容器已离位在飞，文字三元素未起步（基值 0）。
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(120));
+            Assert.AreEqual(0d, title.Opacity, "t≈120ms 标题仍为基值 0（未随容器缩放呈现）。");
+            Assert.AreEqual(0d, idRow.Opacity, "t≈120ms 微信号行仍为基值 0。");
+            Assert.AreEqual(0d, footnote.Opacity, "t≈120ms 尾注仍为基值 0。");
+            Assert.IsTrue(
+                scale.ScaleX > 0.2d && scale.ScaleX < 0.99d,
+                $"t≈120ms 容器必须在飞（实测 ScaleX={scale.ScaleX:0.###}）。");
+
+            // t≈340ms：文字延迟淡入已起步（270ms 起 180ms）。
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(220));
+            Assert.IsTrue(title.Opacity > 0d, $"t≈340ms 标题应已开始浮现（实测 {title.Opacity:0.###}）。");
+            Assert.IsTrue(idRow.Opacity > 0d, $"t≈340ms 微信号行应已开始浮现（实测 {idRow.Opacity:0.###}）。");
+            Assert.IsTrue(footnote.Opacity > 0d, $"t≈340ms 尾注应已开始浮现（实测 {footnote.Opacity:0.###}）。");
+
+            // 落位后（>450ms＋文字尾 450ms）：文字定格 1、容器恒等。
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(400));
+            Assert.AreEqual(1d, title.Opacity, "落位后标题定格基值 1。");
+            Assert.AreEqual(1d, idRow.Opacity, "落位后微信号行定格基值 1。");
+            Assert.AreEqual(1d, footnote.Opacity, "落位后尾注定格基值 1。");
+            AssertQrTransformIdentity(scale, translate, "落位后容器恒等。");
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QrOverlay_ExitHidesTextBeforeContainerLands()
+    {
+        // 动效开（2026-11-07 收回编排时序断言）：关层早段文字先隐（90ms 快速
+        // 淡出，显式 From 当下值）且容器同时收回在飞；落位后文字 0、缩略图 1
+        //（防双影回显交接）。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
+            var title = (System.Windows.UIElement)settings.FindName("WeChatQrTitle")!;
+            var idRow = (System.Windows.UIElement)settings.FindName("WeChatIdLargeBlock")!;
+            var footnote = (System.Windows.UIElement)settings.FindName("WeChatQrFootnote")!;
+            var thumb = (System.Windows.UIElement)settings.FindName("WeChatQrButton")!;
+            var (scale, translate) = QrZoomTransforms(settings);
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+            Assert.AreEqual(1d, title.Opacity, "前置：落位后标题应为 1。");
+
+            RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
+            // 关层早段：Render 优先级 Timer 捕获收回全程四元组（文字三元素＋容器
+            // scale；裸条件轮询只见动画首尾提交值，中途态必须由 Timer 采样捕获）。
+            var samples = new List<(double Scale, double Title, double IdRow, double Footnote)>();
+            var sampler = new DispatcherTimer(DispatcherPriority.Render, settings.Dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(5)
+            };
+            sampler.Tick += (_, _) =>
+                samples.Add((scale.ScaleX, title.Opacity, idRow.Opacity, footnote.Opacity));
+            sampler.Start();
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(200));
+            sampler.Stop();
+            Assert.IsTrue(
+                samples.Count >= 10,
+                $"收回段必须被采样捕获（采样数={samples.Count}）。");
+            // 容器在飞段＝scale 未回恒等的样本（关层进行中变换只从恒等向源比例
+            // 递减、HoldEnd 定格非恒等终值，恒等只在动画前或 Completed 复位后）。
+            var flight = samples.Where(p => p.Scale < 0.99d).ToList();
+            Assert.IsTrue(
+                flight.Count >= 3,
+                $"容器收回飞行段必须被采样捕获（飞行采样={flight.Count}，全样本={samples.Count}）。");
+            Assert.IsTrue(
+                flight.Any(p => p.Title is > 0d and < 1d),
+                $"文字必须先于容器落位淡出且经过中间态（飞行段标题采样={FormatSamples(flight.Select(p => p.Title).ToList())}）。");
+            Assert.IsTrue(
+                flight.Any(p => p.IdRow < 1d) && flight.Any(p => p.Footnote < 1d),
+                "微信号行与尾注须与标题同步先隐。");
+            Assert.IsTrue(
+                flight.First().Title >= flight.Last().Title,
+                $"飞行段标题单调下降（首={flight.First().Title:0.###}、末={flight.Last().Title:0.###}）。");
+
+            PumpUntil(settings.Dispatcher, () => overlay.Visibility == Visibility.Collapsed);
+            Assert.AreEqual(0d, title.Opacity, "收回完成后标题基值 0（层关静止态）。");
+            Assert.AreEqual(0d, idRow.Opacity, "收回完成后微信号行基值 0。");
+            Assert.AreEqual(0d, footnote.Opacity, "收回完成后尾注基值 0。");
+            Assert.AreEqual(1d, thumb.Opacity, "收回完成后缩略图回显 1（防双影终态）。");
+            AssertQrTransformIdentity(scale, translate, "收回完成后容器恒等。");
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QrOverlay_ReopenDuringExitRequeuesTextAndContinuesContainer()
+    {
+        // 动效开（2026-11-07 中断重排语义断言，Q5）：关中途再开——容器层自当下
+        // 插值态续走（首采样仍在飞行区间、不瞬跳回源矩形也不瞬跳恒等），文字层
+        // 不续走、自基值 0 按开层方向重排队（延迟淡入）。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
+            var title = (System.Windows.UIElement)settings.FindName("WeChatQrTitle")!;
+            var (scale, translate) = QrZoomTransforms(settings);
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+
+            RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
+            // 关中途再开：Render 优先级 Timer 捕获收回中段首个落入 (0.35, 0.70)
+            // 的样本，并在**同一调度器批次内立刻再开**（再开若等到长泵返回，收回
+            // 动画可能已 Completed 复位恒等——续走断言的时序前提即「收回在飞时
+            // 再开」）；随后同采样器捕获再开入场首段提交值。
+            var midExitSample = 0d;
+            var reopened = false;
+            var reopenSamples = new List<double>();
+            var reopenTitleSamples = new List<double>();
+            var sampler = new DispatcherTimer(DispatcherPriority.Render, settings.Dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(5)
+            };
+            sampler.Tick += (_, _) =>
+            {
+                if (!reopened)
+                {
+                    if (scale.ScaleX is > 0.35d and < 0.7d)
+                    {
+                        midExitSample = scale.ScaleX;
+                        ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                            new RoutedEventArgs(ButtonBase.ClickEvent));
+                        reopened = true;
+                    }
+
+                    return;
+                }
+
+                if (reopenSamples.Count < 3)
+                {
+                    // 再开后首段采样（远早于文字淡入 BeginTime 270ms）：容器值进
+                    // 续走判定，标题值进「自 0 重排队」判定。
+                    reopenSamples.Add(scale.ScaleX);
+                    reopenTitleSamples.Add(title.Opacity);
+                }
+            };
+            sampler.Start();
+            PumpUntil(settings.Dispatcher, () => reopened && reopenSamples.Count >= 3);
+            sampler.Stop();
+            Assert.IsTrue(
+                midExitSample > 0.3d && midExitSample < 0.99d,
+                $"关中途应处于非恒等飞行态（实测 ScaleX={midExitSample:0.###}）。");
+            Assert.AreEqual(Visibility.Visible, overlay.Visibility, "再开＝层立即回到打开路径。");
+            Assert.IsTrue(
+                reopenSamples.Count >= 1,
+                $"再开入场必须被采样捕获（采样数={reopenSamples.Count}）。");
+            var reopenSample = reopenSamples[0];
+            Assert.IsTrue(
+                Math.Abs(reopenSample - midExitSample) < 0.08d && reopenSample > 0.3d,
+                $"再开首采样必须自当下态续走（不瞬跳回源矩形≈0.19 也不瞬跳恒等；" +
+                $"关中途={midExitSample:0.###}、再开首采样={reopenSample:0.###}）。");
+            Assert.IsTrue(
+                reopenTitleSamples.Count > 0 && reopenTitleSamples.All(v => v == 0d),
+                $"文字不续走：再开后首段标题须仍为基值 0（重排队、延迟淡入未起步；" +
+                $"采样={FormatSamples(reopenTitleSamples)}）。");
+
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+            AssertQrTransformIdentity(scale, translate, "续走入场完成＝容器恒等。");
+            Assert.AreEqual(1d, title.Opacity, "重排队文字落位后定格 1。");
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
     private static void RaisePointUp(UIElement target, RoutedEvent routedEvent)
     {
         var button = routedEvent == UIElement.MouseRightButtonUpEvent ? MouseButton.Right : MouseButton.Left;
@@ -1080,10 +1384,11 @@ public sealed class SettingsWindowContactTests
         });
     }
 
-    /// <summary>QR 卡缩放过渡变换（构造函数建组：先 Scale 后 Translate，顺序冻结）。</summary>
+    /// <summary>QR 容器级过渡变换（构造函数建组挂外层容器：先 Scale 后 Translate，
+    /// 顺序冻结）。</summary>
     private static (ScaleTransform Scale, TranslateTransform Translate) QrZoomTransforms(SettingsWindow settings)
     {
-        var card = (Border)settings.FindName("WeChatQrLargeCard")!;
+        var card = (Border)settings.FindName("WeChatQrOverlayCard")!;
         var group = (TransformGroup)card.RenderTransform!;
         return ((ScaleTransform)group.Children[0], (TranslateTransform)group.Children[1]);
     }
