@@ -1074,10 +1074,11 @@
            共用处理器，「任意单击关闭」对称语义），QR 卡右键＝复制二维码图片
            （独立职责入口不关层）、放大态微信号行左/右键复制且不关层（其处理器
            e.Handled 阻断冒泡）；显隐走 FadeAnimation 统一管理（入场轻档 83ms、
-           收回淡出时长同步缩放时长，动效关闭立即切换），动效开时 QR 卡自页脚
-           缩略图源位置缩放入场、关层自当下态原路缩回源位置（WeChatQrLargeCard
-           渲染变换，代码后置驱动，放大/收回同一插值路径）；Esc 关层优先于关窗
-           （见 SettingsWindow_PreviewKeyDown）。 -->
+           收回淡出时长同步缩放时长，动效关闭立即切换），动效开时**外层整卡容器**
+           自页脚缩略图含框位置飞入落位（container transform：框随二维码一起走、
+           方→矩形形变、标题/微信号行/尾注三文字元素落位后段浮现）、关层自当下态
+           原路飞回源位置（WeChatQrOverlayCard 渲染变换，代码后置驱动，放大/收回
+           同一插值路径）；Esc 关层优先于关窗（见 SettingsWindow_PreviewKeyDown）。 -->
       <Grid x:Name="WeChatQrOverlay"
             Grid.RowSpan="3"
             Panel.ZIndex="20"
@@ -1088,7 +1089,13 @@
             views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FastDurationMs}"
             MouseLeftButtonUp="WeChatQrOverlay_PointButtonUpCloses"
             MouseRightButtonUp="WeChatQrOverlay_PointButtonUpCloses">
-        <Border HorizontalAlignment="Center"
+        <!-- 外层居中卡容器＝过渡动画元素（2026-11-06 容器级 container transform）：
+             含边框与文字子树整卡参与飞行，from＝页脚缩略图按钮含框外接矩形、
+             to＝本容器恒等布局矩形，方→矩形形变由 ScaleX≠ScaleY 结构性承载；
+             渲染变换（Scale→Translate 组）由代码后置构造与驱动，布局一次到位
+             恒定、动画不改布局矩形。 -->
+        <Border x:Name="WeChatQrOverlayCard"
+                HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 Background="{DynamicResource CardBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
@@ -1096,15 +1103,20 @@
                 CornerRadius="8"
                 Padding="20,16">
           <StackPanel>
-            <TextBlock Text="微信扫一扫，加个好友"
+            <!-- 文字三元素基值 Opacity=0（布局恒占位、容器尺寸稳定零回流）：
+                 飞行期不可读也不随容器缩放呈现，落位后段（270→450ms）经代码后置
+                 延迟淡入（先例 MainWindow.CardEntrance 同法）。 -->
+            <TextBlock x:Name="WeChatQrTitle"
+                       Text="微信扫一扫，加个好友"
                        FontSize="13"
                        FontWeight="SemiBold"
                        Foreground="{DynamicResource PrimaryTextBrush}"
                        HorizontalAlignment="Center"
-                       Margin="0,0,0,10" />
-            <!-- QR 卡＝缩放入场动画元素（W3 附录 A）：312×312 白底正方形含 6px
-                 静区，仅含 Image；渲染变换（Scale→Translate 组）由代码后置构造
-                 与驱动，布局一次到位恒定；右键＝复制二维码图片（不关层）。 -->
+                       Margin="0,0,0,10"
+                       Opacity="0" />
+            <!-- QR 卡（W3 附录 A）：312×312 白底正方形含 6px 静区，仅含 Image；
+                 渲染变换已上移到外层容器（本元素零变换）；右键＝复制二维码图片
+                （不关层）。 -->
             <Border x:Name="WeChatQrLargeCard"
                     Background="White"
                     CornerRadius="4"
@@ -1130,16 +1142,19 @@
                          Background="Transparent"
                          Cursor="Hand"
                          ToolTip="复制微信号"
+                         Opacity="0"
                          MouseLeftButtonUp="WeChatIdLargeBlock_PointButtonUp"
                          MouseRightButtonUp="WeChatIdLargeBlock_PointButtonUp">
                 <Run Text="微信：" /><Run x:Name="WeChatIdLargeRun" Foreground="{DynamicResource PrimaryTextBrush}" FontWeight="SemiBold" />
               </TextBlock>
             </StackPanel>
-            <TextBlock Text="扫码或加好友时请注明来意"
+            <TextBlock x:Name="WeChatQrFootnote"
+                       Text="扫码或加好友时请注明来意"
                        FontSize="12"
                        Foreground="{DynamicResource SecondaryTextBrush}"
                        HorizontalAlignment="Center"
-                       Margin="0,6,0,0" />
+                       Margin="0,6,0,0"
+                       Opacity="0" />
           </StackPanel>
         </Border>
       </Grid>

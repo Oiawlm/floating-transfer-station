@@ -80,6 +80,7 @@
 | 启动后排队收起延迟（#30） | LaunchCollapseDelayMs | 250（时序性延迟，减动效保留） |
 | 单击启动重入门闩（#30） | LaunchReentryLatchMs | 500 |
 | 瓦片入场交错步长/封顶（#30） | TileEntranceStaggerMs / TileEntranceStaggerCap | 40 / 8（min(i,8)×40ms） |
+| 二维码容器过渡（独立组，契约 #24，不进三档） | QrZoomInMs/QrZoomOutMs/QrTextFadeInBeginMs/QrTextFadeInMs/QrTextFadeOutMs/QrThumbFadeMs | 450/250/270/180/90/150 |
 
 ## 三、缓动曲线
 
