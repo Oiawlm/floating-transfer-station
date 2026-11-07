@@ -1638,10 +1638,11 @@ public sealed class SettingsWindowContactTests
     [STATestMethod]
     public void QrOverlay_DegradedExitFadesInPlaceWithoutIdentitySnap()
     {
-        // R4 退化路径（Measure 求值不可达＝动效开但几何非法，构造＝页脚容器
-        // Collapsed＋UpdateLayout 使缩略图按钮零尺寸）：纯淡出——容器快照当下值
-        // 定基后清动画（定格在飞、禁瞬时归恒等＝居中放大位原位闪现的单点故障）、
-        // 卡片线性淡出 QrZoomOutMs、层不提前塌缩，终态与正常路径逐值一致。
+        // R4 退化路径（Measure 求值不可达＝动效开但几何非法；构造＝缩略图按钮
+        // 宽置 0＋UpdateLayout——Collapsed 元素保留陈旧 ActualWidth/变换，测得
+        // 源矩形仍合法，零宽重排才确定性产出零尺寸源矩形）：纯淡出——容器快照
+        // 当下值定基后清动画（定格在飞、禁瞬时归恒等）、卡片线性淡出
+        // QrZoomOutMs、层不提前塌缩，终态与正常路径逐值一致。
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
         var window = CreateWindow(directory, preferencesStore);
@@ -1650,7 +1651,7 @@ public sealed class SettingsWindowContactTests
             var settings = OpenSettings(window);
             CompleteLayout(settings);
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
-            var footer = (FrameworkElement)settings.FindName("SettingsFooter")!;
+            var thumbButton = (Button)settings.FindName("WeChatQrButton")!;
             var card = (System.Windows.UIElement)settings.FindName("WeChatQrOverlayCard")!;
             var thumb = (System.Windows.UIElement)settings.FindName("WeChatQrButton")!;
             var (scale, translate) = QrZoomTransforms(settings);
@@ -1662,7 +1663,7 @@ public sealed class SettingsWindowContactTests
             Assert.IsTrue(
                 scale.ScaleX is > 0.2d and < 0.99d,
                 $"前置：入场中途应处于非恒等飞行态（实测 ScaleX={scale.ScaleX:0.###}）。");
-            footer.Visibility = Visibility.Collapsed;
+            thumbButton.Width = 0d;
             settings.UpdateLayout();
 
             RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
@@ -1797,8 +1798,10 @@ public sealed class SettingsWindowContactTests
 
     /// <summary>收回编排多属性确定性采样：Render 优先级 10ms DispatcherTimer 在
     /// PushFrame 泵内同步采四属性（同 ZoomCompletes 口径、不真起渲染帧循环）；
-    /// 收回启动前的前置采样（ScaleX 恒等基值）剥除，同 SampleScaleDuringExit。
-    /// 时间轴不经挂钟——由容器进度反解（QrExitProgressToMs）。</summary>
+    /// 前置采样（收回启动前 ScaleX 恒等基值）与尾随采样（收回完成复位后的恒等
+    /// 态——p 反解为 0 而终值 thumb=1/card=0 属终态卫生而非编排途中）均剥除，
+    /// 同 SampleScaleDuringExit 的前置剥除口径。时间轴不经挂钟——由容器进度反解
+    ///（QrExitProgressToMs）。</summary>
     private static List<QrExitChoreographySample> SampleQrExitChoreography(
         SettingsWindow settings,
         ScaleTransform scale,
@@ -1820,6 +1823,11 @@ public sealed class SettingsWindowContactTests
         while (samples.Count > 0 && samples[0].ScaleX >= 0.999d)
         {
             samples.RemoveAt(0);
+        }
+
+        while (samples.Count > 0 && samples[^1].ScaleX >= 0.999d)
+        {
+            samples.RemoveAt(samples.Count - 1);
         }
 
         return samples;

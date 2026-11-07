@@ -48,6 +48,11 @@ public partial class SettingsWindow : Window
     // 建组挂到 WeChatQrOverlayCard（外层整卡容器）。
     private ScaleTransform? _qrZoomScale;
     private TranslateTransform? _qrZoomTranslate;
+    /// <summary>QR 层生命周期代数（同 FadeAnimation.HideGeneration 口径）：每次
+    /// 开层自增——单一完成点的回调（容器 translateY Completed／退化卡片淡出
+    /// Completed）只对发起那次关层的代数生效，替换式中断后残留的旧时钟回调
+    /// （含已入队未分发的 Completed）不得塌缩重开后的层。</summary>
+    private int _qrLifecycleGeneration;
 
     // QR 过渡文字/缩略图不透明度终态口径：文字关闭静止基值 0（XAML 同款）与
     // 全显定格 1；缩略图终态恒 1（ResetQrTransitionState 固定写全显）。
@@ -306,6 +311,9 @@ public partial class SettingsWindow : Window
         // 显隐淡入淡出＝遮罩纱的 FadeAnimation，层可见性由编排自身即时开
         //（关闭时经单一完成点收口，见 HideWeChatQrOverlay）。
         WeChatQrOverlay.Visibility = Visibility.Visible;
+        // 开层自增生命周期代数：作废关层途中残留的旧时钟完成回调（再开不被
+        // 掉队回调塌缩——同 FadeAnimation.HideGeneration 的防掉队口径）。
+        _qrLifecycleGeneration++;
         FadeAnimation.SetAnimationsEnabled(WeChatQrScrim, animationsEnabled);
         // 收回曾把遮罩纱淡出改锚缩放同步时长（Hide），Show 开头复位回轻档 83ms
         //（既有 DP、ApplyState 读取，零新机制）——入场淡入保持快速档。
@@ -552,8 +560,16 @@ public partial class SettingsWindow : Window
         {
             FillBehavior = FillBehavior.HoldEnd
         };
+        // 完成点带代数守卫（同正常路径口径）：退化收回途中再开＝卡片淡出被替换，
+        // 掉队回调不得塌缩重开后的层。
+        var generation = _qrLifecycleGeneration;
         cardFade.Completed += (_, _) =>
         {
+            if (generation != _qrLifecycleGeneration)
+            {
+                return;
+            }
+
             WeChatQrOverlay.Visibility = Visibility.Collapsed;
             ResetQrTransitionState(QrTextClosedOpacity);
         };
@@ -675,10 +691,18 @@ public partial class SettingsWindow : Window
         {
             // 单一完成点（R6 结构性消除）：收回四条动画同 duration/同帧启动，容器
             // translateY Completed＝正常路径唯一生命周期载体——同一分发帧内层塌缩
-            // ＋终态卫生（卡片/缩略图关键帧同时长同帧完成，错帧闪窗被结构性关闭；
-            // SnapshotAndReplace 被替换的动画不触发 Completed＝中断安全）。
+            // ＋终态卫生（卡片/缩略图关键帧同时长同帧完成，错帧闪窗被结构性关闭）。
+            // 代数守卫：SnapshotAndReplace 被替换的旧时钟不触发 Completed，但已
+            // 入队未分发的回调仍可能掉队到达——再开自增代数后本回调须作废
+            //（同 FadeAnimation.HideGeneration 的防掉队口径，重开不被塌缩）。
+            var generation = _qrLifecycleGeneration;
             translateYAnimation.Completed += (_, _) =>
             {
+                if (generation != _qrLifecycleGeneration)
+                {
+                    return;
+                }
+
                 WeChatQrOverlay.Visibility = Visibility.Collapsed;
                 ResetQrTransitionState(QrTextClosedOpacity);
             };
