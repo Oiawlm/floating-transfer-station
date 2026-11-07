@@ -73,19 +73,28 @@ public static class DesignTokens
     /// 取 120 覆盖手抖频率（≥4Hz 的断言间隔都低于它），又不至于让真离开的
     /// 高亮消退有可感知迟滞。</summary>
     public const int DropTargetWithdrawHoldMs = 120;
-    /// <summary>二维码放大层 QR 卡缩放过渡（实验性，2026-11-06 工作流 B）：时长
-    /// 与缓动独立成组——不并入 83/167/250 三档体系、也不加第四档（档位制红线），
-    /// 仅本场景专用。数值源：入场曲线 (0.32,0.72,0,1)＝iOS 导航/照片缩放转场的
-    /// 非官方测量近似（ionic-framework#19789）；收回曲线 (0.25,0.1,0.25,1)＝
-    /// Apple 公开 kCAMediaTimingFunctionDefault（developer.apple.com/documentation/
-    /// quartzcore/camediatimingfunction）；时长初值＝FluidPhoto（开源 iOS Photos
-    /// 缩放复刻）实测放大 0.5s／收回 0.25s 收敛取整。实验期以真实录屏迭代微调
-    ///（入场 [320,480]ms、收回 [200,320]ms、控制点 ±0.05），终值回写本组与契约
-    /// #24（批次 2026-11-06-interaction-polish 工作流 B）。</summary>
-    public const int QrZoomInMs = 400;
+    /// <summary>二维码放大层容器级 container transform（实验性，2026-11-06 工作流
+    /// B；2026-11-07 容器级重调）：时长与缓动独立成组——不并入 83/167/250 三档
+    /// 体系、也不加第四档（档位制红线），仅本场景专用。口径＝容器级「从哪来到
+    /// 哪去」：动画对象为外层整卡容器（含框飞行、方→矩形形变、文字后段浮现、
+    /// 缩略图防双影淡出）。数值源：入场曲线 (0.32,0.72,0,1)＝iOS 导航/照片缩放
+    /// 转场的非官方测量近似（ionic-framework#19789）；收回曲线 (0.25,0.1,0.25,1)
+    /// ＝Apple 公开 kCAMediaTimingFunctionDefault（developer.apple.com/documentation/
+    /// quartzcore/camediatimingfunction）；时长与文字编排＝Material container
+    /// transform/fade-through（m3.material.io/styles/motion/transitions、
+    /// vocab.design/container-transform）：入场 450ms（长档下限）、文字 270ms 起
+    /// 180ms 淡入（≈60% 进度、落位时可读）、收回文字 90ms 先隐、缩略图 150ms
+    /// 防双影回显。实验期以真实录屏迭代微调（入场 [380,520]ms、文字起淡 55–70%
+    /// 进度、收回 [200,320]ms、控制点 ±0.05），终值回写本组与契约 #24（批次
+    /// 2026-11-06-consistency-batch 工作流 B）。</summary>
+    public const int QrZoomInMs = 450;
     public const int QrZoomOutMs = 250;
     public const string QrZoomInKeySpline = "0.32,0.72,0,1";
     public const string QrZoomOutKeySpline = "0.25,0.1,0.25,1";
+    public const int QrTextFadeInBeginMs = 270;
+    public const int QrTextFadeInMs = 180;
+    public const int QrTextFadeOutMs = 90;
+    public const int QrThumbFadeMs = 150;
 
     // 快捷启动（#30）：场景常量不加档——LaunchConfirmMs/ItemLandingMs 直接锚 SlowDurationMs。
     public const int LaunchConfirmMs = SlowDurationMs;
