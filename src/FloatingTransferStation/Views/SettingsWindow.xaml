@@ -91,6 +91,14 @@
         <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Padding" Value="14,12" />
         <Setter Property="Margin" Value="0,0,0,12" />
+        <Style.Triggers>
+          <!-- 整卡禁用态（契约 #57 修订：置灰非隐藏）——卡级不透明度统一覆盖标题/
+               文字/行（含代码后置构造的行标签与把手）与卡面；钮自身 0.4/0.45 触发器
+               保留，叠加 ≈0.24/0.27 已裁定可接受。零新 token（#34）。 -->
+          <Trigger Property="IsEnabled" Value="False">
+            <Setter Property="Opacity" Value="0.6" />
+          </Trigger>
+        </Style.Triggers>
       </Style>
 
       <!-- 左导航项（契约 #24）：RadioButton 原生带 SelectionItem 语义与 UIA peer，
@@ -781,15 +789,16 @@
                              Text="发现新版本会自动下载、安装并重启，无需确认。" />
                 </StackPanel>
               </Border>
-              <!-- 实验性（首个先例，2026-11-03）：正在打磨中的能力按「默认关闭、显式
-                   开启」提供——不稳定的边缘体验不默认打扰任何用户；形态随既有卡片
+              <!-- 实验性（首个先例，2026-11-03）：正在打磨的能力按成熟度定默认态——
+                   日常可用的默认开启（2026-11-07 起，存量经一次性偏好迁移统一收敛），
+                   边缘体验默认关闭、显式开启；形态随既有卡片
                    语言（CardBrush/BorderBrush/圆角 8），标注「实验性」并在节内说明
                    每项的实验原因。开关即时生效＋原子保存（契约 #5 同路）。 -->
               <Border Style="{StaticResource SettingsCardStyle}" Margin="0">
                 <StackPanel>
                   <TextBlock Text="实验性" Style="{StaticResource SectionTitleStyle}" />
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="以下功能仍在打磨，默认关闭；开启立即生效并自动保存。" />
+                             Text="以下功能仍在打磨：Markdown 阅读视图与图片拖出为文件默认开启，分类内子分组默认关闭；调整立即生效并自动保存。" />
                   <Grid Background="Transparent">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="*" />
@@ -800,7 +809,7 @@
                                Style="{StaticResource RowCaptionStyle}">
                       <TextBlock.ToolTip>
                         <ToolTip>
-                          <TextBlock Text="阅读态按 Markdown 渲染成只读视图；链接用浏览器打开，不加载远程图片。默认关闭的原因：渲染与排版仍在打磨。" TextWrapping="Wrap" MaxWidth="320" />
+                          <TextBlock Text="阅读态按 Markdown 渲染成只读视图；链接用浏览器打开，不加载远程图片。默认开启：渲染与排版仍在打磨，不合意可关闭。" TextWrapping="Wrap" MaxWidth="320" />
                         </ToolTip>
                       </TextBlock.ToolTip>
                     </TextBlock>
@@ -836,8 +845,9 @@
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
                              Text="按钮轨：悬停筛选、单击设收集落点、拖卡归组；视觉分组：同组相邻显示。"
                              ToolTip="实验性功能，默认关闭：交互仍在打磨。开启后内容分类顶部出现分组按钮；推荐先在按钮轨拖卡归组，再切视觉分组浏览。关闭或切换形态不影响卡片与归属。" />
-                  <!-- 实验性第三项（2026-11-06，契约 #58）：图片拖出为文件——门控
-                       既有拖出能力（默认关＝对外剥离文件/位图形态，窗内拖放与
+                  <!-- 实验性第三项（2026-11-06，契约 #58；2026-11-07 起默认开启，
+                       存量经一次性偏好迁移统一收敛）：图片拖出为文件——门控
+                       既有拖出能力（关闭＝对外剥离文件/位图形态，窗内拖放与
                        剪贴板复制零变化）；即时生效＋原子保存（契约 #5 同路）。 -->
                   <Grid Background="Transparent" Margin="0,10,0,0">
                     <Grid.ColumnDefinitions>
@@ -851,7 +861,7 @@
                                VerticalAlignment="Center">
                       <TextBlock.ToolTip>
                         <ToolTip>
-                          <TextBlock Text="只复制不移动，应用内卡片保留；关闭时窗内整理与复制不受影响。默认关闭的原因：拖到不同软件的表现仍在打磨。" TextWrapping="Wrap" MaxWidth="320" />
+                          <TextBlock Text="只复制不移动，应用内卡片保留；关闭时窗内整理与复制不受影响。默认开启：拖到不同软件的表现仍在打磨，不合意可关闭。" TextWrapping="Wrap" MaxWidth="320" />
                         </ToolTip>
                       </TextBlock.ToolTip>
                     </TextBlock>

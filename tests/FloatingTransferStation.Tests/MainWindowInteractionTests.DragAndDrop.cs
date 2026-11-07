@@ -1292,9 +1292,10 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
-    // ---- 图片拖出为文件（契约 #58，实验性默认关）：BuildInternalDragData 反射
-    // 直调先例（上方两条）——窗内拖出经门控单点取两态载荷形状，UI 事件层零
-    // 开关感知（开关字段只经偏好下发进服务）。----
+    // ---- 图片拖出为文件（契约 #58；2026-11-07 起默认开启，禁用路径显式播种关态
+    // ＝迁移后用户显式关闭）：BuildInternalDragData 反射直调先例（上方两条）——
+    // 窗内拖出经门控单点取两态载荷形状，UI 事件层零开关感知（开关字段只经偏好
+    // 下发进服务）。----
 
     [STATestMethod]
     public void InternalDragData_DisabledImageDragKeepsInternalIdWithoutFileDrop()
@@ -1309,7 +1310,14 @@ public sealed partial class MainWindowInteractionTests
 
         var board = new BoardService();
         var item = board.AddImage(Guid.NewGuid(), "images/board-image.png", path);
-        var window = CreateWindow(directory, board);
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(
+            board,
+            store,
+            WindowSettings.Default,
+            new DefaultCaptureCategoryState(),
+            new ImageNormalizer(store.ImagesDirectory),
+            preferences: AppPreferences.Default with { DragOutAsFileEnabled = false });
 
         try
         {
@@ -1323,8 +1331,8 @@ public sealed partial class MainWindowInteractionTests
 
             Assert.IsNotNull(data);
             Assert.AreEqual(item.Id, new DragPayloadService().GetInternalItemId(data));
-            Assert.IsFalse(data.GetDataPresent(DataFormats.FileDrop), "默认关＝窗内图片拖出不携带文件组。");
-            Assert.IsFalse(data.GetDataPresent(DataFormats.Bitmap), "默认关＝窗内图片拖出不携带位图。");
+            Assert.IsFalse(data.GetDataPresent(DataFormats.FileDrop), "用户显式关闭＝窗内图片拖出不携带文件组。");
+            Assert.IsFalse(data.GetDataPresent(DataFormats.Bitmap), "用户显式关闭＝窗内图片拖出不携带位图。");
         }
         finally
         {
