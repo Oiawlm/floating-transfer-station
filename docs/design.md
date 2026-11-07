@@ -131,6 +131,7 @@
 - 卡片悬停时以渲染位移上浮 1px（`LiftAnimation.LiftedOffsetPx = -1`，167ms 减速曲线，回落用加速曲线），不参与布局、不影响命中测试。
 - 滚动条滑块悬停时经 6px 宽悬停层交叉淡入表现展宽（基宽 4px）。
 - BoardList 滚动条为 overlay 布局（1.31.0 起）：列表作用域的 overlay ScrollViewer 模板（`OverlayScrollViewerStyle`，经 BoardList.Resources 作用域隐式样式挂接）让垂直滚动条与内容同格、右缘悬浮其上、不占布局宽——viewport 几何与滚动条可见性解耦，卡片几何不随滚动条出现/消失漂移（默认模板的 Auto 独立列 + 主题样式的系统滚动条宽度下限曾是漂移根因，条带 `MinWidth/MinHeight=0` 压掉该下限）。条带宽 8 落在卡片右缘外边距带 12 内、与卡片内容零遮挡；`Auto` 语义不变（需要时才出现），滑块、透明轨道与悬停展宽 token 全部继续有效。设计契约 #23。
+- 记录编辑器滚动条同为 overlay 布局（文本输入表面，2026-11-06 起）：派生样式 `OverlayScrollTextBoxStyle`（基于 `ThemedTextBoxStyle`，仅重写模板把内容宿主直引 `OverlayScrollViewerStyle`）——打字途中滚动条出现/消失不改变排版宽，Wrap 全文不再重排；与基样式的模板差异是内边距从内容宿主外边距改为 Padding 透传（overlay 模板把 Padding 施加在内容台上、条带贴满宽右缘），条带宽 8 落在编辑器右内边距 12 带内、与文字零相交。设计契约 #23。
 
 ## 五·C、窗口材质（Mica，Windows 11）
 
