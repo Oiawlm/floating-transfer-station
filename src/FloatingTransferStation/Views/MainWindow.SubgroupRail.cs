@@ -13,12 +13,14 @@ namespace FloatingTransferStation.Views;
 /// （对齐分类轨「悬停即进入」展开态先例，零防抖；守卫链＝改名会话中/拖拽在途/
 /// 外部拖放轨道可见/搜索激活任一不进入——搜索压倒沿用 #37）、单击 chip＝设该
 /// 分类收集落点子分组（照「单击标签＝设默认接收分类」先例，原单击过滤 toggle
-/// 退役；搜索态单击＝仅设默认，不退搜索不动过滤）、双击 chip＝改名（照
+/// 退役；搜索态单击＝仅设默认——不退搜索不动过滤）、双击 chip＝改名（照
 /// <see cref="MainWindow.CategoryEditing"/> 全套会话机器）、拖卡片到 chip＝批量
 /// 归属该槽（照「拖卡入标签=移动分类」先例）。过滤只经 BoardList.Items.Filter
 /// 单点（ApplyBoardListFilter，契约 #37 扩展）；退出＝引导条「清空」/Esc/切分类/
-/// 模式切换。无「全部/未指定」chip；实验期无取消归属手势（拖到其他 chip 可覆盖，
-/// README 与契约登记）。
+/// 模式切换。实验开关开启时轨首恒居「全部」伪 chip（契约 #57 修订，2026-11-07）：
+/// 悬停＝进入全量视图（Filter=null＋全 chip 激活态，与根态同列表）、单击无操作、
+/// 不参与改名/拖放归属/默认环，退出沿既有四路径；实验期无取消归属手势（拖到
+/// 其他 chip 可覆盖，README 与契约登记）。
 /// </summary>
 public partial class MainWindow
 {
@@ -27,10 +29,14 @@ public partial class MainWindow
     /// <summary>当前 chip 过滤槽（null=无过滤）；搜索激活期间冻结（让位裁决）。</summary>
     private int? _subgroupFilterSlot;
 
-    /// <summary>chip 过滤生效谓词：槽已选且 ChipRail 模式（Off/GroupedView 无过滤态）。
-    /// internal＝锁定测试直达（拖放/Ctrl+A/收起抑制的守卫前置）。</summary>
+    /// <summary>「全部」伪 chip 全量过滤态（契约 #57 修订）：与 <see cref="_subgroupFilterSlot"/>
+    /// 互斥——全量视图＝根态同列表（Filter=null），仅以全 chip 激活态区分。</summary>
+    private bool _isSubgroupAllFilterActive;
+
+    /// <summary>chip 过滤生效谓词（槽过滤或全量过滤）且 ChipRail 模式（Off/GroupedView
+    /// 无过滤态）。internal＝锁定测试直达（拖放/Ctrl+A/收起抑制/Esc 的守卫前置）。</summary>
     internal bool IsSubgroupFilterActive =>
-        _subgroupFilterSlot is not null &&
+        (_subgroupFilterSlot is not null || _isSubgroupAllFilterActive) &&
         _viewModel.SubgroupDisplay == SubgroupDisplayMode.ChipRail;
 
     private bool IsSubgroupNameEditActive() =>
@@ -85,6 +91,35 @@ public partial class MainWindow
         SetSubgroupFilter(chip);
     }
 
+    private void SubgroupAllChip_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (sender is not Border { DataContext: SubgroupAllChipViewModel })
+        {
+            return;
+        }
+
+        // 交互记账挂在真实 MouseEnter 事件（照 SubgroupChip_MouseEnter 同法，契约 #26）。
+        NoteUserInteraction();
+        // 守卫链逐字同槽 chip：改名会话中/拖拽在途/外部拖放轨道可见/搜索激活
+        //（#37 搜索压倒——悬停不进入、不退搜索）任一成立即不进入。
+        if (_isClosing ||
+            IsSubgroupNameEditActive() ||
+            _panelState.IsDragInProgress ||
+            _viewModel.IsExternalDropRailVisible ||
+            _viewModel.IsSearchActive)
+        {
+            return;
+        }
+
+        // 全量态幂等：滑回「全部」不重复清选择/重过滤。
+        if (_isSubgroupAllFilterActive)
+        {
+            return;
+        }
+
+        SetSubgroupAllFilter();
+    }
+
     private void SubgroupChip_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (_isClosing ||
@@ -134,8 +169,28 @@ public partial class MainWindow
         }
 
         _subgroupFilterSlot = chip.Slot;
+        _isSubgroupAllFilterActive = false;
         ApplySubgroupFilterSelection();
         // 进入过滤视图＝清空选择（沿 #37 进入搜索口径；过滤视图的选择范围无意义）。
+        ClearUserSelection();
+        ApplyBoardListFilter();
+    }
+
+    /// <summary>进入「全部」全量过滤（契约 #57 修订）：清槽过滤态（互斥）、置全量态
+    /// ——列表与根态同源（ApplyBoardListFilter 落 Filter=null），仅以全 chip 激活态
+    /// 区分；进入清选择沿 #37 口径（照 <see cref="SetSubgroupFilter"/> 同构）。</summary>
+    private void SetSubgroupAllFilter()
+    {
+        if (_isClosing ||
+            _viewModel.ActivePanel is not { } panel ||
+            !BoardCategoryCatalog.IsContentBucket(panel.Category))
+        {
+            return;
+        }
+
+        _subgroupFilterSlot = null;
+        _isSubgroupAllFilterActive = true;
+        ApplySubgroupFilterSelection();
         ClearUserSelection();
         ApplyBoardListFilter();
     }
@@ -146,18 +201,21 @@ public partial class MainWindow
         {
             chip.IsFilterActive = chip.Slot == _subgroupFilterSlot;
         }
+
+        _viewModel.SubgroupAllChip.IsFilterActive = _isSubgroupAllFilterActive;
     }
 
-    /// <summary>清除 chip 过滤（契约 #57）：Off/模式切换/切分类共用；reapply＝立即重评
-    /// Filter 单点（旧面板视图上的 Filter 残留由调用方在面板切换前清）。</summary>
+    /// <summary>清除 chip 过滤（契约 #57）：Off/模式切换/切分类/开关关闭共用；reapply＝
+    /// 立即重评 Filter 单点（旧面板视图上的 Filter 残留由调用方在面板切换前清）。</summary>
     private void ClearSubgroupFilter(bool reapplyFilter)
     {
-        if (_subgroupFilterSlot is null)
+        if (_subgroupFilterSlot is null && !_isSubgroupAllFilterActive)
         {
             return;
         }
 
         _subgroupFilterSlot = null;
+        _isSubgroupAllFilterActive = false;
         ApplySubgroupFilterSelection();
         if (reapplyFilter)
         {

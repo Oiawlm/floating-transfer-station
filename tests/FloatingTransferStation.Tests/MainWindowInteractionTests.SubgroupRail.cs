@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using Line = System.Windows.Shapes.Line;
 using FloatingTransferStation.Design;
@@ -16,9 +17,12 @@ namespace FloatingTransferStation.Tests;
 
 /// <summary>
 /// 分类内子分组（实验性，契约 #57）窗口级回归：Off 等价、形态①按钮轨（渲染/
-/// 悬停过滤＋守卫链/单击设默认环/互斥/改名/拖卡归属/过滤态行为）、形态②视觉
-/// 分组（进入分区/边界复用 divider 宿主/组头/置顶不分组/纯重排）、模式切换零
-/// 残留、撤销不回归与双主题证据产出。
+/// 悬停过滤＋守卫链/单击设默认环/互斥/改名/拖卡归属/过滤态行为）、「全部」伪
+/// chip 聚合视图（契约 #57 修订：开关默认关/恒居首五列/悬停全量/粘性与四路径
+/// 退出/搜索压倒/禁令继承/空态走 BoardEmptyState/单击无操作/不参与槽序与归属/
+/// 开关关闭清过滤/GroupedView 与 Off 零呈现）、形态②视觉分组（进入分区/边界
+/// 复用 divider 宿主/组头/置顶不分组/纯重排）、模式切换零残留、撤销不回归与
+/// 双主题证据产出。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -32,7 +36,8 @@ public sealed partial class MainWindowInteractionTests
         TestDirectory directory,
         BoardService board,
         SubgroupDisplayMode mode,
-        WindowSettings? settings = null)
+        WindowSettings? settings = null,
+        bool subgroupAllChipEnabled = false)
     {
         var paths = AppPaths.ForTests(directory.Root);
         var store = new LocalStore(paths, new AtomicTextWriter());
@@ -42,7 +47,11 @@ public sealed partial class MainWindowInteractionTests
             settings ?? WindowSettings.Default,
             new DefaultCaptureCategoryState(),
             new ImageNormalizer(store.ImagesDirectory),
-            preferences: AppPreferences.Default with { SubgroupDisplay = mode });
+            preferences: AppPreferences.Default with
+            {
+                SubgroupDisplay = mode,
+                SubgroupAllChipEnabled = subgroupAllChipEnabled
+            });
     }
 
     private static Border FindSubgroupRail(MainWindow window)
@@ -1718,6 +1727,718 @@ public sealed partial class MainWindowInteractionTests
                 // 下一主题迭代回到默认分类轨。
                 ExpandCategory(window, BoardCategory.Inbox);
                 CompleteLayout(window);
+            }
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    // ---- 「全部」伪 chip（契约 #57 修订，实验开关默认关）：聚合视图窗口级回归 ----
+
+    /// <summary>伪 chip 宿主 Border 判别照 FindSubgroupChip 先例：模板内层共享
+    /// DataContext，只有外层宿主 Border 带 Tag（伪 chip 身份＝目录常量「全部」，
+    /// 无槽号）。</summary>
+    private static Border FindSubgroupAllChip(MainWindow window) =>
+        FindDescendants<Border>(FindSubgroupRail(window)).Single(candidate =>
+            candidate.DataContext is SubgroupAllChipViewModel &&
+            Equals(candidate.Tag, SubgroupCatalog.AllChipName));
+
+    /// <summary>合成悬停进入「全部」（照 HoverChip 合成先例）。</summary>
+    private static void HoverAllChip(MainWindow window)
+    {
+        var chip = FindSubgroupAllChip(window);
+        chip.RaiseEvent(NewMouseEventArgs(UIElement.MouseEnterEvent, chip));
+        CompleteLayout(window);
+    }
+
+    private static UniformGrid FindSubgroupRailGrid(MainWindow window) =>
+        FindDescendants<UniformGrid>(FindSubgroupRail(window)).Single();
+
+    [STATestMethod]
+    public void Subgroup_AllChipHiddenByDefaultAndRailStaysFourColumns()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("内容", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            Assert.IsFalse(viewModel.SubgroupAllChipEnabled, "「全部」伪 chip 实验开关默认关。");
+            Assert.AreEqual(4, viewModel.SubgroupRailItems.Count, "轨投影＝4 槽 chip（现状逐值）。");
+            Assert.IsTrue(
+                viewModel.SubgroupRailItems.All(item => item is SubgroupChipViewModel),
+                "默认无伪 chip 进入投影。");
+            Assert.AreEqual(4, viewModel.SubgroupRailColumnCount, "列数投影保持 4。");
+            Assert.AreEqual(4, FindSubgroupRailGrid(window).Columns, "UniformGrid 四列（现状逐值）。");
+            Assert.AreEqual(4, viewModel.SubgroupChips.Count, "槽 chip 集不受开关影响。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipAppearsFirstAsFifthColumnWhenEnabled()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("内容", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.ChipRail,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            Assert.IsTrue(viewModel.SubgroupAllChipEnabled);
+            Assert.AreEqual(5, viewModel.SubgroupRailItems.Count, "开启后投影＝「全部」＋4 槽。");
+            Assert.IsInstanceOfType(
+                viewModel.SubgroupRailItems[0],
+                typeof(SubgroupAllChipViewModel),
+                "「全部」恒居首枚（不参与槽序）。");
+            Assert.AreEqual(
+                SubgroupCatalog.AllChipName,
+                viewModel.SubgroupAllChip.DisplayName,
+                "显示名＝目录常量「全部」。");
+            Assert.AreEqual(5, viewModel.SubgroupRailColumnCount, "列数投影 4→5。");
+            Assert.AreEqual(5, FindSubgroupRailGrid(window).Columns, "UniformGrid 五列等分。");
+            Assert.AreEqual(
+                SubgroupCatalog.AllChipName,
+                FindDescendants<TextBlock>(FindSubgroupAllChip(window)).Single().Text,
+                "视觉树首枚渲染「全部」。");
+            // 轨道高/面板宽零变化（不为内容加宽结构，#54/#16 精神）。
+            Assert.AreEqual(
+                WindowSettings.SubgroupRailHeight,
+                FindSubgroupRail(window).Height,
+                "轨高仍＝结构常量。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipHoverShowsAllItemsIncludingUngrouped()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
+        board.AddText("乙", BoardCategory.Inbox).Subgroup = 2;
+        board.AddText("丙", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.ChipRail,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            HoverAllChip(window);
+
+            Assert.IsTrue(window.IsSubgroupFilterActive, "全量态计入过滤谓词（禁令单点继承）。");
+            Assert.IsNull(list!.Items.Filter, "全量视图＝根态同列表（Filter=null）。");
+            CollectionAssert.AreEquivalent(
+                new[] { "甲", "乙", "丙" },
+                list.Items.OfType<BoardItem>().Select(item => item.Text).ToArray(),
+                "该分类全部卡可见（含未分组丙——R1 缺口修复）。");
+            Assert.AreEqual(3, viewModel.ActivePanel!.Items.Count, "源集合不动。");
+            Assert.IsTrue(viewModel.SubgroupAllChip.IsFilterActive, "全 chip 激活态。");
+            foreach (var chip in viewModel.SubgroupChips)
+            {
+                Assert.IsFalse(chip.IsFilterActive, "槽 chip 选中态全灭（互斥）。");
+            }
+            Assert.AreEqual(0, list.SelectedItems.Count, "进入全量视图清空选择（#37 口径）。");
+
+            // 滑到槽 chip＝换组（全量态让位槽过滤，互斥）。
+            HoverChip(window, 1);
+            Assert.IsFalse(viewModel.SubgroupAllChip.IsFilterActive);
+            CollectionAssert.AreEquivalent(
+                new[] { "甲" },
+                list.Items.OfType<BoardItem>().Select(item => item.Text).ToArray());
+
+            // 滑回「全部」＝回到全量（互斥反向）。
+            HoverAllChip(window);
+            Assert.IsTrue(window.IsSubgroupFilterActive);
+            Assert.IsNull(list.Items.Filter);
+            Assert.AreEqual(3, list.Items.OfType<BoardItem>().Count());
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipFilterIsStickyUntilClearedViaHintBar()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
+        board.AddText("丙", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.ChipRail,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            HoverAllChip(window);
+            Assert.IsTrue(window.IsSubgroupFilterActive);
+
+            // 粘性：无 MouseLeave 行为，悬停移开后过滤保持（沿槽过滤同口径）。
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            CompleteLayout(window);
+            Assert.IsTrue(window.IsSubgroupFilterActive, "全量过滤粘性（悬停离开不退出）。");
+            Assert.IsTrue(viewModel.SubgroupAllChip.IsFilterActive);
+            Assert.AreEqual(2, list!.Items.OfType<BoardItem>().Count());
+
+            // 引导条「清空」＝既有退出路径（零新增退出方式）。
+            ((Button)window.FindName("SearchClearFilterButton"))!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CompleteLayout(window);
+
+            Assert.IsFalse(window.IsSubgroupFilterActive);
+            Assert.IsFalse(viewModel.SubgroupAllChip.IsFilterActive, "退出清全 chip 激活态。");
+            Assert.IsNull(list.Items.Filter);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipFilterIsStickyUntilClearedByEscape()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.ChipRail,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            HoverAllChip(window);
+            Assert.IsTrue(window.IsSubgroupFilterActive, "前置：全量态。");
+
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
+            CompleteLayout(window);
+
+            Assert.IsFalse(window.IsSubgroupFilterActive, "Esc＝取消全量过滤（既有路径）。");
+            Assert.IsFalse(viewModel.SubgroupAllChip.IsFilterActive);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipFilterIsClearedWhenSwitchingCategory()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
+        board.AddText("乙", BoardCategory.CustomerOriginal);
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.ChipRail,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            HoverAllChip(window);
+            Assert.IsTrue(window.IsSubgroupFilterActive, "前置：全量态。");
+
+            ExpandCategory(window, BoardCategory.CustomerOriginal);
+            CompleteLayout(window);
+
+            Assert.IsFalse(window.IsSubgroupFilterActive, "切分类清全量过滤（既有路径）。");
+            Assert.IsFalse(viewModel.SubgroupAllChip.IsFilterActive);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipFilterIsClearedWhenSwitchingMode()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.ChipRail,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            HoverAllChip(window);
+            Assert.IsTrue(window.IsSubgroupFilterActive, "前置：全量态。");
+
+            window.ApplyPreferences(
+                window.CurrentPreferences with { SubgroupDisplay = SubgroupDisplayMode.Off });
+            CompleteLayout(window);
+
+            Assert.IsFalse(window.IsSubgroupFilterActive, "模式切换清全量过滤（既有路径）。");
+            Assert.IsFalse(viewModel.SubgroupAllChip.IsFilterActive);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipFilterYieldsToSearchAndRestoresAfterSearchExit()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("苹果一", BoardCategory.Inbox).Subgroup = 1;
+        board.AddText("香蕉二", BoardCategory.Inbox).Subgroup = 1;
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.ChipRail,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            HoverAllChip(window);
+            Assert.IsTrue(window.IsSubgroupFilterActive);
+
+            // 搜索激活＝搜索谓词压倒（#37），全量态冻结让位、激活态保留。
+            window.EnterSearchMode();
+            ((TextBox)window.FindName("SearchInput"))!.Text = "苹果";
+            CompleteLayout(window);
+
+            Assert.IsTrue(viewModel.IsSearchActive);
+            Assert.IsTrue(viewModel.SubgroupAllChip.IsFilterActive, "让位期间全 chip 激活态保留。");
+            CollectionAssert.AreEquivalent(
+                new[] { "苹果一" },
+                list!.Items.OfType<BoardItem>().Select(item => item.Text).ToArray(),
+                "搜索谓词压倒全量视图。");
+
+            window.ExitSearchMode();
+            CompleteLayout(window);
+
+            Assert.IsFalse(viewModel.IsSearchActive);
+            Assert.IsTrue(window.IsSubgroupFilterActive, "退出搜索自动恢复全量态。");
+            Assert.IsNull(list.Items.Filter, "恢复＝Filter=null（根态同列表）。");
+            Assert.AreEqual(2, list.Items.OfType<BoardItem>().Count());
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipFilterKeepsDragAndCtrlABannedAndSuppressesCollapse()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
+        board.AddText("乙", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.ChipRail,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            window.ClientAreaAnimationsEnabled = false;
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            HoverAllChip(window);
+            Assert.IsTrue(window.IsSubgroupFilterActive, "前置：全量态谓词为真。");
+
+            // Ctrl+A 沿 #37 口径禁用（谓词单点扩容自动继承）。
+            ApplicationCommands.SelectAll.Execute(null, list!);
+            CompleteLayout(window);
+            Assert.AreEqual(0, list.SelectedItems.Count, "全量态 Ctrl+A 不得选择。");
+
+            // 自动收起抑制：全量态 Root_MouseLeave 后 450ms 仍展开。
+            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(450));
+            CompleteLayout(window);
+            Assert.IsTrue(viewModel.IsPanelExpanded, "全量态抑制自动收起。");
+
+            // 退出全量态＝禁令解除（引导条清空）。
+            ((Button)window.FindName("SearchClearFilterButton"))!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CompleteLayout(window);
+            Assert.IsFalse(window.IsSubgroupFilterActive);
+            ApplicationCommands.SelectAll.Execute(null, list);
+            CompleteLayout(window);
+            Assert.AreEqual(2, list.SelectedItems.Count, "退出后 Ctrl+A 恢复。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipFilterEmptyCategoryShowsBoardEmptyStateNotGroupHint()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        // 空分类＋全量态：内容与根态等价——走 BoardEmptyState（#33 修订口径），
+        // 不让位「该分组暂无卡片」（那是槽过滤空结果的语义）。
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.ChipRail,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var hint = (Border)window.FindName("SearchEmptyHint");
+            var boardEmpty = (StackPanel)window.FindName("BoardEmptyState");
+
+            HoverAllChip(window);
+
+            Assert.AreEqual(
+                Visibility.Visible,
+                boardEmpty!.Visibility,
+                "全量态空分类走 BoardEmptyState（与根态内容等价）。");
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                hint!.Visibility,
+                "不让位「该分组暂无卡片」（仅槽过滤让位）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipClickIsNoOpAndDoubleClickDoesNotRename()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.ChipRail,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var allHost = FindSubgroupAllChip(window);
+
+            HoverAllChip(window);
+            Assert.IsTrue(window.IsSubgroupFilterActive, "前置：全量态。");
+
+            // 单击＝无操作（无落点语义，不发明交互）：过滤态不翻转。
+            allHost.RaiseEvent(NewMouseButtonEventArgs(
+                UIElement.MouseLeftButtonUpEvent,
+                allHost));
+            CompleteLayout(window);
+            Assert.IsTrue(window.IsSubgroupFilterActive, "单击不退出全量态。");
+            Assert.AreEqual(
+                DefaultMarkerState.Inactive,
+                viewModel.SubgroupChips[1].DefaultMarkerState,
+                "单击不设默认落点（伪 chip 无槽身份）。");
+
+            // 双击＝无改名会话（模板无编辑器，会话机器不触及）。
+            var doubleClick = NewMouseButtonEventArgs(
+                UIElement.MouseLeftButtonDownEvent,
+                allHost);
+            typeof(MouseButtonEventArgs)
+                .GetField("_count", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(doubleClick, 2);
+            allHost.RaiseEvent(doubleClick);
+            CompleteLayout(window);
+
+            Assert.AreEqual(0, FindDescendants<TextBox>(allHost).Count(), "伪 chip 无编辑器。");
+            Assert.AreEqual(
+                SubgroupCatalog.AllChipName,
+                viewModel.SubgroupAllChip.DisplayName,
+                "显示名恒定「全部」（无改名）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipExcludedFromSlotOrderAndDropAssignment()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        var first = board.AddText("甲", BoardCategory.Inbox);
+        var second = board.AddText("乙", BoardCategory.Inbox);
+        var settings = WindowSettings.Default
+            .WithSubgroupOrder(BoardCategory.Inbox, [3, 1, 0, 2]);
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.ChipRail,
+            settings,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var list = (ListBox)window.FindName("BoardList");
+            var allHost = FindSubgroupAllChip(window);
+            var data = new DragPayloadService().BuildInternalBatch([first, second]);
+
+            // 槽序只辖槽 chip：伪 chip 恒居首、槽序按分类清单生效。
+            CollectionAssert.AreEqual(
+                new[] { 3, 1, 0, 2 },
+                viewModel.SubgroupChips.Select(chip => chip.Slot).ToArray(),
+                "槽序按分类清单（校验零改）。");
+            Assert.IsInstanceOfType(viewModel.SubgroupRailItems[0], typeof(SubgroupAllChipViewModel));
+            CollectionAssert.AreEqual(
+                new[] { 3, 1, 0, 2 },
+                viewModel.SubgroupRailItems
+                    .Skip(1)
+                    .Cast<SubgroupChipViewModel>()
+                    .Select(chip => chip.Slot)
+                    .ToArray(),
+                "投影槽段＝槽序（伪 chip 不参与）。");
+
+            // 伪 chip 槽号不进入槽序校验：带 4 元素的非法序仍被拒（Count==SlotCount）。
+            viewModel.ApplySubgroupOrder(BoardCategory.Inbox, [0, 1, 2, 3, 3]);
+            CollectionAssert.AreEqual(
+                new[] { 3, 1, 0, 2 },
+                viewModel.SubgroupChips.Select(chip => chip.Slot).ToArray(),
+                "非法序（数量≠SlotCount）拒绝重排。");
+
+            // 拖卡到「全部」＝无归属（模板无拖放处理器，祖先无兜底 Drop）。
+            allHost.RaiseEvent(NewDragEventArgs(data, DragDrop.DragEnterEvent, allHost));
+            allHost.RaiseEvent(NewDragEventArgs(data, DragDrop.DropEvent, allHost));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
+            CompleteLayout(window);
+
+            Assert.IsNull(first.Subgroup, "拖卡到「全部」不得归属。");
+            Assert.IsNull(second.Subgroup);
+            var persisted = ReadPersistedJson<BoardSnapshot>(directory, "board.json");
+            Assert.IsNotNull(persisted);
+            Assert.AreEqual(
+                0,
+                persisted!.Items.Count(item => item.Subgroup is not null),
+                "无归属落盘。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipToggleOffWhileActiveClearsFilter()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.ChipRail,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var list = (ListBox)window.FindName("BoardList");
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            HoverAllChip(window);
+            Assert.IsTrue(window.IsSubgroupFilterActive, "前置：全量态。");
+            Assert.IsNull(list!.Items.Filter);
+
+            // 开→关（全量过滤激活时）＝先清过滤零残留（照模式切换先例）。
+            window.ApplyPreferences(
+                window.CurrentPreferences with { SubgroupAllChipEnabled = false });
+            CompleteLayout(window);
+
+            Assert.IsFalse(window.IsSubgroupFilterActive, "开关关闭清全量过滤。");
+            Assert.IsFalse(viewModel.SubgroupAllChip.IsFilterActive);
+            Assert.IsFalse(viewModel.SubgroupAllChipEnabled);
+            Assert.AreEqual(4, viewModel.SubgroupRailItems.Count, "轨投影回落 4 槽。");
+            Assert.AreEqual(4, viewModel.SubgroupRailColumnCount);
+            Assert.AreEqual(4, FindSubgroupRailGrid(window).Columns, "布局回落四列。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipZeroPresenceInGroupedViewAndOff()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.Off,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            // Off：轨整行塌缩（开关不影响 Off 等价性）。
+            Assert.IsFalse(((MainWindowViewModel)window.DataContext).IsSubgroupRailVisible);
+            Assert.AreEqual(Visibility.Collapsed, FindSubgroupRail(window).Visibility);
+            Assert.IsFalse(window.IsSubgroupFilterActive, "Off 无过滤态（谓词含 ChipRail 判）。");
+
+            window.ApplyPreferences(
+                window.CurrentPreferences with { SubgroupDisplay = SubgroupDisplayMode.GroupedView });
+            InvokePrivateTask(window, "DrainPendingOperationsAsync");
+            CompleteLayout(window);
+
+            // GroupedView：视觉分组本身已是聚合呈现，轨零呈现。
+            Assert.AreEqual(Visibility.Collapsed, FindSubgroupRail(window).Visibility);
+            Assert.IsFalse(window.IsSubgroupFilterActive, "GroupedView 无过滤态。");
+            Assert.IsNull(((ListBox)window.FindName("BoardList"))!.Items.Filter);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_AllChipEvidenceBothThemes()
+    {
+        // 契约 #57 修订证据：浅/深双主题五列布局（「全部」恒居首）＋全量激活帧
+        //（未分组卡可见）。环境变量未设置时跳过（CI 无证据目录即 Inconclusive）。
+        if (string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FTS_SUBGROUP_EVIDENCE_DIR")))
+        {
+            Assert.Inconclusive("未设置 FTS_SUBGROUP_EVIDENCE_DIR，跳过发布证据产出。");
+        }
+
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("未分组卡片", BoardCategory.Inbox);
+        var urgentFirst = board.AddText("急件一：今天必须交付的稿子", BoardCategory.Inbox);
+        var urgentSecond = board.AddText("急件二：回复合作确认", BoardCategory.Inbox);
+        urgentFirst.Subgroup = 1;
+        urgentSecond.Subgroup = 1;
+        var window = CreateSubgroupWindow(
+            directory,
+            board,
+            SubgroupDisplayMode.Off,
+            subgroupAllChipEnabled: true);
+
+        try
+        {
+            window.Show();
+            window.Topmost = true;
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var shell = (Border)window.FindName("WindowShell");
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            foreach (var theme in new[] { DesignTheme.Light, DesignTheme.Dark })
+            {
+                DesignThemeManager.Apply(window, theme);
+                CompleteLayout(window);
+                var themeName = theme == DesignTheme.Light ? "light" : "dark";
+
+                // 五列布局帧（开关开启＋ChipRail）。
+                window.ApplyPreferences(window.CurrentPreferences with
+                {
+                    SubgroupDisplay = SubgroupDisplayMode.ChipRail,
+                    SubgroupAllChipEnabled = true
+                });
+                CompleteLayout(window);
+                Assert.AreEqual(5, FindSubgroupRailGrid(window).Columns, "证据帧必须含五列布局。");
+                SaveVisualEvidence(shell!, $"subgroup-all-five-columns-{themeName}.png", "FTS_SUBGROUP_EVIDENCE_DIR");
+
+                // 全量激活帧（悬停进入，未分组卡可见）。
+                HoverAllChip(window);
+                Assert.IsTrue(window.IsSubgroupFilterActive, "证据帧必须含全量激活态。");
+                Assert.AreEqual(3, ((ListBox)window.FindName("BoardList"))!.Items.OfType<BoardItem>().Count());
+                SaveVisualEvidence(shell!, $"subgroup-all-active-{themeName}.png", "FTS_SUBGROUP_EVIDENCE_DIR");
             }
         }
         finally
