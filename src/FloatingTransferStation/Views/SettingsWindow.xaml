@@ -1175,6 +1175,34 @@
                   </StackPanel>
                 </StackPanel>
               </Border>
+              <Border x:Name="AiImageNamingCard" Style="{StaticResource SettingsCardStyle}" Margin="0">
+                <StackPanel>
+                  <TextBlock Text="AI 识图命名" Style="{StaticResource SectionTitleStyle}" />
+                  <Grid Background="Transparent">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="启用 AI 识图命名"
+                               Style="{StaticResource RowCaptionStyle}">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="开启后新收集的图片会自动识别命名；关闭后不再发送任何图片。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
+                    <CheckBox x:Name="AiImageNamingToggle"
+                              Grid.Column="1"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              AutomationProperties.Name="启用 AI 识图命名"
+                              Checked="AiImageNamingToggle_Checked"
+                              Unchecked="AiImageNamingToggle_Unchecked" />
+                  </Grid>
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="开启后，新收集的图片会发送至 DeepSeek 识别内容并自动命名（复用上方 DeepSeek API Key），卡片悬停可见名称，拖出即为该文件名；识别失败自动跳过，不会重试。" />
+                </StackPanel>
+              </Border>
             </StackPanel>
           </Grid>
         </ScrollViewer>
