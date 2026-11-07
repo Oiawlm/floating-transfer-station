@@ -162,7 +162,7 @@
 
 ## 五·G、记录阅读视图排版（Markdown 渲染，实验性，2026-11-03）
 
-实验开关 `ReviewMarkdownViewEnabled`（默认关）开启后记录表面的只读 Markdown 阅读视图（类 Obsidian 阅读体验；子集与降级语义见设计契约 #4 增补）。排版数值唯一来源＝`DesignTokens`（人类可读规范即本节）：
+实验开关 `ReviewMarkdownViewEnabled`（2026-11-07 起默认开启；存量显式 false 经一次性偏好迁移统一收敛）开启后记录表面的只读 Markdown 阅读视图（类 Obsidian 阅读体验；子集与降级语义见设计契约 #4 增补）。排版数值唯一来源＝`DesignTokens`（人类可读规范即本节）：
 
 | Token | 值 | 用途 |
 |---|---|---|

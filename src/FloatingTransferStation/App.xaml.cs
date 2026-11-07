@@ -94,6 +94,10 @@ public partial class App : Application
             // 结构性内嵌为数据根 plugins，无独立偏好，随数据目录一起移动。
             var store = new LocalStore(paths, new AtomicTextWriter());
             var preferences = await store.LoadPreferencesAsync();
+            // 一次性偏好迁移（契约 59）：实验开关默认开启的存量收敛。先于主窗构造
+            // ＝功能面单一下发路径；「启动只读不写」的既有例外＝一次性版本戳迁移
+            // （QuickLaunchMigration 先例）。
+            preferences = await new ExperimentalDefaultsMigration(store).EnsureAsync(preferences);
 
             var board = new BoardService();
             var normalizer = new ImageNormalizer(paths.ImagesDirectory);

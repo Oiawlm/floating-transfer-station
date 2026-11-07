@@ -739,11 +739,11 @@ public sealed class AppPreferencesTests
     }
 
     [TestMethod]
-    public void Default_DisablesReviewMarkdownView()
+    public void Default_EnablesReviewMarkdownView()
     {
-        Assert.IsFalse(
+        Assert.IsTrue(
             AppPreferences.Default.ReviewMarkdownViewEnabled,
-            "复盘阅读视图默认关闭（实验性＝零打扰，复盘表面与现状逐像素一致）。");
+            "默认开启（2026-11-07 起，实验性；存量经一次性迁移收敛）。");
     }
 
     [TestMethod]
@@ -768,7 +768,7 @@ public sealed class AppPreferencesTests
     }
 
     [TestMethod]
-    public void OlderJson_WithoutReviewMarkdownViewField_FallsBackToDisabled()
+    public void OlderJson_WithoutReviewMarkdownViewField_FallsBackToEnabled()
     {
         var storeOptions = new JsonSerializerOptions
         {
@@ -780,17 +780,17 @@ public sealed class AppPreferencesTests
             storeOptions);
 
         Assert.IsNotNull(restored);
-        Assert.IsFalse(
+        Assert.IsTrue(
             restored.ReviewMarkdownViewEnabled,
-            "旧 preferences.json 缺字段时必须回落到默认关闭（升级零感知）。");
+            "缺字段回落构造默认＝新默认开启。");
     }
 
     [TestMethod]
-    public void Default_DisablesDragOutAsFile()
+    public void Default_EnablesDragOutAsFile()
     {
-        Assert.IsFalse(
+        Assert.IsTrue(
             AppPreferences.Default.DragOutAsFileEnabled,
-            "图片拖出为文件默认关闭（实验性＝零打扰，对外拖出能力需显式开启）。");
+            "默认开启（2026-11-07 起，实验性；存量经一次性迁移收敛）。");
     }
 
     [TestMethod]
@@ -815,7 +815,7 @@ public sealed class AppPreferencesTests
     }
 
     [TestMethod]
-    public void OlderJson_WithoutDragOutAsFileField_FallsBackToDisabled()
+    public void OlderJson_WithoutDragOutAsFileField_FallsBackToEnabled()
     {
         var storeOptions = new JsonSerializerOptions
         {
@@ -827,8 +827,57 @@ public sealed class AppPreferencesTests
             storeOptions);
 
         Assert.IsNotNull(restored);
-        Assert.IsFalse(
+        Assert.IsTrue(
             restored.DragOutAsFileEnabled,
-            "旧 preferences.json 缺字段时必须回落到默认关闭（升级零感知）。");
+            "缺字段回落构造默认＝新默认开启。");
+    }
+
+    [TestMethod]
+    public void Default_ZeroExperimentalDefaultsMigrationStamp()
+    {
+        Assert.AreEqual(
+            0,
+            AppPreferences.Default.ExperimentalDefaultsMigrationVersion,
+            "新装默认未迁移（戳 0）：首次启动由一次性迁移统一置开并落戳。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesExperimentalDefaultsMigrationVersion()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        foreach (var version in new[] { 0, 1 })
+        {
+            var preferences = AppPreferences.Default with { ExperimentalDefaultsMigrationVersion = version };
+
+            var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+            StringAssert.Contains(serialized, "\"experimentalDefaultsMigrationVersion\"", "落盘键名必须是 experimentalDefaultsMigrationVersion（camelCase）。");
+            var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+            Assert.AreEqual(preferences, restored);
+            Assert.AreEqual(version, restored!.ExperimentalDefaultsMigrationVersion);
+        }
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutExperimentalDefaultsMigrationVersionField_FallsBackToZero()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","interfaceFont":null}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.AreEqual(
+            0,
+            restored.ExperimentalDefaultsMigrationVersion,
+            "旧 preferences.json 缺戳字段时必须回落 0（未迁移＝下次启动重放迁移，幂等收敛）。");
     }
 }
