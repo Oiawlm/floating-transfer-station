@@ -35,6 +35,7 @@ public sealed class ClipboardCaptureService
         BoardOperationGate? operationGate = null,
         DefaultCaptureCategoryState? defaultCaptureCategory = null,
         PluginCatalog? pluginCatalog = null,
+        DefaultSubgroupState? defaultSubgroup = null,
         CaptureDeduplicationGate? deduplicationGate = null,
         int maximumPendingCaptures = 16,
         long maximumPendingBytes = 256L * 1024 * 1024)

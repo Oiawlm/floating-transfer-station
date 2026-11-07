@@ -17,7 +17,8 @@ public sealed class ExternalDropImportService
         IBoardStore store,
         Action<string> showStatus,
         BoardOperationGate? operationGate = null,
-        PluginCatalog? pluginCatalog = null)
+        PluginCatalog? pluginCatalog = null,
+        DefaultSubgroupState? defaultSubgroup = null)
     {
         _normalizer = normalizer;
         _board = board;
