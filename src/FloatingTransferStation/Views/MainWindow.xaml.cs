@@ -145,7 +145,8 @@ public partial class MainWindow : Window
         AppLauncher? appLauncher = null,
         ILauncherDiscoveryStore? launcherDiscoveryStore = null,
         InputDeliveryService? inputDelivery = null,
-        Func<DateTimeOffset>? updateClock = null)
+        Func<DateTimeOffset>? updateClock = null,
+        DefaultSubgroupState? defaultSubgroup = null)
     {
         InitializeComponent();
         _preferences = preferences ?? AppPreferences.Default;
@@ -199,7 +200,7 @@ public partial class MainWindow : Window
         _dailyReviews = dailyReviewStore ?? store as IDailyReviewStore;
         var work = CurrentWorkArea();
         _settings = settings.Normalize(work.Width, work.Height);
-        _viewModel = new MainWindowViewModel(board, _settings, defaultCaptureCategory);
+        _viewModel = new MainWindowViewModel(board, _settings, defaultCaptureCategory, defaultSubgroup);
         DataContext = _viewModel;
         _viewModel.ShortCardNotesEnabled = _preferences.ShortCardNotesEnabled;
         _viewModel.AiOrganizeEnabled = _preferences.AiOrganizeEnabled;

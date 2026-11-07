@@ -185,6 +185,28 @@ public sealed class SubgroupBoardServiceTests
     }
 
     [TestMethod]
+    public void AddText_WithSubgroupPersistsSlotOnNewItem()
+    {
+        var board = new BoardService();
+
+        var item = board.AddText("甲", BoardCategory.Inbox, subgroup: 2);
+        var image = board.AddImage(
+            Guid.NewGuid(),
+            "images/a.png",
+            @"C:\store\images\a.png",
+            BoardCategory.Inbox,
+            subgroup: 1);
+
+        Assert.AreEqual(2, item.Subgroup, "可选参承载默认落点子分组（文本卡）。");
+        Assert.AreEqual(1, image.Subgroup, "可选参承载默认落点子分组（图片卡）。");
+        Assert.IsNull(
+            board.AddText("乙", BoardCategory.Inbox).Subgroup,
+            "不传参＝未指定组（既有落点不变）。");
+        var snapshotItem = board.CreateSnapshot().Items.Single(snapshot => snapshot.Id == item.Id);
+        Assert.AreEqual(2, snapshotItem.Subgroup, "槽值随快照持久化。");
+    }
+
+    [TestMethod]
     public async Task AssignSubgroup_IsUndoable()
     {
         var board = new BoardService();
