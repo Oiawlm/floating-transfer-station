@@ -2024,6 +2024,39 @@
     </Setter>
   </Style>
 
+  <!-- overlay 滚动文本输入框（#23 机制扩展至文本输入表面，2026-11-06 记录编辑器根治）：
+       派生自 ThemedTextBoxStyle（画刷/圆角/聚焦环等纯 Setter 单一来源不变），仅重写模板把
+       PART_ContentHost 直引上方 keyed overlay 滚动模板——与设置窗 SettingsScrollHost 直引
+       同构。与基样式的唯一模板差异：内边距由 viewer 的 Margin 改为 Padding 透传（overlay
+       模板把 Padding 施加在 presenter 上、条带贴 viewer 满宽右缘）——8 DIP 瘦条落在
+       12 DIP 右内边距带内、与文字零相交；默认模板下 Auto 滚动条占独立 Auto 布局列，打满
+       一屏突然占宽 ≈17 DIP（主题 ScrollBar 系统尺寸下限），Wrap 排版宽骤减即全文重排
+       （用户报障「输入到一定程度滚动条出现，已输入文字突然整体换行重排」；Hidden 稳定留槽
+       是卡内编辑器先例，但记录编辑器是大篇幅输入面、滚动反馈重要，走 overlay 路线）。
+       keyed 派生而非改基样式：ThemedTextBoxStyle 另有约十处输入面消费，不得外溢。 -->
+  <Style x:Key="OverlayScrollTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource ThemedTextBoxStyle}">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="TextBox">
+          <Border x:Name="Surface"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{StaticResource ControlCornerRadius}">
+            <ScrollViewer x:Name="PART_ContentHost"
+                          Padding="{TemplateBinding Padding}"
+                          Style="{StaticResource OverlayScrollViewerStyle}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="Surface" Property="Opacity" Value="0.5" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <DataTemplate DataType="{x:Type models:BoardItem}">
     <Grid Style="{StaticResource CardRootStyle}">
       <Border Style="{StaticResource CardShadowLayerStyle}" />

@@ -10,6 +10,7 @@ public sealed class ExternalDropImportService
     private readonly Action<string> _showStatus;
     private readonly BoardOperationGate _operationGate;
     private readonly PluginCatalog? _pluginCatalog;
+    private readonly DefaultSubgroupState _defaultSubgroup;
 
     public ExternalDropImportService(
         IImageNormalizer normalizer,
@@ -17,7 +18,8 @@ public sealed class ExternalDropImportService
         IBoardStore store,
         Action<string> showStatus,
         BoardOperationGate? operationGate = null,
-        PluginCatalog? pluginCatalog = null)
+        PluginCatalog? pluginCatalog = null,
+        DefaultSubgroupState? defaultSubgroup = null)
     {
         _normalizer = normalizer;
         _board = board;
@@ -25,6 +27,7 @@ public sealed class ExternalDropImportService
         _showStatus = showStatus;
         _operationGate = operationGate ?? new BoardOperationGate();
         _pluginCatalog = pluginCatalog;
+        _defaultSubgroup = defaultSubgroup ?? new DefaultSubgroupState();
     }
 
     public async Task<bool> ImportAsync(
@@ -128,9 +131,12 @@ public sealed class ExternalDropImportService
         BoardCategory targetCategory,
         List<Guid> addedItemIds)
     {
+        // 默认落点在导入段一次求值（契约 #57 修订）：外部拖入到分类标签＝落该分类
+        // 的收集落点子分组（未设＝null 未指定组）；Add* 调用点不二次求值。
+        var targetSubgroup = _defaultSubgroup.Current(targetCategory);
         if (payload is ExternalDropPayload.Text text)
         {
-            addedItemIds.Add(_board.AddText(text.Value, targetCategory).Id);
+            addedItemIds.Add(_board.AddText(text.Value, targetCategory, subgroup: targetSubgroup).Id);
             return;
         }
 
@@ -141,7 +147,8 @@ public sealed class ExternalDropImportService
                 stored.Id,
                 stored.RelativePath,
                 stored.AbsolutePath,
-                targetCategory).Id);
+                targetCategory,
+                subgroup: targetSubgroup).Id);
         }
     }
 

@@ -130,16 +130,18 @@
           </Grid>
         </Border>
       </DataTemplate>
-      <!-- 子分组 chip（实验性，契约 #57 形态①）：视觉沿分类轨标签语言（边框/圆角/
-           hover/激活 accent）；单击过滤、双击改名（照分类轨「单击激活、双击改名」
-           同构）、拖卡入 chip＝批量归属该槽（照「拖卡入标签=移动分类」先例）。
-           改名会话与分类改名同一套机器（IME 守卫＋Enter/Esc/失焦提交）。 -->
+      <!-- 子分组 chip（实验性，契约 #57 修订）：视觉沿分类轨标签语言（边框/圆角/
+           hover/激活 accent）；悬停过滤、单击设收集落点（照分类轨「悬停即进入、
+           单击设默认接收」同构）、双击改名、拖卡入 chip＝批量归属该槽（照「拖卡入
+           标签=移动分类」先例）。改名会话与分类改名同一套机器（IME 守卫＋Enter/
+           Esc/失焦提交）。 -->
       <DataTemplate x:Key="SubgroupChipTemplate"
                     DataType="{x:Type vm:SubgroupChipViewModel}">
         <Border x:Name="ChipSurface"
                 Style="{StaticResource SubgroupChipContainerStyle}"
                 Tag="{Binding Slot}"
                 AllowDrop="True"
+                MouseEnter="SubgroupChip_MouseEnter"
                 MouseLeftButtonDown="SubgroupChip_MouseLeftButtonDown"
                 MouseLeftButtonUp="SubgroupChip_MouseLeftButtonUp"
                 DragEnter="SubgroupChip_DragEnter"
@@ -157,6 +159,13 @@
                     views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
             <Border Style="{StaticResource SubgroupChipActiveLayerStyle}" />
             <Border Style="{StaticResource SubgroupChipDropTargetLayerStyle}" />
+            <!-- 收集落点子分组环（契约 #57 修订）：复用 #56 默认接收分类单圆环
+                 （样式零改、同 Data 同规格），每分类独立记忆；显隐由本模板
+                 IsDefaultSubgroup 触发驱动（样式内 IsDefaultCapture 触发在 chip
+                 数据上下文不命中，环显隐单点在此）。 -->
+            <Path x:Name="DefaultSubgroupMarker"
+                  Style="{StaticResource CategoryDefaultMarkerStyle}"
+                  Data="M12,4 A8,8 0 1 1 11.99,4 Z" />
             <TextBlock Text="{Binding DisplayName}"
                        Style="{StaticResource SubgroupChipLabelTextStyle}" />
             <TextBox Text="{Binding DraftName, UpdateSourceTrigger=Explicit}"
@@ -166,6 +175,11 @@
                      LostKeyboardFocus="SubgroupChipNameEditor_LostKeyboardFocus" />
           </Grid>
         </Border>
+        <DataTemplate.Triggers>
+          <DataTrigger Binding="{Binding IsDefaultSubgroup}" Value="True">
+            <Setter TargetName="DefaultSubgroupMarker" Property="Opacity" Value="1" />
+          </DataTrigger>
+        </DataTemplate.Triggers>
       </DataTemplate>
     </ResourceDictionary>
   </Window.Resources>
@@ -520,8 +534,9 @@
           </Grid>
         </Border>
 
-        <!-- 子分组按钮轨（实验性，契约 #57 形态①）：ChipRail 模式且激活面板为
+        <!-- 子分组按钮轨（实验性，契约 #57 修订）：ChipRail 模式且激活面板为
              内容桶才可见（VM IsSubgroupRailVisible 唯一驱动；复盘/启动表面零呈现）；
+             悬停即按槽过滤、单击设收集落点（右上角圆环，每分类独立记忆）；
              四槽 UniformGrid（不加不减不排序）。Off/GroupedView＝整行 Collapsed
              零占位，BoardList 几何与现状逐 DIP 一致。 -->
         <Border x:Name="SubgroupRail"
@@ -812,9 +827,12 @@
                          Foreground="{DynamicResource SecondaryTextBrush}"
                          Text="今天" />
             </Grid>
+            <!-- 记录编辑器挂 keyed overlay 滚动模板（契约 #23 扩展，2026-11-06）：打满一屏
+                 滚动条出现/消失不改变排版宽（Auto 滚动条悬浮文字之上、8 DIP 落在 Padding=12
+                 右带内），Wrap 全文不再重排；垂直 Auto/水平 Disabled 语义不变。 -->
             <TextBox x:Name="ReviewEditor"
                      Grid.Row="1"
-                     Style="{StaticResource ThemedTextBoxStyle}"
+                     Style="{StaticResource OverlayScrollTextBoxStyle}"
                      AcceptsReturn="True"
                      TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"
