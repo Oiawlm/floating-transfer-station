@@ -130,6 +130,12 @@ $overrides = @(
         'src/FloatingTransferStation/Views/MainWindow.SelectionAndDeletion.cs') },
     @{ Name = 'Settings'; Filter = 'FullyQualifiedName~SettingsWindow|FullyQualifiedName~Preferences'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.Settings.cs') },
+    # 子分组轨模板选择器（2026-11-08 登记缩圈，批次 2026-11-08-interaction-unify-batch a1）：
+    # #60 新增 Views 文件落地时漏登记（R-AppStem 词根 SubgroupChipTemplateSelector 零命中），
+    # 反向守卫自此拦截本地选择器（CI 不跑本脚本故未拦、main 既有缺口）；真实锁定面＝
+    # SubgroupRail 族（「全部」伪 chip 模板分派经轨渲染全测，词根沿 SubgroupRail 登记值）。
+    @{ Name = 'SubgroupChipTemplateSelector'; Filter = 'FullyQualifiedName~Subgroup'; Globs = @(
+        'src/FloatingTransferStation/Views/SubgroupChipTemplateSelector.cs') },
     @{ Name = 'Updates'; Filter = 'FullyQualifiedName~Update'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.Updates.cs') },
     # 控件/转换器

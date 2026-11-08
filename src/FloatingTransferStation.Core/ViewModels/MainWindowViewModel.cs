@@ -221,19 +221,21 @@ public sealed class MainWindowViewModel : ObservableObject
 
     /// <summary>按分类槽序重排 chip 集（Activate 与采纳共用单点）：序未变不重建
     /// （防每次激活重置轨容器）；无种子（非内容桶）保持现状（轨在该面板不可见）。
-    /// chip 数组实际替换后连带重建轨投影（「全部」恒居首，契约 #57 修订）。</summary>
+    /// chip 数组实际替换后连带重建轨投影（「全部」恒居首，契约 #57 修订）。末尾统一
+    /// 重算默认环（#56 修订：未设默认的兜底环位＝显示序首槽，随重排/激活换轨位移；
+    /// 激活分类未变序时同样需要按新分类解析环位，故重算不得随重建短路）。</summary>
     private void ApplySubgroupChipsOrder(BoardCategory category)
     {
-        if (!_subgroupOrders.TryGetValue(category, out var order) ||
-            order.SequenceEqual(SubgroupChips.Select(chip => chip.Slot)))
+        if (_subgroupOrders.TryGetValue(category, out var order) &&
+            !order.SequenceEqual(SubgroupChips.Select(chip => chip.Slot)))
         {
-            return;
+            SubgroupChips = order
+                .Select(slot => SubgroupChips.Single(chip => chip.Slot == slot))
+                .ToArray();
+            RebuildSubgroupRailItems();
         }
 
-        SubgroupChips = order
-            .Select(slot => SubgroupChips.Single(chip => chip.Slot == slot))
-            .ToArray();
-        RebuildSubgroupRailItems();
+        ApplyDefaultSubgroupSelection();
     }
 
     /// <summary>轨投影重建单点（契约 #57 修订）：开关开启＝「全部」伪 chip 恒居首＋
@@ -355,11 +357,10 @@ public sealed class MainWindowViewModel : ObservableObject
 
         ActivePanel = activePanel;
         // 子分组轨可见性随激活面板的内容桶角色翻转（契约 #57 作用域）；chip 集按
-        // 新激活分类的槽序重排＋默认环差分恢复（chip 实例跨分类共享，契约 #57 修订
-        // ——两消费同点合并，不造第二挂接）。
+        // 新激活分类的槽序重排＋默认环重算（chip 实例跨分类共享，契约 #57 修订与
+        // #56 修订——重排末尾统一重算环位，两消费同点合并，不造第二挂接）。
         OnPropertyChanged(nameof(IsSubgroupRailVisible));
         ApplySubgroupChipsOrder(category);
-        ApplyDefaultSubgroupSelection();
     }
 
     public void SetPanelExpanded(bool isExpanded)
@@ -445,24 +446,28 @@ public sealed class MainWindowViewModel : ObservableObject
         return true;
     }
 
-    /// <summary>chip 默认环差分单点：按激活面板（内容桶）解析该分类当前默认槽；
-    /// 轨可见时每 chip 恒有环（#56 修订）——紫 iff 激活分类=默认接收分类且该
-    /// chip 为其默认子分组，其余灰（未设默认时该分类全部灰）；面板非内容桶
-    /// （轨不可见）全 None 兜底。Current 读取仅限环恢复（落点求值在两管线入口，
-    /// 契约 #57 修订）。</summary>
+    /// <summary>chip 默认环独占判定单点（#56 修订）：轨可见（激活面板为内容桶）时
+    /// 恰一枚槽 chip 带环——环位＝该分类当前默认子分组，未设兜底＝显示序首槽
+    /// （<see cref="SubgroupChips"/>[0]，随槽序重排位移）；环色＝Active 紫 iff
+    /// 激活分类=默认接收分类 ∧ 默认已设（有效默认落点），否则 Inactive 灰——兜底
+    /// 环恒灰：未设默认时捕获实际落 null（未指定组），首槽紫环会是假信号，紫严格
+    /// 保留给有效落点。其余槽 chip 一律 None；面板非内容桶（轨不可见）全 None 兜底。
+    /// Current 读取仅限环恢复（落点求值在两管线入口，契约 #57 修订）。</summary>
     private void ApplyDefaultSubgroupSelection()
     {
         var category = ActivePanel?.Category;
         var isContentBucket = category is { } value && BoardCategoryCatalog.IsContentBucket(value);
         var isDefaultCaptureCategory = isContentBucket && category == _defaultCaptureCategory.Current;
         var current = isContentBucket ? _defaultSubgroup.Current(category.GetValueOrDefault()) : null;
+        var ringSlot = isContentBucket ? current ?? SubgroupChips[0].Slot : (int?)null;
+        var ringState = isDefaultCaptureCategory && current is not null
+            ? DefaultMarkerState.Active
+            : DefaultMarkerState.Inactive;
         foreach (var chip in SubgroupChips)
         {
-            chip.DefaultMarkerState = isDefaultCaptureCategory && chip.Slot == current
-                ? DefaultMarkerState.Active
-                : isContentBucket
-                    ? DefaultMarkerState.Inactive
-                    : DefaultMarkerState.None;
+            chip.DefaultMarkerState = isContentBucket && chip.Slot == ringSlot
+                ? ringState
+                : DefaultMarkerState.None;
         }
     }
 
