@@ -160,9 +160,10 @@
             <Border Style="{StaticResource SubgroupChipActiveLayerStyle}" />
             <Border Style="{StaticResource SubgroupChipDropTargetLayerStyle}" />
             <!-- 收集落点子分组环（契约 #57 修订＋#56 双态环语法）：复用 #56
-                 默认接收分类单圆环（同 Data 同规格），每分类独立记忆；环态由
-                 样式 DefaultMarkerState 触发器统一驱动——两宿主属性同名，
-                 样式触发器在 chip 数据上下文同样命中，环显隐单点回归样式。 -->
+                 默认接收分类单圆环（同 Data 同规格），每分类独立记忆——轨可见时
+                 恰一枚槽 chip 独占环（默认子分组，未设兜底显示序首槽恒灰），其余
+                 None；环态由样式 DefaultMarkerState 触发器统一驱动——两宿主属性
+                 同名，样式触发器在 chip 数据上下文同样命中，环显隐单点回归样式。 -->
             <Path x:Name="DefaultSubgroupMarker"
                   Style="{StaticResource CategoryDefaultMarkerStyle}"
                   Data="M12,4 A8,8 0 1 1 11.99,4 Z" />
