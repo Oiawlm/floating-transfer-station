@@ -33,20 +33,14 @@ public partial class MainWindow
         ClearSearchConditions();
     }
 
+    /// <summary>搜索空结果的「清空筛选」按钮（契约 #33 2026-11-08 修订）：按钮
+    /// 只在搜索分支呈现（可见性由 UpdateEmptyStates 单点求值，槽过滤空态无 CTA、
+    /// 由副文案引导退出），这里只承载搜索条件一键清空。</summary>
     private void SearchClearFilterButton_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
-        if (_viewModel.IsSearchActive)
-        {
-            ClearSearchConditions();
-            FocusSearchInput();
-        }
-        else
-        {
-            // chip 过滤空态（契约 #57）：清空按钮取消的是子分组过滤（搜索条未展开，
-            // 不触碰搜索条件与焦点）。
-            ClearSubgroupFilter(reapplyFilter: true);
-        }
+        ClearSearchConditions();
+        FocusSearchInput();
     }
 
     private void SearchInput_TextChanged(object sender, TextChangedEventArgs e)

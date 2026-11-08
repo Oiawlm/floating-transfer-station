@@ -86,8 +86,10 @@ public partial class MainWindow
     }
 
     /// <summary>空态可见性唯一求值点（契约 #33，2026-11-06 收敛修订；2026-11-07
-    /// 谓词分化修订）：从当前状态
-    /// 一次算出并应用 SearchEmptyHint 与 BoardEmptyState 两元素——同格（Grid.Row=2）
+    /// 谓词分化修订；2026-11-08 槽过滤空态去 CTA 修订）：从当前状态
+    /// 一次算出并应用 SearchEmptyHint（含分支互补三件套：标题文案＋搜索分支
+    /// 「清空筛选」按钮可见/槽过滤分支副文案引导可见，两者互斥）与
+    /// BoardEmptyState 两元素——同格（Grid.Row=2）
     /// 设计互斥（搜索态「无匹配结果」与槽过滤空结果「该分组暂无卡片」的空集
     /// 语义由 SearchEmptyHint 承载、文案按来源切换，#57 扩展；内容桶空态让位——
     /// 让位谓词＝仅槽过滤：「全部」全量态与根态内容等价，空分类走 BoardEmptyState），
@@ -138,6 +140,19 @@ public partial class MainWindow
         SearchEmptyHintTitle.SetCurrentValue(
             TextBlock.TextProperty,
             _viewModel.IsSearchActive ? "无匹配结果" : "该分组暂无卡片");
+        // 分支互补三件套（契约 #33 2026-11-08 修订）：搜索＝「清空筛选」按钮在场
+        //（#37 语义零变化）、副文案退位；槽过滤＝无 CTA——按钮退位、副文案承载
+        // 退出引导（对齐内容桶空态的纯文字引导范式：该空态是「视图空」而非
+        // 「内容空」，轨在场且被过滤 chip 高亮，Esc/切分类/悬停其他 chip 通道充足）。
+        SearchClearFilterButton.SetCurrentValue(
+            VisibilityProperty,
+            searchVisible ? Visibility.Visible : Visibility.Collapsed);
+        SearchEmptyHintHint.SetCurrentValue(
+            VisibilityProperty,
+            subgroupVisible ? Visibility.Visible : Visibility.Collapsed);
+        SearchEmptyHintHint.SetCurrentValue(
+            TextBlock.TextProperty,
+            "按 Esc 查看该分类全部卡片，或移到其他分组");
     }
 
     /// <summary>记录空态唯一更新点：记录表面激活、编辑器可用（存储在位）且当前
