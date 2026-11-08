@@ -209,9 +209,9 @@ public sealed partial class MainWindowInteractionTests
             foreach (var chip in chips)
             {
                 Assert.AreEqual(
-                    DefaultMarkerState.Inactive,
+                    chip.Slot == 0 ? DefaultMarkerState.Inactive : DefaultMarkerState.None,
                     chip.DefaultMarkerState,
-                    "装载期无默认子分组＝全部灰环（轨可见时每 chip 恒有环，#56 修订）。");
+                    "装载期无默认子分组＝恰显示序首槽（恒等序＝槽 0）灰环兜底，余槽 None（恰一枚独占环，#56 修订）。");
             }
 
             // 复盘表面零呈现：切到复盘标签轨必须塌缩。
@@ -568,33 +568,38 @@ public sealed partial class MainWindowInteractionTests
 
             ClickChip(window, 1);
             Assert.AreEqual(DefaultMarkerState.Active, viewModel.SubgroupChips[1].DefaultMarkerState, "单击设默认环（紫＝有效默认落点）。");
-            Assert.AreEqual(DefaultMarkerState.Inactive, viewModel.SubgroupChips[3].DefaultMarkerState, "其余 chip 灰环（具备能力非当前）。");
+            Assert.AreEqual(DefaultMarkerState.None, viewModel.SubgroupChips[3].DefaultMarkerState, "其余 chip 无环（恰一枚独占环，#56 修订）。");
 
             ClickChip(window, 3);
-            Assert.AreEqual(DefaultMarkerState.Inactive, viewModel.SubgroupChips[1].DefaultMarkerState, "再单击他槽＝紫环移动。");
+            Assert.AreEqual(DefaultMarkerState.None, viewModel.SubgroupChips[1].DefaultMarkerState, "再单击他槽＝Active 环移动、原位变 None。");
             Assert.AreEqual(DefaultMarkerState.Active, viewModel.SubgroupChips[3].DefaultMarkerState);
 
             // 同槽再单击＝幂等（差分语义，环保持）。
             ClickChip(window, 3);
             Assert.AreEqual(DefaultMarkerState.Active, viewModel.SubgroupChips[3].DefaultMarkerState);
 
-            // 每分类独立一份：重要分类非默认接收＝全灰（默认记忆仍各自保存，
-            // 切回恢复）；重要分类设默认后仍灰（紫 iff 激活分类=默认接收分类）。
+            // 每分类独立一份：重要分类非默认接收＝灰独占环（未设默认＝显示序首槽
+            // 兜底；默认记忆仍各自保存，切回恢复）；设默认后环位移到该槽仍灰
+            // （紫 iff 激活分类=默认接收分类）。
             ExpandCategory(window, BoardCategory.CustomerOriginal);
             CompleteLayout(window);
             foreach (var chip in viewModel.SubgroupChips)
             {
                 Assert.AreEqual(
-                    DefaultMarkerState.Inactive,
+                    chip.Slot == 0 ? DefaultMarkerState.Inactive : DefaultMarkerState.None,
                     chip.DefaultMarkerState,
-                    "重要分类非默认接收＝全部灰环（用户示例）。");
+                    "重要分类非默认接收且未设默认＝首槽灰环兜底（恰一枚独占环）。");
             }
 
             ClickChip(window, 2);
             Assert.AreEqual(
                 DefaultMarkerState.Inactive,
                 viewModel.SubgroupChips[2].DefaultMarkerState,
-                "重要分类独立设默认（会话态记忆）但环仍灰。");
+                "重要分类独立设默认（会话态记忆）环位移到该槽但仍灰。");
+            Assert.AreEqual(
+                DefaultMarkerState.None,
+                viewModel.SubgroupChips[0].DefaultMarkerState,
+                "设默认后兜底首槽环让位（恰一枚独占环）。");
 
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
@@ -602,7 +607,7 @@ public sealed partial class MainWindowInteractionTests
                 DefaultMarkerState.Active,
                 viewModel.SubgroupChips[3].DefaultMarkerState,
                 "切回待分类恢复其紫环（每分类独立）。");
-            Assert.AreEqual(DefaultMarkerState.Inactive, viewModel.SubgroupChips[2].DefaultMarkerState);
+            Assert.AreEqual(DefaultMarkerState.None, viewModel.SubgroupChips[2].DefaultMarkerState);
         }
         finally
         {
@@ -629,28 +634,37 @@ public sealed partial class MainWindowInteractionTests
             // 环＝复用 #56 默认接收分类单圆环样式（同实例、同几何规格）；环态与
             // 用色由样式 DefaultMarkerState 触发器单点驱动（模板级触发器已退役）。
             var markerStyle = (Style)window.FindResource("CategoryDefaultMarkerStyle");
-            var marker = FindDescendants<System.Windows.Shapes.Path>(chipHost)
-                .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
+            System.Windows.Shapes.Path MarkerOf(Border host) =>
+                FindDescendants<System.Windows.Shapes.Path>(host)
+                    .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
+            var marker = MarkerOf(chipHost);
             var markerData = marker.Data.ToString();
             StringAssert.Contains(markerData, "A8,8");
             Assert.AreEqual(1.25d, marker.StrokeThickness);
             Assert.AreEqual(10d, marker.Width);
             Assert.AreEqual(10d, marker.Height);
             Assert.AreEqual(1, Panel.GetZIndex(marker), "环在文字之上（照分类标记层序）。");
-            Assert.AreEqual(1d, marker.Opacity, "未设默认＝灰环（Inactive 恒有环，#56 修订）。");
+            // 装载期未设默认＝显示序首槽（恒等序＝槽 0）灰环兜底，本槽（1）无环。
+            Assert.AreEqual(0d, marker.Opacity, "未设默认＝非兜底槽无环（恰一枚独占环，#56 修订）。");
+            var fallbackMarker = MarkerOf(FindSubgroupChip(window, 0));
+            Assert.AreEqual(1d, fallbackMarker.Opacity, "兜底首槽灰环（轨可见时恒有一环）。");
             Assert.AreSame(
                 window.FindResource("SecondaryTextBrush"),
-                marker.Stroke,
+                fallbackMarker.Stroke,
                 "灰环描边＝SecondaryTextBrush（复用非新 token，双主题整本替换自适应）。");
 
             ClickChip(window, 1);
 
             Assert.AreEqual(DefaultMarkerState.Active, viewModel.SubgroupChips[1].DefaultMarkerState);
-            Assert.AreEqual(1d, marker.Opacity, "设默认后环保持可见。");
+            Assert.AreEqual(1d, marker.Opacity, "设默认后本槽独占环亮起（有效默认落点）。");
             Assert.AreSame(
                 window.FindResource("AccentBrush"),
                 marker.Stroke,
                 "有效默认落点描边＝AccentBrush 主题自适应紫。");
+            Assert.AreEqual(
+                0d,
+                fallbackMarker.Opacity,
+                "设默认后兜底首槽环让位（其余槽 marker Opacity=0）。");
         }
         finally
         {
@@ -1375,6 +1389,10 @@ public sealed partial class MainWindowInteractionTests
             // 先设默认子分组（单击 chip 2）：模式切换不清理收集落点记忆（会话态）。
             ClickChip(window, 2);
             Assert.AreEqual(DefaultMarkerState.Active, viewModel.SubgroupChips[2].DefaultMarkerState);
+            Assert.AreEqual(
+                DefaultMarkerState.None,
+                viewModel.SubgroupChips[1].DefaultMarkerState,
+                "其余槽 chip 无环（恰一枚独占环，#56 修订）。");
 
             // ChipRail→Off：轨塌缩＋过滤清除＋Filter 重评估，无残留。
             window.ApplyPreferences(
@@ -1566,9 +1584,10 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
-    /// <summary>环语法断言单点（契约 #56 修订）：轨可见时每 chip 恒有环——
-    /// purpleSlot 为 null 时全灰，否则该槽紫、余灰（描边经样式触发器单点换色）。</summary>
-    private static void AssertChipRingGrammar(MainWindow window, int? purpleSlot)
+    /// <summary>环语法断言单点（契约 #56 修订）：轨可见时恰一枚槽 chip 独占环——
+    /// ringSlot 槽 Opacity=1（isPurple 决定紫/灰描边，兜底环恒灰），其余槽 marker
+    /// Opacity=0（描边经样式触发器单点换色）。</summary>
+    private static void AssertChipRingGrammar(MainWindow window, int ringSlot, bool isPurple)
     {
         var markerStyle = (Style)window.FindResource("CategoryDefaultMarkerStyle");
         var accent = window.FindResource("AccentBrush");
@@ -1577,11 +1596,17 @@ public sealed partial class MainWindowInteractionTests
         {
             var marker = FindDescendants<System.Windows.Shapes.Path>(FindSubgroupChip(window, slot))
                 .Single(candidate => ReferenceEquals(candidate.Style, markerStyle));
-            Assert.AreEqual(1d, marker.Opacity, $"槽 {slot} 恒有环（具备落点能力）。");
+            if (slot != ringSlot)
+            {
+                Assert.AreEqual(0d, marker.Opacity, $"槽 {slot} 无环（恰一枚独占环）。");
+                continue;
+            }
+
+            Assert.AreEqual(1d, marker.Opacity, $"槽 {slot} 独占环（轨可见时恒有一环）。");
             Assert.AreSame(
-                slot == purpleSlot ? accent : secondary,
+                isPurple ? accent : secondary,
                 marker.Stroke,
-                $"槽 {slot} 环色＝{(slot == purpleSlot ? "紫（Active＝有效默认落点）" : "灰（Inactive＝非默认）")}。");
+                $"槽 {slot} 环色＝{(isPurple ? "紫（Active＝有效默认落点）" : "灰（Inactive＝非默认/兜底占位）")}。");
         }
     }
 
@@ -1604,17 +1629,17 @@ public sealed partial class MainWindowInteractionTests
             // 重要分类预置默认槽 2（未激活不呈环）；待分类（装载期默认接收）设槽 1。
             Assert.IsTrue(viewModel.SetDefaultSubgroup(BoardCategory.CustomerOriginal, 2));
             ClickChip(window, 1);
-            AssertChipRingGrammar(window, purpleSlot: 1);
+            AssertChipRingGrammar(window, ringSlot: 1, isPurple: true);
 
-            // 默认接收迁移到重要分类：激活轨（待分类）即刻原紫变灰（紫 iff
-            // 激活分类=默认接收分类）。
+            // 默认接收迁移到重要分类：激活轨（待分类）紫环即刻灭、灰环让位到其
+            // 默认槽 1（紫 iff 激活分类=默认接收分类，原位独占环改灰）。
             Assert.IsTrue(viewModel.SetDefaultCaptureCategory(BoardCategory.CustomerOriginal));
-            AssertChipRingGrammar(window, purpleSlot: null);
+            AssertChipRingGrammar(window, ringSlot: 1, isPurple: false);
 
-            // 激活迁到新默认接收分类：其默认槽亮紫、余灰。
+            // 激活迁到新默认接收分类：其默认槽亮紫、余槽无环。
             ExpandCategory(window, BoardCategory.CustomerOriginal);
             CompleteLayout(window);
-            AssertChipRingGrammar(window, purpleSlot: 2);
+            AssertChipRingGrammar(window, ringSlot: 2, isPurple: true);
         }
         finally
         {
@@ -1637,14 +1662,95 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
 
-            // 用户示例（2026-11-07）：重要非默认接收——即使设了默认子分组也全灰。
+            // 用户示例（2026-11-07→2026-11-08 独占环）：重要非默认接收——设默认后
+            // 环位移到该槽、恒灰（兜底首槽环让位）。
             Assert.AreEqual(BoardCategory.Inbox, viewModel.DefaultCapturePanel.Category, "装载期默认接收＝待分类。");
+            AssertChipRingGrammar(window, ringSlot: 0, isPurple: false);
             ClickChip(window, 2);
             Assert.AreEqual(
                 DefaultMarkerState.Inactive,
                 viewModel.SubgroupChips.Single(chip => chip.Slot == 2).DefaultMarkerState,
                 "非默认接收分类：设默认后环仍灰。");
-            AssertChipRingGrammar(window, purpleSlot: null);
+            AssertChipRingGrammar(window, ringSlot: 2, isPurple: false);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_RingGrammarFallbackGrayOnFirstSlotWhenNoDefaultSet()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            // 装载期未设默认（current=null）：显示序首槽（恒等序＝槽 0）灰环兜底——
+            // 父分类是默认接收分类也恒灰（紫 iff 默认已设；未设时捕获实际落 null，
+            // 首槽紫环是假信号）。
+            Assert.AreEqual(BoardCategory.Inbox, viewModel.DefaultCapturePanel.Category, "装载期默认接收＝待分类。");
+            Assert.AreEqual(
+                DefaultMarkerState.Inactive,
+                viewModel.SubgroupChips[0].DefaultMarkerState,
+                "未设默认＝显示序首槽灰环兜底（恒有一环）。");
+            Assert.IsTrue(
+                viewModel.SubgroupChips.Skip(1).All(chip => chip.DefaultMarkerState == DefaultMarkerState.None),
+                "其余槽 chip 一律 None（恰一枚独占环）。");
+            AssertChipRingGrammar(window, ringSlot: 0, isPurple: false);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_RingFallbackFollowsDisplayOrder()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("甲", BoardCategory.Inbox);
+        var settings = WindowSettings.Default
+            .WithSubgroupOrder(BoardCategory.Inbox, [2, 0, 1, 3]);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail, settings);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            // 自定义槽序 [2,0,1,3]＋未设默认：兜底环在显示序首枚（槽 2）。
+            Assert.AreEqual(2, viewModel.SubgroupChips[0].Slot, "轨首枚＝显示序首槽。");
+            Assert.AreEqual(
+                DefaultMarkerState.Inactive,
+                viewModel.SubgroupChips.Single(chip => chip.Slot == 2).DefaultMarkerState,
+                "兜底环位＝显示序首槽（随槽序，非恒槽 0）。");
+            AssertChipRingGrammar(window, ringSlot: 2, isPurple: false);
+
+            // 槽序重排（契约 #57 修订③采纳路径）：兜底环位移到新显示序首枚（槽 3）。
+            viewModel.ApplySubgroupOrder(BoardCategory.Inbox, [3, 1, 0, 2]);
+            CompleteLayout(window);
+            Assert.AreEqual(3, viewModel.SubgroupChips[0].Slot, "重排后轨首枚＝槽 3。");
+            Assert.AreEqual(
+                DefaultMarkerState.Inactive,
+                viewModel.SubgroupChips.Single(chip => chip.Slot == 3).DefaultMarkerState,
+                "改序后兜底环位移到新显示序首槽。");
+            Assert.AreEqual(
+                DefaultMarkerState.None,
+                viewModel.SubgroupChips.Single(chip => chip.Slot == 2).DefaultMarkerState,
+                "原兜底位环让位（恰一枚独占环）。");
+            AssertChipRingGrammar(window, ringSlot: 3, isPurple: false);
         }
         finally
         {
@@ -1655,51 +1761,57 @@ public sealed partial class MainWindowInteractionTests
     [STATestMethod]
     public void Subgroup_RingGrammarEvidenceBothThemes()
     {
-        // 契约 #56 修订证据：浅/深 ×（默认分类轨紫 1 灰 3／非默认分类轨全灰／
-        // 主标签紫灰对比）。环境变量未设置时跳过（CI 无证据目录即 Inconclusive，
-        // 不阻塞质量门）。
+        // 契约 #56 修订证据：浅/深 ×（未设默认首槽灰兜底／默认接收分类紫独占／
+        // 非默认分类灰独占／主标签紫灰对照）。环境变量未设置时跳过（CI 无证据
+        // 目录即 Inconclusive，不阻塞质量门）。
         if (string.IsNullOrWhiteSpace(
                 Environment.GetEnvironmentVariable("FTS_RING_EVIDENCE_DIR")))
         {
             Assert.Inconclusive("未设置 FTS_RING_EVIDENCE_DIR，跳过发布证据产出。");
         }
 
-        using var directory = new TestDirectory();
-        var board = new BoardService();
-        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
-        board.AddText("乙", BoardCategory.Inbox).Subgroup = 2;
-        board.AddText("丙", BoardCategory.CustomerOriginal).Subgroup = 1;
-        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
-
-        try
+        foreach (var theme in new[] { DesignTheme.Light, DesignTheme.Dark })
         {
-            window.Show();
-            window.Topmost = true;
-            ExpandCategory(window, BoardCategory.Inbox);
-            CompleteLayout(window);
-            var shell = (Border)window.FindName("WindowShell");
-            var viewModel = (MainWindowViewModel)window.DataContext;
-            var markerStyle = (Style)window.FindResource("CategoryDefaultMarkerStyle");
+            // 每主题独立窗口：兜底帧要求未设默认的装载期状态，主题间不复用会话态。
+            using var directory = new TestDirectory();
+            var board = new BoardService();
+            board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
+            board.AddText("乙", BoardCategory.Inbox).Subgroup = 2;
+            board.AddText("丙", BoardCategory.CustomerOriginal).Subgroup = 1;
+            var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
 
-            foreach (var theme in new[] { DesignTheme.Light, DesignTheme.Dark })
+            try
             {
+                window.Show();
+                window.Topmost = true;
+                ExpandCategory(window, BoardCategory.Inbox);
+                CompleteLayout(window);
                 DesignThemeManager.Apply(window, theme);
                 CompleteLayout(window);
                 var themeName = theme == DesignTheme.Light ? "light" : "dark";
+                var shell = (Border)window.FindName("WindowShell");
+                var viewModel = (MainWindowViewModel)window.DataContext;
+                var markerStyle = (Style)window.FindResource("CategoryDefaultMarkerStyle");
 
-                // 默认分类轨（装载期默认接收＝待分类）：设默认槽后紫 1 灰 3。
+                // 未设默认（装载期）：首槽灰环兜底、余无环（恰一枚独占环）。
+                AssertChipRingGrammar(window, ringSlot: 0, isPurple: false);
+                SaveVisualEvidence(
+                    shell!, $"evidence-a1-fallback-{themeName}.png", "FTS_RING_EVIDENCE_DIR");
+
+                // 默认分类轨（装载期默认接收＝待分类）：设默认槽 1 后紫独占。
                 ClickChip(window, 1);
                 CompleteLayout(window);
-                AssertChipRingGrammar(window, purpleSlot: 1);
+                AssertChipRingGrammar(window, ringSlot: 1, isPurple: true);
                 SaveVisualEvidence(
-                    shell!, $"evidence-a1-rail-defaultcapture-{themeName}.png", "FTS_RING_EVIDENCE_DIR");
+                    shell!, $"evidence-a1-default-purple-{themeName}.png", "FTS_RING_EVIDENCE_DIR");
 
-                // 非默认分类轨（重要）：全灰（用户示例）。
+                // 非默认分类轨（重要，预置默认槽 1）：默认槽灰环独占（用户示例）。
+                Assert.IsTrue(viewModel.SetDefaultSubgroup(BoardCategory.CustomerOriginal, 1));
                 ExpandCategory(window, BoardCategory.CustomerOriginal);
                 CompleteLayout(window);
-                AssertChipRingGrammar(window, purpleSlot: null);
+                AssertChipRingGrammar(window, ringSlot: 1, isPurple: false);
                 SaveVisualEvidence(
-                    shell!, $"evidence-a1-rail-nondefault-{themeName}.png", "FTS_RING_EVIDENCE_DIR");
+                    shell!, $"evidence-a1-nondefault-gray-{themeName}.png", "FTS_RING_EVIDENCE_DIR");
 
                 // 主标签紫/灰对比：默认接收标签紫、另一内容桶灰、记录/启动无环。
                 var accent = window.FindResource("AccentBrush");
@@ -1723,15 +1835,11 @@ public sealed partial class MainWindowInteractionTests
 
                 SaveVisualEvidence(
                     shell!, $"evidence-a1-maintabs-{themeName}.png", "FTS_RING_EVIDENCE_DIR");
-
-                // 下一主题迭代回到默认分类轨。
-                ExpandCategory(window, BoardCategory.Inbox);
-                CompleteLayout(window);
             }
-        }
-        finally
-        {
-            CloseWindow(window);
+            finally
+            {
+                CloseWindow(window);
+            }
         }
     }
 
@@ -2209,9 +2317,13 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             Assert.IsTrue(window.IsSubgroupFilterActive, "单击不退出全量态。");
             Assert.AreEqual(
-                DefaultMarkerState.Inactive,
+                DefaultMarkerState.None,
                 viewModel.SubgroupChips[1].DefaultMarkerState,
-                "单击不设默认落点（伪 chip 无槽身份）。");
+                "单击不设默认落点（伪 chip 无槽身份；非兜底槽恒 None，恰一枚独占环）。");
+            Assert.AreEqual(
+                DefaultMarkerState.Inactive,
+                viewModel.SubgroupChips[0].DefaultMarkerState,
+                "兜底首槽灰环不受伪 chip 单击影响。");
 
             // 双击＝无改名会话（模板无编辑器，会话机器不触及）。
             var doubleClick = NewMouseButtonEventArgs(
