@@ -260,14 +260,14 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(3, viewModel.ActivePanel!.Items.Count, "源集合不得被过滤改动。");
             Assert.AreEqual(0, list.SelectedItems.Count, "进入过滤视图清空选择（#37 口径）。");
 
-            // 过滤退出＝引导条「清空」按钮（原「再点同 chip 取消」随单击过滤退役）。
-            ((Button)window.FindName("SearchClearFilterButton"))!
-                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            // 过滤退出＝Esc（槽过滤空态无 CTA，「清空筛选」按钮收敛为搜索分支专用，
+            // 契约 #33 2026-11-08 修订；原「再点同 chip 取消」随单击过滤退役）。
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
             CompleteLayout(window);
 
             Assert.IsFalse(window.IsSubgroupFilterActive);
             Assert.IsFalse(viewModel.SubgroupChips[1].IsFilterActive);
-            Assert.AreEqual(3, list.Items.OfType<BoardItem>().Count(), "清空筛选＝取消过滤还原。");
+            Assert.AreEqual(3, list.Items.OfType<BoardItem>().Count(), "Esc＝取消过滤还原。");
             Assert.IsNull(list.Items.Filter);
         }
         finally
@@ -843,9 +843,9 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "过滤态抑制自动收起。");
 
-            // 退出过滤＝引导条「清空」按钮（单击 toggle 已退役）。
-            ((Button)window.FindName("SearchClearFilterButton"))!
-                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            // 退出过滤＝Esc（槽过滤空态无 CTA，契约 #33 2026-11-08 修订；单击
+            // toggle 已退役）。
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
             CompleteLayout(window);
             Assert.IsFalse(window.IsSubgroupFilterActive);
             ApplicationCommands.SelectAll.Execute(null, list);
@@ -878,6 +878,7 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var hint = (Border)window.FindName("SearchEmptyHint");
             var hintTitle = (TextBlock)window.FindName("SearchEmptyHintTitle");
+            var hintHint = (TextBlock)window.FindName("SearchEmptyHintHint");
             var clearButton = (Button)window.FindName("SearchClearFilterButton");
             var list = (ListBox)window.FindName("BoardList");
 
@@ -886,13 +887,83 @@ public sealed partial class MainWindowInteractionTests
             Assert.AreEqual(Visibility.Visible, hint!.Visibility, "空结果复用 SearchEmptyHint。");
             Assert.AreEqual("该分组暂无卡片", hintTitle!.Text, "文案按来源切换。");
             Assert.AreEqual(0, list!.Items.OfType<BoardItem>().Count());
+            // 槽过滤空态无 CTA（契约 #33 2026-11-08 修订）：按钮退位、副文案承载
+            // 退出引导（「清空筛选」只在搜索分支呈现）。
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                clearButton!.Visibility,
+                "槽过滤空态不呈现「清空筛选」按钮。");
+            Assert.AreEqual(
+                Visibility.Visible,
+                hintHint!.Visibility,
+                "槽过滤空态副文案在场。");
+            Assert.AreEqual(
+                "按 Esc 查看该分类全部卡片，或移到其他分组",
+                hintHint.Text,
+                "副文案＝退出引导文案。");
 
-            clearButton!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
             CompleteLayout(window);
 
             Assert.AreEqual(Visibility.Collapsed, hint.Visibility);
-            Assert.AreEqual(1, list.Items.OfType<BoardItem>().Count(), "清空筛选取消 chip 过滤。");
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                hintHint.Visibility,
+                "Esc 取消过滤后副文案随宿主退位。");
+            Assert.AreEqual(1, list.Items.OfType<BoardItem>().Count(), "Esc 取消 chip 过滤。");
             Assert.IsFalse(window.IsSubgroupFilterActive);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void Subgroup_ChipFilterEmptyHintKeepsSearchBranchUntouched()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("苹果", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var hint = (Border)window.FindName("SearchEmptyHint");
+            var hintTitle = (TextBlock)window.FindName("SearchEmptyHintTitle");
+            var hintHint = (TextBlock)window.FindName("SearchEmptyHintHint");
+            var clearButton = (Button)window.FindName("SearchClearFilterButton");
+            var list = (ListBox)window.FindName("BoardList");
+
+            window.EnterSearchMode();
+            var input = (TextBox)window.FindName("SearchInput");
+            input.Text = "不存在的关键词";
+            CompleteLayout(window);
+
+            Assert.IsTrue(viewModel.IsSearchActive, "前置：搜索空结果态。");
+            Assert.AreEqual(Visibility.Visible, hint!.Visibility);
+            Assert.AreEqual("无匹配结果", hintTitle!.Text);
+            Assert.AreEqual(0, list!.Items.OfType<BoardItem>().Count());
+            // 单点两分支互斥守卫（契约 #33 2026-11-08 修订）：搜索分支按钮在场、
+            // 槽过滤副文案退位——按钮语义零变化（#37 锁定不动）。
+            Assert.AreEqual(
+                Visibility.Visible,
+                clearButton!.Visibility,
+                "搜索空结果态「清空筛选」按钮在场。");
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                hintHint!.Visibility,
+                "搜索分支副文案退位。");
+
+            clearButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CompleteLayout(window);
+
+            Assert.AreEqual(1, list.Items.OfType<BoardItem>().Count(), "一键清空后还原完整列表。");
+            Assert.AreEqual(Visibility.Collapsed, hint.Visibility);
         }
         finally
         {
@@ -955,11 +1026,10 @@ public sealed partial class MainWindowInteractionTests
             var boardEmpty = (StackPanel)window.FindName("BoardEmptyState");
 
             HoverChip(window, 1);
-            ((Button)window.FindName("SearchClearFilterButton"))!
-                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
             CompleteLayout(window);
 
-            Assert.IsFalse(window.IsSubgroupFilterActive, "前置：引导条「清空」＝取消过滤。");
+            Assert.IsFalse(window.IsSubgroupFilterActive, "前置：Esc＝取消过滤（槽过滤空态无 CTA）。");
             Assert.AreEqual(
                 Visibility.Collapsed,
                 hint!.Visibility,
@@ -1998,51 +2068,9 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
-    [STATestMethod]
-    public void Subgroup_AllChipFilterIsStickyUntilClearedViaHintBar()
-    {
-        using var directory = new TestDirectory();
-        var board = new BoardService();
-        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
-        board.AddText("丙", BoardCategory.Inbox);
-        var window = CreateSubgroupWindow(
-            directory,
-            board,
-            SubgroupDisplayMode.ChipRail,
-            subgroupAllChipEnabled: true);
-
-        try
-        {
-            window.Show();
-            ExpandCategory(window, BoardCategory.Inbox);
-            CompleteLayout(window);
-            var list = (ListBox)window.FindName("BoardList");
-            var viewModel = (MainWindowViewModel)window.DataContext;
-
-            HoverAllChip(window);
-            Assert.IsTrue(window.IsSubgroupFilterActive);
-
-            // 粘性：无 MouseLeave 行为，悬停移开后过滤保持（沿槽过滤同口径）。
-            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(300));
-            CompleteLayout(window);
-            Assert.IsTrue(window.IsSubgroupFilterActive, "全量过滤粘性（悬停离开不退出）。");
-            Assert.IsTrue(viewModel.SubgroupAllChip.IsFilterActive);
-            Assert.AreEqual(2, list!.Items.OfType<BoardItem>().Count());
-
-            // 引导条「清空」＝既有退出路径（零新增退出方式）。
-            ((Button)window.FindName("SearchClearFilterButton"))!
-                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            CompleteLayout(window);
-
-            Assert.IsFalse(window.IsSubgroupFilterActive);
-            Assert.IsFalse(viewModel.SubgroupAllChip.IsFilterActive, "退出清全 chip 激活态。");
-            Assert.IsNull(list.Items.Filter);
-        }
-        finally
-        {
-            CloseWindow(window);
-        }
-    }
+    // 「全部」全量过滤粘性经 Subgroup_AllChipFilterIsStickyUntilClearedByEscape 锁定；
+    // 原引导条按钮退出变体（Subgroup_AllChipFilterIsStickyUntilClearedViaHintBar）
+    // 随「清空筛选」收敛为搜索分支专用退役（契约 #33 2026-11-08 修订，Issue #341）。
 
     [STATestMethod]
     public void Subgroup_AllChipFilterIsStickyUntilClearedByEscape()
@@ -2234,9 +2262,9 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             Assert.IsTrue(viewModel.IsPanelExpanded, "全量态抑制自动收起。");
 
-            // 退出全量态＝禁令解除（引导条清空）。
-            ((Button)window.FindName("SearchClearFilterButton"))!
-                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            // 退出全量态＝禁令解除（Esc；槽过滤/全量态空态均无 CTA，契约 #33
+            // 2026-11-08 修订）。
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
             CompleteLayout(window);
             Assert.IsFalse(window.IsSubgroupFilterActive);
             ApplicationCommands.SelectAll.Execute(null, list);
