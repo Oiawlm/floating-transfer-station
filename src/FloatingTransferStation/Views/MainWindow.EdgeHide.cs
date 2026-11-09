@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private const int EdgeHideRecallTolerancePx = 8;
 
     private readonly EdgeHideStateMachine _edgeHide = new();
+    private readonly DockingIntentMutex _dockingIntentMutex = new();
     private readonly DispatcherTimer _edgeHideRecallTimer;
 
     // 以下三者在 Docked 期间有效：回位区为物理像素（隐藏时刻保存，此后不做任何
@@ -42,10 +43,19 @@ public partial class MainWindow : Window
         var armed = _edgeHide.ToggleArm();
         UpdateEdgeHideButton();
 
-        // 再按一次取消：若指针已离开面板（自动化路径），按既有节奏恢复自动收起
-        // （与解除保持展开同构）。
+        // 互斥（R2，后激活者胜）：激活贴边待命即解除「保持展开」，两按钮任何时刻
+        // 不同时点亮（视觉态与功能态一致）。
+        if (armed && _dockingIntentMutex.Request(DockingIntent.EdgeHide) == DockingIntent.PanelHold)
+        {
+            _panelState.EndPanelHold();
+            UpdatePanelHoldButton();
+        }
+
+        // 再按一次取消：让出互斥组；若指针已离开面板（自动化路径），按既有节奏恢复
+        // 自动收起（与解除保持展开同构）。
         if (!armed)
         {
+            _dockingIntentMutex.Clear(DockingIntent.EdgeHide);
             ReconcileSurfaceAfterSuppressionRelease();
         }
     }
@@ -128,6 +138,7 @@ public partial class MainWindow : Window
         }
 
         _edgeHide.Reset();
+        _dockingIntentMutex.Clear(DockingIntent.EdgeHide);
         _edgeHideRecallTimer.Stop();
         _edgeHideRecallEnteredAt = 0;
         ApplyPlacement(placement);
@@ -179,7 +190,8 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// armed 生命周期：仅展开态有意义。面板经其他路径离开展开态（外部拖放收起、
-    /// 常规收起兜底）且未进入 Docked 时自动解除，不留悬置 armed。
+    /// 常规收起兜底）且未进入 Docked 时自动解除，不留悬置 armed；保持展开激活时
+    /// 的互斥挤出（R2）复用本单点，同步让出贴边意图的互斥组持有权。
     /// </summary>
     private void DisarmEdgeHide()
     {
@@ -189,6 +201,7 @@ public partial class MainWindow : Window
         }
 
         _edgeHide.Reset();
+        _dockingIntentMutex.Clear(DockingIntent.EdgeHide);
         UpdateEdgeHideButton();
     }
 }
