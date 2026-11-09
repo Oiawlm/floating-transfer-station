@@ -113,9 +113,11 @@ public interface IUpdateService
 /// </summary>
 public sealed class UpdateService : IUpdateService
 {
-    // 安装资产在 GitHub Release 上的稳定精确名（README 元数据测试锁定同名约定）；
+    // 发行资产命名单一权威锚（契约 #26 修订①）：安装资产在 GitHub Release 上的稳定精确名。
+    // iss OutputBaseFilename、build-release.ps1 精确名断言与 SHA256SUMS 派生、README 下载链接
+    // 四方与本常量同源，由 LifecycleTests.ReleaseMetadata.ReleaseAssetNaming_* 跨语言互锁。
     // SHA256SUMS.txt 是唯一信任锚（sha256sum 格式：<64位十六进制><空白><文件名>）。
-    private const string InstallerAssetNamePrefix = "FloatingTransferStation-Setup-";
+    public const string InstallerAssetNamePrefix = "FloatingTransferStation-Setup-";
     private const string ChecksumsFileName = "SHA256SUMS.txt";
     private const string InstallerAssetNameSuffix = ".exe";
     private const string DownloadPartialSuffix = ".download";
