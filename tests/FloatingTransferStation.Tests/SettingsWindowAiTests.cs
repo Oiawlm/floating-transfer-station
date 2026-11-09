@@ -468,7 +468,7 @@ public sealed class SettingsWindowAiTests
             Assert.IsTrue(card.IsEnabled, "识图命名卡恒可用（自身开关独立于整理总开关）。");
             Assert.IsTrue(
                 FindDescendants<TextBlock>(card).Any(block =>
-                    block.Text == "开启后，新收集的图片会发送至 DeepSeek 识别内容并自动命名（复用上方 DeepSeek API Key），卡片悬停可见名称，拖出即为该文件名；识别失败自动跳过，不会重试。"),
+                    block.Text == "开启后，新收集的图片会发送至 DeepSeek 识别内容并自动命名；关闭后不再发送任何图片。"),
                 "隐私披露必须逐字呈现在卡内（契约 #61 锁定文案）。");
             Assert.IsTrue(
                 FindDescendants<TextBlock>(card).Any(block => block.Text.Contains("发送至 DeepSeek")),
