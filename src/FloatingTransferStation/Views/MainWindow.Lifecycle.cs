@@ -117,6 +117,10 @@ public partial class MainWindow : Window
 
     private void ApplyPlacement(WindowPlacement placement)
     {
+        // 矩形权威仲裁（#12 例外条款①）：放置动画期间矩形权威归 animator——先取消
+        // （到达动画终态，经终态的权威交接）再应用新放置；取消不回调完成，WPF 账本
+        // 由本次应用收口。
+        _edgePeekAnimator?.Cancel(applyTerminal: true);
         CancelPanelCollapseExit();
         CancelCollapsedVisualHandoff();
         if (TryApplyPlacementAtomically(placement))
@@ -217,7 +221,7 @@ public partial class MainWindow : Window
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
         _topmostTimer.Stop();
-        _edgeHideRecallTimer.Stop();
+        _edgePeekExpandIntentTimer.Stop();
         _autoCleanupCheckTimer.Stop();
         _updateCheckTimer.Stop();
         // 关闭时取消挂起的左半单击送达（窗口销毁后送达目标与状态条均无意义）。

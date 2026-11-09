@@ -1,41 +1,42 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Services;
 
 namespace FloatingTransferStation.Views;
 
 /// <summary>
-/// 一次性贴边隐藏（1.20.0）：头部按钮按一次进入待命，鼠标离开后整窗同尺寸纯移出
-/// 所有显示器右缘之外（比收起到轨道更彻底）；鼠标移回原位驻留后回到原位原形并自动
-/// 解除。触发融入既有收起节奏（Root_MouseLeave → _collapseTimer → tick 分支），
-/// 不新增触发器；找回兜底：回位驻留、全局唤起热键、显示器变化立即恢复。
+/// 一次性贴边隐藏 peek 化（R12，契约 #17，Issue #353）：头部按钮按一次进入待命，
+/// 鼠标离开后整窗同尺寸平移收缩到右缘 peek 态——绝大部分出屏、屏内仅留左侧把手
+/// （宽＝DesignTokens.EdgePeekHandleWidthPx，空间记忆锚点）；移上把手经 60ms 意图
+/// 事务（#42 同族）展开，恢复即回原放置并自动解除（一次性）。触发融入既有收起
+/// 节奏（Root_MouseLeave → _collapseTimer → tick 分支），不新增触发器；找回兜底：
+/// 把手 hover、全局唤起热键、显示器变化立即展开。窗口矩形动画经唯一
+/// WindowPlacementAnimator（契约 #12 例外通道）：动画期间矩形权威归 animator，
+/// ApplyPlacement 入口先取消动画（到达终态）再应用；WPF Left/Top 账本仅在动画
+/// 完成/取消时一次收口。与「保持展开」的互斥（R2）沿 DockingIntentMutex 原样。
 /// </summary>
 public partial class MainWindow : Window
 {
-    // 回位轮询节奏：业界主流 ~100ms（TrafficMonitor、winautohidev2 等一致）；
-    // 仅 Docked 期间运行，窗口离屏收不到鼠标事件，轮询是回位检测的唯一可靠途径。
-    private static readonly TimeSpan EdgeHideRecallPollInterval = TimeSpan.FromMilliseconds(100);
-
-    // 回位驻留时长：连续命中 ≥200ms 才恢复，过滤扫边误触（调研经验值）。
-    // 右缘滚动条拖拽等驻留动作可能意外唤回——一次性语义把代价限制为一次，属
-    // 可接受权衡；阈值集中此处便于调整。
-    private const int EdgeHideRecallDwellMs = 200;
-
-    // 回位区外扩容差（物理像素）：隐藏时刻屏幕内可见矩形四向外扩，容许光标落点偏差。
-    private const int EdgeHideRecallTolerancePx = 8;
-
     private readonly EdgeHideStateMachine _edgeHide = new();
     private readonly DockingIntentMutex _dockingIntentMutex = new();
-    private readonly DispatcherTimer _edgeHideRecallTimer;
 
-    // 以下三者在 Docked 期间有效：回位区为物理像素（隐藏时刻保存，此后不做任何
-    // 运行时 DPI 换算——窗口离屏后其 CompositionTarget 变换不可信）；原放置为
-    // DIP 账本值（隐藏时刻窗口仍在屏内，变换仍有效）。
-    private PhysicalRectangle _edgeHideRecallZone;
-    private WindowPlacement? _edgeHideHiddenPlacement;
-    private long _edgeHideRecallEnteredAt;
+    // 把手 hover 展开的意图事务计时（#42 同族）：布防 → 到期重验指针仍在窗口/把手
+    // 内才提交展开；离开即取消，防扫边误触由事务重验达成。
+    private readonly DispatcherTimer _edgePeekExpandIntentTimer;
+
+    // peek 期间有效：原放置为 DIP 账本值（收缩时刻窗口仍在屏内、账本仍权威），
+    // 展开动画以它为终态。
+    private WindowPlacement? _edgePeekOriginalPlacement;
+
+    private WindowPlacementAnimator? _edgePeekAnimator;
+
+    /// <summary>测试注入帧时钟（null＝生产 CompositionTarget.Rendering）；必须在
+    /// 首次 peek 之前设置——animator 创建时捕获时钟（契约 #12 例外条款测试通道）。</summary>
+    internal IPlacementAnimationClock? PlacementAnimationClockOverride { get; set; }
 
     private void EdgeHideButton_Click(object sender, RoutedEventArgs e)
     {
@@ -62,22 +63,34 @@ public partial class MainWindow : Window
 
     private void UpdateEdgeHideButton()
     {
-        var armed = _edgeHide.IsArmed;
+        var active = _edgeHide.IsArmed || _edgeHide.IsPeek;
         // SetResourceReference 保持动态解析：主题切换时强调色/次级文字色自动跟随。
         EdgeHideButton.SetResourceReference(
             Control.ForegroundProperty,
-            armed ? "AccentBrush" : "SecondaryTextBrush");
-        var label = armed
-            ? "已准备贴边隐藏，鼠标移开即移出屏幕；再按一次取消"
-            : "一次性移出屏幕：鼠标离开后收进屏幕边缘，移回原位自动展开";
+            active ? "AccentBrush" : "SecondaryTextBrush");
+        string label;
+        if (_edgeHide.IsPeek)
+        {
+            label = "已收进屏幕边缘：移上把手或用唤起快捷键展开";
+        }
+        else if (_edgeHide.IsArmed)
+        {
+            label = "已准备收进屏幕边缘，鼠标移开即缩成把手；再按一次取消";
+        }
+        else
+        {
+            label = "一次性收进屏幕边缘：鼠标离开后缩成边缘把手，移上把手自动展开";
+        }
+
         EdgeHideButton.ToolTip = label;
         AutomationProperties.SetName(EdgeHideButton, label);
     }
 
     /// <summary>
-    /// 一次性贴边隐藏提交（收起节奏 tick 内，armed 且无抑制）：整窗同尺寸纯移动到
-    /// 所有显示器右缘之外——一次矩形变更（迁移原子性），面板保持展开、滚动位置与
-    /// 内容原样冻结。不走收起视觉交接（那是为收起变形设计的，隐藏不需要）。
+    /// 一次性贴边隐藏提交（收起节奏 tick 内，armed 且无抑制）：整窗同尺寸平移收缩
+    /// 到 peek 几何（与工作区交集宽＝把手宽），面板保持展开、滚动位置与内容原样
+    /// 冻结。收缩经 animator 167ms 加速出场（#12 例外通道）；减动效一次直达终态
+    /// （把手即时出现）。不走收起视觉交接（那是为收起变形设计的，收缩不需要）。
     /// </summary>
     private bool TryCommitEdgeHide()
     {
@@ -89,108 +102,256 @@ public partial class MainWindow : Window
             return false;
         }
 
-        var monitors = MonitorBounds.AllMonitors();
-        if (monitors.Count == 0 ||
-            !_edgeHide.TryDock(_panelState.WouldCollapse))
+        if (!_edgeHide.TryPeek(_panelState.WouldCollapse))
         {
             return false;
         }
 
-        var visibleAtHide = new PhysicalRectangle(
+        // DIP→物理换算一次完成（此刻窗口仍在屏内、变换有效）；peek 锚定收缩时刻
+        // 所在工作区右缘（工作区物理矩形按同一变换换算）。
+        var transform = _windowSource.CompositionTarget.TransformToDevice;
+        var work = CurrentWorkArea();
+        var workArea = new PhysicalRectangle(
+            (int)Math.Round(work.Left * transform.M11),
+            (int)Math.Round(work.Top * transform.M22),
+            (int)Math.Round(work.Right * transform.M11),
+            (int)Math.Round((work.Top + work.Height) * transform.M22));
+        var handleWidthPx = Math.Max(
+            1,
+            (int)Math.Round(DesignTokens.EdgePeekHandleWidthPx * transform.M11));
+        var visibleAtCommit = new PhysicalRectangle(
             windowRect.Left,
             windowRect.Top,
             windowRect.Right,
             windowRect.Bottom);
-        _edgeHideRecallZone = WindowController.EdgeRecallZone(
-            visibleAtHide,
-            EdgeHideRecallTolerancePx);
-        _edgeHideHiddenPlacement = new WindowPlacement(Left, Top, Width, Height);
-        _edgeHideRecallEnteredAt = 0;
+        var peek = WindowController.EdgePeekPlacement(visibleAtCommit, workArea, handleWidthPx);
+        var peekPlacement = new WindowPlacement(
+            peek.Left / transform.M11,
+            peek.Top / transform.M22,
+            Width,
+            Height);
 
-        // ApplyPlacement 以 DIP 为权威、按 CompositionTarget 换算一次：此刻窗口
-        // 仍在屏内、变换仍有效；此后窗口离屏，回位判定只走物理像素直比。
-        var transform = _windowSource.CompositionTarget.TransformToDevice;
-        var hidden = WindowController.EdgeHidden(visibleAtHide, monitors);
-        ApplyPlacement(new WindowPlacement(
-            hidden.Left / transform.M11,
-            hidden.Top / transform.M22,
-            hidden.Width / transform.M11,
-            hidden.Height / transform.M22));
+        // 原放置以 DIP 账本保存（此刻仍权威）；WPF Left/Top 账本仅在动画完成/取消时
+        // 一次收口（Width/Height 恒不变）。
+        _edgePeekOriginalPlacement = new WindowPlacement(Left, Top, Width, Height);
         UpdateEdgeHideButton();
-        ShowStatus("已移出屏幕，鼠标移回原位即可唤回。");
-        _edgeHideRecallTimer.Start();
+
+        if (ClientAreaAnimationsEnabled)
+        {
+            EnsureEdgePeekAnimator().Begin(
+                visibleAtCommit,
+                peek,
+                DesignTokens.NormalDurationMs,
+                FadeAnimation.ExitEasing,
+                onCompleted: () => OnEdgePeekCollapseCompleted(peekPlacement));
+        }
+        else
+        {
+            ApplyPlacement(peekPlacement);
+            ShowEdgePeekHandle(animate: false);
+        }
+
+        ShowStatus("已收进屏幕边缘，鼠标移到把手即可展开。");
         return true;
     }
 
-    /// <summary>
-    /// 回位恢复：一次矩形变更移回隐藏时刻的原放置。面板本就未收起，指针此刻在
-    /// 原窗口位置（回位区内），随后的 Root_MouseEnter 与既有展开/保持机制自然
-    /// 接管——「移回原位自动展开」由此成立，无需任何新展开逻辑。恢复即解除
-    /// 一次性待命并停轮询。混合 DPI 多屏下离屏期间 WM_DPICHANGED 可能改变窗口
-    /// DPI 上下文，恢复经原 DIP 放置折算的落点偏差由落回原显示器时的
-    /// WM_DPICHANGED 自校正兜底（回位触发判定本身是物理像素直比，不受影响）。
-    /// </summary>
-    private void RestoreFromEdgeHide()
+    /// <summary>收缩动画完成：WPF Left/Top 账本一次收口；把手视觉 83ms 淡入登场。</summary>
+    private void OnEdgePeekCollapseCompleted(WindowPlacement peekPlacement)
     {
-        if (!_edgeHide.IsDocked || _edgeHideHiddenPlacement is not { } placement)
+        Left = peekPlacement.Left;
+        Top = peekPlacement.Top;
+        ShowEdgePeekHandle(animate: true);
+    }
+
+    /// <summary>
+    /// 把手视觉层登场（peek 态专用）：83ms FastDurationMs 淡入；减动效即时出现。
+    /// 入场淡入达成柔和收束（DWM 不透明窗无整窗 opacity，「83ms 淡出尾巴」对
+    /// HWND 本体不可实现——分层透明已被弃用）。
+    /// </summary>
+    private void ShowEdgePeekHandle(bool animate)
+    {
+        EdgePeekHandleLayer.Visibility = Visibility.Visible;
+        if (!animate || !ClientAreaAnimationsEnabled)
+        {
+            StopEdgePeekHandleAnimation();
+            EdgePeekHandleLayer.Opacity = 1d;
+            return;
+        }
+
+        var entrance = new DoubleAnimation(
+            0d,
+            1d,
+            TimeSpan.FromMilliseconds(DesignTokens.FastDurationMs))
+        {
+            EasingFunction = FadeAnimation.EnterEasing,
+            FillBehavior = FillBehavior.Stop,
+        };
+        EdgePeekHandleLayer.BeginAnimation(UIElement.OpacityProperty, null);
+        EdgePeekHandleLayer.SetValue(UIElement.OpacityProperty, 0d);
+        EdgePeekHandleLayer.BeginAnimation(UIElement.OpacityProperty, entrance);
+    }
+
+    private void HideEdgePeekHandle()
+    {
+        StopEdgePeekHandleAnimation();
+        EdgePeekHandleLayer.Visibility = Visibility.Collapsed;
+    }
+
+    private void StopEdgePeekHandleAnimation()
+    {
+        EdgePeekHandleLayer.BeginAnimation(UIElement.OpacityProperty, null);
+        EdgePeekHandleLayer.Opacity = 1d;
+    }
+
+    /// <summary>
+    /// 把手 hover / 指针回入窗口（含收缩途中反向救援）：布防展开意图事务——60ms
+    /// 后重验指针仍在窗口内才提交展开（#42 同族；窗口同一 HWND 持续可命中）。
+    /// </summary>
+    private void ArmEdgePeekExpandIntent()
+    {
+        if (!_edgeHide.IsPeek)
+        {
+            return;
+        }
+
+        _edgePeekExpandIntentTimer.Stop();
+        _edgePeekExpandIntentTimer.Start();
+    }
+
+    private void EdgePeekExpandIntentTimer_Tick(object? sender, EventArgs e)
+    {
+        _edgePeekExpandIntentTimer.Stop();
+        if (!_edgeHide.IsPeek ||
+            _windowSource?.Handle is not { } handle || handle == 0 ||
+            !NativeMethods.GetWindowRect(handle, out var windowRect))
+        {
+            return;
+        }
+
+        // 意图事务重验：到期时指针仍在窗口内（含把手）才提交展开；已离开则本次
+        // 意图作废（可由下一次 MouseEnter 重新布防）。
+        if (!NativeMethods.GetCursorPos(out var cursor) ||
+            !new PhysicalRectangle(
+                windowRect.Left,
+                windowRect.Top,
+                windowRect.Right,
+                windowRect.Bottom).Contains(cursor.X, cursor.Y))
+        {
+            return;
+        }
+
+        RestoreFromEdgeHide();
+    }
+
+    /// <summary>
+    /// 退出 peek 相位的记账单点（相位/互斥/把手视觉/意图计时），不含几何——几何由
+    /// 调用路径自行应用（展开恢复、显示器变化重贴齐、外部拖放轨揭示等）。
+    /// </summary>
+    private void ExitEdgePeekState()
+    {
+        if (!_edgeHide.IsPeek)
         {
             return;
         }
 
         _edgeHide.Reset();
         _dockingIntentMutex.Clear(DockingIntent.EdgeHide);
-        _edgeHideRecallTimer.Stop();
-        _edgeHideRecallEnteredAt = 0;
-        ApplyPlacement(placement);
+        _edgePeekExpandIntentTimer.Stop();
+        HideEdgePeekHandle();
         UpdateEdgeHideButton();
-        // 待命常显随解除结束：恢复后头部回到默认悬停显隐（指针真实悬停则保持显示）。
-        SetHeaderActionsVisible(HeaderActionRegion.IsMouseOver);
-        ShowStatus("已从屏幕边缘唤回。");
-    }
-
-    private void EdgeHideRecallTimer_Tick(object? sender, EventArgs e)
-    {
-        if (!_edgeHide.IsDocked)
-        {
-            _edgeHideRecallTimer.Stop();
-            return;
-        }
-
-        if (!NativeMethods.GetCursorPos(out var cursor))
-        {
-            return;
-        }
-
-        HandleEdgeHideRecallPoll(cursor.X, cursor.Y, Environment.TickCount64);
     }
 
     /// <summary>
-    /// 回位驻留判定（物理像素直比）：光标进入回位区记起点，连续驻留达阈值才恢复
-    /// （过滤扫边误触），离开即重置进度。时间戳由调用方注入，便于模拟轮询测试。
+    /// peek 展开：恢复即解除（一次性）在展开提交点生效；动画经 animator 250ms
+    /// 减速入场（#12 例外通道）回到原放置，完成回调一次收口 WPF 账本；展开途中
+    /// 不中断（完成→常规 250ms 收起接管）。减动效/无句柄时一次直达。混合 DPI
+    /// 多屏下 peek 期间 WM_DPICHANGED 改变窗口 DPI 上下文时，落回原显示器的
+    /// 自校正兜底与既有路径一致。
     /// </summary>
-    private void HandleEdgeHideRecallPoll(int cursorX, int cursorY, long timestampMs)
+    private void RestoreFromEdgeHide()
     {
-        if (!_edgeHideRecallZone.Contains(cursorX, cursorY))
+        if (!_edgeHide.IsPeek || _edgePeekOriginalPlacement is not { } placement)
         {
-            _edgeHideRecallEnteredAt = 0;
             return;
         }
 
-        if (_edgeHideRecallEnteredAt == 0)
+        ExitEdgePeekState();
+        // 待命/peek 常显随解除结束：恢复后头部回到默认悬停显隐（指针真实悬停则
+        // 保持显示）。
+        SetHeaderActionsVisible(HeaderActionRegion.IsMouseOver);
+
+        if (!ClientAreaAnimationsEnabled ||
+            _windowSource?.Handle is not { } handle || handle == 0 ||
+            _windowSource.CompositionTarget is null ||
+            !NativeMethods.GetWindowRect(handle, out var currentRect))
         {
-            _edgeHideRecallEnteredAt = timestampMs;
+            ApplyPlacement(placement);
+            ShowStatus("已从屏幕边缘唤回。");
             return;
         }
 
-        if (timestampMs - _edgeHideRecallEnteredAt >= EdgeHideRecallDwellMs)
+        // 终态与 ApplyPlacement 的物理换算同式（两锚定边各自取整），动画终点与
+        // 直达路径落点一致。
+        var transform = _windowSource.CompositionTarget.TransformToDevice;
+        var left = (int)Math.Round(placement.Left * transform.M11);
+        var top = (int)Math.Round(placement.Top * transform.M22);
+        var target = new PhysicalRectangle(
+            left,
+            top,
+            (int)Math.Round((placement.Left + placement.Width) * transform.M11),
+            (int)Math.Round((placement.Top + placement.Height) * transform.M22));
+        var current = new PhysicalRectangle(
+            currentRect.Left,
+            currentRect.Top,
+            currentRect.Right,
+            currentRect.Bottom);
+        var animator = EnsureEdgePeekAnimator();
+        if (animator.IsRunning)
         {
-            RestoreFromEdgeHide();
+            // 收缩途中反向救援/热键打断：捕获当前实时进度为新起点、时长按剩余距离
+            // 比例重映射（封顶 250ms），禁止原点重放。
+            animator.Redirect(
+                target,
+                DesignTokens.SlowDurationMs,
+                FadeAnimation.EnterEasing,
+                () => OnEdgePeekExpandCompleted(placement));
         }
+        else
+        {
+            animator.Begin(
+                current,
+                target,
+                DesignTokens.SlowDurationMs,
+                FadeAnimation.EnterEasing,
+                () => OnEdgePeekExpandCompleted(placement));
+        }
+    }
+
+    /// <summary>展开动画完成：WPF Left/Top 账本一次收口（Width/Height 恒不变）。</summary>
+    private void OnEdgePeekExpandCompleted(WindowPlacement placement)
+    {
+        Left = placement.Left;
+        Top = placement.Top;
+        ShowStatus("已从屏幕边缘唤回。");
+    }
+
+    private WindowPlacementAnimator EnsureEdgePeekAnimator()
+    {
+        if (_edgePeekAnimator is { } animator)
+        {
+            return animator;
+        }
+
+        animator = new WindowPlacementAnimator(
+            _windowSource?.Handle ?? 0,
+            PlacementAnimationClockOverride ?? new RenderingPlacementAnimationClock());
+        _edgePeekAnimator = animator;
+        return animator;
     }
 
     /// <summary>
     /// armed 生命周期：仅展开态有意义。面板经其他路径离开展开态（外部拖放收起、
-    /// 常规收起兜底）且未进入 Docked 时自动解除，不留悬置 armed；保持展开激活时
+    /// 常规收起兜底）且未进入 Peek 时自动解除，不留悬置 armed；保持展开激活时
     /// 的互斥挤出（R2）复用本单点，同步让出贴边意图的互斥组持有权。
     /// </summary>
     private void DisarmEdgeHide()
@@ -205,4 +366,3 @@ public partial class MainWindow : Window
         UpdateEdgeHideButton();
     }
 }
-

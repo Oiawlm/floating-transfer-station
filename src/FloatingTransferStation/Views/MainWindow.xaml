@@ -328,8 +328,8 @@
 
                 <Button x:Name="EdgeHideButton"
                         Style="{StaticResource HeaderActionButtonStyle}"
-                        ToolTip="一次性移出屏幕：鼠标离开后收进屏幕边缘，移回原位自动展开"
-                        AutomationProperties.Name="一次性移出屏幕：鼠标离开后收进屏幕边缘，移回原位自动展开"
+                        ToolTip="一次性收进屏幕边缘：鼠标离开后缩成边缘把手，移上把手自动展开"
+                        AutomationProperties.Name="一次性收进屏幕边缘：鼠标离开后缩成边缘把手，移上把手自动展开"
                         Click="EdgeHideButton_Click">
                   <!-- 「箭头收入右缘」语汇（→|）：箭头指向右缘竖线，直译一次性贴边隐藏；
                        描边图标显式 14.5×14.5 + 1.5 描边（光学足印约 16 DIP），与贴缘面板/搜索/恢复默认按钮同一规范。 -->
@@ -1472,6 +1472,46 @@
                      Style="{StaticResource StatusTextStyle}" />
         </Border>
       </Popup>
+
+      <!-- R12 peek 把手（契约 #17，Issue #353）：peek 态左缘常驻把手——窗壳底＋右缘
+           描边＋居中 grip 小视觉，hover 提亮＋Accent 指示（167ms FadeAnimation，头部
+           按钮 HoverLayer 同手法）；窗口左缘自带 DWM 恒定圆角即把手左侧圆角（#6
+           豁免口径见 #17 替换文本）。宽 16＝DesignTokens.EdgePeekHandleWidthPx 的
+           XAML 镜像（锁定测试互锁）；非 peek 态 Collapsed 零命中。 -->
+      <Grid x:Name="EdgePeekHandleLayer"
+            Grid.ColumnSpan="2"
+            Panel.ZIndex="20"
+            Width="16"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Stretch"
+            Background="Transparent"
+            Visibility="Collapsed">
+        <Border Background="{DynamicResource TabRailBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,1,0" />
+        <Border Background="{DynamicResource HoverSurfaceBrush}"
+                Opacity="0"
+                IsHitTestVisible="False"
+                views:FadeAnimation.IsActive="{Binding IsMouseOver, ElementName=EdgePeekHandleLayer}"
+                views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+        <Border Width="3"
+                Height="24"
+                CornerRadius="1.5"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+          <Border.Style>
+            <Style TargetType="Border">
+              <Setter Property="Background" Value="{DynamicResource SecondaryTextBrush}" />
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, ElementName=EdgePeekHandleLayer}" Value="True">
+                  <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Border.Style>
+        </Border>
+      </Grid>
 
       <Border Grid.ColumnSpan="2"
               Panel.ZIndex="10"
