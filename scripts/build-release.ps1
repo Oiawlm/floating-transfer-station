@@ -76,6 +76,12 @@ $uninstallShortcutPattern =
 if ($innoText -notmatch $uninstallShortcutPattern) {
     throw 'Installer contract failed: the Start menu uninstall shortcut is required.'
 }
+# 发行资产命名单一权威（契约 #26 修订①）：产物出生即更新器精确名（UpdateService.
+# InstallerAssetNamePrefix 派生），消灭发行侧人工改名环节；版本段由 version.txt 唯一赋值。
+$outputBaseFilenamePattern = '(?m)^OutputBaseFilename=FloatingTransferStation-Setup-\{#MyAppVersion\}\s*$'
+if ($innoText -notmatch $outputBaseFilenamePattern) {
+    throw 'Installer contract failed: OutputBaseFilename must be exactly FloatingTransferStation-Setup-{#MyAppVersion} (single-source release asset naming).'
+}
 $recursiveDeleteMatches = [regex]::Matches(
     $innoText,
     '(?im)^[ \t]*Type:[ \t]*filesandordirs;[ \t]*Name:[ \t]*"([^"\r\n]+)"[ \t]*\r?$')
@@ -102,10 +108,28 @@ if ($LASTEXITCODE -ne 0) { throw 'Self-contained publish failed.' }
 & $iscc $innoScript
 if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
 
-$setups = @(Get-ChildItem -LiteralPath $installerDirectory -Filter "*-Setup-$version.exe" -File)
-if ($setups.Count -ne 1) {
-    throw "Expected exactly one release installer, found $($setups.Count)."
+# 产物断言＝更新器精确名（前缀与 UpdateService.InstallerAssetNamePrefix 同源；版本段与
+# version.txt 同源）：名字错即构建失败，发行侧不再存在「改名后对齐」的人工环节。
+$expectedSetupName = "FloatingTransferStation-Setup-$version.exe"
+$setups = @(Get-ChildItem -LiteralPath $installerDirectory -Filter '*.exe' -File)
+$actualSetupNames = @($setups | ForEach-Object { $_.Name })
+if ($setups.Count -ne 1 -or $actualSetupNames[0] -cne $expectedSetupName) {
+    throw "Expected exactly one release installer named '$expectedSetupName' (updater exact-name asset contract), found $($actualSetupNames.Count): $($actualSetupNames -join ', ')."
 }
 $setup = $setups[0].FullName
 
+# SHA256SUMS 清单从实际产物派生（哈希与条目名都取自实际文件，零硬编码）；sha256sum 文本
+# 格式＝<64 位小写十六进制><空格><*><文件名>＋结尾换行，与历史发行实物及更新器
+# ParseChecksumLine 解析同构。清单与安装包同落 artifacts\installer\，随 CI 附件直传。
+$manifestPath = Join-Path $installerDirectory 'SHA256SUMS.txt'
+$setupHash = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+$expectedManifestLine = "$setupHash *$expectedSetupName"
+Set-Content -LiteralPath $manifestPath -Value $expectedManifestLine -Encoding ascii
+# 回读断言：清单逐字对齐实际产物的哈希与文件名（防写入漂移）。
+$manifestText = Get-Content -Raw -LiteralPath $manifestPath
+if ($manifestText.TrimEnd("`r", "`n") -cne $expectedManifestLine) {
+    throw "SHA256SUMS manifest verification failed: expected '$expectedManifestLine', found '$($manifestText.TrimEnd("`r", "`n"))'."
+}
+
 Write-Host "Release installer: $setup"
+Write-Host "Checksums manifest: $manifestPath"

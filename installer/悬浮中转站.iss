@@ -23,7 +23,10 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\artifacts\installer
-OutputBaseFilename=悬浮中转站-Setup-{#MyAppVersion}
+; 发行资产名单一权威（契约 #26 修订①）：前缀 FloatingTransferStation-Setup- 与更新器
+; UpdateService.InstallerAssetNamePrefix 同源互锁（LifecycleTests.ReleaseMetadata 锁定），
+; 产物出生即更新器精确名，发行上传禁止改名；AppName/安装目录/exe 名不属资产命名、保持中文。
+OutputBaseFilename=FloatingTransferStation-Setup-{#MyAppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
