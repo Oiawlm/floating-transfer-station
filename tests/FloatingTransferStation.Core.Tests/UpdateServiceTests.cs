@@ -14,7 +14,10 @@ namespace FloatingTransferStation.Tests;
 ///    结果记录而非异常外泄；③ 资产按精确名匹配与缺失回退信号（AssetMissing + 发布页）；
 /// ④ SHA256 校验通过/失败与失败清理（含同版本旧文件与半成品清理）；⑤
 /// 「检查→下载→校验→可安装」状态流转。请求契约：显式 User-Agent 与 GitHub Accept 头
-/// （缺 User-Agent 直接 403）、repo API 地址与 HTML 地址同源于 ProductIdentity。
+///（缺 User-Agent 直接 403）、repo API 地址与 HTML 地址同源于 ProductIdentity。
+/// 2026-11-08 修订②（契约 #26 修订②）：R15 单点直升锁定（多代差一次到最新＋检查恰
+/// 1 请求唯一 latest 端点）与静默安装 /LOG 参数构造（无路径逐字旧串、带路径引号包裹、
+/// 建目录失败省略照常启动）。
 /// </summary>
 [TestClass]
 public sealed class UpdateServiceTests
@@ -69,6 +72,19 @@ public sealed class UpdateServiceTests
     {
         // Version 不解析预发布后缀；releases/latest 本就排除预发布，带后缀一律按无更新。
         Assert.IsFalse(UpdateService.IsNewerVersion("v99.0.0-beta.1", "1.34.0"));
+    }
+
+    [TestMethod]
+    public void IsNewerVersion_MultiGenerationGap_JumpsStraightToLatest()
+    {
+        // R15 锁定（契约 #26 修订②）：版本比较永远与 latest 单点比较——多代差一律
+        // 一次直升最新，无逐版本 stepping（任何「只能升一版」机制都会先破坏本断言）。
+        Assert.IsTrue(UpdateService.IsNewerVersion("v1.71.0", "1.50.0"), "跨 21 个小版本仍是一次比较即更新。");
+        Assert.IsTrue(UpdateService.IsNewerVersion("v1.70.0", "1.50.0"));
+        Assert.IsTrue(UpdateService.IsNewerVersion("v1.60.0", "1.50.0"));
+        Assert.IsTrue(UpdateService.IsNewerVersion("v1.51.0", "1.50.0"), "相邻小版本同样单点比较。");
+        Assert.IsTrue(UpdateService.IsNewerVersion("v2.0.0", "1.71.0"), "跨大版本一次直升。");
+        Assert.IsFalse(UpdateService.IsNewerVersion("v1.50.0", "1.50.0"), "相等仍是无更新（严格大于）。");
     }
 
     [TestMethod]
@@ -128,6 +144,30 @@ public sealed class UpdateServiceTests
         Assert.IsTrue(result.IsSuccess);
         Assert.IsFalse(result.HasUpdate);
         Assert.IsNull(result.Asset);
+    }
+
+    [TestMethod]
+    public async Task CheckForUpdateAsync_LatestOnly_SingleRequestSingleEndpoint()
+    {
+        // R15 锁定（契约 #26 修订②）：一次检查恰发一次请求，且唯一点名
+        // ProductIdentity.GitHubLatestReleaseApiUrl（releases/latest 单点端点）——
+        // 任何逐版本机制都必须先破坏「恰 1 请求＋唯一端点」这两条断言。
+        var assets = string.Join(
+            ",",
+            AssetEntry(InstallerAssetName, InstallerDownloadUrl, 123),
+            AssetEntry("SHA256SUMS.txt", ChecksumsDownloadUrl, 99));
+        var handler = RespondWithRelease(ReleaseBody("v99.0.0", assets));
+        var service = new UpdateService(handler);
+
+        var result = await service.CheckForUpdateAsync();
+
+        Assert.AreEqual(1, handler.CallCount, "一次检查必须恰发一次请求（无逐版本遍历）。");
+        Assert.AreEqual(
+            ProductIdentity.GitHubLatestReleaseApiUrl,
+            handler.LastRequest!.RequestUri!.ToString(),
+            "检查端点唯一＝releases/latest 单点（ProductIdentity 单一来源）。");
+        Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
+        Assert.IsTrue(result.HasUpdate);
     }
 
     [TestMethod]
@@ -297,8 +337,10 @@ public sealed class UpdateServiceTests
     }
 
     [TestMethod]
-    public void TryStartSilentInstaller_UsesSilentArgumentsAndRequiresExistingFile()
+    public void TryStartSilentInstaller_WithoutLogPath_KeepsLegacyArgumentsVerbatim()
     {
+        // 契约 #26 修订②向后兼容基线：不提供日志路径时参数串必须逐字等于旧串
+        //（既有安装器行为零变化；/LOG 只在显式提供路径时追加）。
         ProcessStartInfo? captured = null;
         var service = new UpdateService(
             new FakeHttpMessageHandler((_, _) => throw new AssertFailedException("启动安装器不得发起网络请求。")),
@@ -318,6 +360,43 @@ public sealed class UpdateServiceTests
         Assert.AreEqual(installer, captured.FileName);
         Assert.AreEqual("/SILENT /SUPPRESSMSGBOXES /NORESTART", captured.Arguments);
         Assert.IsTrue(captured.UseShellExecute, "静默安装必须以脱钩外壳进程启动。");
+    }
+
+    [TestMethod]
+    public void TryStartSilentInstaller_WithLogPathAppendsQuotedLogSwitch()
+    {
+        // 契约 #26 修订②：提供日志路径＝基础静默参数＋引号包裹的 /LOG 段（路径带
+        // 空格仍保持单段参数），日志目录先建；目录被占（建失败）＝省略 /LOG 照常启动。
+        ProcessStartInfo? captured = null;
+        var service = new UpdateService(
+            new FakeHttpMessageHandler((_, _) => throw new AssertFailedException("启动安装器不得发起网络请求。")),
+            startInfo =>
+            {
+                captured = startInfo;
+                return true;
+            });
+        using var directory = new TestDirectory();
+        var installer = Path.Combine(directory.Root, InstallerAssetName);
+        File.WriteAllText(installer, "installer");
+        var logDirectory = Path.Combine(directory.Root, "logs with space");
+        var logPath = Path.Combine(logDirectory, "setup-99.0.0.log");
+
+        Assert.IsTrue(service.TryStartSilentInstaller(installer, logPath));
+
+        Assert.IsNotNull(captured);
+        Assert.AreEqual(
+            $"/SILENT /SUPPRESSMSGBOXES /NORESTART /LOG=\"{Path.GetFullPath(logPath)}\"",
+            captured.Arguments,
+            "/LOG 段必须以引号包裹追加在基础参数之后（空格路径不破参数）。");
+        Assert.IsTrue(Directory.Exists(logDirectory), "启动安装器前必须先建日志目录。");
+
+        var blockedDirectory = Path.Combine(directory.Root, "blocked");
+        File.WriteAllText(blockedDirectory, "占用目录名的文件");
+        Assert.IsTrue(service.TryStartSilentInstaller(installer, Path.Combine(blockedDirectory, "setup.log")));
+        Assert.AreEqual(
+            "/SILENT /SUPPRESSMSGBOXES /NORESTART",
+            captured.Arguments,
+            "日志目录建失败必须省略 /LOG 照常启动（可观测性不阻断更新）。");
     }
 
     [TestMethod]
