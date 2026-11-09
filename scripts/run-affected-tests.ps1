@@ -104,11 +104,12 @@ $overrides = @(
         'src/FloatingTransferStation/Views/MainWindow.CardTextEditing.cs') },
     @{ Name = 'CategoryEditing'; Filter = 'FullyQualifiedName~Category'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.CategoryEditing.cs', 'src/FloatingTransferStation/Views/CategoryFeedbackAnimation.cs') },
-    # 点击编辑器外部＝提交共享协调（2026-10-26，契约 #49）：协调四处编辑位的提交
-    # 触发通道——受影响面＝新矩阵＋四处编辑位既有锁定族（分类/卡片正文与备注/
-    # 记录编辑器含 Esc 族/瓦片改名）。
-    @{ Name = 'EditingCommit'; Filter = 'FullyQualifiedName~EditingCommit|FullyQualifiedName~Category|FullyQualifiedName~CardEditing|FullyQualifiedName~CardNote|FullyQualifiedName~ReviewEditor|FullyQualifiedName~QuickLaunch_Rename'; Globs = @(
-        'src/FloatingTransferStation/Views/MainWindow.EditingCommit.cs') },
+    # 编辑会话终结共享协调（2026-10-26，契约 #49；2026-11-08 修订：点外即提交＋切走即
+    # 冲刷，四处→五处——chip 改名经共享改名会话协调器入列）：受影响面＝新矩阵＋五处编辑位
+    # 既有锁定族（分类/子分组 chip/卡片正文与备注/记录编辑器含 Esc 族/瓦片改名）＋改名会话
+    # 协调器本体（InlineRenameSession——两类改名会话的共享机器）。
+    @{ Name = 'EditingCommit'; Filter = 'FullyQualifiedName~EditingCommit|FullyQualifiedName~Category|FullyQualifiedName~SubgroupRename|FullyQualifiedName~CardEditing|FullyQualifiedName~CardNote|FullyQualifiedName~ReviewEditor|FullyQualifiedName~QuickLaunch_Rename'; Globs = @(
+        'src/FloatingTransferStation/Views/MainWindow.EditingCommit.cs', 'src/FloatingTransferStation/Views/InlineRenameSession.cs') },
     # CtrlC 为取证修订：原 ClipboardDelivery 词根在测试方法名中不存在（欠选）；
     # LeftClickCopy/RightClick 为手势交换（Issue #216）后的方法名前缀（原 RightClickCopy 已随右键复制移除）
     @{ Name = 'ClipboardDelivery'; Filter = 'FullyQualifiedName~LeftClickCopy|FullyQualifiedName~RightClick|FullyQualifiedName~CtrlC'; Globs = @(
@@ -289,7 +290,7 @@ $interactionTestPrefixes = @{
     'TextDelivery'           = @('TextDelivery')
     'CardOperationAvoidance' = @('CardOperationStrip', 'CardText', 'CardTextReservedInset')
     'CardRendering'          = @('BatchStructuralChange', 'BoardList', 'CardTemplate', 'CardText', 'CardThumbnail')
-    'CategoryEditing'        = @('CategoryNameEditing', 'CategoryNameEditor', 'CategoryNameSave', 'CategoryNameSaveFailure', 'CategoryTab', 'CategoryTabLabelAndEditor', 'F2Rename')
+    'CategoryEditing'        = @('CategoryNameEditing', 'CategoryNameEditor', 'CategoryNameSave', 'CategoryNameSaveFailure', 'CategoryRename', 'CategoryTab', 'CategoryTabLabelAndEditor', 'F2Rename')
     'CategoryOrder'          = @('ApplyCategoryOrderAsync', 'CategoryRail')
     'ClipboardCapture'       = @('ClipboardCapture')
     'ClipboardDelivery'      = @('CtrlC', 'LeftClickCopy', 'RightClick')
@@ -332,7 +333,7 @@ $interactionTestPrefixes = @{
     'ScrollViewport'         = @('ScrollViewport')
     'Search'                 = @('Search')
     'SubgroupOrder'          = @('ApplySubgroupOrderAsync', 'SubgroupRail')
-    'SubgroupRail'           = @('Subgroup')
+    'SubgroupRail'           = @('Subgroup', 'SubgroupRename')
     'SelectionAndDeletion'   = @('BatchPinButton', 'BatchPinCommand', 'BatchPinExecutionGuard', 'DeletePending', 'DeleteShortcut', 'EmptyListBackgroundClearsSelectionWithoutChangingPanelOrScroll', 'Escape', 'HeaderClear', 'HeaderDeleteFailureRestoresMixedSelectionAndSuccessDeletesOnlySelection', 'HeaderDeleteWithoutSelection', 'HeaderDeleteWithoutSelectionFailureRestoresCategoryAndNewItemStaysUnselected', 'PinButton', 'SelectAllCommand', 'SelectedCountBadge', 'SelectionButtonTogglesPersistentTwoSignalFeedback', 'SelectionSurvivesAutoCollapseButClearsOnUserCategorySwitch', 'Shortcut', 'TrashButton')
     'TopmostImeSuppression'  = @('TopmostReassert')
     'Undo'                   = @('DeleteThenUndoFromPanel', 'Undo')

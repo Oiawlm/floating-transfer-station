@@ -122,19 +122,18 @@
                  两字宽文本列＋自然折行承载，纯布局约束、不为内容加宽轨道。 -->
             <TextBlock Text="{Binding DisplayName}"
                        Style="{StaticResource CategoryLabelTextStyle}" />
+            <!-- 改名编辑器事件经共享改名会话协调器窗口级路由（InlineRenameSession，
+                 契约 #49 修订），不经模板事件特性散挂。 -->
             <TextBox Text="{Binding DraftName, UpdateSourceTrigger=Explicit}"
-                     Style="{StaticResource CategoryNameEditorStyle}"
-                     TextChanged="CategoryNameEditor_TextChanged"
-                     KeyDown="CategoryNameEditor_KeyDown"
-                     LostKeyboardFocus="CategoryNameEditor_LostKeyboardFocus" />
+                     Style="{StaticResource CategoryNameEditorStyle}" />
           </Grid>
         </Border>
       </DataTemplate>
       <!-- 子分组 chip（实验性，契约 #57 修订）：视觉沿分类轨标签语言（边框/圆角/
            hover/激活 accent）；悬停过滤、单击设收集落点（照分类轨「悬停即进入、
            单击设默认接收」同构）、双击改名、拖卡入 chip＝批量归属该槽（照「拖卡入
-           标签=移动分类」先例）。改名会话与分类改名同一套机器（IME 守卫＋Enter/
-           Esc/失焦提交）。 -->
+           标签=移动分类」先例）。改名会话与分类改名同一台协调器机器（IME 守卫＋Enter/
+           Esc/失焦提交，契约 #57 修订⑤）。 -->
       <DataTemplate x:Key="SubgroupChipTemplate"
                     DataType="{x:Type vm:SubgroupChipViewModel}">
         <Border x:Name="ChipSurface"
@@ -170,10 +169,7 @@
             <TextBlock Text="{Binding DisplayName}"
                        Style="{StaticResource SubgroupChipLabelTextStyle}" />
             <TextBox Text="{Binding DraftName, UpdateSourceTrigger=Explicit}"
-                     Style="{StaticResource SubgroupChipNameEditorStyle}"
-                     TextChanged="SubgroupChipNameEditor_TextChanged"
-                     KeyDown="SubgroupChipNameEditor_KeyDown"
-                     LostKeyboardFocus="SubgroupChipNameEditor_LostKeyboardFocus" />
+                     Style="{StaticResource SubgroupChipNameEditorStyle}" />
           </Grid>
         </Border>
       </DataTemplate>

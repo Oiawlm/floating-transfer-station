@@ -1,7 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using System.Windows.Threading;
+using System.Windows.Media;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -26,6 +27,8 @@ public partial class MainWindow
 {
     private readonly HashSet<TextBox> _activeSubgroupNameCompositions = [];
 
+    private InlineRenameSession<SubgroupChipViewModel> _subgroupRenameSession = null!;
+
     /// <summary>当前 chip 过滤槽（null=无过滤）；搜索激活期间冻结（让位裁决）。</summary>
     private int? _subgroupFilterSlot;
 
@@ -44,6 +47,40 @@ public partial class MainWindow
 
     private void InitializeSubgroupNameEditing()
     {
+        // chip 改名与分类改名共用共享改名会话协调器（契约 #57 修订⑤）：会话机器同构
+        //（Begin/限长/IME 守卫/Enter/Esc/失焦），只有 subject 参数与乐观保存单点不同；
+        // 「点外即提交」隧道与面板切换冲刷经协调器登记清单统一分发。
+        _subgroupRenameSession = new InlineRenameSession<SubgroupChipViewModel>(
+            Dispatcher,
+            _activeSubgroupNameCompositions,
+            subjects: () => _viewModel.SubgroupChips,
+            isEditing: chip => chip.IsEditingName,
+            findEditor: TryGetSubgroupNameEditor,
+            findDescendantEditor: FindDescendant<TextBox>,
+            limitDraft: SubgroupCatalog.LimitName,
+            beginSession: chip => chip.BeginNameEdit(),
+            endSession: (chip, draftName) => chip.EndNameEdit(draftName),
+            cancelSession: chip => chip.CancelNameEdit(),
+            saveIfChanged: (chip, name) =>
+            {
+                if (name == chip.DisplayName ||
+                    _viewModel.ActivePanel is not { } panel)
+                {
+                    return;
+                }
+
+                TrackPendingOperation(SaveSubgroupNameAsync(panel.Category, chip.Slot, name));
+            },
+            afterSessionEnd: ReconcileSurfaceAfterEditing);
+        AddHandler(
+            Keyboard.KeyDownEvent,
+            new KeyEventHandler(SubgroupChipNameEditor_KeyDown));
+        AddHandler(
+            Keyboard.LostKeyboardFocusEvent,
+            new KeyboardFocusChangedEventHandler(SubgroupChipNameEditor_LostKeyboardFocus));
+        AddHandler(
+            TextBoxBase.TextChangedEvent,
+            new TextChangedEventHandler(SubgroupChipNameEditor_TextChanged));
         AddHandler(
             TextCompositionManager.PreviewTextInputStartEvent,
             new TextCompositionEventHandler(SubgroupChipNameEditor_CompositionStartedOrUpdated),
@@ -258,124 +295,61 @@ public partial class MainWindow
         GroupedViewGuidance.SetCurrentValue(VisibilityProperty, visible ? Visibility.Visible : Visibility.Collapsed);
     }
 
-    // ---- 双击改名会话（照 CategoryEditing 全套：草稿限长/IME 守卫/Enter/Esc/失焦提交） ----
+    // ---- 双击改名会话（共享协调器机器，契约 #57 修订⑤：与分类改名同一台会话机；
+    //      事件入口窗口级挂接，编辑器在 DataTemplate 内不经 XAML 特性散挂） ----
 
-    private void BeginSubgroupNameEdit(SubgroupChipViewModel chip, Border host)
-    {
-        chip.BeginNameEdit();
-        Dispatcher.BeginInvoke(
-            DispatcherPriority.Input,
-            new Action(() =>
-            {
-                if (!chip.IsEditingName ||
-                    FindDescendant<TextBox>(host) is not { } editor)
-                {
-                    return;
-                }
+    private void BeginSubgroupNameEdit(SubgroupChipViewModel chip, Border host) =>
+        _subgroupRenameSession.Begin(chip, host);
 
-                editor.Focus();
-                editor.SelectAll();
-            }));
-    }
-
-    private void SubgroupChipNameEditor_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (sender is not TextBox editor ||
-            editor.DataContext is not SubgroupChipViewModel chip ||
-            !chip.IsEditingName ||
-            _activeSubgroupNameCompositions.Contains(editor))
-        {
-            return;
-        }
-
-        // MaxLength 按 UTF-16 计数（代理对占 2），文本元素口径的限长在此归一。
-        var limited = SubgroupCatalog.LimitName(editor.Text);
-        if (limited == editor.Text)
-        {
-            return;
-        }
-
-        editor.Text = limited;
-        editor.CaretIndex = editor.Text.Length;
-    }
+    private void SubgroupChipNameEditor_TextChanged(object sender, TextChangedEventArgs e) =>
+        _subgroupRenameSession.HandleTextChanged(e);
 
     private void SubgroupChipNameEditor_CompositionStartedOrUpdated(
         object sender,
-        TextCompositionEventArgs e)
-    {
-        if (e.OriginalSource is TextBox
-            {
-                DataContext: SubgroupChipViewModel { IsEditingName: true }
-            } editor)
-        {
-            _activeSubgroupNameCompositions.Add(editor);
-        }
-    }
+        TextCompositionEventArgs e) =>
+        _subgroupRenameSession.HandleCompositionStartedOrUpdated(e);
 
     private void SubgroupChipNameEditor_CompositionCompleted(
         object sender,
-        TextCompositionEventArgs e)
-    {
-        if (e.OriginalSource is TextBox editor)
-        {
-            _activeSubgroupNameCompositions.Remove(editor);
-        }
-    }
+        TextCompositionEventArgs e) =>
+        _subgroupRenameSession.HandleCompositionCompleted(e);
 
-    private void SubgroupChipNameEditor_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (sender is not TextBox editor ||
-            editor.DataContext is not SubgroupChipViewModel chip)
-        {
-            return;
-        }
-
-        if (_activeSubgroupNameCompositions.Contains(editor))
-        {
-            return;
-        }
-
-        if (e.Key == Key.Enter)
-        {
-            e.Handled = true;
-            CommitSubgroupNameEdit(chip, editor.Text);
-        }
-        else if (e.Key == Key.Escape)
-        {
-            e.Handled = true;
-            _activeSubgroupNameCompositions.Remove(editor);
-            chip.CancelNameEdit();
-            ReconcileSurfaceAfterEditing();
-        }
-    }
+    private void SubgroupChipNameEditor_KeyDown(object sender, KeyEventArgs e) =>
+        _subgroupRenameSession.HandleKeyDown(e);
 
     private void SubgroupChipNameEditor_LostKeyboardFocus(
         object sender,
-        KeyboardFocusChangedEventArgs e)
+        KeyboardFocusChangedEventArgs e) =>
+        _subgroupRenameSession.HandleLostKeyboardFocus(e);
+
+    private void CommitSubgroupNameEdit(SubgroupChipViewModel chip, string draftName) =>
+        _subgroupRenameSession.Commit(chip, draftName);
+
+    /// <summary>指定 chip 的名字编辑器（协调器查询缝）：轨内槽 chip 宿主树递归查找
+    ///（chip≤5 无虚拟化；「全部」伪 chip 无编辑器，天然不在查找域）。</summary>
+    private TextBox? TryGetSubgroupNameEditor(SubgroupChipViewModel chip) =>
+        FindSubgroupNameEditor(SubgroupRail, chip);
+
+    private static TextBox? FindSubgroupNameEditor(
+        DependencyObject parent,
+        SubgroupChipViewModel chip)
     {
-        if (sender is TextBox { DataContext: SubgroupChipViewModel chip } editor)
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
         {
-            _activeSubgroupNameCompositions.Remove(editor);
-            CommitSubgroupNameEdit(chip, editor.Text);
-        }
-    }
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is TextBox { DataContext: SubgroupChipViewModel candidate } &&
+                ReferenceEquals(candidate, chip))
+            {
+                return (TextBox)child;
+            }
 
-    private void CommitSubgroupNameEdit(SubgroupChipViewModel chip, string draftName)
-    {
-        if (!chip.IsEditingName)
-        {
-            return;
-        }
-
-        var name = chip.EndNameEdit(draftName);
-        ReconcileSurfaceAfterEditing();
-        if (name == chip.DisplayName ||
-            _viewModel.ActivePanel is not { } panel)
-        {
-            return;
+            if (FindSubgroupNameEditor(child, chip) is { } descendant)
+            {
+                return descendant;
+            }
         }
 
-        TrackPendingOperation(SaveSubgroupNameAsync(panel.Category, chip.Slot, name));
+        return null;
     }
 
     /// <summary>子分组槽名乐观提交（镜像 <see cref="SaveCategoryNameAsync"/>：save gate

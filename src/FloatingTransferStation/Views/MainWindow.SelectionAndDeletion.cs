@@ -41,15 +41,10 @@ public partial class MainWindow : Window
 
     private void ActivatePanel(BoardCategory category)
     {
-        // 编辑会话锚定当前面板视图：换面板即终结（提交+清手势记忆），
-        // 早于搜索退出与焦点转移——它们的中间状态不应干扰提交流径。
-        EndCardEditSessionForViewChange();
-
-        // 冲刷仍是记录特有行为，键在角色（#30）：离开记录表面即冲刷未保存记录。
-        if (IsReviewActive() && BoardCategoryCatalog.RoleOf(category) != CategoryRole.Review)
-        {
-            TrackPendingOperation(FlushReviewAsync());
-        }
+        // 面板切换统一冲刷（契约 #49 修订）：在途编辑会话（卡片/两类改名/记录）先于
+        // 视图突变按提交路径终结，早于搜索退出与焦点转移——它们的中间状态不应干扰
+        // 提交流径（冲刷序与条件见 FlushEditingSessionsForPanelSwitch）。
+        FlushEditingSessionsForPanelSwitch(category);
 
         // 搜索作用于单一分类:切换分类即退出搜索并还原列表(设计草案切片 1)。
         if (_viewModel.IsSearchActive && _viewModel.ActivePanel?.Category != category)

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -1227,6 +1228,37 @@ public partial class SettingsWindow : Window
         if (!_isChangingDataDirectory)
         {
             Close();
+        }
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        // 关窗冲刷持焦草稿（契约 #5 增补）：Esc/关闭钮/系统菜单三路都汇 Close()——
+        // 在窗体卸载前经本单点冲刷，再走基类关闭序列。
+        CommitFocusedDraftEditorsOnClose();
+        base.OnClosing(e);
+    }
+
+    /// <summary>仍持键盘焦点的草稿编辑器经既有失焦提交路径冲刷（AI Key 两框→密文提交；
+    /// AI 整理提示词→覆盖提交）。焦点门控＝草稿唯一逃逸 LostFocus 的状态：关窗不经焦点
+    /// 迁移，失焦提交不会自行触发；同时避免无条件重提交——DPAPI 每次产新密文，无草稿
+    /// 关窗也会写偏好盘（契约 #5 的零无谓写盘边界）。持久化沿 ApplyPreferences 唯一管线，
+    /// 排水由主窗 Closing 序列兜底。</summary>
+    private void CommitFocusedDraftEditorsOnClose()
+    {
+        if (DeepSeekKeyBox.IsKeyboardFocusWithin)
+        {
+            CommitDeepSeekKey();
+        }
+
+        if (DeepSeekKeyPlainBox.IsKeyboardFocusWithin)
+        {
+            CommitDeepSeekKey();
+        }
+
+        if (AiOrganizePromptBox.IsKeyboardFocusWithin)
+        {
+            CommitAiOrganizePrompt();
         }
     }
 

@@ -11,12 +11,13 @@ namespace FloatingTransferStation.Tests;
 
 /// <summary>
 /// 「点击编辑器外部＝提交」共享协调（MainWindow.EditingCommit.cs）的 STA 测试矩阵：
-/// 四处编辑位（分类名/瓦片名/卡片正文/卡片备注）「编辑中→点击面板空白区→已保存」
-/// 合成事件路径＋卡片正文一处真实 SendInput 点击路径；复盘编辑器点击面板空白
-/// 立即冲刷（不等 700ms 防抖）；IME 组合期点击外部组合文本不丢失（既有组合标记
-/// 技法）；Esc 取消语义、拖拽起手不误触、真实键盘导航（F2/Esc）零回归；协调器
-/// 不吞事件（e.Handled 不置位——按压继续原旅程）。既有提交/取消语义本身不变，
-/// 只补触发通道；独立对话框类编辑窗不在此列。
+/// 五处编辑位（分类名/子分组 chip 名/瓦片名/卡片正文/卡片备注）「编辑中→点击面板
+/// 空白区→已保存」合成事件路径＋卡片正文一处真实 SendInput 点击路径；复盘编辑器
+/// 点击面板空白立即冲刷（不等 700ms 防抖）；IME 组合期点击外部组合文本不丢失
+///（既有组合标记技法）；Esc 取消语义、拖拽起手不误触、真实键盘导航（F2/Esc）
+/// 零回归；协调器不吞事件（e.Handled 不置位——按压继续原旅程）。既有提交/取消
+/// 语义本身不变，只补触发通道；独立对话框类编辑窗不在此列。两类改名会话经共享
+/// 改名会话协调器接入（契约 #49 修订四处→五处＋契约 #57 修订⑤）。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -839,6 +840,240 @@ public sealed partial class MainWindowInteractionTests
         finally
         {
             CloseWindowWithoutSaving(window);
+        }
+    }
+
+    // ---- 子分组 chip 名（R5：第五处接入——chip 改名照分类名同入按压协调，契约 #57 修订⑤） ----
+
+    [STATestMethod]
+    public void EditingCommit_SubGroupName_PanelBlankPressCommitsDraft()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("内容", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            DoubleClickChip(window, 1);
+            var editor = FindChipEditor(window, 1);
+            Assert.IsTrue(
+                viewModel.SubgroupChips.Single(chip => chip.Slot == 1).IsEditingName,
+                "前置条件：双击进入 chip 改名会话。");
+            editor.Text = "要事";
+
+            var press = RaisePanelBlankPress(PanelBlankRail(window));
+            CompleteLayout(window);
+
+            Assert.IsFalse(press.Handled, "协调器只补触发通道，不吞按压事件。");
+            Assert.IsFalse(
+                viewModel.SubgroupChips.Single(chip => chip.Slot == 1).IsEditingName,
+                "点击面板空白必须终结 chip 改名会话（R5：点外即提交）。");
+            InvokePrivateTask(window, "DrainPendingOperationsAsync");
+            Assert.AreEqual(
+                "要事",
+                viewModel.SubgroupChips.Single(chip => chip.Slot == 1).DisplayName,
+                "点击面板空白的提交必须乐观上屏 chip 名。");
+            var persisted = ReadPersistedJson<WindowSettings>(directory, "settings.json");
+            Assert.IsNotNull(persisted);
+            Assert.AreEqual(
+                "要事",
+                persisted!.SubgroupName(BoardCategory.Inbox, 1),
+                "点击面板空白的提交必须持久化 chip 名。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void EditingCommit_SubGroupName_PressAnotherChipCommitsAndDefaultSetProceeds()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("内容", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+
+            DoubleClickChip(window, 1);
+            FindChipEditor(window, 1).Text = "要事";
+
+            // 按压另一枚 chip：预览隧道先提交在途改名（编辑器之外），按压旅程照常
+            // 继续——MouseLeftButtonUp 承载的「单击设默认收集落点」不被吞。
+            var otherChip = FindSubgroupChip(window, 2);
+            var press = RaisePanelBlankPress(otherChip);
+            CompleteLayout(window);
+
+            Assert.IsFalse(press.Handled, "提交后的按压照常旅程，不被协调器吞掉。");
+            Assert.IsFalse(
+                viewModel.SubgroupChips.Single(chip => chip.Slot == 1).IsEditingName,
+                "按压另一枚 chip 必须先提交在途改名会话。");
+            ClickChip(window, 2);
+            InvokePrivateTask(window, "DrainPendingOperationsAsync");
+
+            Assert.AreEqual(
+                "要事",
+                viewModel.SubgroupChips.Single(chip => chip.Slot == 1).DisplayName,
+                "按压另一枚 chip 的提交必须乐观上屏。");
+            var persisted = ReadPersistedJson<WindowSettings>(directory, "settings.json");
+            Assert.IsNotNull(persisted);
+            Assert.AreEqual(
+                "要事",
+                persisted!.SubgroupName(BoardCategory.Inbox, 1),
+                "按压另一枚 chip 的提交必须持久化。");
+            Assert.AreEqual(
+                DefaultMarkerState.Active,
+                viewModel.SubgroupChips.Single(chip => chip.Slot == 2).DefaultMarkerState,
+                "按压旅程继续：单击设默认收集落点照常生效（Inbox 默认接收→紫环移位）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void EditingCommit_SubGroupName_CompositionTextSurvivesPanelBlankCommit()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("内容", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            DoubleClickChip(window, 1);
+            var editor = FindChipEditor(window, 1);
+
+            // 组合进行中（标记技法）：组合期文本已在编辑器 Text 里（WPF 实况）。
+            editor.RaiseEvent(NewTextCompositionEventArgs(
+                TextCompositionManager.PreviewTextInputStartEvent,
+                editor,
+                "zuhe"));
+            editor.Text = "组文";
+            Assert.IsTrue(
+                GetPrivateField<HashSet<TextBox>>(window, "_activeSubgroupNameCompositions")
+                    .Contains(editor),
+                "前置条件：组合标记已置位。");
+
+            RaisePanelBlankPress(PanelBlankRail(window));
+            CompleteLayout(window);
+            InvokePrivateTask(window, "DrainPendingOperationsAsync");
+
+            Assert.AreEqual(
+                "组文",
+                ((MainWindowViewModel)window.DataContext).SubgroupChips
+                    .Single(chip => chip.Slot == 1).DisplayName,
+                "组合期点击外部必须把组合文本一并保存，不得丢失。");
+            var persisted = ReadPersistedJson<WindowSettings>(directory, "settings.json");
+            Assert.IsNotNull(persisted);
+            Assert.AreEqual(
+                "组文",
+                persisted!.SubgroupName(BoardCategory.Inbox, 1));
+            Assert.IsFalse(
+                GetPrivateField<HashSet<TextBox>>(window, "_activeSubgroupNameCompositions")
+                    .Contains(editor),
+                "会话终结后组合标记必须清理（防下次 Enter/Esc 失效）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    // ---- UI 证据帧（env `FTS_RENAME_COMMIT_EVIDENCE_DIR` 门控，未设置 Inconclusive；
+    //      帧序列经 ffmpeg 合成 evidence-b1-commit-unify.mp4——批次 2026-11-08 b1 验收 §八.3） ----
+
+    [STATestMethod]
+    public void EditingCommit_EvidenceRenameCommitUnify()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("分组内容一", BoardCategory.Inbox).Subgroup = 1;
+        board.AddText("分组内容二", BoardCategory.Inbox).Subgroup = 2;
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+        var shell = (System.Windows.Controls.Border?)null;
+
+        try
+        {
+            window.Show();
+            window.ClientAreaAnimationsEnabled = false;
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            shell = (System.Windows.Controls.Border)window.FindName("WindowShell")!;
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var inbox = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.Inbox);
+            var reference = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.Reference);
+
+            // 帧 1-2：分类改名后点空白＝保存。
+            inbox.BeginNameEdit();
+            CompleteLayout(window);
+            var editor = FindDescendants<TextBox>(FindCategoryTab(window, inbox)).Single();
+            Assert.IsTrue(editor.Focus());
+            editor.Text = "收集箱";
+            CompleteLayout(window);
+            SaveVisualEvidence(shell!, "01-category-editing.png", "FTS_RENAME_COMMIT_EVIDENCE_DIR");
+            RaisePanelBlankPress(PanelBlankRail(window));
+            CompleteLayout(window);
+            InvokePrivateTask(window, "DrainPendingOperationsAsync");
+            SaveVisualEvidence(shell!, "02-category-blank-press-saved.png", "FTS_RENAME_COMMIT_EVIDENCE_DIR");
+
+            // 帧 3-4：chip 改名后点空白＝保存。
+            DoubleClickChip(window, 1);
+            var chipEditor = FindChipEditor(window, 1);
+            chipEditor.Text = "要事";
+            CompleteLayout(window);
+            SaveVisualEvidence(shell!, "03-chip-editing.png", "FTS_RENAME_COMMIT_EVIDENCE_DIR");
+            RaisePanelBlankPress(PanelBlankRail(window));
+            CompleteLayout(window);
+            InvokePrivateTask(window, "DrainPendingOperationsAsync");
+            SaveVisualEvidence(shell!, "04-chip-blank-press-saved.png", "FTS_RENAME_COMMIT_EVIDENCE_DIR");
+
+            // 帧 5-7：编辑中悬停切另一标签＝切换且草稿保存（切回无残留）。
+            DoubleClickChip(window, 2);
+            FindChipEditor(window, 2).Text = "杂项";
+            CompleteLayout(window);
+            SaveVisualEvidence(shell!, "05-chip-editing-before-hover-switch.png", "FTS_RENAME_COMMIT_EVIDENCE_DIR");
+            var referenceTab = FindCategoryTab(window, reference);
+            referenceTab.RaiseEvent(NewMouseEventArgs(UIElement.MouseEnterEvent, referenceTab));
+            CompleteLayout(window);
+            InvokePrivateTask(window, "DrainPendingOperationsAsync");
+            SaveVisualEvidence(shell!, "06-hover-switched-and-saved.png", "FTS_RENAME_COMMIT_EVIDENCE_DIR");
+            var inboxTab = FindCategoryTab(window, inbox);
+            inboxTab.RaiseEvent(NewMouseEventArgs(UIElement.MouseEnterEvent, inboxTab));
+            CompleteLayout(window);
+            SaveVisualEvidence(shell!, "07-switch-back-no-residue.png", "FTS_RENAME_COMMIT_EVIDENCE_DIR");
+
+            // 帧 8：改名中按 Esc＝取消丢弃。
+            DoubleClickChip(window, 3);
+            var escEditor = FindChipEditor(window, 3);
+            escEditor.Text = "取消";
+            CompleteLayout(window);
+            RaiseChipEditorKey(window, escEditor, Key.Escape);
+            CompleteLayout(window);
+            SaveVisualEvidence(shell!, "08-escape-cancel-discards.png", "FTS_RENAME_COMMIT_EVIDENCE_DIR");
+        }
+        finally
+        {
+            CloseWindow(window);
         }
     }
 }
