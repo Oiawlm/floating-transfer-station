@@ -156,7 +156,11 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-candidate
-          path: artifacts/installer/*.exe
+          # 安装包与 build-release.ps1 从实际产物派生的 SHA256SUMS.txt 同附件直传
+          # （契约 #26 修订①：发行上传取附件原名，禁止改名与手工生成清单）。
+          path: |
+            artifacts/installer/*.exe
+            artifacts/installer/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
 
