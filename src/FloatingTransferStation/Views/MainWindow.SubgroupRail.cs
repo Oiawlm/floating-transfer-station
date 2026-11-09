@@ -16,11 +16,12 @@ namespace FloatingTransferStation.Views;
 /// 退役；搜索态单击＝仅设默认——不退搜索不动过滤）、双击 chip＝改名（照
 /// <see cref="MainWindow.CategoryEditing"/> 全套会话机器）、拖卡片到 chip＝批量
 /// 归属该槽（照「拖卡入标签=移动分类」先例）。过滤只经 BoardList.Items.Filter
-/// 单点（ApplyBoardListFilter，契约 #37 扩展）；退出＝引导条「清空」/Esc/切分类/
-/// 模式切换。实验开关开启时轨首恒居「全部」伪 chip（契约 #57 修订，2026-11-07）：
-/// 悬停＝进入全量视图（Filter=null＋全 chip 激活态，与根态同列表）、单击无操作、
-/// 不参与改名/拖放归属/默认环，退出沿既有四路径；实验期无取消归属手势（拖到
-/// 其他 chip 可覆盖，README 与契约登记）。
+/// 单点（ApplyBoardListFilter，契约 #37 扩展）；退出＝Esc/切分类/模式切换/悬停
+/// 其他 chip（含「全部」）——槽过滤空态无 CTA，引导由空态副文案承载（契约 #33
+/// 2026-11-08 修订）。实验开关开启时轨首恒居「全部」伪 chip（契约 #57 修订，
+/// 2026-11-07）：悬停＝进入全量视图（Filter=null＋全 chip 激活态，与根态同列表）、
+/// 单击无操作、不参与改名/拖放归属/默认环，退出沿既有三路径＋悬停其他 chip；
+/// 实验期无取消归属手势（拖到其他 chip 可覆盖，README 与契约登记）。
 /// </summary>
 public partial class MainWindow
 {

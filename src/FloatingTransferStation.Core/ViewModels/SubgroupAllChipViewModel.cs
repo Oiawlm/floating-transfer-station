@@ -18,7 +18,8 @@ public sealed class SubgroupAllChipViewModel : ObservableObject
     public string DisplayName => SubgroupCatalog.AllChipName;
 
     /// <summary>全量过滤选中态：悬停进入（Filter=null＋全 chip 激活视觉）、沿既有
-    /// 四路径退出（引导条清空/Esc/切分类/模式切换）；搜索激活期间冻结让位（#37）。</summary>
+    /// 三路径（Esc/切分类/模式切换）＋悬停其他 chip 退出（契约 #60 2026-11-08 句级
+    /// 同步）；搜索激活期间冻结让位（#37）。</summary>
     public bool IsFilterActive
     {
         get => _isFilterActive;
