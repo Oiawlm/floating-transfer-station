@@ -325,6 +325,50 @@ public sealed partial class LifecycleTests
 
     [TestMethod]
     [TestCategory("Adversarial")]
+    public void Installer_PrepareToInstallFailuresAreLoggedBeforeAborting()
+    {
+        // 静默中止可观测（契约 #26 修订②）：PrepareToInstall 的两个失败分支都必须在
+        // 返回错误串中止前调用 LogPrepareToInstallAbort（原因＋守卫三目录值），使
+        // /SILENT 下的无痕中止在安装器日志（应用侧 /LOG）中可诊断；返回串与行为零变化。
+        var repositoryRoot = FindRepositoryRoot();
+        var installerFiles = Directory.GetFiles(
+            Path.Combine(repositoryRoot, "installer"),
+            "*.iss",
+            SearchOption.TopDirectoryOnly);
+        Assert.HasCount(1, installerFiles);
+        var installer = File.ReadAllText(installerFiles[0]);
+
+        var prepareToInstallStart = installer.IndexOf(
+            "function PrepareToInstall",
+            StringComparison.Ordinal);
+        Assert.IsTrue(prepareToInstallStart >= 0, "安装器必须定义 PrepareToInstall。");
+        var prepareToInstall = installer[
+            prepareToInstallStart..installer.IndexOf(
+                "procedure ForceCloseRunningApplication",
+                prepareToInstallStart,
+                StringComparison.Ordinal)];
+        StringAssert.Contains(
+            prepareToInstall,
+            "LogPrepareToInstallAbort('install directory guard rejected the selection');",
+            "安装目录守卫失败分支必须先写安装器日志再中止。");
+        StringAssert.Contains(
+            prepareToInstall,
+            "LogPrepareToInstallAbort('data directory migration failed');",
+            "数据目录迁移失败分支必须先写安装器日志再中止。");
+        // 日志助手自身：经 Log( 落盘并携带守卫三目录值（ExistingDirectory/OwnerDirectory/{app}）。
+        var logHelperStart = installer.IndexOf(
+            "procedure LogPrepareToInstallAbort",
+            StringComparison.Ordinal);
+        Assert.IsTrue(logHelperStart >= 0, "安装器必须定义 LogPrepareToInstallAbort 日志助手。");
+        var logHelper = installer[logHelperStart..prepareToInstallStart];
+        StringAssert.Contains(logHelper, "Log('PrepareToInstall aborted: ' + Reason");
+        StringAssert.Contains(logHelper, "; ExistingDirectory='");
+        StringAssert.Contains(logHelper, "; OwnerDirectory='");
+        StringAssert.Contains(logHelper, "; AppDir='");
+    }
+
+    [TestMethod]
+    [TestCategory("Adversarial")]
     public void Installer_ProvidesExplicitUninstallEntryAndDeletesOnlyOwnedDataRoot()
     {
         var repositoryRoot = FindRepositoryRoot();

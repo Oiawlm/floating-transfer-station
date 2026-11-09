@@ -282,7 +282,7 @@ public sealed partial class MainWindowInteractionTests
                 UpdateErrorKind.DownloadFailed,
                 "harness 密封缺省：无网络假件不支持下载。"));
 
-        public bool TryStartSilentInstaller(string installerPath) => false;
+        public bool TryStartSilentInstaller(string installerPath, string? installerLogPath = null) => false;
     }
 
     private static (Border Layer, Border Marker) FindCategoryFeedback(
