@@ -88,15 +88,16 @@
         <Setter Property="Background" Value="{DynamicResource CardBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="CornerRadius" Value="{StaticResource SurfaceCornerRadius}" />
         <Setter Property="Padding" Value="14,12" />
         <Setter Property="Margin" Value="0,0,0,12" />
         <Style.Triggers>
           <!-- 整卡禁用态（契约 #57 修订：置灰非隐藏）——卡级不透明度统一覆盖标题/
-               文字/行（含代码后置构造的行标签与把手）与卡面；钮自身 0.4/0.45 触发器
-               保留，叠加 ≈0.24/0.27 已裁定可接受。零新 token（#34）。 -->
+               文字/行（含代码后置构造的行标签与把手）与卡面；卡级档=CardDisabledOpacity
+               0.6（2026-11-08 视觉语言收敛入 token，DesignTokens 单一源）；钮自身
+               0.4 触发器保留，叠加 ≈0.24 已裁定可接受。 -->
           <Trigger Property="IsEnabled" Value="False">
-            <Setter Property="Opacity" Value="0.6" />
+            <Setter Property="Opacity" Value="{x:Static design:DesignTokens.CardDisabledOpacity}" />
           </Trigger>
         </Style.Triggers>
       </Style>
@@ -153,11 +154,15 @@
           <Setter.Value>
             <ControlTemplate TargetType="CheckBox">
               <Grid Width="40" Height="20" Background="Transparent">
+                <!-- Track 圆角=高一半（胶囊派生规则）、Thumb=高一半（圆形派生规则），
+                     两者均不入圆角阶梯（design.md §四登记）。 -->
                 <Border x:Name="Track"
                         Width="40"
                         Height="20"
                         CornerRadius="10"
                         Background="{DynamicResource BorderBrush}"
+                        BorderBrush="Transparent"
+                        BorderThickness="1"
                         IsHitTestVisible="False" />
                 <Border x:Name="Thumb"
                         Width="14"
@@ -169,13 +174,18 @@
                         IsHitTestVisible="False" />
               </Grid>
               <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <!-- 「仅描边」轻 hover 支系（同 ComboBox/QR 缩略钮）：悬停只换描边，
+                       不换底不位移（2026-11-08 视觉语言收敛 A13 补齐开关悬停反馈）。 -->
+                  <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource HoverBorderBrush}" />
+                </Trigger>
                 <Trigger Property="IsChecked" Value="True">
                   <Setter TargetName="Track" Property="Background" Value="{DynamicResource AccentBrush}" />
                   <Setter TargetName="Thumb" Property="Background" Value="{DynamicResource OnAccentBrush}" />
                   <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right" />
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
-                  <Setter Property="Opacity" Value="0.45" />
+                  <Setter Property="Opacity" Value="{x:Static design:DesignTokens.ControlDisabledOpacity}" />
                 </Trigger>
               </ControlTemplate.Triggers>
             </ControlTemplate>
@@ -203,7 +213,7 @@
                       Background="{TemplateBinding Background}"
                       BorderBrush="{TemplateBinding BorderBrush}"
                       BorderThickness="{TemplateBinding BorderThickness}"
-                      CornerRadius="6">
+                      CornerRadius="{StaticResource ControlCornerRadius}">
                 <ScrollViewer x:Name="PART_ContentHost"
                               Margin="{TemplateBinding Padding}"
                               VerticalAlignment="Center" />
@@ -271,10 +281,27 @@
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Style.Triggers>
           <Trigger Property="IsEnabled" Value="False">
-            <Setter Property="Opacity" Value="0.5" />
+            <Setter Property="Opacity" Value="{x:Static design:DesignTokens.ControlDisabledOpacity}" />
           </Trigger>
           <Trigger Property="IsKeyboardFocusWithin" Value="True">
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+          </Trigger>
+        </Style.Triggers>
+      </Style>
+
+      <!-- 微信号复制行（2026-11-08 视觉语言收敛 A14：页脚行与放大层行共用）——
+           手型光标＋悬停 HoverSurface 瞬切底（单表面轻控件「瞬切」支系），反馈色
+           仍由代码后置翻转 Run 前景；左右键复制语义不变。 -->
+      <Style x:Key="WeChatIdRowStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="ToolTip" Value="复制微信号" />
+        <Style.Triggers>
+          <Trigger Property="IsMouseOver" Value="True">
+            <Setter Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
           </Trigger>
         </Style.Triggers>
       </Style>
@@ -300,7 +327,7 @@
                  DragCompleted="HeaderDragRegion_DragCompleted" />
           <TextBlock Text="设置"
                      Margin="16,0"
-                     FontSize="15"
+                     FontSize="16"
                      FontWeight="SemiBold"
                      Foreground="{DynamicResource PrimaryTextBrush}"
                      VerticalAlignment="Center"
@@ -1240,14 +1267,10 @@
               <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                 <!-- 微信号行左右键皆复制（W3 2026-11-05）：透明底整行可命中＋手型
                      光标，同一处理器服两事件；反馈就地翻转本行微信号 Run
-                     （2026-11-06 起文本复制唯一入口即本行，零 toast）。 -->
+                     （2026-11-06 起文本复制唯一入口即本行，零 toast）。样式
+                     WeChatIdRowStyle（2026-11-08 A14 补悬停 HoverSurface 底）。 -->
                 <TextBlock x:Name="WeChatIdFooterBlock"
-                           FontSize="12"
-                           VerticalAlignment="Center"
-                           Foreground="{DynamicResource SecondaryTextBrush}"
-                           Background="Transparent"
-                           Cursor="Hand"
-                           ToolTip="复制微信号"
+                           Style="{StaticResource WeChatIdRowStyle}"
                            MouseLeftButtonUp="WeChatIdFooterBlock_PointButtonUp"
                            MouseRightButtonUp="WeChatIdFooterBlock_PointButtonUp">
                   <Run Text="微信：" /><Run x:Name="WeChatIdRun" Foreground="{DynamicResource PrimaryTextBrush}" FontWeight="SemiBold" />
@@ -1308,15 +1331,15 @@
              恒定、动画不改布局矩形。自持 Opacity（基值 0）：入场 0→1 与遮罩纱
              同帧同曲线同时长（兄弟不相乘、无双重变淡）；收回全程可见飞回，
              末段与缩略图换手——代码后置编排。 -->
-        <Border x:Name="WeChatQrOverlayCard"
-                Opacity="0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                Background="{DynamicResource CardBrush}"
-                BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="1"
-                CornerRadius="8"
-                Padding="20,16">
+            <Border x:Name="WeChatQrOverlayCard"
+                    Opacity="0"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource CardBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource SurfaceCornerRadius}"
+                    Padding="20,16">
           <StackPanel>
             <!-- 文字三元素基值 Opacity=0（布局恒占位、容器尺寸稳定零回流）：
                  飞行期不可读也不随容器缩放呈现，落位后段（270→450ms）经代码后置
@@ -1334,7 +1357,7 @@
                 （不关层）。 -->
             <Border x:Name="WeChatQrLargeCard"
                     Background="White"
-                    CornerRadius="4"
+                    CornerRadius="{StaticResource ControlCornerRadius}"
                     Padding="6"
                     ToolTip="右键复制二维码图片"
                     MouseRightButtonUp="WeChatQrLargeCard_MouseRightButtonUp">
@@ -1348,15 +1371,11 @@
                         HorizontalAlignment="Center"
                         Margin="0,12,0,0">
               <!-- 放大态微信号行左右键皆复制且不关层（W3）：与页脚行同一处理器
-                   形态，e.Handled 阻断冒泡到遮罩关层（同 QR 卡右键复制被消费
-                   的形态）；反馈就地翻转本行微信号 Run。 -->
+                   形态＋同一样式（WeChatIdRowStyle，2026-11-08 A14 补悬停底），
+                   e.Handled 阻断冒泡到遮罩关层（同 QR 卡右键复制被消费的形态）；
+                   反馈就地翻转本行微信号 Run。 -->
               <TextBlock x:Name="WeChatIdLargeBlock"
-                         FontSize="12"
-                         VerticalAlignment="Center"
-                         Foreground="{DynamicResource SecondaryTextBrush}"
-                         Background="Transparent"
-                         Cursor="Hand"
-                         ToolTip="复制微信号"
+                         Style="{StaticResource WeChatIdRowStyle}"
                          Opacity="0"
                          MouseLeftButtonUp="WeChatIdLargeBlock_PointButtonUp"
                          MouseRightButtonUp="WeChatIdLargeBlock_PointButtonUp">

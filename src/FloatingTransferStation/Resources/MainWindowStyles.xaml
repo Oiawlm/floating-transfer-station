@@ -43,7 +43,9 @@
   <!-- 圆角两档阶梯（#30 修订 2026-10-18，Issue #186 D9）：控件 4 / 表面 8，
        数值唯一来源=DesignTokens.ControlCornerRadiusPx / SurfaceCornerRadiusPx
        （锁定测试镜像）；SurfaceCornerRadius 与 CardCornerRadius（=8）收敛同源。
-       既有 5/6/7 字面量（识别元素/头部钮/徽章）本次触面之外不强制收编。 -->
+       阶梯外登记值：头部钮/徽章 7（HeaderActionCornerRadiusPx，2026-11-08 重命名
+       对仗）、置顶钮 6、选择环 5——识别元素/头部钮/徽章不入阶梯（登记表见
+       docs/design.md §四）。 -->
   <CornerRadius x:Key="SurfaceCornerRadius">8</CornerRadius>
   <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>
   <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
@@ -53,6 +55,13 @@
   <!-- 选择环圆角（识别元素 r5，#30 修订 2026-10-18）：卡片与瓦片勾选钮共用，
        镜像 DesignTokens.CheckboxCornerRadius。 -->
   <CornerRadius x:Key="SelectionRingCornerRadius">5</CornerRadius>
+  <!-- 卡片族间距镜像资源（2026-11-08 视觉语言收敛，接回 DesignTokens 断链三 token：
+       CardRootMargin 左右=CardInsetPx 12、上下=CardGutterPx 4；边界卡上距 10 是
+       置顶分隔节奏的组成部分（#27 呼吸空间 4+8 中的 8 落在边界卡上距）；卡片
+       内边距=CardPaddingPx 12（卡片内容 Grid 与记录编辑器共用）。锁定测试互锁。 -->
+  <Thickness x:Key="CardRootMargin" Left="12" Top="4" Right="12" Bottom="4" />
+  <Thickness x:Key="CardRootBoundaryMargin" Left="12" Top="10" Right="12" Bottom="4" />
+  <Thickness x:Key="CardPadding" Left="12" Top="12" Right="12" Bottom="12" />
   <converters:BooleanOrConverter x:Key="BooleanOrConverter" />
   <converters:NonEmptyTextConverter x:Key="NonEmptyTextConverter" />
 
@@ -140,7 +149,7 @@
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsEnabled" Value="False">
-              <Setter Property="Opacity" Value="0.35" />
+              <Setter Property="Opacity" Value="{x:Static design:DesignTokens.ControlDisabledOpacity}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -178,7 +187,7 @@
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsEnabled" Value="False">
-              <Setter TargetName="Surface" Property="Opacity" Value="0.5" />
+              <Setter TargetName="Surface" Property="Opacity" Value="{x:Static design:DesignTokens.ControlDisabledOpacity}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -186,7 +195,7 @@
     </Setter>
     <Style.Triggers>
       <Trigger Property="IsEnabled" Value="False">
-        <Setter Property="Opacity" Value="0.5" />
+        <Setter Property="Opacity" Value="{x:Static design:DesignTokens.ControlDisabledOpacity}" />
       </Trigger>
       <Trigger Property="IsKeyboardFocusWithin" Value="True">
         <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
@@ -228,7 +237,7 @@
               <Setter TargetName="Surface" Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-              <Setter Property="Opacity" Value="0.4" />
+              <Setter Property="Opacity" Value="{x:Static design:DesignTokens.ControlDisabledOpacity}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -245,6 +254,50 @@
     <Setter Property="Padding" Value="0" />
     <Setter Property="FontSize" Value="16" />
     <Setter Property="Focusable" Value="True" />
+  </Style>
+
+  <!-- 常规切换按钮（2026-11-08 视觉语言收敛 A15：可折叠「高级」钮自 Aero2 原生
+       外观收编）：复用 ThemedActionButtonStyle 同族语言（CardBrush 表面＋悬停换底
+       换边＋按压 ActiveCategory＋禁用两档 token＋控件级圆角），全部既有主题键、
+       零新视觉；ToggleButton 与 Button 是平行类型（Style/Template 不可跨用），
+       故独立成样式承载同一语言。 -->
+  <Style x:Key="ThemedToggleButtonStyle" TargetType="ToggleButton">
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToggleButton">
+          <Border x:Name="Surface"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{StaticResource ControlCornerRadius}">
+            <ContentPresenter HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Margin="{TemplateBinding Padding}"
+                              RecognizesAccessKey="True" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Surface" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
+              <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource HoverBorderBrush}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Surface" Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="{x:Static design:DesignTokens.ControlDisabledOpacity}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 
   <!-- 记录「阅读｜编辑」分段切换（实验性，2026-11-03，仅实验开关开启时可见）：外框
@@ -312,7 +365,7 @@
         <ControlTemplate TargetType="Button">
           <Border x:Name="Surface"
                   Background="{TemplateBinding Background}"
-                  CornerRadius="5">
+                  CornerRadius="{StaticResource SelectionRingCornerRadius}">
             <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalAlignment="Center"
                               Margin="{TemplateBinding Padding}" />
@@ -360,7 +413,7 @@
         <ControlTemplate TargetType="MenuItem">
           <Border x:Name="MenuItemSurface"
                   Background="Transparent"
-                  CornerRadius="5"
+                  CornerRadius="{StaticResource SelectionRingCornerRadius}"
                   Padding="{TemplateBinding Padding}">
             <ContentPresenter ContentSource="Header"
                               HorizontalAlignment="Left"
@@ -392,7 +445,7 @@
         <ControlTemplate TargetType="MenuItem">
           <Border x:Name="MenuItemSurface"
                   Background="Transparent"
-                  CornerRadius="5"
+                  CornerRadius="{StaticResource SelectionRingCornerRadius}"
                   Padding="{TemplateBinding Padding}">
             <Grid>
               <ContentPresenter ContentSource="Header"
@@ -447,7 +500,7 @@
                   Background="{TemplateBinding Background}"
                   BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="5">
+                  CornerRadius="{StaticResource SelectionRingCornerRadius}">
             <ContentPresenter HorizontalAlignment="Center"
                               VerticalAlignment="Center"
                               Margin="{TemplateBinding Padding}" />
@@ -466,9 +519,81 @@
               <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-              <Setter Property="Opacity" Value="0.4" />
+              <Setter Property="Opacity" Value="{x:Static design:DesignTokens.ControlDisabledOpacity}" />
             </Trigger>
           </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- 常规勾选框（2026-11-08 视觉语言收敛 A15：原生 CheckBox 收编入主题体系——
+       复用勾选钮（SelectionButtonStyle）同一视觉语言：16×16 环 r5、悬停环换
+       Accent、选中 Accent 填充＋OnAccent 对勾；全部既有主题键，零新视觉。
+       语义仍是原生 CheckBox（IsChecked 两态、UIA Toggle）；W6 焦点视觉治理
+       同策略不画焦点框。消费者：多选选择器行（MultiItemPickerWindow）。 -->
+  <Style x:Key="ThemedCheckBoxStyle" TargetType="CheckBox">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="CheckBox">
+          <Grid Width="30" Height="30" Background="Transparent">
+            <Border x:Name="SelectionSurface"
+                    Width="16"
+                    Height="16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="Transparent"
+                    BorderBrush="{DynamicResource SecondaryTextBrush}"
+                    BorderThickness="1.5"
+                    CornerRadius="{StaticResource SelectionRingCornerRadius}" />
+            <Border x:Name="SelectionHoverRing"
+                    Width="16"
+                    Height="16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BorderBrush="{DynamicResource AccentBrush}"
+                    BorderThickness="1.5"
+                    CornerRadius="{StaticResource SelectionRingCornerRadius}"
+                    Opacity="0"
+                    IsHitTestVisible="False"
+                    views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}"
+                    views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                    views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+            <Border x:Name="SelectionSelectedFill"
+                    Width="16"
+                    Height="16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource AccentBrush}"
+                    CornerRadius="{StaticResource SelectionRingCornerRadius}"
+                    Opacity="0"
+                    IsHitTestVisible="False"
+                    views:FadeAnimation.IsActive="{Binding IsChecked, RelativeSource={RelativeSource TemplatedParent}}"
+                    views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                    views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}" />
+            <Path x:Name="SelectionCheck"
+                  Width="9"
+                  Height="7"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  Data="M1,3.5 L3.5,6 L8,1"
+                  Stroke="{DynamicResource OnAccentBrush}"
+                  StrokeThickness="1.5"
+                  StrokeStartLineCap="Round"
+                  StrokeEndLineCap="Round"
+                  StrokeLineJoin="Round"
+                  Stretch="Fill"
+                  Opacity="0"
+                  Visibility="Collapsed"
+                  IsHitTestVisible="False"
+                  views:FadeAnimation.IsActive="{Binding IsChecked, RelativeSource={RelativeSource TemplatedParent}}"
+                  views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                  views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.FadeVisibilityMs}"
+                  views:FadeAnimation.ManageVisibility="True" />
+          </Grid>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
@@ -500,7 +625,7 @@
                 <Border x:Name="ItemSurface"
                         Background="Transparent"
                         Padding="10,7"
-                        CornerRadius="4"
+                        CornerRadius="{StaticResource ControlCornerRadius}"
                         Margin="4,2">
                   <ContentPresenter />
                 </Border>
@@ -597,7 +722,7 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="CornerRadius" Value="{StaticResource SurfaceCornerRadius}" />
     <!-- 焦点视觉只保留文本输入控件（W6 焦点视觉治理，2026-11-03）：容器级
          IsKeyboardFocusWithin→Accent 描边触发器移除——分类改名编辑器持焦时
          标签不再整圈紫框，聚焦反馈由编辑器自身的 Themed 描边承载。 -->
@@ -878,7 +1003,7 @@
        增长（≤2 行/40px）。行距经 TextBlock.LineHeight/LineStackingStrategy 附加
        属性进 TextBoxView（Inherits=true），与显示行精确同行距、消除字体度量差
        ——只在编辑器样式本地设置，不得提升到容器级（防继承泄漏），值引用
-       CardTextLineHeight 单一资源（与正文编辑态/两处显示态同源，值不变仍为 20）。
+       CardTextLineHeight 单一资源（与正文编辑态/两处显示态同源，值不变仍为 19）。
        可见性由条目 IsEditingNote 驱动（状态挂条目，虚拟化回收不错乱），键位与
        失焦经窗口级路由事件挂接，与正文编辑器共用同一会话机器。 -->
   <Style x:Key="CardNoteEditorStyle" TargetType="TextBox">
@@ -1115,14 +1240,14 @@
   <!-- 卡片根容器：承载外距、分区起始于普通区的额外上距与悬停上浮（渲染位移），
        自身不携带 Effect，避免整棵子树进入 Effect 中间位图。 -->
   <Style x:Key="CardRootStyle" TargetType="Grid">
-    <Setter Property="Margin" Value="12,4" />
+    <Setter Property="Margin" Value="{StaticResource CardRootMargin}" />
     <Setter Property="views:LiftAnimation.IsActive"
             Value="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" />
     <Setter Property="views:LiftAnimation.AnimationsEnabled"
             Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}" />
     <Style.Triggers>
       <DataTrigger Binding="{Binding StartsNormalRegion}" Value="True">
-        <Setter Property="Margin" Value="12,10,12,4" />
+        <Setter Property="Margin" Value="{StaticResource CardRootBoundaryMargin}" />
       </DataTrigger>
     </Style.Triggers>
   </Style>
@@ -1182,7 +1307,7 @@
                     Background="Transparent"
                     BorderBrush="{DynamicResource SecondaryTextBrush}"
                     BorderThickness="1.5"
-                    CornerRadius="5" />
+                    CornerRadius="{StaticResource SelectionRingCornerRadius}" />
             <Border x:Name="SelectionHoverRing"
                     Width="16"
                     Height="16"
@@ -1190,7 +1315,7 @@
                     VerticalAlignment="Center"
                     BorderBrush="{DynamicResource AccentBrush}"
                     BorderThickness="1.5"
-                    CornerRadius="5"
+                    CornerRadius="{StaticResource SelectionRingCornerRadius}"
                     Opacity="0"
                     IsHitTestVisible="False"
                     views:FadeAnimation.IsActive="{Binding IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}"
@@ -1202,7 +1327,7 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Background="{DynamicResource AccentBrush}"
-                    CornerRadius="5"
+                    CornerRadius="{StaticResource SelectionRingCornerRadius}"
                     Opacity="0"
                     IsHitTestVisible="False"
                     views:FadeAnimation.IsActive="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}"
@@ -1610,7 +1735,7 @@
               <Setter TargetName="MenuItemSurface" Property="Background" Value="{DynamicResource HoverSurfaceBrush}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-              <Setter Property="Opacity" Value="0.45" />
+              <Setter Property="Opacity" Value="{x:Static design:DesignTokens.ControlDisabledOpacity}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -2058,7 +2183,7 @@
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsEnabled" Value="False">
-              <Setter TargetName="Surface" Property="Opacity" Value="0.5" />
+              <Setter TargetName="Surface" Property="Opacity" Value="{x:Static design:DesignTokens.ControlDisabledOpacity}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -2087,7 +2212,7 @@
           <Border x:Name="CardHoverRingLayer"
                   BorderBrush="{DynamicResource HoverBorderBrush}"
                   BorderThickness="1"
-                  CornerRadius="8"
+                  CornerRadius="{StaticResource SurfaceCornerRadius}"
                   Margin="-1"
                   Opacity="0"
                   IsHitTestVisible="False"
@@ -2105,7 +2230,7 @@
           <Border x:Name="CardSelectedRingLayer"
                   BorderBrush="{DynamicResource SelectedCardBorderBrush}"
                   BorderThickness="1"
-                  CornerRadius="8"
+                  CornerRadius="{StaticResource SurfaceCornerRadius}"
                   Margin="-1"
                   Opacity="0"
                   IsHitTestVisible="False"
@@ -2118,7 +2243,7 @@
           <Border x:Name="CardEditingRingLayer"
                   BorderBrush="{DynamicResource AccentBrush}"
                   BorderThickness="1"
-                  CornerRadius="8"
+                  CornerRadius="{StaticResource SurfaceCornerRadius}"
                   Margin="-1"
                   Opacity="0"
                   IsHitTestVisible="False"
@@ -2135,7 +2260,7 @@
                2026-10-12 起编辑器原位同格、置于本模板声明序末尾——见下方备注行
                Grid），行 1=内容视觉层；命中层与备注可点元素跨两行（备注行区域
                手势分区不变：左半无选择语义、右半 toggle/复制）。 -->
-          <Grid Margin="12" Background="Transparent">
+          <Grid Margin="{StaticResource CardPadding}" Background="Transparent">
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />
               <RowDefinition Height="*" />

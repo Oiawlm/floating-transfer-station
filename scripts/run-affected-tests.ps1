@@ -278,6 +278,7 @@ $interactionTestPrefixes = @{
     'BoardDragOverPerf'      = @('BoardDragOverPerf')
     'BoardEmptyState'        = @('BoardEmptyState')
     'BtnGridEvidence'        = @('Evidence')
+    'ButtonStates'           = @('ButtonStates')
     'CardAi'                 = @('CardAi')
     'CardAiEvidence'         = @('Evidence')
     'CardCaretAnchor'        = @('CardCaretAnchor')

@@ -129,8 +129,9 @@ internal partial class PluginActionTrialWindow : Window
     private void ShowTrialStatus(string message, bool isError)
     {
         TrialStatusText.Text = message;
+        // 成功反馈色键统一 AccentBrush（DeepSeek 状态先例为尊，2026-11-08 视觉语言收敛）。
         TrialStatusText.SetResourceReference(
             TextElement.ForegroundProperty,
-            isError ? "DangerBrush" : "SecondaryTextBrush");
+            isError ? "DangerBrush" : "AccentBrush");
     }
 }

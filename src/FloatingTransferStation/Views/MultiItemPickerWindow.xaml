@@ -110,8 +110,11 @@
                   <ColumnDefinition Width="*" />
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+                <!-- 2026-11-08 视觉语言收敛 A15：原生 Aero2 CheckBox 收编入主题体系
+                     （ThemedCheckBoxStyle——勾选钮同款环语言，既有主题键零新视觉）。 -->
                 <CheckBox Grid.Column="0"
                           VerticalAlignment="Center"
+                          Style="{StaticResource ThemedCheckBoxStyle}"
                           IsChecked="{Binding IsChecked, Mode=TwoWay}"
                           AutomationProperties.Name="{Binding Title}" />
                 <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">

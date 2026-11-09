@@ -122,19 +122,17 @@
                  TextWrapping="Wrap"
                  Visibility="Collapsed" />
 
-      <!-- 可折叠高级区（仅 Application）：参数/起始位置。 -->
+      <!-- 可折叠高级区（仅 Application）：参数/起始位置。「高级」折叠钮自 Aero2
+           原生外观收编入主题体系（2026-11-08 视觉语言收敛 A15：ThemedToggle
+           ButtonStyle＝ThemedActionButton 同族语言，既有键零新视觉）。 -->
         <StackPanel x:Name="AdvancedSection"
                     Grid.Row="3"
                     Visibility="Collapsed">
           <ToggleButton x:Name="AdvancedToggle"
                         Content="高级"
                         FontSize="12"
-                        Foreground="{DynamicResource SecondaryTextBrush}"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
+                        Style="{StaticResource ThemedToggleButtonStyle}"
                         HorizontalAlignment="Left"
-                        Padding="0,4,0,2"
                         Focusable="False" />
           <StackPanel x:Name="AdvancedPanel"
                       Visibility="{Binding IsChecked, ElementName=AdvancedToggle, Converter={StaticResource BooleanToVisibilityConverter}}"

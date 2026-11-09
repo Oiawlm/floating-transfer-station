@@ -13,7 +13,8 @@ public static class LiftAnimation
 {
     internal static readonly HandoffBehavior AnimationHandoffBehavior = HandoffBehavior.SnapshotAndReplace;
     internal static readonly TimeSpan LiftDuration = TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs);
-    public const double LiftedOffsetPx = -1d;
+    /// <summary>数值唯一来源=DesignTokens.CardHoverLiftPx（2026-11-08 视觉语言收敛）。</summary>
+    public const double LiftedOffsetPx = DesignTokens.CardHoverLiftPx;
 
     public static readonly DependencyProperty IsActiveProperty = DependencyProperty.RegisterAttached(
         "IsActive",
@@ -42,7 +43,10 @@ public static class LiftAnimation
     internal static DoubleAnimation CreateLiftAnimation(double from, double to) =>
         new(from, to, LiftDuration)
         {
-            EasingFunction = to < from ? FadeAnimation.ExitEasing : FadeAnimation.EnterEasing,
+            // 缓动按语义不按数值方向（2026-11-08 视觉语言收敛）：目的地=抬升态→
+            // EnterEasing 减速，回落常态→ExitEasing 加速。位移向负值，原「to<from」
+            // 数值判据把抬升命中加速曲线，与类注释/设计规范 §六宣称相反。
+            EasingFunction = to == LiftedOffsetPx ? FadeAnimation.EnterEasing : FadeAnimation.ExitEasing,
             FillBehavior = FillBehavior.Stop,
         };
 
