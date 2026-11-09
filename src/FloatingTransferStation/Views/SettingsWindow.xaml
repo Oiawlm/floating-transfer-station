@@ -475,7 +475,13 @@
                    先例），关闭态说明行切为引导句。 -->
               <Border x:Name="SubgroupOrderCard" Style="{StaticResource SettingsCardStyle}">
                 <StackPanel>
-                  <TextBlock Text="子分组顺序" Style="{StaticResource SectionTitleStyle}" />
+                  <TextBlock Text="子分组顺序" Style="{StaticResource SectionTitleStyle}">
+                    <TextBlock.ToolTip>
+                      <ToolTip>
+                        <TextBlock Text="顺序只影响分组按钮与分组显示，不改卡片归属；重置窗口设置不会清除。拖动把手或用上移/下移按钮，Esc 取消拖动。" TextWrapping="Wrap" MaxWidth="320" />
+                      </ToolTip>
+                    </TextBlock.ToolTip>
+                  </TextBlock>
                   <TextBlock x:Name="SubgroupOrderTitleCustomerOriginal" Style="{StaticResource RowCaptionStyle}" Margin="0,2,0,0" />
                   <Grid ClipToBounds="True">
                     <StackPanel x:Name="SubgroupOrderListCustomerOriginal" />
@@ -500,8 +506,7 @@
                   </Grid>
                   <TextBlock x:Name="SubgroupOrderNote"
                              Style="{StaticResource NoteCaptionStyle}"
-                             Text="调整每个分类内四个分组的显示顺序。"
-                             ToolTip="顺序只影响分组按钮与分组显示，不改卡片归属；重置窗口设置不会清除。拖动把手或用上移/下移按钮，Esc 取消拖动。" />
+                             Text="调整每个分类内四个分组的显示顺序。" />
                 </StackPanel>
               </Border>
               <Border Style="{StaticResource SettingsCardStyle}">
@@ -798,7 +803,7 @@
                 <StackPanel>
                   <TextBlock Text="实验性" Style="{StaticResource SectionTitleStyle}" />
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="以下功能仍在打磨：Markdown 阅读视图与图片拖出为文件默认开启，分类内子分组与其「全部」按钮默认关闭；调整立即生效并自动保存。" />
+                             Text="以下能力仍在打磨，按成熟度各定默认态（各项默认值与打磨原因见行悬停说明）；调整立即生效并自动保存。" />
                   <Grid Background="Transparent">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="*" />
@@ -834,7 +839,13 @@
                                Text="分类内子分组"
                                Style="{StaticResource RowCaptionStyle}"
                                Margin="0,0,8,0"
-                               VerticalAlignment="Center" />
+                               VerticalAlignment="Center">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="实验性功能，默认关闭：交互仍在打磨。开启后内容分类顶部出现分组按钮；推荐先在按钮轨拖卡归组，再切视觉分组浏览。关闭或切换形态不影响卡片与归属。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
                     <ComboBox x:Name="SubgroupModeComboBox"
                               Grid.Column="1"
                               Style="{StaticResource ThemedComboBoxStyle}"
@@ -843,8 +854,7 @@
                               SelectionChanged="SubgroupModeComboBox_SelectionChanged" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="按钮轨：悬停筛选、单击设收集落点、拖卡归组；视觉分组：同组相邻显示。"
-                             ToolTip="实验性功能，默认关闭：交互仍在打磨。开启后内容分类顶部出现分组按钮；推荐先在按钮轨拖卡归组，再切视觉分组浏览。关闭或切换形态不影响卡片与归属。" />
+                             Text="按钮轨：悬停筛选、单击设收集落点、拖卡归组；视觉分组：同组相邻显示。" />
                   <!-- 实验性第三项（2026-11-06，契约 #58；2026-11-07 起默认开启，
                        存量经一次性偏好迁移统一收敛）：图片拖出为文件——门控
                        既有拖出能力（关闭＝对外剥离文件/位图形态，窗内拖放与
@@ -1188,7 +1198,7 @@
                                Style="{StaticResource RowCaptionStyle}">
                       <TextBlock.ToolTip>
                         <ToolTip>
-                          <TextBlock Text="开启后新收集的图片会自动识别命名；关闭后不再发送任何图片。" TextWrapping="Wrap" MaxWidth="320" />
+                          <TextBlock Text="复用上方 DeepSeek API Key；卡片悬停可见名称，拖出即为该文件名；识别失败自动跳过，不会重试。" TextWrapping="Wrap" MaxWidth="320" />
                         </ToolTip>
                       </TextBlock.ToolTip>
                     </TextBlock>
@@ -1200,7 +1210,7 @@
                               Unchecked="AiImageNamingToggle_Unchecked" />
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
-                             Text="开启后，新收集的图片会发送至 DeepSeek 识别内容并自动命名（复用上方 DeepSeek API Key），卡片悬停可见名称，拖出即为该文件名；识别失败自动跳过，不会重试。" />
+                             Text="开启后，新收集的图片会发送至 DeepSeek 识别内容并自动命名；关闭后不再发送任何图片。" />
                 </StackPanel>
               </Border>
             </StackPanel>
