@@ -29,7 +29,6 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _hasEnabledPluginActions;
     private IReadOnlyList<SubgroupChipViewModel> _subgroupChips = Array.Empty<SubgroupChipViewModel>();
     private IReadOnlyList<object> _subgroupRailItems = Array.Empty<object>();
-    private bool _subgroupAllChipEnabled;
     private readonly Dictionary<BoardCategory, IReadOnlyList<int>> _subgroupOrders = new();
 
     public MainWindowViewModel(
@@ -95,38 +94,22 @@ public sealed class MainWindowViewModel : ObservableObject
         private set => SetProperty(ref _subgroupChips, value);
     }
 
-    /// <summary>「全部」伪 chip 单实例（契约 #57 修订）：跨分类复用、无槽身份，
-    /// 仅承载全量过滤激活态；只在开关开启时进入 <see cref="SubgroupRailItems"/> 投影。</summary>
+    /// <summary>「全部」伪 chip 单实例（契约 #60）：跨分类复用、无槽身份，
+    /// 仅承载全量过滤激活态；结构性恒居 <see cref="SubgroupRailItems"/> 投影首枚。</summary>
     public SubgroupAllChipViewModel SubgroupAllChip { get; } = new();
 
     /// <summary>
-    /// 轨渲染投影（契约 #57 修订）：槽 chip 按激活分类槽序；实验开关开启时「全部」
-    /// 伪 chip 恒居首（不参与槽序）。重建单点＝<see cref="RebuildSubgroupRailItems"/>
-    /// （ctor/槽序重排/开关翻转），沿「重建数组单次通知」惯例；<see cref="SubgroupChips"/>
+    /// 轨渲染投影（契约 #60）：「全部」伪 chip 恒居首（不参与槽序）＋槽 chip 按
+    /// 激活分类槽序。重建单点＝<see cref="RebuildSubgroupRailItems"/>
+    /// （ctor/槽序重排），沿「重建数组单次通知」惯例；<see cref="SubgroupChips"/>
     /// 与其槽序校验（Count==SlotCount）零改——槽序只辖槽 chip。
     /// </summary>
     public IReadOnlyList<object> SubgroupRailItems => _subgroupRailItems;
 
-    /// <summary>轨 UniformGrid 列数（契约 #57 修订）：SlotCount＋开关开启时的「全部」
-    /// 首列（4→5 等分，每 chip ≈57 DIP）；轨道高/面板宽零变化（不为内容加宽结构，
+    /// <summary>轨 UniformGrid 列数（契约 #60）：恒 5 列——「全部」恒居首
+    /// （5 等分，每 chip ≈57 DIP）；轨道高/面板宽零变化（不为内容加宽结构，
     /// #54/#16 精神）。</summary>
-    public int SubgroupRailColumnCount =>
-        SubgroupCatalog.SlotCount + (_subgroupAllChipEnabled ? 1 : 0);
-
-    /// <summary>子分组「全部」伪 chip 实验开关（契约 #57 修订，默认关）：由
-    /// ApplyPreferences 唯一管线喂值＋窗口构造段镜像（#58 教训）；翻转时重建轨投影
-    /// 与列数。关→开无过滤语义；开→关的过滤清理由窗口层管线承担（照模式切换先例）。</summary>
-    public bool SubgroupAllChipEnabled
-    {
-        get => _subgroupAllChipEnabled;
-        set
-        {
-            if (SetProperty(ref _subgroupAllChipEnabled, value))
-            {
-                RebuildSubgroupRailItems();
-            }
-        }
-    }
+    public int SubgroupRailColumnCount => SubgroupCatalog.SlotCount + 1;
 
     /// <summary>
     /// 子分组呈现模式（契约 #57 三态，默认 Off）：由 ApplyPreferences 唯一管线
@@ -238,15 +221,12 @@ public sealed class MainWindowViewModel : ObservableObject
         ApplyDefaultSubgroupSelection();
     }
 
-    /// <summary>轨投影重建单点（契约 #57 修订）：开关开启＝「全部」伪 chip 恒居首＋
-    /// 槽序 chips，关闭＝仅槽序 chips；数组重建后单次通知投影与列数。</summary>
+    /// <summary>轨投影重建单点（契约 #60）：「全部」伪 chip 恒居首＋槽序 chips；
+    /// 数组重建后单次通知投影（列数恒 5，无需通知）。</summary>
     private void RebuildSubgroupRailItems()
     {
-        _subgroupRailItems = (_subgroupAllChipEnabled
-            ? new object[] { SubgroupAllChip }.Concat(SubgroupChips)
-            : SubgroupChips.Cast<object>()).ToArray();
+        _subgroupRailItems = new object[] { SubgroupAllChip }.Concat(SubgroupChips).ToArray();
         OnPropertyChanged(nameof(SubgroupRailItems));
-        OnPropertyChanged(nameof(SubgroupRailColumnCount));
     }
 
     public CategoryViewModel DefaultCapturePanel
