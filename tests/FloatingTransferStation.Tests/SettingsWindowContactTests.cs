@@ -32,7 +32,9 @@ namespace FloatingTransferStation.Tests;
 /// 防双影淡出）、关层自当下态原路飞回源位置且收回编排「对齐落位」（卡片全程
 /// 可见、缩略图持隐至 95% 回程后同窗线性换手——阈值断言 A-E 锁定，消除原位
 /// 闪现），单一完成点收口层生命周期；退化路径纯淡出（禁瞬时恒等）；动效关＝
-/// 对象定格终态。
+/// 对象定格终态。岛式码面（2026-11-08）：双宿主（缩略图模板与放大层容器）拆
+/// 阴影层＋码面两子层——阴影单点复用/派生共享 CardShadowLayerStyle、随主题
+/// 字典活切换，码面双主题恒白（白底可扫性主题不变量升格为岛式规范）。
 /// </summary>
 [TestClass]
 public sealed class SettingsWindowContactTests
@@ -185,6 +187,132 @@ public sealed class SettingsWindowContactTests
                 "放大微信二维码",
                 thumbButton.GetValue(AutomationProperties.NameProperty),
                 "缩略图按钮必须携带 UIA 名称。");
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QrIsland_OverlayCardCarriesThemeShadowLayer()
+    {
+        // 岛式码面（2026-11-08）：放大层容器由 Border 改 Grid 后拆阴影层＋内容面
+        // 两子层——阴影单点复用共享 CardShadowLayerStyle（CardBrush 底＋
+        // CardCornerRadius＋CardShadowEffect＋不参与命中），高程隔离在文字子树
+        // 之外；内容面与 Grid 容器零 Effect（Effect 关 ClearType 守卫）。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+
+            var container = (Grid)settings.FindName("WeChatQrOverlayCard")!;
+            var shadowLayer = (Border)settings.FindName("WeChatQrCardShadowLayer")!;
+            var face = (Border)settings.FindName("WeChatQrCardFace")!;
+            Assert.AreSame(
+                settings.FindResource("CardShadowEffect"),
+                shadowLayer.Effect,
+                "放大层阴影层必须解析共享 CardShadowEffect（主题字典键实例）。");
+            Assert.AreEqual(
+                (CornerRadius)settings.FindResource("CardCornerRadius"),
+                shadowLayer.CornerRadius,
+                "阴影层圆角＝CardCornerRadius token（卡片档）。");
+            Assert.IsFalse(
+                shadowLayer.IsHitTestVisible,
+                "阴影层不参与命中（CardShadowLayerStyle 单点语义）。");
+            Assert.IsNull(face.Effect, "内容面不得携带 Effect（Effect 关 ClearType）。");
+            Assert.IsNull(container.Effect, "Grid 容器不得携带 Effect（Effect 关 ClearType）。");
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QrIsland_CodeFacesStayWhiteAndThumbCarriesShadowInBothThemes()
+    {
+        // 岛式码面（2026-11-08）：缩略图模板根 Grid 插入派生阴影层
+        //（WeChatQrThumbShadowLayerStyle＝CardShadowLayerStyle 派生，仅覆写白底
+        // 与控件档圆角）；码面（缩略图 Surface 与放大卡）双主题恒白——白底可扫
+        // 性是主题不变量而非调色板颜色。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        try
+        {
+            var settings = OpenSettings(window);
+            var thumbButton = (Button)settings.FindName("WeChatQrButton")!;
+            var largeCard = (Border)settings.FindName("WeChatQrLargeCard")!;
+            CompleteLayout(settings);
+
+            foreach (var theme in new[] { DesignTheme.Dark, DesignTheme.Light })
+            {
+                settings.ApplyTheme(theme);
+                CompleteLayout(settings);
+
+                var thumbShadow = (Border)thumbButton.Template.FindName(
+                    "WeChatQrThumbShadowLayer", thumbButton)!;
+                Assert.IsNotNull(thumbShadow, "缩略图模板必须携带岛式阴影层。");
+                Assert.AreSame(
+                    settings.FindResource("CardShadowEffect"),
+                    thumbShadow.Effect,
+                    "缩略图阴影层必须解析共享 CardShadowEffect。");
+                var surface = (Border)thumbButton.Template.FindName("Surface", thumbButton)!;
+                Assert.AreEqual(Colors.White, ((SolidColorBrush)surface.Background).Color,
+                    "缩略图码面双主题恒白。");
+                Assert.AreEqual(Colors.White, ((SolidColorBrush)largeCard.Background).Color,
+                    "放大卡码面双主题恒白。");
+            }
+        }
+        finally
+        {
+            CloseAll(window);
+        }
+    }
+
+    [STATestMethod]
+    public void QrIsland_ShadowFollowsLiveThemeSwitch()
+    {
+        // 岛式阴影随主题字典整本换装（先例 WindowShell_OpaqueFallbackFollowsLiveThemeSwitch）：
+        // 阴影层 Effect 是 DynamicResource 键引用，活切换后实例必须跟随新字典
+        //（深色 #000000·0.35 / 浅色 #1D1D1F·0.12 的高程差异由此承载，零新机制）。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore);
+        try
+        {
+            var settings = OpenSettings(window);
+            CompleteLayout(settings);
+            var overlayShadow = (Border)settings.FindName("WeChatQrCardShadowLayer")!;
+            var thumbButton = (Button)settings.FindName("WeChatQrButton")!;
+            var thumbShadow = (Border)thumbButton.Template.FindName(
+                "WeChatQrThumbShadowLayer", thumbButton)!;
+
+            settings.ApplyTheme(DesignTheme.Dark);
+            CompleteLayout(settings);
+            Assert.AreSame(
+                settings.FindResource("CardShadowEffect"),
+                overlayShadow.Effect,
+                "深色下放大层阴影层必须跟随新字典（不定格旧主题实例）。");
+            Assert.AreSame(
+                settings.FindResource("CardShadowEffect"),
+                thumbShadow.Effect,
+                "深色下缩略图阴影层必须跟随新字典。");
+
+            settings.ApplyTheme(DesignTheme.Light);
+            CompleteLayout(settings);
+            Assert.AreSame(
+                settings.FindResource("CardShadowEffect"),
+                overlayShadow.Effect,
+                "浅色下放大层阴影层必须跟随新字典。");
+            Assert.AreSame(
+                settings.FindResource("CardShadowEffect"),
+                thumbShadow.Effect,
+                "浅色下缩略图阴影层必须跟随新字典。");
         }
         finally
         {
@@ -1173,7 +1301,7 @@ public sealed class SettingsWindowContactTests
         {
             var settings = OpenSettings(window);
             CompleteLayout(settings);
-            var card = (Border)settings.FindName("WeChatQrOverlayCard")!;
+            var card = (Grid)settings.FindName("WeChatQrOverlayCard")!;
             var button = (Button)settings.FindName("WeChatQrButton")!;
             var (scale, translate) = QrZoomTransforms(settings);
 
@@ -1453,7 +1581,7 @@ public sealed class SettingsWindowContactTests
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
             var scrim = (Border)settings.FindName("WeChatQrScrim")!;
             var button = (Button)settings.FindName("WeChatQrButton")!;
-            var card = (Border)settings.FindName("WeChatQrOverlayCard")!;
+            var card = (Grid)settings.FindName("WeChatQrOverlayCard")!;
             var (scale, _) = QrZoomTransforms(settings);
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
@@ -1516,7 +1644,7 @@ public sealed class SettingsWindowContactTests
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
             var scrim = (Border)settings.FindName("WeChatQrScrim")!;
             var button = (Button)settings.FindName("WeChatQrButton")!;
-            var card = (Border)settings.FindName("WeChatQrOverlayCard")!;
+            var card = (Grid)settings.FindName("WeChatQrOverlayCard")!;
             var (scale, _) = QrZoomTransforms(settings);
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
@@ -1577,7 +1705,7 @@ public sealed class SettingsWindowContactTests
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
             var scrim = (Border)settings.FindName("WeChatQrScrim")!;
             var button = (Button)settings.FindName("WeChatQrButton")!;
-            var card = (Border)settings.FindName("WeChatQrOverlayCard")!;
+            var card = (Grid)settings.FindName("WeChatQrOverlayCard")!;
             var (scale, _) = QrZoomTransforms(settings);
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
@@ -1722,7 +1850,7 @@ public sealed class SettingsWindowContactTests
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
             var scrim = (Border)settings.FindName("WeChatQrScrim")!;
             var button = (Button)settings.FindName("WeChatQrButton")!;
-            var card = (Border)settings.FindName("WeChatQrOverlayCard")!;
+            var card = (Grid)settings.FindName("WeChatQrOverlayCard")!;
             var (scale, _) = QrZoomTransforms(settings);
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
@@ -1796,11 +1924,48 @@ public sealed class SettingsWindowContactTests
         double MaskOpacity,
         double CardOpacity);
 
-    /// <summary>收回编排多属性确定性采样：Render 优先级 10ms DispatcherTimer 在
-    /// PushFrame 泵内同步采四属性（同 ZoomCompletes 口径、不真起渲染帧循环）；
-    /// 前置采样（收回启动前 ScaleX 恒等基值）与尾随采样（收回完成复位后的恒等
-    /// 态——p 反解为 0 而终值 thumb=1/card=0 属终态卫生而非编排途中）均剥除，
-    /// 同 SampleScaleDuringExit 的前置剥除口径。时间轴不经挂钟——由容器进度反解
+    /// <summary>泵内高频采样帧（采样基建单点，2026-11-09 根因修复，Issue #335）：
+    /// 采样密度瓶颈不在「被动 vs 主动」，而在系统计时器分辨率——DispatcherTimer
+    /// 到期与 WPF 动画时钟的帧推进（无合成器的测试进程挂在系统计时器管线）同受
+    /// 默认 ~15.6ms 粒度限制，CI 负载叠加到期投递延迟后被动 10ms tick 在 260ms
+    /// 动画窗内仅 3-8 个有效样本（PR #339 CI 两笔采样数门槛红）。本帧内
+    /// timeBeginPeriod(1) 把进程计时器分辨率提至 1ms＋采样间隔降至 2ms——
+    /// 样本密度≈动画帧密度（约 10 倍提升，CI 负载下仍有数量级裕量）；计时器
+    /// 采样保留（每 tick 之间 dispatcher 有空档处理渲染/时钟管线，动画帧照常
+    /// 推进——忙循环回调链会持续占用 Render 队列、饿死帧推进使时钟冻结，
+    /// 本机实证收回全程读到恒等快照值）。进程级粒度提升随 timeEndPeriod 复原，
+    /// 不影响用户可见动画时长与效果。</summary>
+    private static void PumpSamplingFrame(Dispatcher dispatcher, int durationMs, Action sample)
+    {
+        timeBeginPeriod(1);
+        try
+        {
+            var sampler = new DispatcherTimer(DispatcherPriority.Render, dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(2)
+            };
+            sampler.Tick += (_, _) => sample();
+            sampler.Start();
+            PumpFor(dispatcher, TimeSpan.FromMilliseconds(durationMs));
+            sampler.Stop();
+        }
+        finally
+        {
+            timeEndPeriod(1);
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("winmm.dll", SetLastError = true)]
+    private static extern uint timeBeginPeriod(uint period);
+
+    [System.Runtime.InteropServices.DllImport("winmm.dll", SetLastError = true)]
+    private static extern uint timeEndPeriod(uint period);
+
+    /// <summary>收回编排多属性确定性采样：泵内高频采样帧同步采四属性
+    ///（PumpSamplingFrame 口径，2026-11-09 密度根因修复）；前置采样
+    ///（收回启动前 ScaleX 恒等基值）与尾随采样（收回完成复位后的恒等态——
+    /// p 反解为 0 而终值 thumb=1/card=0 属终态卫生而非编排途中）均剥除，同
+    /// SampleScaleDuringExit 的前置剥除口径。时间轴不经挂钟——由容器进度反解
     ///（QrExitProgressToMs）。</summary>
     private static List<QrExitChoreographySample> SampleQrExitChoreography(
         SettingsWindow settings,
@@ -1811,15 +1976,11 @@ public sealed class SettingsWindowContactTests
         var thumb = (System.Windows.UIElement)settings.FindName("WeChatQrButton")!;
         var card = (System.Windows.UIElement)settings.FindName("WeChatQrOverlayCard")!;
         var samples = new List<QrExitChoreographySample>();
-        var sampler = new DispatcherTimer(DispatcherPriority.Render, settings.Dispatcher)
-        {
-            Interval = TimeSpan.FromMilliseconds(10)
-        };
-        sampler.Tick += (_, _) => samples.Add(new QrExitChoreographySample(
-            scale.ScaleX, thumb.Opacity, mask.Opacity, card.Opacity));
-        sampler.Start();
-        PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(pumpMs));
-        sampler.Stop();
+        PumpSamplingFrame(
+            settings.Dispatcher,
+            pumpMs,
+            () => samples.Add(new QrExitChoreographySample(
+                scale.ScaleX, thumb.Opacity, mask.Opacity, card.Opacity)));
         while (samples.Count > 0 && samples[0].ScaleX >= 0.999d)
         {
             samples.RemoveAt(0);
@@ -1912,28 +2073,22 @@ public sealed class SettingsWindowContactTests
     /// 顺序冻结）。</summary>
     private static (ScaleTransform Scale, TranslateTransform Translate) QrZoomTransforms(SettingsWindow settings)
     {
-        var card = (Border)settings.FindName("WeChatQrOverlayCard")!;
+        var card = (Grid)settings.FindName("WeChatQrOverlayCard")!;
         var group = (TransformGroup)card.RenderTransform!;
         return ((ScaleTransform)group.Children[0], (TranslateTransform)group.Children[1]);
     }
 
-    /// <summary>收回途中 ScaleX 采样：Render 优先级 Timer 每 10ms 采一次、泵
-    /// pumpMs 后停（收回动画飞行段的当下插值态捕获，同 ZoomCompletes 口径）；
-    /// 收回启动后首个时钟 tick 之前读到的是恒等基值，先剥掉这类前置采样。</summary>
+    /// <summary>收回途中 ScaleX 采样：泵内高频采样帧逐次读 ScaleX（收回动画
+    /// 飞行段的当下插值态捕获；PumpSamplingFrame 口径，2026-11-09 密度根因
+    /// 修复——同根因单点）；收回启动后首帧推进前读到的是恒等基值，先剥掉
+    /// 这类前置采样。</summary>
     private static List<double> SampleScaleDuringExit(
         SettingsWindow settings,
         ScaleTransform scale,
         int pumpMs)
     {
         var samples = new List<double>();
-        var sampler = new DispatcherTimer(DispatcherPriority.Render, settings.Dispatcher)
-        {
-            Interval = TimeSpan.FromMilliseconds(10)
-        };
-        sampler.Tick += (_, _) => samples.Add(scale.ScaleX);
-        sampler.Start();
-        PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(pumpMs));
-        sampler.Stop();
+        PumpSamplingFrame(settings.Dispatcher, pumpMs, () => samples.Add(scale.ScaleX));
         while (samples.Count > 0 && samples[0] >= 0.999d)
         {
             samples.RemoveAt(0);

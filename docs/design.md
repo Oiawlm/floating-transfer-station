@@ -58,7 +58,7 @@
 
 深色主题的卡片阴影为 `#000000`、透明度 0.35（浅色为 `#1D1D1F`、0.12）。
 
-**配色豁免清单**（有意不进主题键，登记于 §六）：二维码白底（扫码可扫性是主题不变量而非调色板颜色——放大卡与缩略图两处；深色岛式方案属本批 f1、未落轨前按现状豁免）；Mica 色调 `WindowShellTintHex/DarkHex`（材质层，非表面色）；IconTool 预览底色（独立工具非主题面）；结构性 `Transparent`（命中层/占位底，非颜色语义）。代码侧画刷一律 `DynamicResource`/`SetResourceReference` 活解析（契约 #28），禁止 `FindResource` 快照。
+**配色豁免清单**（有意不进主题键，登记于 §六）：二维码白底码面（扫码可扫性是主题不变量而非调色板颜色——放大层与页脚缩略两宿主自 2026-11-09 f1 落轨起为**岛式呈现**：白底码面＋共享卡片阴影层（`CardShadowLayerStyle` 派生）以主题高程把码面「岛」抬出暗背景，浅深两主题均带高程、码面恒白；圆角走 ControlCornerRadius/CardCornerRadius 资源）；Mica 色调 `WindowShellTintHex/DarkHex`（材质层，非表面色）；IconTool 预览底色（独立工具非主题面）；结构性 `Transparent`（命中层/占位底，非颜色语义）。代码侧画刷一律 `DynamicResource`/`SetResourceReference` 活解析（契约 #28），禁止 `FindResource` 快照。
 
 ## 二、动效全景（时长、缓动与编排）
 
@@ -220,7 +220,7 @@
 
 | 项 | 内容 | 依据 |
 |---|---|---|
-| 配色豁免 | QR 白底两处、Mica tint、IconTool 预览底色、结构性 Transparent | §一；QR 深色岛式属 f1（未落轨，现状豁免） |
+| 配色豁免 | QR 白底码面（f1 落轨后岛式：主题阴影高程＋恒白码面，2026-11-09 实况）、Mica tint、IconTool 预览底色、结构性 Transparent | §一配色豁免清单 |
 | 圆角派生 | 胶囊/线状/内层−描边三类派生值与头部表面 11、滑块 2 | §四派生规则 |
 | 行为计时器 | 意图窗 60ms、收起驻留 250ms、状态 4s、反馈复位 1.6s、AI 旋转 1.2s、失败闪烁 1/0.2、PopupAnimation=Fade（系统）、拖拽线性归位、瓦片落位 0.8→1.0 幅值 | 时序编排/场景值非视觉档 |
 | 字号/图标尺寸 | 图标字形 28/36/16、瓦片勾选钮图标 16（脱离 14.5 规范已注记）、瓦片名 LineHeight 16 | 图标尺寸独立于文本字号档 |
