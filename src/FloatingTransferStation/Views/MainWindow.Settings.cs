@@ -263,13 +263,11 @@ public partial class MainWindow : Window, ISettingsHost
         settings.Show();
     }
 
-    /// <summary>立即应用偏好（主题/界面字体/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/AI 整理开关/AI 识图命名开关/启动·自动发现/启动器列数策略/记录 Markdown 阅读视图/分类内子分组/子分组「全部」按钮/图片拖出为文件）并异步原子持久化；持久化失败经状态条提示。</summary>
+    /// <summary>立即应用偏好（主题/界面字体/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/AI 整理开关/AI 识图命名开关/启动·自动发现/启动器列数策略/记录 Markdown 阅读视图/分类内子分组/图片拖出为文件）并异步原子持久化；持久化失败经状态条提示。</summary>
     public void ApplyPreferences(AppPreferences preferences)
     {
-        // 开关翻转基准在整体换基前捕获：false→true 翻转触发存量未命名图片补扫；
-        // true→false 翻转触发「全部」伪 chip 全量过滤清理（零残留）。
+        // 开关翻转基准在整体换基前捕获：false→true 翻转触发存量未命名图片补扫。
         var aiImageNamingWasEnabled = _preferences.AiImageNamingEnabled;
-        var subgroupAllChipWasEnabled = _preferences.SubgroupAllChipEnabled;
         _preferences = preferences;
         ApplyThemePreference(preferences.ThemeMode);
         ApplyInterfaceFontPreference(preferences.InterfaceFont);
@@ -292,7 +290,6 @@ public partial class MainWindow : Window, ISettingsHost
         }
 
         ApplySubgroupDisplayPreference(preferences.SubgroupDisplay);
-        ApplySubgroupAllChipPreference(preferences.SubgroupAllChipEnabled, subgroupAllChipWasEnabled);
         ApplyReviewMarkdownViewPreference();
         ApplyLauncherDiscoveryPreference(preferences);
         ApplyLauncherColumnStrategy();
@@ -318,21 +315,6 @@ public partial class MainWindow : Window, ISettingsHost
         }
 
         UpdateGroupedViewGuidance();
-    }
-
-    /// <summary>
-    /// 子分组「全部」伪 chip 开关下发（契约 #57 修订，ApplyPreferences 唯一管线的
-    /// 一部分）：开→关时若全量过滤激活先清（零残留，照模式切换先例）；关→开无
-    /// 过滤语义（伪 chip 恒居首出现即可悬停）；开关值经 VM 重建轨投影与列数。
-    /// </summary>
-    private void ApplySubgroupAllChipPreference(bool enabled, bool wasEnabled)
-    {
-        if (wasEnabled && !enabled)
-        {
-            ClearSubgroupFilter(reapplyFilter: true);
-        }
-
-        _viewModel.SubgroupAllChipEnabled = enabled;
     }
 
     /// <summary>GroupedView 进入分区：对两个内容桶分类逐个尝试稳定分区（已聚簇的分类

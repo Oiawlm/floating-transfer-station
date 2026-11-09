@@ -18,11 +18,10 @@ namespace FloatingTransferStation.Tests;
 /// <summary>
 /// 分类内子分组（实验性，契约 #57）窗口级回归：Off 等价、形态①按钮轨（渲染/
 /// 悬停过滤＋守卫链/单击设默认环/互斥/改名/拖卡归属/过滤态行为）、「全部」伪
-/// chip 聚合视图（契约 #57 修订：开关默认关/恒居首五列/悬停全量/粘性与四路径
-/// 退出/搜索压倒/禁令继承/空态走 BoardEmptyState/单击无操作/不参与槽序与归属/
-/// 开关关闭清过滤/GroupedView 与 Off 零呈现）、形态②视觉分组（进入分区/边界
-/// 复用 divider 宿主/组头/置顶不分组/纯重排）、模式切换零残留、撤销不回归与
-/// 双主题证据产出。
+/// chip 聚合视图（契约 #60：结构性恒在恒居首五列/悬停全量/粘性与四路径退出/
+/// 搜索压倒/禁令继承/空态走 BoardEmptyState/单击无操作/不参与槽序与归属/
+/// GroupedView 与 Off 零呈现）、形态②视觉分组（进入分区/边界复用 divider 宿主/
+/// 组头/置顶不分组/纯重排）、模式切换零残留、撤销不回归与双主题证据产出。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
@@ -36,8 +35,7 @@ public sealed partial class MainWindowInteractionTests
         TestDirectory directory,
         BoardService board,
         SubgroupDisplayMode mode,
-        WindowSettings? settings = null,
-        bool subgroupAllChipEnabled = false)
+        WindowSettings? settings = null)
     {
         var paths = AppPaths.ForTests(directory.Root);
         var store = new LocalStore(paths, new AtomicTextWriter());
@@ -47,11 +45,7 @@ public sealed partial class MainWindowInteractionTests
             settings ?? WindowSettings.Default,
             new DefaultCaptureCategoryState(),
             new ImageNormalizer(store.ImagesDirectory),
-            preferences: AppPreferences.Default with
-            {
-                SubgroupDisplay = mode,
-                SubgroupAllChipEnabled = subgroupAllChipEnabled
-            });
+            preferences: AppPreferences.Default with { SubgroupDisplay = mode });
     }
 
     private static Border FindSubgroupRail(MainWindow window)
@@ -1913,7 +1907,7 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
-    // ---- 「全部」伪 chip（契约 #57 修订，实验开关默认关）：聚合视图窗口级回归 ----
+    // ---- 「全部」伪 chip（契约 #60，结构性恒在——实验开关已删）：聚合视图窗口级回归 ----
 
     /// <summary>伪 chip 宿主 Border 判别照 FindSubgroupChip 先例：模板内层共享
     /// DataContext，只有外层宿主 Border 带 Tag（伪 chip 身份＝目录常量「全部」，
@@ -1935,7 +1929,7 @@ public sealed partial class MainWindowInteractionTests
         FindDescendants<UniformGrid>(FindSubgroupRail(window)).Single();
 
     [STATestMethod]
-    public void Subgroup_AllChipHiddenByDefaultAndRailStaysFourColumns()
+    public void Subgroup_AllChipAlwaysFirstAsFifthColumnByDefault()
     {
         using var directory = new TestDirectory();
         var board = new BoardService();
@@ -1949,42 +1943,7 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
 
-            Assert.IsFalse(viewModel.SubgroupAllChipEnabled, "「全部」伪 chip 实验开关默认关。");
-            Assert.AreEqual(4, viewModel.SubgroupRailItems.Count, "轨投影＝4 槽 chip（现状逐值）。");
-            Assert.IsTrue(
-                viewModel.SubgroupRailItems.All(item => item is SubgroupChipViewModel),
-                "默认无伪 chip 进入投影。");
-            Assert.AreEqual(4, viewModel.SubgroupRailColumnCount, "列数投影保持 4。");
-            Assert.AreEqual(4, FindSubgroupRailGrid(window).Columns, "UniformGrid 四列（现状逐值）。");
-            Assert.AreEqual(4, viewModel.SubgroupChips.Count, "槽 chip 集不受开关影响。");
-        }
-        finally
-        {
-            CloseWindow(window);
-        }
-    }
-
-    [STATestMethod]
-    public void Subgroup_AllChipAppearsFirstAsFifthColumnWhenEnabled()
-    {
-        using var directory = new TestDirectory();
-        var board = new BoardService();
-        board.AddText("内容", BoardCategory.Inbox);
-        var window = CreateSubgroupWindow(
-            directory,
-            board,
-            SubgroupDisplayMode.ChipRail,
-            subgroupAllChipEnabled: true);
-
-        try
-        {
-            window.Show();
-            ExpandCategory(window, BoardCategory.Inbox);
-            CompleteLayout(window);
-            var viewModel = (MainWindowViewModel)window.DataContext;
-
-            Assert.IsTrue(viewModel.SubgroupAllChipEnabled);
-            Assert.AreEqual(5, viewModel.SubgroupRailItems.Count, "开启后投影＝「全部」＋4 槽。");
+            Assert.AreEqual(5, viewModel.SubgroupRailItems.Count, "默认投影＝「全部」＋4 槽（结构性恒在）。");
             Assert.IsInstanceOfType(
                 viewModel.SubgroupRailItems[0],
                 typeof(SubgroupAllChipViewModel),
@@ -1993,12 +1952,13 @@ public sealed partial class MainWindowInteractionTests
                 SubgroupCatalog.AllChipName,
                 viewModel.SubgroupAllChip.DisplayName,
                 "显示名＝目录常量「全部」。");
-            Assert.AreEqual(5, viewModel.SubgroupRailColumnCount, "列数投影 4→5。");
+            Assert.AreEqual(5, viewModel.SubgroupRailColumnCount, "列数恒 5（常量式投影）。");
             Assert.AreEqual(5, FindSubgroupRailGrid(window).Columns, "UniformGrid 五列等分。");
             Assert.AreEqual(
                 SubgroupCatalog.AllChipName,
                 FindDescendants<TextBlock>(FindSubgroupAllChip(window)).Single().Text,
                 "视觉树首枚渲染「全部」。");
+            Assert.AreEqual(4, viewModel.SubgroupChips.Count, "槽 chip 集不受影响。");
             // 轨道高/面板宽零变化（不为内容加宽结构，#54/#16 精神）。
             Assert.AreEqual(
                 WindowSettings.SubgroupRailHeight,
@@ -2022,8 +1982,7 @@ public sealed partial class MainWindowInteractionTests
         var window = CreateSubgroupWindow(
             directory,
             board,
-            SubgroupDisplayMode.ChipRail,
-            subgroupAllChipEnabled: true);
+            SubgroupDisplayMode.ChipRail);
 
         try
         {
@@ -2081,8 +2040,7 @@ public sealed partial class MainWindowInteractionTests
         var window = CreateSubgroupWindow(
             directory,
             board,
-            SubgroupDisplayMode.ChipRail,
-            subgroupAllChipEnabled: true);
+            SubgroupDisplayMode.ChipRail);
 
         try
         {
@@ -2116,8 +2074,7 @@ public sealed partial class MainWindowInteractionTests
         var window = CreateSubgroupWindow(
             directory,
             board,
-            SubgroupDisplayMode.ChipRail,
-            subgroupAllChipEnabled: true);
+            SubgroupDisplayMode.ChipRail);
 
         try
         {
@@ -2150,8 +2107,7 @@ public sealed partial class MainWindowInteractionTests
         var window = CreateSubgroupWindow(
             directory,
             board,
-            SubgroupDisplayMode.ChipRail,
-            subgroupAllChipEnabled: true);
+            SubgroupDisplayMode.ChipRail);
 
         try
         {
@@ -2186,8 +2142,7 @@ public sealed partial class MainWindowInteractionTests
         var window = CreateSubgroupWindow(
             directory,
             board,
-            SubgroupDisplayMode.ChipRail,
-            subgroupAllChipEnabled: true);
+            SubgroupDisplayMode.ChipRail);
 
         try
         {
@@ -2236,8 +2191,7 @@ public sealed partial class MainWindowInteractionTests
         var window = CreateSubgroupWindow(
             directory,
             board,
-            SubgroupDisplayMode.ChipRail,
-            subgroupAllChipEnabled: true);
+            SubgroupDisplayMode.ChipRail);
 
         try
         {
@@ -2287,8 +2241,7 @@ public sealed partial class MainWindowInteractionTests
         var window = CreateSubgroupWindow(
             directory,
             board,
-            SubgroupDisplayMode.ChipRail,
-            subgroupAllChipEnabled: true);
+            SubgroupDisplayMode.ChipRail);
 
         try
         {
@@ -2324,8 +2277,7 @@ public sealed partial class MainWindowInteractionTests
         var window = CreateSubgroupWindow(
             directory,
             board,
-            SubgroupDisplayMode.ChipRail,
-            subgroupAllChipEnabled: true);
+            SubgroupDisplayMode.ChipRail);
 
         try
         {
@@ -2388,8 +2340,7 @@ public sealed partial class MainWindowInteractionTests
             directory,
             board,
             SubgroupDisplayMode.ChipRail,
-            settings,
-            subgroupAllChipEnabled: true);
+            settings);
 
         try
         {
@@ -2439,48 +2390,6 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void Subgroup_AllChipToggleOffWhileActiveClearsFilter()
-    {
-        using var directory = new TestDirectory();
-        var board = new BoardService();
-        board.AddText("甲", BoardCategory.Inbox).Subgroup = 1;
-        var window = CreateSubgroupWindow(
-            directory,
-            board,
-            SubgroupDisplayMode.ChipRail,
-            subgroupAllChipEnabled: true);
-
-        try
-        {
-            window.Show();
-            ExpandCategory(window, BoardCategory.Inbox);
-            CompleteLayout(window);
-            var list = (ListBox)window.FindName("BoardList");
-            var viewModel = (MainWindowViewModel)window.DataContext;
-
-            HoverAllChip(window);
-            Assert.IsTrue(window.IsSubgroupFilterActive, "前置：全量态。");
-            Assert.IsNull(list!.Items.Filter);
-
-            // 开→关（全量过滤激活时）＝先清过滤零残留（照模式切换先例）。
-            window.ApplyPreferences(
-                window.CurrentPreferences with { SubgroupAllChipEnabled = false });
-            CompleteLayout(window);
-
-            Assert.IsFalse(window.IsSubgroupFilterActive, "开关关闭清全量过滤。");
-            Assert.IsFalse(viewModel.SubgroupAllChip.IsFilterActive);
-            Assert.IsFalse(viewModel.SubgroupAllChipEnabled);
-            Assert.AreEqual(4, viewModel.SubgroupRailItems.Count, "轨投影回落 4 槽。");
-            Assert.AreEqual(4, viewModel.SubgroupRailColumnCount);
-            Assert.AreEqual(4, FindSubgroupRailGrid(window).Columns, "布局回落四列。");
-        }
-        finally
-        {
-            CloseWindow(window);
-        }
-    }
-
-    [STATestMethod]
     public void Subgroup_AllChipZeroPresenceInGroupedViewAndOff()
     {
         using var directory = new TestDirectory();
@@ -2489,8 +2398,7 @@ public sealed partial class MainWindowInteractionTests
         var window = CreateSubgroupWindow(
             directory,
             board,
-            SubgroupDisplayMode.Off,
-            subgroupAllChipEnabled: true);
+            SubgroupDisplayMode.Off);
 
         try
         {
@@ -2522,8 +2430,9 @@ public sealed partial class MainWindowInteractionTests
     [STATestMethod]
     public void Subgroup_AllChipEvidenceBothThemes()
     {
-        // 契约 #57 修订证据：浅/深双主题五列布局（「全部」恒居首）＋全量激活帧
-        //（未分组卡可见）。环境变量未设置时跳过（CI 无证据目录即 Inconclusive）。
+        // 契约 #60 证据：浅/深双主题五列布局（默认配置即「全部」恒居首）＋全量
+        // 激活帧（未分组卡可见）。环境变量未设置时跳过（CI 无证据目录即
+        // Inconclusive）。
         if (string.IsNullOrWhiteSpace(
                 Environment.GetEnvironmentVariable("FTS_SUBGROUP_EVIDENCE_DIR")))
         {
@@ -2537,11 +2446,7 @@ public sealed partial class MainWindowInteractionTests
         var urgentSecond = board.AddText("急件二：回复合作确认", BoardCategory.Inbox);
         urgentFirst.Subgroup = 1;
         urgentSecond.Subgroup = 1;
-        var window = CreateSubgroupWindow(
-            directory,
-            board,
-            SubgroupDisplayMode.Off,
-            subgroupAllChipEnabled: true);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
 
         try
         {
@@ -2550,7 +2455,6 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var shell = (Border)window.FindName("WindowShell");
-            var viewModel = (MainWindowViewModel)window.DataContext;
 
             foreach (var theme in new[] { DesignTheme.Light, DesignTheme.Dark })
             {
@@ -2558,13 +2462,7 @@ public sealed partial class MainWindowInteractionTests
                 CompleteLayout(window);
                 var themeName = theme == DesignTheme.Light ? "light" : "dark";
 
-                // 五列布局帧（开关开启＋ChipRail）。
-                window.ApplyPreferences(window.CurrentPreferences with
-                {
-                    SubgroupDisplay = SubgroupDisplayMode.ChipRail,
-                    SubgroupAllChipEnabled = true
-                });
-                CompleteLayout(window);
+                // 五列布局帧（默认配置＝结构性恒在）。
                 Assert.AreEqual(5, FindSubgroupRailGrid(window).Columns, "证据帧必须含五列布局。");
                 SaveVisualEvidence(shell!, $"subgroup-all-five-columns-{themeName}.png", "FTS_SUBGROUP_EVIDENCE_DIR");
 
