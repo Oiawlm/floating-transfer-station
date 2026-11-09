@@ -160,9 +160,10 @@
             <Border Style="{StaticResource SubgroupChipActiveLayerStyle}" />
             <Border Style="{StaticResource SubgroupChipDropTargetLayerStyle}" />
             <!-- 收集落点子分组环（契约 #57 修订＋#56 双态环语法）：复用 #56
-                 默认接收分类单圆环（同 Data 同规格），每分类独立记忆；环态由
-                 样式 DefaultMarkerState 触发器统一驱动——两宿主属性同名，
-                 样式触发器在 chip 数据上下文同样命中，环显隐单点回归样式。 -->
+                 默认接收分类单圆环（同 Data 同规格），每分类独立记忆——轨可见时
+                 恰一枚槽 chip 独占环（默认子分组，未设兜底显示序首槽恒灰），其余
+                 None；环态由样式 DefaultMarkerState 触发器统一驱动——两宿主属性
+                 同名，样式触发器在 chip 数据上下文同样命中，环显隐单点回归样式。 -->
             <Path x:Name="DefaultSubgroupMarker"
                   Style="{StaticResource CategoryDefaultMarkerStyle}"
                   Data="M12,4 A8,8 0 1 1 11.99,4 Z" />
@@ -667,7 +668,10 @@
           </ListBox.ItemsPanel>
         </ListBox>
 
-        <!-- 搜索空态：无匹配时居中提示 + 一键清空（代码后置切换可见性）。 -->
+        <!-- 空结果双分支宿主（契约 #33，2026-11-08 修订；代码后置切换可见性）：
+             搜索＝标题＋「清空筛选」按钮；槽过滤＝标题＋副文案引导（无 CTA——
+             该空态是「视图空」而非「内容空」，轨在场且被过滤 chip 高亮，退出通道
+             充足，引导由文案承载）。 -->
         <Border x:Name="SearchEmptyHint"
                 Grid.Row="2"
                 Visibility="Collapsed"
@@ -689,6 +693,13 @@
                     HorizontalAlignment="Center"
                     Style="{StaticResource ThemedActionButtonStyle}"
                     Click="SearchClearFilterButton_Click" />
+            <TextBlock x:Name="SearchEmptyHintHint"
+                       Text="按 Esc 查看该分类全部卡片，或移到其他分组"
+                       FontSize="12"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       HorizontalAlignment="Center"
+                       Margin="0,4,0,0"
+                       Visibility="Collapsed" />
           </StackPanel>
         </Border>
 
