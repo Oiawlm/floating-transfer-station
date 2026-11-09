@@ -396,6 +396,72 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void UpdateCheck_AutoCheckFailure_LogsDiagnosticsWithoutUiDisturbance()
+    {
+        // 契约 #26 修订②：自动检查失败 UI 仍完全静默，但失败必须落本地诊断日志
+        // （<数据根>\logs\update.log——测试数据根即 directory.Root），可诊断不扰民。
+        using var directory = new TestDirectory();
+        var fake = new FakeUpdateService
+        {
+            CheckResult = UpdateCheckResult.Fail(UpdateErrorKind.RateLimited, "请求过于频繁，请稍后重试。")
+        };
+        var window = CreateWindow(directory, new BoardService(), updateService: fake);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            RunScheduledCheck(window);
+
+            Assert.IsEmpty(StatusTextOf(window), "自动检查失败必须保持 UI 零打扰（无状态条/toast/弹窗）。");
+            var logPath = Path.Combine(directory.Root, "logs", "update.log");
+            Assert.IsTrue(File.Exists(logPath), "自动检查失败必须写诊断日志 update.log。");
+            var logText = File.ReadAllText(logPath);
+            StringAssert.Contains(logText, "|检查|失败|", "失败记录必须带阶段与 kind 字段。");
+            StringAssert.Contains(logText, "请求过于频繁，请稍后重试。", "失败记录必须携带失败原因。");
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
+    public void UpdateButton_DownloadFailure_LogsStageRecordsToDiagnostics()
+    {
+        // 契约 #26 修订②：更新流各阶段成败与里程碑落诊断日志——下载失败用例断言
+        // 「发现新版里程碑＋下载阶段失败」两记录齐全（沿既有假件注入模式，日志落测试目录）。
+        using var directory = new TestDirectory();
+        var fake = new FakeUpdateService { CheckResult = AvailableUpdate() };
+        fake.DownloadResult = UpdateDownloadResult.Fail(UpdateErrorKind.HashMismatch, "更新包校验失败，已放弃安装。");
+        var window = CreateWindow(directory, new BoardService(), updateService: fake);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+
+            RunScheduledCheck(window);
+            WaitForStatusText(window, "更新包校验失败，已放弃安装。");
+
+            var logText = File.ReadAllText(Path.Combine(directory.Root, "logs", "update.log"));
+            StringAssert.Contains(
+                logText,
+                $"|检查|里程碑|发现新版本 {UpdateVersion}",
+                "发现新版本的里程碑必须记录。");
+            StringAssert.Contains(logText, "|下载|失败|", "下载/校验失败必须记录下载阶段。");
+            StringAssert.Contains(logText, "更新包校验失败，已放弃安装。", "下载失败记录必须携带失败原因。");
+        }
+        finally
+        {
+            CloseWindowWithoutSaving(window);
+        }
+    }
+
+    [STATestMethod]
     public void UpdateCheck_IdleTwoHours_TriggersOneCheckPerIdleEpisode()
     {
         using var directory = new TestDirectory();
@@ -710,6 +776,7 @@ public sealed partial class MainWindowInteractionTests
         public string? DownloadedDirectory { get; private set; }
         public UpdateCheckResult? DownloadedCheck { get; private set; }
         public string? StartedInstallerPath { get; private set; }
+        public string? StartedInstallerLogPath { get; private set; }
         public List<string> EventLog { get; } = new();
 
         public Task<UpdateCheckResult> CheckForUpdateAsync(CancellationToken cancellationToken = default)
@@ -731,10 +798,11 @@ public sealed partial class MainWindowInteractionTests
             return HeldDownload ?? Task.FromResult(DownloadResult);
         }
 
-        public bool TryStartSilentInstaller(string installerPath)
+        public bool TryStartSilentInstaller(string installerPath, string? installerLogPath = null)
         {
             EventLog.Add("install");
             StartedInstallerPath = installerPath;
+            StartedInstallerLogPath = installerLogPath;
             return true;
         }
     }
