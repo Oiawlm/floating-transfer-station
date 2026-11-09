@@ -100,7 +100,7 @@ public interface IUpdateService
         string downloadDirectory,
         CancellationToken cancellationToken = default);
 
-    bool TryStartSilentInstaller(string installerPath);
+    bool TryStartSilentInstaller(string installerPath, string? installerLogPath = null);
 }
 
 /// <summary>
@@ -121,6 +121,8 @@ public sealed class UpdateService : IUpdateService
     private const string ChecksumsFileName = "SHA256SUMS.txt";
     private const string InstallerAssetNameSuffix = ".exe";
     private const string DownloadPartialSuffix = ".download";
+    // 静默安装基础参数（契约 #26）；可选的安装器日志段 /LOG="…" 由
+    // BuildSilentInstallerArguments 在此之上按需追加（契约 #26 修订②）。
     public const string SilentInstallArguments = "/SILENT /SUPPRESSMSGBOXES /NORESTART";
 
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
@@ -305,9 +307,11 @@ public sealed class UpdateService : IUpdateService
     /// <summary>
     /// 以静默参数启动已通过校验的安装包（脱钩进程）。时序由调用方保证：启动前必须
     /// 已排空保存管线，启动后应用经既有优雅退出路径关闭——安装器检查互斥锁时应用
-    /// 必须已退出（AppMutex 静默失守即更新静默失败）。
+    /// 必须已退出（AppMutex 静默失守即更新静默失败）。installerLogPath 非空时以
+    /// /LOG="绝对路径" 追加安装器日志开关（目录先建；建失败＝省略 /LOG 照常启动，
+    /// 可观测性不得反过来阻断更新——契约 #26 修订②）；null＝逐字保持基础静默参数。
     /// </summary>
-    public bool TryStartSilentInstaller(string installerPath)
+    public bool TryStartSilentInstaller(string installerPath, string? installerLogPath = null)
     {
         if (string.IsNullOrWhiteSpace(installerPath) || !File.Exists(installerPath))
         {
@@ -316,7 +320,7 @@ public sealed class UpdateService : IUpdateService
 
         var startInfo = new ProcessStartInfo(installerPath)
         {
-            Arguments = SilentInstallArguments,
+            Arguments = BuildSilentInstallerArguments(installerLogPath),
             UseShellExecute = true
         };
         if (_processStarter is not null)
@@ -333,6 +337,38 @@ public sealed class UpdateService : IUpdateService
             exception is InvalidOperationException or System.ComponentModel.Win32Exception or PlatformNotSupportedException)
         {
             return false;
+        }
+    }
+
+    /// <summary>
+    /// 静默安装参数构造（契约 #26 修订②的 /LOG 深融点）：基础参数
+    /// <see cref="SilentInstallArguments"/> 逐字不变；提供日志路径时先取绝对路径并建
+    /// 目录，再以引号包裹追加 <c>/LOG="…"</c> 段（路径含空格也保持单段参数）；取
+    /// 绝对路径或建目录失败＝省略 /LOG 照常启动（安装器日志是可观测性增强，不是
+    /// 更新的前置条件）。
+    /// </summary>
+    private static string BuildSilentInstallerArguments(string? installerLogPath)
+    {
+        if (installerLogPath is null)
+        {
+            return SilentInstallArguments;
+        }
+
+        try
+        {
+            var fullPath = Path.GetFullPath(installerLogPath);
+            var directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            return $"{SilentInstallArguments} /LOG=\"{fullPath}\"";
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return SilentInstallArguments;
         }
     }
 

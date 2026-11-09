@@ -210,15 +210,20 @@ begin
       IsSameInstallDirectory(ExistingDirectory, OwnerDirectory));
 end;
 
-function ValidateInstallDirectorySelection: Boolean;
-var
-  ExistingDirectory: String;
-  OwnerDirectory: String;
+procedure ReadInstallGuardDirectories(var ExistingDirectory, OwnerDirectory: String);
 begin
   ExistingDirectory := '';
   OwnerDirectory := '';
   RegQueryStringValue(HKCU, InstallRegistryKey, 'InstallLocation', ExistingDirectory);
   RegQueryStringValue(HKCU, DataRegistryKey, InstallDirectoryRegistryValue, OwnerDirectory);
+end;
+
+function ValidateInstallDirectorySelection: Boolean;
+var
+  ExistingDirectory: String;
+  OwnerDirectory: String;
+begin
+  ReadInstallGuardDirectories(ExistingDirectory, OwnerDirectory);
   Result := IsInstallDirectorySelectionSafe(ExistingDirectory, OwnerDirectory,
     ExpandConstant('{app}'));
 end;
@@ -712,16 +717,35 @@ begin
   Result := True;
 end;
 
+// 静默中止可观测（契约 #26 修订②）：PrepareToInstall 失败在返回错误串中止安装前，
+// 先把原因与守卫三目录值写入安装器日志（应用侧启动安装器时带 /LOG 指向数据根
+// logs 目录，两层配合使静默模式下的中止可诊断）；返回串与行为零变化。
+procedure LogPrepareToInstallAbort(const Reason: String);
+var
+  ExistingDirectory: String;
+  OwnerDirectory: String;
+begin
+  ReadInstallGuardDirectories(ExistingDirectory, OwnerDirectory);
+  Log('PrepareToInstall aborted: ' + Reason +
+    '; ExistingDirectory=' + ExistingDirectory +
+    '; OwnerDirectory=' + OwnerDirectory +
+    '; AppDir=' + ExpandConstant('{app}'));
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
   if not ValidateInstallDirectorySelection then
   begin
+    LogPrepareToInstallAbort('install directory guard rejected the selection');
     Result := '旧版本尚未启用卸载归属保护。请先保留原程序目录完成一次更新，再运行安装程序更改程序目录。内容存储位置可以照常选择。';
     Exit;
   end;
   if not PrepareDataDirectoryMigration then
+  begin
+    LogPrepareToInstallAbort('data directory migration failed');
     Result := '无法迁移现有内容。请确认目标文件夹可用后重试；原存储位置未作修改。';
+  end;
 end;
 
 procedure ForceCloseRunningApplication;
