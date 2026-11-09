@@ -32,6 +32,9 @@ public sealed partial class MainWindowInteractionTests
     private static PhysicalRectangle RecallZone(MainWindow window) =>
         GetPrivateField<PhysicalRectangle>(window, "_edgeHideRecallZone");
 
+    private static bool PanelHoldActive(MainWindow window) =>
+        GetPrivateField<PanelStateMachine>(window, "_panelState").IsPanelHoldActive;
+
     /// <summary>
     /// armed + 模拟指针离开 + 收起节奏 tick → 整窗贴边隐藏。回位轮询真实定时器
     /// 立即停用（回位驻留由模拟轮询单独锁定），避免测试机真实光标位置影响几何断言。
@@ -260,7 +263,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void EdgeHide_PanelHoldSuppressesDockUntilReleased()
+    public void EdgeHide_PanelHoldActivationDisarmsArmedAndLaterLeaveCollapsesNormally()
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
@@ -274,30 +277,120 @@ public sealed partial class MainWindowInteractionTests
             var expandedWidth = window.Width;
             var viewModel = (MainWindowViewModel)window.DataContext;
 
-            // 抑制复用：保持展开（PanelHold）同样抑制贴边隐藏，armed 保留不悬置丢失。
+            // 互斥（R2，后激活者胜）：armed 与保持展开不得并存——激活保持展开即解除
+            // 贴边待命（armed 即灭），此后保持期间离开仍不得隐藏或收起。
             ToggleEdgeHide(window);
+            Assert.IsTrue(EdgeHideState(window).IsArmed);
             TogglePanelHold(window);
+
+            Assert.AreEqual(
+                EdgeHidePhase.Idle,
+                EdgeHideState(window).Phase,
+                "激活保持展开必须解除贴边待命。");
             InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
             InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
             CompleteLayout(window);
 
             Assert.IsTrue(viewModel.IsPanelExpanded, "保持展开期间不得隐藏。");
-            Assert.IsTrue(EdgeHideState(window).IsArmed, "抑制期间 armed 保留。");
+            Assert.IsTrue(PanelHoldActive(window));
             Assert.AreEqual(expandedWidth, window.Width, 0.5);
 
-            // 解除保持后下一次离开节奏提交贴边隐藏（armed 仍在）。
+            // 解除保持后的离开走常规收起（贴边待命已被互斥解除，不再恢复隐藏）。
             TogglePanelHold(window);
             InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
             InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-            RecallTimer(window).Stop();
             CompleteLayout(window);
 
-            Assert.IsTrue(EdgeHideState(window).IsDocked, "解除保持后的离开应提交贴边隐藏。");
-            Assert.IsTrue(viewModel.IsPanelExpanded);
+            Assert.IsFalse(viewModel.IsPanelExpanded, "解除保持后的离开必须普通收起。");
+            Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);
+            Assert.AreEqual(EdgeHidePhase.Idle, EdgeHideState(window).Phase);
         }
         finally
         {
-            RestoreAndClose(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void EdgeHide_MutexActivatingHoldDisarmsArmedEdgeHide()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var edgeButton = (Button)window.FindName("EdgeHideButton");
+            var holdButton = (Button)window.FindName("PanelHoldButton");
+            Assert.IsNotNull(edgeButton);
+            Assert.IsNotNull(holdButton);
+            var accent = window.FindResource("AccentBrush");
+            var secondary = window.FindResource("SecondaryTextBrush");
+
+            ToggleEdgeHide(window);
+            Assert.IsTrue(EdgeHideState(window).IsArmed);
+            Assert.AreEqual(accent, edgeButton.Foreground, "待命态贴边按钮点亮。");
+
+            // 互斥（后激活者胜）：激活保持展开即解除贴边待命，两按钮任何时刻不同时点亮。
+            TogglePanelHold(window);
+
+            Assert.IsTrue(PanelHoldActive(window), "保持展开接管互斥组。");
+            Assert.AreEqual(
+                EdgeHidePhase.Idle,
+                EdgeHideState(window).Phase,
+                "保持展开激活必须解除贴边待命。");
+            Assert.AreEqual(secondary, edgeButton.Foreground, "贴边按钮前景即灭。");
+            Assert.AreEqual(
+                "一次性移出屏幕：鼠标离开后收进屏幕边缘，移回原位自动展开",
+                edgeButton.ToolTip,
+                "解除后按钮文案回到默认。");
+            Assert.AreEqual(accent, holdButton.Foreground, "保持展开按钮点亮。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void EdgeHide_MutexActivatingEdgeHideEndsPanelHold()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var edgeButton = (Button)window.FindName("EdgeHideButton");
+            var holdButton = (Button)window.FindName("PanelHoldButton");
+            Assert.IsNotNull(edgeButton);
+            Assert.IsNotNull(holdButton);
+            var accent = window.FindResource("AccentBrush");
+            var secondary = window.FindResource("SecondaryTextBrush");
+
+            TogglePanelHold(window);
+            Assert.IsTrue(PanelHoldActive(window));
+            Assert.AreEqual(accent, holdButton.Foreground, "保持展开态按钮点亮。");
+
+            // 互斥（后激活者胜）：激活贴边待命即解除保持展开，两按钮任何时刻不同时点亮。
+            ToggleEdgeHide(window);
+
+            Assert.IsTrue(EdgeHideState(window).IsArmed, "贴边待命接管互斥组。");
+            Assert.IsFalse(PanelHoldActive(window), "贴边待命激活必须解除保持展开。");
+            Assert.AreEqual(secondary, holdButton.Foreground, "保持展开按钮前景即灭。");
+            Assert.AreEqual(
+                "保持展开，暂停自动收起",
+                holdButton.ToolTip,
+                "解除后按钮文案回到默认。");
+            Assert.AreEqual(accent, edgeButton.Foreground, "贴边按钮点亮。");
+        }
+        finally
+        {
+            CloseWindow(window);
         }
     }
 
