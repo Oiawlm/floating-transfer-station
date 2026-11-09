@@ -177,10 +177,10 @@
           </Grid>
         </Border>
       </DataTemplate>
-      <!-- 子分组「全部」伪 chip（实验性，契约 #57 修订；实验开关默认关）：恒居轨首、
-           无槽身份——不参与槽序拖排/改名/拖放归属/默认落点（无环、无编辑器）；悬停＝
-           进入全量过滤视图（Filter=null＋全 chip 激活态），单击无操作。视觉复用槽
-           chip 样式族（容器/hover/激活层/文字按 IsFilterActive 同名鸭子类型命中）。 -->
+      <!-- 子分组「全部」伪 chip（契约 #60；结构性恒居轨首）：无槽身份——不参与
+           槽序拖排/改名/拖放归属/默认落点（无环、无编辑器）；悬停＝进入全量过滤
+           视图（Filter=null＋全 chip 激活态），单击无操作。视觉复用槽 chip 样式族
+           （容器/hover/激活层/文字按 IsFilterActive 同名鸭子类型命中）。 -->
       <DataTemplate x:Key="SubgroupAllChipTemplate"
                     DataType="{x:Type vm:SubgroupAllChipViewModel}">
         <Border x:Name="ChipSurface"
