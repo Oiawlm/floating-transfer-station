@@ -70,7 +70,16 @@ public sealed partial class MainWindowInteractionTests
             Equals(candidate.Tag, slot));
     }
 
-    private static void ClickChip(MainWindow window, int slot)
+    private static void ClickChip(MainWindow window, int slot) =>
+        WithThreadKeyboardModifiers(
+            ModifierKeys.None,
+            () => ClickChipAmbientModifiers(window, slot));
+
+    /// <summary>裸单击（不清洗键盘态）：ClickSwitch 开态的 Up 分派读实时
+    /// Keyboard.Modifiers——录制/真输入会话里用户按住 Ctrl 会把裸单击误路由为
+    /// Ctrl+单击（EvidenceBothThemes 本地实红根因）；对修饰键敏感的断言一律走
+    /// <see cref="ClickChip"/>（注入 None）或 WithThreadKeyboardModifiers 显式播种。</summary>
+    private static void ClickChipAmbientModifiers(MainWindow window, int slot)
     {
         var chip = FindSubgroupChip(window, slot);
         chip.RaiseEvent(NewMouseButtonEventArgs(
@@ -2487,19 +2496,22 @@ public sealed partial class MainWindowInteractionTests
     // ---- 点击切换实验开关（契约 #62，默认关；R13 悬停误触治理）：窗口级回归 ----
     // ---- 关态现状锁＋开态新手势路由（过滤状态机/消费点零改动） ----
 
-    private static void ClickAllChip(MainWindow window)
-    {
-        var chip = FindSubgroupAllChip(window);
-        chip.RaiseEvent(NewMouseButtonEventArgs(
-            UIElement.MouseLeftButtonUpEvent,
-            chip));
-        CompleteLayout(window);
-    }
+    private static void ClickAllChip(MainWindow window) =>
+        WithThreadKeyboardModifiers(
+            ModifierKeys.None,
+            () =>
+            {
+                var chip = FindSubgroupAllChip(window);
+                chip.RaiseEvent(NewMouseButtonEventArgs(
+                    UIElement.MouseLeftButtonUpEvent,
+                    chip));
+                CompleteLayout(window);
+            });
 
     private static void CtrlClickChip(MainWindow window, int slot) =>
         WithThreadKeyboardModifiers(
             ModifierKeys.Control,
-            () => ClickChip(window, slot));
+            () => ClickChipAmbientModifiers(window, slot));
 
     [STATestMethod]
     public void Subgroup_ClickSwitch_OffByDefault_HoverSwitchesAndClickSetsDefaultUnchanged()
