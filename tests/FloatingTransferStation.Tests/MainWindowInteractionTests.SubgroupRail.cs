@@ -2531,9 +2531,9 @@ public sealed partial class MainWindowInteractionTests
             ClickChip(window, 1);
             Assert.IsTrue(window.IsSubgroupFilterActive, "关态单击不动过滤（现状）。");
             Assert.AreEqual(
-                DefaultMarkerState.Inactive,
+                DefaultMarkerState.Active,
                 viewModel.SubgroupChips.Single(chip => chip.Slot == 1).DefaultMarkerState,
-                "关态单击设默认＝环移到该槽（灰：非默认接收分类的有效落点）。");
+                "关态单击设默认＝环移到该槽（紫：待分类＝装载期默认接收分类的有效落点）。");
         }
         finally
         {
@@ -2708,9 +2708,9 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsFalse(window.IsSubgroupFilterActive, "Ctrl+单击＝设默认，过滤不动。");
             Assert.IsNull(list!.Items.Filter);
             Assert.AreEqual(
-                DefaultMarkerState.Inactive,
+                DefaultMarkerState.Active,
                 viewModel.SubgroupChips.Single(chip => chip.Slot == 2).DefaultMarkerState,
-                "Ctrl+单击设默认＝环移到该槽（灰：待分类非默认接收分类的有效落点）。");
+                "Ctrl+单击设默认＝环移到该槽（紫：待分类＝装载期默认接收分类的有效落点）。");
             Assert.AreEqual(
                 DefaultMarkerState.None,
                 viewModel.SubgroupChips.Single(chip => chip.Slot == 0).DefaultMarkerState,
@@ -2765,9 +2765,9 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsTrue(viewModel.IsSearchActive, "Ctrl+单击仍不退搜索。");
             Assert.IsFalse(window.IsSubgroupFilterActive);
             Assert.AreEqual(
-                DefaultMarkerState.Inactive,
+                DefaultMarkerState.Active,
                 viewModel.SubgroupChips.Single(chip => chip.Slot == 1).DefaultMarkerState,
-                "搜索态 Ctrl+单击＝仍设默认（落点不连坐）。");
+                "搜索态 Ctrl+单击＝仍设默认（落点不连坐；紫：默认接收分类有效落点）。");
         }
         finally
         {
@@ -2930,7 +2930,8 @@ public sealed partial class MainWindowInteractionTests
     public void Subgroup_ClickSwitch_On_ChipCountsRefreshOnCollectionAndAssignment()
     {
         // 计数口径（契约 #62）：该分类该槽全部卡（含置顶）＋「全部」＝分类总数；
-        // 触发＝集合增删与拖卡指派。
+        // 未分组卡（Subgroup=null）不进任何槽计数、只进「全部」总数；触发＝集合
+        // 增删与拖卡指派。
         using var directory = new TestDirectory();
         var board = new BoardService();
         var first = board.AddText("甲", BoardCategory.Inbox);
@@ -2948,24 +2949,24 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
-            AssertCounts(1, 1, 0, 0, totalCount: 2);
+            AssertCounts(0, 1, 0, 0, totalCount: 2);
 
             // 增卡（采集路径＝集合 Add，subgroup 建卡时给定＝Add 事件已带终值）。
             var added = board.AddText("丙", BoardCategory.Inbox, subgroup: 1);
             CompleteLayout(window);
-            AssertCounts(2, 1, 0, 0, totalCount: 3);
+            AssertCounts(0, 2, 0, 0, totalCount: 3);
 
             // 删卡（集合 Remove，经统一删除管线）。
             RunMutationsTask(
                 window,
                 mutations => mutations.DeleteManyAsync([first.Id], BoardDeleteMode.Undoable));
-            AssertCounts(1, 1, 0, 0, totalCount: 2);
+            AssertCounts(0, 1, 0, 0, totalCount: 2);
 
             // 指派（拖卡归属路径＝AssignSubgroupAsync，无集合变化）。
             RunMutationsTask(
                 window,
                 mutations => mutations.AssignSubgroupAsync([added.Id], 2));
-            AssertCounts(0, 1, 1, 0, totalCount: 2);
+            AssertCounts(0, 0, 1, 0, totalCount: 2);
 
             void AssertCounts(int slot0, int slot1, int slot2, int slot3, int totalCount)
             {
