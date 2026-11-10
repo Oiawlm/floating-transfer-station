@@ -129,17 +129,20 @@
           </Grid>
         </Border>
       </DataTemplate>
-      <!-- 子分组 chip（实验性，契约 #57 修订）：视觉沿分类轨标签语言（边框/圆角/
-           hover/激活 accent）；悬停过滤、单击设收集落点（照分类轨「悬停即进入、
-           单击设默认接收」同构）、双击改名、拖卡入 chip＝批量归属该槽（照「拖卡入
-           标签=移动分类」先例）。改名会话与分类改名同一台协调器机器（IME 守卫＋Enter/
-           Esc/失焦提交，契约 #57 修订⑤）。 -->
-      <DataTemplate x:Key="SubgroupChipTemplate"
+      <!-- 子分组 chip（实验性，契约 #57 修订＋#62 点击切换门控）：视觉沿分类轨
+           标签语言（边框/圆角/hover/激活 accent）；关态＝悬停过滤、单击设收集
+           落点（照分类轨「悬停即进入、单击设默认接收」同构）；开态＝悬停纯视觉
+           （驻留 300ms 计数/手势 ToolTip，绑定 VM ToolTipText——关态恒 null 不
+           显示）、裸单击 toggle 过滤、Ctrl+单击设收集落点；双击改名、拖卡入
+           chip＝批量归属该槽（照「拖卡入标签=移动分类」先例）两态共用。改名
+           会话与分类改名同一套机器（IME 守卫＋Enter/Esc/失焦提交）。 -->      <DataTemplate x:Key="SubgroupChipTemplate"
                     DataType="{x:Type vm:SubgroupChipViewModel}">
         <Border x:Name="ChipSurface"
                 Style="{StaticResource SubgroupChipContainerStyle}"
                 Tag="{Binding Slot}"
                 AllowDrop="True"
+                ToolTip="{Binding ToolTipText}"
+                ToolTipService.InitialShowDelay="300"
                 MouseEnter="SubgroupChip_MouseEnter"
                 MouseLeftButtonDown="SubgroupChip_MouseLeftButtonDown"
                 MouseLeftButtonUp="SubgroupChip_MouseLeftButtonUp"
@@ -173,16 +176,21 @@
           </Grid>
         </Border>
       </DataTemplate>
-      <!-- 子分组「全部」伪 chip（实验性，契约 #57 修订；实验开关默认关）：恒居轨首、
-           无槽身份——不参与槽序拖排/改名/拖放归属/默认落点（无环、无编辑器）；悬停＝
-           进入全量过滤视图（Filter=null＋全 chip 激活态），单击无操作。视觉复用槽
-           chip 样式族（容器/hover/激活层/文字按 IsFilterActive 同名鸭子类型命中）。 -->
+      <!-- 子分组「全部」伪 chip（契约 #60；结构性恒居轨首）：无槽身份——不参与
+           槽序拖排/改名/拖放归属/默认落点（无环、无编辑器）；关态＝悬停进入全量
+           过滤视图（Filter=null＋全 chip 激活态）、单击无操作；开态（契约 #62）＝
+           悬停纯视觉（驻留 300ms 计数/手势 ToolTip）、单击进全量态/再点回根
+           （Up 处理器关态＝无操作）。视觉复用槽 chip 样式族（容器/hover/激活层/
+           文字按 IsFilterActive 同名鸭子类型命中）。 -->
       <DataTemplate x:Key="SubgroupAllChipTemplate"
                     DataType="{x:Type vm:SubgroupAllChipViewModel}">
         <Border x:Name="ChipSurface"
                 Style="{StaticResource SubgroupChipContainerStyle}"
                 Tag="{x:Static models:SubgroupCatalog.AllChipName}"
-                MouseEnter="SubgroupAllChip_MouseEnter">
+                ToolTip="{Binding ToolTipText}"
+                ToolTipService.InitialShowDelay="300"
+                MouseEnter="SubgroupAllChip_MouseEnter"
+                MouseLeftButtonUp="SubgroupAllChip_MouseLeftButtonUp">
           <Grid Background="Transparent">
             <Border x:Name="ChipHoverLayer"
                     Background="{DynamicResource HoverSurfaceBrush}"
@@ -324,8 +332,8 @@
 
                 <Button x:Name="EdgeHideButton"
                         Style="{StaticResource HeaderActionButtonStyle}"
-                        ToolTip="一次性移出屏幕：鼠标离开后收进屏幕边缘，移回原位自动展开"
-                        AutomationProperties.Name="一次性移出屏幕：鼠标离开后收进屏幕边缘，移回原位自动展开"
+                        ToolTip="一次性收进屏幕边缘：鼠标离开后缩成边缘把手，移上把手自动展开"
+                        AutomationProperties.Name="一次性收进屏幕边缘：鼠标离开后缩成边缘把手，移上把手自动展开"
                         Click="EdgeHideButton_Click">
                   <!-- 「箭头收入右缘」语汇（→|）：箭头指向右缘竖线，直译一次性贴边隐藏；
                        描边图标显式 14.5×14.5 + 1.5 描边（光学足印约 16 DIP），与贴缘面板/搜索/恢复默认按钮同一规范。 -->
@@ -1468,6 +1476,46 @@
                      Style="{StaticResource StatusTextStyle}" />
         </Border>
       </Popup>
+
+      <!-- R12 peek 把手（契约 #17，Issue #353）：peek 态左缘常驻把手——窗壳底＋右缘
+           描边＋居中 grip 小视觉，hover 提亮＋Accent 指示（167ms FadeAnimation，头部
+           按钮 HoverLayer 同手法）；窗口左缘自带 DWM 恒定圆角即把手左侧圆角（#6
+           豁免口径见 #17 替换文本）。宽 16＝DesignTokens.EdgePeekHandleWidthPx 的
+           XAML 镜像（锁定测试互锁）；非 peek 态 Collapsed 零命中。 -->
+      <Grid x:Name="EdgePeekHandleLayer"
+            Grid.ColumnSpan="2"
+            Panel.ZIndex="20"
+            Width="16"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Stretch"
+            Background="Transparent"
+            Visibility="Collapsed">
+        <Border Background="{DynamicResource TabRailBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,1,0" />
+        <Border Background="{DynamicResource HoverSurfaceBrush}"
+                Opacity="0"
+                IsHitTestVisible="False"
+                views:FadeAnimation.IsActive="{Binding IsMouseOver, ElementName=EdgePeekHandleLayer}"
+                views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
+                views:FadeAnimation.DurationMs="{x:Static design:DesignTokens.HoverFeedbackMs}" />
+        <Border Width="3"
+                Height="24"
+                CornerRadius="1.5"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+          <Border.Style>
+            <Style TargetType="Border">
+              <Setter Property="Background" Value="{DynamicResource SecondaryTextBrush}" />
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, ElementName=EdgePeekHandleLayer}" Value="True">
+                  <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Border.Style>
+        </Border>
+      </Grid>
 
       <Border Grid.ColumnSpan="2"
               Panel.ZIndex="10"

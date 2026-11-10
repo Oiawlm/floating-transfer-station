@@ -19,10 +19,15 @@ namespace FloatingTransferStation.Views;
 /// 归属该槽（照「拖卡入标签=移动分类」先例）。过滤只经 BoardList.Items.Filter
 /// 单点（ApplyBoardListFilter，契约 #37 扩展）；退出＝Esc/切分类/模式切换/悬停
 /// 其他 chip（含「全部」）——槽过滤空态无 CTA，引导由空态副文案承载（契约 #33
-/// 2026-11-08 修订）。实验开关开启时轨首恒居「全部」伪 chip（契约 #57 修订，
-/// 2026-11-07）：悬停＝进入全量视图（Filter=null＋全 chip 激活态，与根态同列表）、
-/// 单击无操作、不参与改名/拖放归属/默认环，退出沿既有三路径＋悬停其他 chip；
-/// 实验期无取消归属手势（拖到其他 chip 可覆盖，README 与契约登记）。
+/// 2026-11-08 修订）。轨首恒居「全部」伪 chip（契约 #60，2026-11-08 起结构性
+/// 恒在）：悬停＝进入全量视图（Filter=null＋全 chip 激活态，与根态同列表）、
+/// 不参与改名/拖放归属/默认环，退出沿既有三路径＋悬停其他 chip；实验期无取消
+/// 归属手势（拖到其他 chip 可覆盖，README 与契约登记）。
+/// 点击切换实验开关（契约 #62，默认关；偏好 SubgroupRailClickSwitchEnabled）
+/// 开启＝手势重路由，过滤状态机与全部消费点零改动：悬停任何 chip＝纯视觉
+///（既有 hover 层＋描边，驻留 300ms 计数/手势 ToolTip），裸单击槽 chip＝toggle
+/// 过滤（再点取消，搜索态冻结无操作），Ctrl+单击＝设收集落点（两态共用），
+/// 单击「全部」＝全量态/再点回根；关态＝现状逐字保留。
 /// </summary>
 public partial class MainWindow
 {
@@ -108,6 +113,14 @@ public partial class MainWindow
 
         // 交互记账挂在真实 MouseEnter 事件（照 CategoryTab_MouseEnter 先例，契约 #26）。
         NoteUserInteraction();
+        // 点击切换开态（契约 #62，R13 悬停误触治理）：悬停＝纯视觉——既有 hover
+        // 层与描边由模板 IsMouseOver 驱动，过滤切换退役为单击承载，此处路由早退
+        //（驻留计数/手势提示由 ToolTip 承载，见 RefreshSubgroupChipHints）。
+        if (_viewModel.SubgroupRailClickSwitchEnabled)
+        {
+            return;
+        }
+
         // 守卫链（对齐 EvaluateHoverIntent 结构，不新造状态机）：改名会话中/拖拽在途
         //（拖卡滑过 chip 也触发 MouseEnter，必须挡）/外部拖放轨道可见/搜索激活
         //（#37 搜索压倒——悬停不进入、不退搜索）任一成立即不进入。
@@ -138,6 +151,12 @@ public partial class MainWindow
 
         // 交互记账挂在真实 MouseEnter 事件（照 SubgroupChip_MouseEnter 同法，契约 #26）。
         NoteUserInteraction();
+        // 点击切换开态（契约 #62）：「全部」悬停同样退役为纯视觉，路由早退。
+        if (_viewModel.SubgroupRailClickSwitchEnabled)
+        {
+            return;
+        }
+
         // 守卫链逐字同槽 chip：改名会话中/拖拽在途/外部拖放轨道可见/搜索激活
         //（#37 搜索压倒——悬停不进入、不退搜索）任一成立即不进入。
         if (_isClosing ||
@@ -187,14 +206,86 @@ public partial class MainWindow
         }
 
         e.Handled = true;
-        // 单击＝设该分类的收集落点子分组（照分类轨「单击标签＝设默认接收分类」先例；
-        // 搜索态单击＝仅设默认——不退搜索、不动过滤，#37 修订）。角色闸同置：
-        // 记录/启动标签绝不成为落点，Core 侧 Set 守卫为纵深。
+        // Ctrl+单击（两态共用，修饰键手势族先例＝卡片 Ctrl/Ctrl+Shift 右键）＝设
+        // 该分类的收集落点子分组（照「单击标签＝设默认接收分类」先例；搜索态可用
+        // ——#37 压倒只冻结过滤，落点不连坐）。
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            SetDefaultSubgroupFromChip(chip);
+            return;
+        }
+
+        // 关态＝现状逐字保留：裸单击＝设收集落点（搜索态单击＝仅设默认——不退
+        // 搜索、不动过滤，#37 修订）；开态＝裸单击 toggle 过滤（契约 #62）。
+        if (_viewModel.SubgroupRailClickSwitchEnabled)
+        {
+            ToggleSubgroupFilterFromChip(chip);
+        }
+        else
+        {
+            SetDefaultSubgroupFromChip(chip);
+        }
+    }
+
+    /// <summary>「全部」伪 chip 单击（契约 #62 开态；关态＝无操作，#60 原文）：
+    /// 进入全量态（#60 语义原样：Filter=null＋全 chip 激活、粘性、拖放/Ctrl+A
+    /// 禁令、收起抑制自动继承），全量态再点＝回根态；搜索压倒＝过滤冻结无操作。
+    /// 「全部」无落点语义——修饰键不发明交互（Ctrl+单击＝无操作）。</summary>
+    private void SubgroupAllChip_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_isClosing ||
+            e.ChangedButton != MouseButton.Left ||
+            !_viewModel.SubgroupRailClickSwitchEnabled)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (_viewModel.IsSearchActive ||
+            Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            return;
+        }
+
+        if (_isSubgroupAllFilterActive)
+        {
+            ClearSubgroupFilter(reapplyFilter: true);
+            return;
+        }
+
+        SetSubgroupAllFilter();
+    }
+
+    /// <summary>设收集落点子分组（Ctrl+单击/关态裸单击共用；照「单击标签＝设默认
+    /// 接收分类」先例）。角色闸同置：记录/启动标签绝不成为落点，Core 侧 Set 守卫
+    /// 为纵深。</summary>
+    private void SetDefaultSubgroupFromChip(SubgroupChipViewModel chip)
+    {
         if (_viewModel.ActivePanel is { } panel &&
             BoardCategoryCatalog.IsContentBucket(panel.Category))
         {
             _viewModel.SetDefaultSubgroup(panel.Category, chip.Slot);
         }
+    }
+
+    /// <summary>开态裸单击＝toggle 过滤（契约 #62）：未激活→进入该槽过滤（清空
+    /// 选择沿 #37、激活态双指示既有）；已激活→取消回根态（toggle 先例＝搜索类型
+    /// chip「再点取消」）。搜索态＝过滤冻结无操作（#37 压倒）；过滤状态机
+    /// （SetSubgroupFilter/ClearSubgroupFilter）零改动复用。</summary>
+    private void ToggleSubgroupFilterFromChip(SubgroupChipViewModel chip)
+    {
+        if (_viewModel.IsSearchActive)
+        {
+            return;
+        }
+
+        if (_subgroupFilterSlot == chip.Slot)
+        {
+            ClearSubgroupFilter(reapplyFilter: true);
+            return;
+        }
+
+        SetSubgroupFilter(chip);
     }
 
     private void SetSubgroupFilter(SubgroupChipViewModel chip)
@@ -259,6 +350,43 @@ public partial class MainWindow
         {
             ApplyBoardListFilter();
         }
+    }
+
+    /// <summary>chip 计数与驻留提示唯一喂数点（契约 #62）：计数＝激活分类该槽
+    /// 全部卡（含置顶，读源集合）；提示文本按开关组稿——开态两行（名·计数＋手势
+    /// 提示，模板 ToolTip 绑定 ToolTipText、InitialShowDelay=300），关态恒 null
+    ///（现状零变化）。触发＝面板激活/改名提交（RefreshSubgroupChips 伴随点）、
+    /// 既有集合变化点（ActivePanelItems_EmptyStateChanged）、拖卡指派
+    ///（SubgroupChip_Drop）与开关翻转（ApplySubgroupRailClickSwitchPreference）；
+    /// 非内容桶面板无轨无消费面直接返回。后台导入路径的集合变化可能非 UI 线程，
+    /// 统一封送回 UI 线程（与 UpdateEmptyStates 同法）。</summary>
+    private void RefreshSubgroupChipHints()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(RefreshSubgroupChipHints);
+            return;
+        }
+
+        if (_viewModel.ActivePanel is not { } panel ||
+            !BoardCategoryCatalog.IsContentBucket(panel.Category))
+        {
+            return;
+        }
+
+        var clickSwitch = _viewModel.SubgroupRailClickSwitchEnabled;
+        foreach (var chip in _viewModel.SubgroupChips)
+        {
+            chip.CardCount = panel.Items.Count(item => item.Subgroup == chip.Slot);
+            chip.ToolTipText = clickSwitch
+                ? $"{chip.DisplayName} · {chip.CardCount} 张卡片\n单击查看 · Ctrl+单击设为收集落点 · 双击改名"
+                : null;
+        }
+
+        _viewModel.SubgroupAllChip.CardCount = panel.Items.Count;
+        _viewModel.SubgroupAllChip.ToolTipText = clickSwitch
+            ? $"{_viewModel.SubgroupAllChip.DisplayName} · {_viewModel.SubgroupAllChip.CardCount} 张卡片\n单击查看全部"
+            : null;
     }
 
     // ---- 视觉分组零指派引导（2026-11-06，契约 #57 形态②可用性扩展） ----
@@ -370,6 +498,7 @@ public partial class MainWindow
                     panel.Category == category)
                 {
                     _viewModel.RefreshSubgroupChips(_settings, category);
+                    RefreshSubgroupChipHints();
                 }
 
                 _board.SetSubgroupDisplay(_viewModel.SubgroupDisplay, _settings);
@@ -450,5 +579,7 @@ public partial class MainWindow
 
         e.Effects = DragDropEffects.Move;
         await _mutations.AssignSubgroupAsync(itemIds, chip.Slot);
+        // 指派改变槽计数（契约 #62 驻留提示口径）：归属落板后同步喂数。
+        RefreshSubgroupChipHints();
     }
 }

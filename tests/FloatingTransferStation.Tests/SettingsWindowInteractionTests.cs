@@ -1760,8 +1760,10 @@ public sealed class SettingsWindowInteractionTests
     }
 
     [STATestMethod]
-    public void SubgroupAllChipToggle_DefaultsOffAppliesImmediatelyAndPersistsAcrossReopen()
+    public void SubgroupRailClickSwitchToggle_DefaultsOffAppliesImmediatelyAndPersistsAcrossReopen()
     {
+        // 子分组轨点击切换（契约 #62，实验性第四项，批次 2026-11-08
+        // interaction-unify-batch d1）：默认关＋即时生效＋原子保存＋重开回显。
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
         var window = CreateWindow(
@@ -1775,33 +1777,30 @@ public sealed class SettingsWindowInteractionTests
             var settings = OpenSettings(window);
             ((RadioButton)settings.FindName("SettingsNavGeneral")!).IsChecked = true;
             CompleteLayout(window);
-            var toggle = (CheckBox)settings.FindName("SubgroupAllChipToggle")!;
+            var toggle = (CheckBox)settings.FindName("SubgroupRailClickSwitchToggle")!;
             Assert.IsNotNull(toggle);
-            Assert.IsFalse(toggle.IsChecked!.Value, "「全部」按钮默认关闭（2026-11-07 起，实验性）。");
+            Assert.IsFalse(toggle.IsChecked!.Value, "子分组轨点击切换默认关闭（实验性）。");
             Assert.IsNull(
                 preferencesStore.LastSaved,
                 "初始化同步段不得触发保存（_isSynchronizingControls 守卫）。");
 
             toggle.IsChecked = true;
             CompleteLayout(window);
-            Assert.IsTrue(window.CurrentPreferences.SubgroupAllChipEnabled, "改动必须立即生效（契约 #5）。");
-            Assert.IsTrue(preferencesStore.LastSaved!.SubgroupAllChipEnabled, "改动必须立即落偏好存储。");
-            var viewModel = (MainWindowViewModel)window.DataContext;
-            Assert.IsTrue(viewModel.SubgroupAllChipEnabled, "开关经 ApplyPreferences 喂值到窗口 VM（轨投影消费源）。");
-            Assert.AreEqual(5, viewModel.SubgroupRailColumnCount, "VM 列数投影 4→5。");
+            Assert.IsTrue(window.CurrentPreferences.SubgroupRailClickSwitchEnabled, "改动必须立即生效（契约 #5）。");
+            Assert.IsTrue(preferencesStore.LastSaved!.SubgroupRailClickSwitchEnabled, "改动必须立即落偏好存储。");
 
             // 重开设置窗：开关状态必须来自已保存偏好而非控件残留。
             settings.Close();
             var reopened = OpenSettings(window);
             ((RadioButton)reopened.FindName("SettingsNavGeneral")!).IsChecked = true;
             CompleteLayout(window);
-            var reopenedToggle = (CheckBox)reopened.FindName("SubgroupAllChipToggle")!;
+            var reopenedToggle = (CheckBox)reopened.FindName("SubgroupRailClickSwitchToggle")!;
             Assert.IsTrue(reopenedToggle.IsChecked!.Value, "重开设置窗必须反映已保存的新值。");
 
             reopenedToggle.IsChecked = false;
             CompleteLayout(window);
-            Assert.IsFalse(window.CurrentPreferences.SubgroupAllChipEnabled, "再关闭必须即时生效。");
-            Assert.IsFalse(preferencesStore.LastSaved.SubgroupAllChipEnabled);
+            Assert.IsFalse(window.CurrentPreferences.SubgroupRailClickSwitchEnabled, "再关闭必须即时生效。");
+            Assert.IsFalse(preferencesStore.LastSaved!.SubgroupRailClickSwitchEnabled);
             reopened.Close();
         }
         finally

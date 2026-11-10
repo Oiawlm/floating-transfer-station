@@ -226,9 +226,10 @@ public partial class MainWindow : Window
         // 自动重整队会覆盖用户在 GroupedView 内拖出的有意新 run。
         _viewModel.SubgroupDisplay = _preferences.SubgroupDisplay;
         _board.SetSubgroupDisplay(_preferences.SubgroupDisplay, _settings);
-        // 子分组「全部」伪 chip 开关构造段镜像（契约 #57 修订）：启动不走
-        // ApplyPreferences，漏本行＝重启后轨首「全部」消失（沿 DragOut 镜像先例）。
-        _viewModel.SubgroupAllChipEnabled = _preferences.SubgroupAllChipEnabled;
+        // 子分组轨点击切换实验开关（契约 #62）：构造段镜像——启动不走
+        // ApplyPreferences，漏本行＝重启后开关失效（沿 DragOut 镜像先例，#58 教训）；
+        // 默认关＝现状零行为变化。
+        _viewModel.SubgroupRailClickSwitchEnabled = _preferences.SubgroupRailClickSwitchEnabled;
         // 插件目录态（Issue #240 插件钮可见性单一来源）：启动装载先于窗口构造
         //（App 组合根），构造期即同步；后续目录变化经设置路径刷新（见
         // MainWindow.Settings.cs）。
@@ -241,8 +242,11 @@ public partial class MainWindow : Window
         _statusTimer.Tick += StatusTimer_Tick;
         _topmostTimer = new DispatcherTimer { Interval = TopmostReassertInterval };
         _topmostTimer.Tick += (_, _) => ReassertTopmost();
-        _edgeHideRecallTimer = new DispatcherTimer { Interval = EdgeHideRecallPollInterval };
-        _edgeHideRecallTimer.Tick += EdgeHideRecallTimer_Tick;
+        _edgePeekExpandIntentTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(DesignTokens.EdgePeekExpandDwellMs),
+        };
+        _edgePeekExpandIntentTimer.Tick += EdgePeekExpandIntentTimer_Tick;
         InitializeDailyReviewEditing();
         InitializeAutoCleanup();
         InitializeUpdates();
@@ -326,7 +330,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_edgeHide.IsDocked)
+        if (_edgeHide.IsPeek)
         {
             RestoreFromEdgeHide();
             return;
@@ -498,13 +502,14 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 显示器/工作区环境变化（WM_DISPLAYCHANGE、WM_SETTINGCHANGE）：贴边隐藏的
-    /// 离屏窗口在新显示器布局下可能失去回位路径，立即恢复（防找不到窗口）；
+    /// 显示器/工作区环境变化（WM_DISPLAYCHANGE、WM_SETTINGCHANGE）：peek 态窗口
+    /// 在新显示器布局下可能失去找回路径，立即展开恢复（防找不到窗口）——展开动画
+    /// 随后的重贴齐应用会被 ReapplyCurrentPlacement 取消并落到新布局的展开放置；
     /// 工作区可能已改变，按当前面板状态重新贴齐，可见态外形不变。
     /// </summary>
     private void OnDisplayEnvironmentChanged()
     {
-        if (_edgeHide.IsDocked)
+        if (_edgeHide.IsPeek)
         {
             RestoreFromEdgeHide();
         }

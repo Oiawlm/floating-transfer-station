@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -1001,6 +1002,134 @@ public sealed partial class MainWindowInteractionTests
                 collapsedTab.RaiseEvent(NewDragEventArgs(data, DragDrop.DragEnterEvent, collapsedTab)));
 
             Assert.IsTrue(((MainWindowViewModel)window.DataContext).IsExternalDropRailVisible);
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    /// <summary>
+    /// 契约 #12 例外通道（R12 peek，Issue #353）：经唯一窗口矩形动画服务
+    /// WindowPlacementAnimator 的连续迁移允许中间矩形，本测试锁定例外条款的可判定
+    /// 语义——① 逐帧单调且介于初终态之间、Top/尺寸恒不变、终态唯一（末帧精确落
+    /// 终态）且完成回调恰一次；② 单一权威：动画期间 ApplyPlacement 先取消动画
+    /// （到达终态）再应用，取消不回调完成、后续帧不再应用；③ 可中断可重定向：
+    /// Redirect 捕获当前实时进度为新起点（禁原点重放）、时长按剩余距离比例重映射
+    /// （封顶原时长）。注入手动时钟逐帧驱动（减动效退化＝不进入本通道，由
+    /// EdgePeek_ReducedMotionCollapsesDirectlyToTerminalState 锁定）。
+    /// </summary>
+    [STATestMethod]
+    public void PlacementAnimation_SingleAuthorityMonotonicTerminalUnique()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            Assert.IsTrue(GetWindowRect(handle, out var startRect));
+            var start = new PhysicalRectangle(
+                startRect.Left,
+                startRect.Top,
+                startRect.Right,
+                startRect.Bottom);
+            var shift = 96;
+            var forward = start with { Left = start.Left + shift, Right = start.Right + shift };
+            var clock = new ManualPlacementAnimationClock();
+            var animator = new WindowPlacementAnimator(handle, clock);
+            // 注册进窗口的矩形权威位：ApplyPlacement 的「先取消动画」仲裁对本实例
+            // 生效（单一权威的完整闭环，否则测试自建 animator 游离在窗口账本之外）。
+            SetPrivateField(window, "_edgePeekAnimator", animator);
+            // 起始账本快照：动画帧移动 HWND 时 WPF 的 Left/Top DP 随 WM_MOVE 同步
+            // （中段读 window.Left 拿到的是飞行中位置）——段②的新放置以快照为准。
+            var ledgerAtStart = new WindowPlacement(window.Left, window.Top, window.Width, window.Height);
+
+            // ① 连续受控迁移：收缩方向的加速出场段。
+            var completed = 0;
+            var observedLefts = new List<int>();
+            animator.Begin(
+                start,
+                forward,
+                DesignTokens.NormalDurationMs,
+                FadeAnimation.ExitEasing,
+                onCompleted: () => completed++);
+            for (var t = 8; t < DesignTokens.NormalDurationMs; t += 8)
+            {
+                clock.AdvanceTo(t);
+                Assert.IsTrue(GetWindowRect(handle, out var frame));
+                observedLefts.Add(frame.Left);
+                Assert.IsTrue(
+                    frame.Left >= start.Left && frame.Left <= forward.Left,
+                    $"中间帧 Left={frame.Left} 越出 [{start.Left},{forward.Left}]。");
+                Assert.AreEqual(startRect.Top, frame.Top, 1, "平移动画 Top 恒不变。");
+                Assert.AreEqual(startRect.Width, frame.Width, 1, "平移动画尺寸恒不变。");
+                Assert.AreEqual(startRect.Height, frame.Height, 1);
+            }
+
+            clock.AdvanceTo(DesignTokens.NormalDurationMs);
+            Assert.AreEqual(1, completed, "完成回调恰一次。");
+            Assert.IsTrue(GetWindowRect(handle, out var terminalRect));
+            Assert.AreEqual(forward.Left, terminalRect.Left, 0, "末帧精确落在唯一终态。");
+            CollectionAssert.AreEqual(
+                observedLefts.OrderBy(left => left).ToArray(),
+                observedLefts.ToArray(),
+                "帧序列向终态单调。");
+
+            // ② 单一权威：动画期间 ApplyPlacement 先取消（到达终态）再应用新放置。
+            var canceledSegmentCompletions = 0;
+            animator.Begin(
+                forward,
+                start,
+                DesignTokens.NormalDurationMs,
+                FadeAnimation.EnterEasing,
+                onCompleted: () => canceledSegmentCompletions++);
+            clock.AdvanceTo(DesignTokens.NormalDurationMs + 40);
+            Assert.IsTrue(animator.IsRunning, "前置：第二段动画在途。");
+            InvokePrivate(window, "ApplyPlacement", ledgerAtStart);
+            Assert.IsFalse(animator.IsRunning, "单一权威：ApplyPlacement 取消在途动画。");
+            Assert.AreEqual(0, canceledSegmentCompletions, "取消路径不回调完成。");
+            Assert.IsTrue(GetWindowRect(handle, out var appliedRect));
+            Assert.AreEqual(
+                start.Left,
+                appliedRect.Left,
+                1,
+                "取消（到达终态）后新放置立即生效。");
+            clock.AdvanceTo(DesignTokens.NormalDurationMs + 80);
+            Assert.IsTrue(GetWindowRect(handle, out var afterCancel));
+            Assert.AreEqual(appliedRect.Left, afterCancel.Left, 0, "取消后不再应用后续帧。");
+
+            // ③ 重定向禁原点重放：start→forward 中段重定向回 start，新段起点＝当前
+            // 实时进度（不回到本段原点 start 也不跳终态）、时长按剩余距离比例重映射。
+            var redirectCompletions = 0;
+            animator.Begin(
+                start,
+                forward,
+                DesignTokens.SlowDurationMs,
+                FadeAnimation.EnterEasing,
+                onCompleted: () => redirectCompletions++);
+            clock.AdvanceTo(DesignTokens.NormalDurationMs + 120 + DesignTokens.SlowDurationMs / 2);
+            Assert.IsTrue(GetWindowRect(handle, out var midFlight));
+            Assert.IsTrue(
+                midFlight.Left > start.Left && midFlight.Left < forward.Left,
+                $"前置：重定向发生在中段（Left={midFlight.Left}）。");
+            animator.Redirect(
+                start,
+                DesignTokens.SlowDurationMs,
+                FadeAnimation.ExitEasing,
+                onCompleted: () => redirectCompletions++);
+            clock.AdvanceTo(DesignTokens.NormalDurationMs + 120 + DesignTokens.SlowDurationMs / 2 + 20);
+            Assert.IsTrue(GetWindowRect(handle, out var afterRedirect));
+            Assert.IsTrue(
+                afterRedirect.Left <= midFlight.Left && afterRedirect.Left > start.Left,
+                $"重定向后从当前进度 {midFlight.Left} 反转（观测 {afterRedirect.Left}），禁原点重放。");
+            clock.AdvanceTo(DesignTokens.NormalDurationMs + 120 + 2 * DesignTokens.SlowDurationMs);
+            Assert.AreEqual(1, redirectCompletions, "重定向段完成恰一次（原段回调被替换）。");
+            Assert.IsTrue(GetWindowRect(handle, out var redirectTerminal));
+            Assert.AreEqual(start.Left, redirectTerminal.Left, 0, "重定向终态唯一。");
         }
         finally
         {

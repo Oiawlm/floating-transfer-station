@@ -883,50 +883,30 @@ public sealed class AppPreferencesTests
     }
 
     [TestMethod]
-    public void Default_DisablesSubgroupAllChip()
+    public void OlderJson_WithRemovedSubgroupAllChipField_StillLoads()
     {
-        Assert.IsFalse(
-            AppPreferences.Default.SubgroupAllChipEnabled,
-            "默认关闭（2026-11-07 起，实验性；聚合视图交互仍在打磨）。");
-    }
-
-    [TestMethod]
-    public void JsonRoundTrip_PreservesSubgroupAllChipEnabled()
-    {
-        var storeOptions = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            Converters = { new JsonStringEnumConverter() }
-        };
-        foreach (var enabled in new[] { false, true })
-        {
-            var preferences = AppPreferences.Default with { SubgroupAllChipEnabled = enabled };
-
-            var serialized = JsonSerializer.Serialize(preferences, storeOptions);
-            StringAssert.Contains(serialized, "\"subgroupAllChipEnabled\"", "落盘键名必须是 subgroupAllChipEnabled（camelCase）。");
-            var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
-
-            Assert.AreEqual(preferences, restored);
-            Assert.AreEqual(enabled, restored!.SubgroupAllChipEnabled);
-        }
-    }
-
-    [TestMethod]
-    public void OlderJson_WithoutSubgroupAllChipField_FallsBackToDisabled()
-    {
+        // 「全部」chip 转结构性恒在（契约 #60 修订，批次 2026-11-08
+        // interaction-unify-batch a3）删除了 SubgroupAllChipEnabled（1.71.0 引入）：
+        // 开关时代的 preferences.json 仍带着该字段，加载按未知成员忽略，
+        // 不抛错、不回落任何语义——「全部」恒居轨首、不可关闭（照 #36
+        // RightClickCardCopyEnabled 移除先例）。
         var storeOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             Converters = { new JsonStringEnumConverter() }
         };
         var restored = JsonSerializer.Deserialize<AppPreferences>(
-            """{"themeMode":"Light","interfaceFont":null}""",
+            """{"themeMode":"Dark","animationsEnabled":true,"subgroupAllChipEnabled":false,"subgroupDisplay":"ChipRail"}""",
             storeOptions);
 
         Assert.IsNotNull(restored);
+        Assert.AreEqual(ThemePreference.Dark, restored.ThemeMode);
+        Assert.IsTrue(restored.AnimationsEnabled);
+        Assert.AreEqual(SubgroupDisplayMode.ChipRail, restored.SubgroupDisplay);
+        var saved = JsonSerializer.Serialize(restored, storeOptions);
         Assert.IsFalse(
-            restored.SubgroupAllChipEnabled,
-            "缺字段回落构造默认＝关闭。");
+            saved.Contains("subgroupAllChip", StringComparison.OrdinalIgnoreCase),
+            "再落盘不得写回已移除的字段。");
     }
 
     [TestMethod]
@@ -976,5 +956,57 @@ public sealed class AppPreferencesTests
             0,
             restored.ExperimentalDefaultsMigrationVersion,
             "旧 preferences.json 缺戳字段时必须回落 0（未迁移＝下次启动重放迁移，幂等收敛）。");
+    }
+
+    [TestMethod]
+    public void Default_DisablesSubgroupRailClickSwitch()
+    {
+        // 子分组轨点击切换（契约 #62，批次 2026-11-08-interaction-unify-batch d1）：
+        // 实验性默认关＝全用户零行为变化（悬停即进＋单击设默认现状逐字保留）。
+        Assert.IsFalse(
+            AppPreferences.Default.SubgroupRailClickSwitchEnabled,
+            "默认关＝零打扰，沿实验开关先例。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesSubgroupRailClickSwitchEnabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        foreach (var enabled in new[] { false, true })
+        {
+            var preferences = AppPreferences.Default with { SubgroupRailClickSwitchEnabled = enabled };
+
+            var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+            StringAssert.Contains(
+                serialized,
+                "\"subgroupRailClickSwitchEnabled\"",
+                "落盘键名必须是 subgroupRailClickSwitchEnabled（camelCase）。");
+            var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+            Assert.AreEqual(preferences, restored);
+            Assert.AreEqual(enabled, restored!.SubgroupRailClickSwitchEnabled);
+        }
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutSubgroupRailClickSwitchField_FallsBackToDisabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","interfaceFont":null}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsFalse(
+            restored.SubgroupRailClickSwitchEnabled,
+            "旧 preferences.json 缺字段时必须回落默认关闭（免迁移；不进 #59 一次性迁移）。");
     }
 }

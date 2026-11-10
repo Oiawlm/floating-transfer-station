@@ -10,9 +10,9 @@ public readonly record struct WorkArea(double Left, double Top, double Width, do
 public readonly record struct WindowPlacement(double Left, double Top, double Width, double Height);
 
 /// <summary>
-/// 物理像素矩形（与 <see cref="MonitorBounds"/>、Win32 坐标同系）。贴边隐藏的
-/// 回位判定全部在物理像素上进行：GetCursorPos 物理坐标直比，不做任何运行时
-/// DPI 换算（窗口离屏后其 CompositionTarget 变换不可信）。
+/// 物理像素矩形（与 <see cref="MonitorBounds"/>、Win32 坐标同系）。peek 几何
+/// （收缩目标、把手命中重验）全部在物理像素上进行：GetCursorPos 物理坐标直比，
+/// DIP→物理换算只在入口经 CompositionTarget 一次完成。
 /// </summary>
 public readonly record struct PhysicalRectangle(int Left, int Top, int Right, int Bottom)
 {
@@ -26,11 +26,6 @@ public readonly record struct PhysicalRectangle(int Left, int Top, int Right, in
 
 public static class WindowController
 {
-    /// <summary>
-    /// 整窗移出屏幕时越过最右显示器右缘的余量（物理像素）：DWM 阴影越出窗口
-    /// 矩形，只贴缘会在最右屏缘留下可见暗边，「完全移出」要求连阴影一起带走。
-    /// </summary>
-    public const int EdgeHideOffscreenClearancePx = 32;
     public static WindowPlacement Collapsed(
         WorkArea workArea,
         WindowSettings settings,
@@ -86,34 +81,19 @@ public static class WindowController
         Math.Min(Math.Max(0, desiredWidth), Math.Max(0, workArea.Width));
 
     /// <summary>
-    /// 一次性贴边隐藏的目标矩形（物理像素）：整窗平移到所有显示器右缘之外，
-    /// 尺寸与垂直位置不变。可测不变量：与每一个显示器矩形零交集——多显示器下
-    /// 右邻屏接不住滑出像素；无右邻时与「贴本屏右缘外移」等价（另有阴影余量）。
+    /// 边缘 peek 的目标矩形（物理像素，R12 契约 #17）：整窗同尺寸纯平移收缩，
+    /// 绝大部分移出隐藏时刻所在工作区右缘，屏内仅保留左侧把手。可测不变量：
+    /// 结果矩形与工作区的交集宽恰等于把手宽（handleWidthPx，调用方经
+    /// CompositionTarget 由 DIP 一次换算），Top 与尺寸不变。把手宽大于窗口宽的
+    /// 退化输入下整个窗口留在屏内（交集宽＝窗口宽，钳制为更小者）。
     /// </summary>
-    public static PhysicalRectangle EdgeHidden(
+    public static PhysicalRectangle EdgePeekPlacement(
         PhysicalRectangle window,
-        IReadOnlyList<MonitorBounds> monitors)
+        PhysicalRectangle workArea,
+        int handleWidthPx)
     {
-        if (monitors.Count == 0)
-        {
-            throw new ArgumentException("贴边隐藏至少需要一个显示器。", nameof(monitors));
-        }
-
-        var offscreenLeft = monitors.Max(candidate => candidate.Right) +
-            EdgeHideOffscreenClearancePx;
-        return window with { Left = offscreenLeft, Right = offscreenLeft + window.Width };
+        var inScreenWidth = Math.Min(handleWidthPx, window.Width);
+        var peekLeft = workArea.Right - inScreenWidth;
+        return window with { Left = peekLeft, Right = peekLeft + window.Width };
     }
-
-    /// <summary>
-    /// 贴边隐藏的回位判定区（物理像素）：隐藏时刻的屏幕内可见矩形四向外扩
-    /// 小容差（容许光标落点偏差）。光标物理坐标直比，驻留时长由调用方累积。
-    /// </summary>
-    public static PhysicalRectangle EdgeRecallZone(
-        PhysicalRectangle visibleAtHide,
-        int tolerance) =>
-        new(
-            visibleAtHide.Left - tolerance,
-            visibleAtHide.Top - tolerance,
-            visibleAtHide.Right + tolerance,
-            visibleAtHide.Bottom + tolerance);
 }

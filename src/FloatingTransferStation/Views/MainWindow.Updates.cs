@@ -18,7 +18,9 @@ namespace FloatingTransferStation.Views;
 ///（关=停调度、开=恢复）；自动检查的任何失败完全静默，手动检查失败经状态条
 /// 提示一次。检查与下载全程单飞防重入；按钮状态唯一派生自版本比较结果，下载
 /// 失败回到可用态仍点亮可重试。更新过程仅状态条反馈（下载/校验/安装进度提示），
-/// 无弹窗、无 toast。
+/// 无弹窗、无 toast。2026-11-08 修订②（契约 #26 修订②）：更新流各阶段成败与
+/// 里程碑落本地诊断日志（数据根 logs\update.log，安装器另带 /LOG 日志），UI 静默
+/// 语义零变化（日志是文件不是 UI）。
 /// </summary>
 public partial class MainWindow : Window
 {
@@ -40,13 +42,31 @@ public partial class MainWindow : Window
     private bool _isUpdateDownloadInFlight;
     private bool _assetMissingBrowserOpened;
     private UpdateCheckResult? _availableUpdate;
+    // 更新诊断日志与安装器日志目录（契约 #26 修订②）：<数据根>\logs\ 下的 update.log
+    // 与 setup-<版本>.log；写入全部静默（IO 失败在服务内吞掉），UI 零变化。
+    private UpdateDiagnosticsLog _updateDiagnostics = null!;
+    private string _updateLogDirectory = "";
 
     private void InitializeUpdates()
     {
+        // 数据根解析沿用组合根已解析的 _dataDirectory（生产＝AppPaths.CreateDefault 的
+        // 结果，不在 UI 内二次读登记）；未传目录的窗口回落默认位置 %LocalAppData%\悬浮中转站\。
+        var dataRoot = string.IsNullOrWhiteSpace(_dataDirectory)
+            ? AppPaths.DefaultDataDirectory()
+            : _dataDirectory;
+        _updateLogDirectory = Path.Combine(dataRoot, "logs");
+        _updateDiagnostics = new UpdateDiagnosticsLog(Path.Combine(_updateLogDirectory, "update.log"));
         _updateCheckTimer.Tick += (_, _) => UpdateCheckTimer_Tick();
         // 初始态文案同样经双态派生（单一来源，XAML 只作占位）。
         UpdateUpdateButtonState();
     }
+
+    /// <summary>诊断日志写点收敛：失败与里程碑各一入口，阶段由调用点给出。</summary>
+    private void LogUpdateFailure(string phase, string message) =>
+        _updateDiagnostics.Write(phase, UpdateDiagnosticsLog.FailureKind, message);
+
+    private void LogUpdateMilestone(string phase, string message) =>
+        _updateDiagnostics.Write(phase, UpdateDiagnosticsLog.MilestoneKind, message);
 
     /// <summary>
     /// 启动/恢复自动检查调度（偏好开关的唯一执行点，SourceInitialized 与
@@ -129,9 +149,11 @@ public partial class MainWindow : Window
         catch (OperationCanceledException)
         {
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            // 自动检查的任何失败完全静默（结果记录外的一切异常同按静默降级处理）。
+            // 自动检查的任何失败完全静默（结果记录外的一切异常同按静默降级处理）；
+            // 失败原因落诊断日志（文件不是 UI，静默契约不变——契约 #26 修订②）。
+            LogUpdateFailure(UpdateDiagnosticsLog.CheckPhase, $"自动检查异常：{exception.Message}");
         }
         finally
         {
@@ -187,9 +209,11 @@ public partial class MainWindow : Window
         catch (OperationCanceledException)
         {
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            // async void 的未知异常会击穿为进程崩溃：手动路径就地降级反馈。
+            // async void 的未知异常会击穿为进程崩溃：手动路径就地降级反馈；
+            // 原因同步落诊断日志（契约 #26 修订②）。
+            LogUpdateFailure(UpdateDiagnosticsLog.CheckPhase, $"手动检查异常：{exception.Message}");
             ShowStatus("检查更新失败，请稍后重试。");
         }
         finally
@@ -210,6 +234,9 @@ public partial class MainWindow : Window
     {
         if (!result.IsSuccess)
         {
+            LogUpdateFailure(
+                UpdateDiagnosticsLog.CheckPhase,
+                $"{(isManual ? "手动" : "自动")}检查失败：{result.ErrorMessage}");
             if (isManual)
             {
                 ShowStatus($"检查更新失败：{result.ErrorMessage}");
@@ -236,6 +263,10 @@ public partial class MainWindow : Window
 
         if (result.Asset is null || result.Checksums is null)
         {
+            // AssetMissing 的诊断价值最高（发行侧事故的表现形态）：手动与自动都落日志。
+            LogUpdateFailure(
+                UpdateDiagnosticsLog.CheckPhase,
+                $"新版本 {result.LatestVersion} 缺少可校验的自动更新资产（AssetMissing）。");
             if (isManual)
             {
                 ShowStatus(
@@ -250,6 +281,9 @@ public partial class MainWindow : Window
             return;
         }
 
+        LogUpdateMilestone(
+            UpdateDiagnosticsLog.CheckPhase,
+            $"发现新版本 {result.LatestVersion}，自动续接更新流。");
         _availableUpdate = result;
         UpdateUpdateButtonState();
         // 检查与安装直连：任何检查发现新版本即自动进入完整静默更新流——每次发现
@@ -299,27 +333,44 @@ public partial class MainWindow : Window
             if (!download.IsSuccess || download.InstallerPath is null)
             {
                 // 服务侧已清理临时文件；回到可用态（按钮仍点亮）由用户决定何时重试。
+                LogUpdateFailure(
+                    UpdateDiagnosticsLog.DownloadPhase,
+                    $"版本 {version} 下载/校验失败：{download.ErrorMessage ?? "未知原因"}。");
                 ShowStatus(download.ErrorMessage ?? "更新下载失败，可稍后重试。");
                 return;
             }
 
+            LogUpdateMilestone(
+                UpdateDiagnosticsLog.DownloadPhase,
+                $"版本 {version} 更新包已通过 SHA256 校验。");
             ShowStatus("更新包已通过校验，正在保存内容并准备安装…");
             await DrainBeforeUpdateAsync();
-            if (!_updateService.TryStartSilentInstaller(download.InstallerPath))
+            // 安装器日志（契约 #26 修订②双层可观测）：/LOG 指向数据根 logs 目录；
+            // 建目录失败时服务侧省略 /LOG 照常启动，可观测性不阻断更新。
+            var installerLogPath = Path.Combine(_updateLogDirectory, $"setup-{version}.log");
+            if (!_updateService.TryStartSilentInstaller(download.InstallerPath, installerLogPath))
             {
+                LogUpdateFailure(
+                    UpdateDiagnosticsLog.InstallPhase,
+                    $"无法启动更新安装程序（安装器日志 {installerLogPath}）。");
                 ShowStatus("无法启动更新安装程序，本次更新未执行，可稍后重试。");
                 return;
             }
 
+            LogUpdateMilestone(
+                UpdateDiagnosticsLog.InstallPhase,
+                $"版本 {version} 安装器已启动（/LOG={installerLogPath}），为更新退出应用。");
             RequestApplicationExit();
         }
         catch (OperationCanceledException)
         {
             // 关闭序列取消了下载：应用正在退出，无需也不应再提示。
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            // async void 的未知异常会击穿为进程崩溃：就地降级，按钮回到可用态可重试。
+            // async void 的未知异常会击穿为进程崩溃：就地降级，按钮回到可用态可重试；
+            // 原因落诊断日志（流级阶段：异常点无法归入单一阶段，契约 #26 修订②）。
+            LogUpdateFailure(UpdateDiagnosticsLog.FlowPhase, $"更新流未知异常：{exception.Message}");
             ShowStatus("更新未完成，可稍后重试。");
         }
         finally

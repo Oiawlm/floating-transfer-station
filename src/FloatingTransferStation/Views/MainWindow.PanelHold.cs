@@ -13,6 +13,7 @@ public partial class MainWindow : Window
         if (_panelState.IsPanelHoldActive)
         {
             _panelState.EndPanelHold();
+            _dockingIntentMutex.Clear(DockingIntent.PanelHold);
             UpdatePanelHoldButton();
             if (!_isClosing)
             {
@@ -20,6 +21,14 @@ public partial class MainWindow : Window
             }
 
             return;
+        }
+
+        // 互斥（R2，后激活者胜）：激活保持展开即解除贴边待命，两按钮任何时刻不同时
+        // 点亮。复用 armed 自动解除单点；贴边已离屏（防御路径）时其 IsArmed 守卫
+        // 自行 no-op，不动离屏窗口。
+        if (_dockingIntentMutex.Request(DockingIntent.PanelHold) == DockingIntent.EdgeHide)
+        {
+            DisarmEdgeHide();
         }
 
         // 固定 = 用户断言面板保持展开：作废任何待提交的收起与行进中的计时。

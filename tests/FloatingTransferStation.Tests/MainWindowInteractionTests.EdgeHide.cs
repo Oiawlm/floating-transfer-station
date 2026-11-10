@@ -1,6 +1,8 @@
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -9,13 +11,21 @@ using FloatingTransferStation.Views;
 namespace FloatingTransferStation.Tests;
 
 /// <summary>
-/// 一次性贴边隐藏的窗口层契约（1.20.0）：armed + 指针离开 → 整窗同尺寸纯移出所有
-/// 显示器（零交集）且面板保持展开；回位区驻留 ≥200ms → 恢复原矩形并解除；恢复后
-/// 再次离开仅普通轨道收起；抑制复用（PanelHold 同样抑制）；热键与显示器变化兜底；
-/// 其他收起路径解除 armed。迁移原子性：隐藏与恢复各只有一次矩形变更。
+/// 一次性贴边隐藏 peek 化的窗口层契约（R12，契约 #17，Issue #353）：armed + 指针
+/// 离开 → 整窗同尺寸平移收缩为右缘把手（与工作区交集宽＝16 DIP 把手宽）、面板保持
+/// 展开；把手 hover 意图事务（60ms 重验指针在内，#42 同族）→ 展开回原放置并解除
+/// （一次性）；展开后再次离开仅普通轨道收起；互斥（R2）沿 c1；热键与显示器变化
+/// 立即展开兜底；减动效一次直达终态；收缩途中指针回入＝从当前进度反转展开。
+/// 窗口矩形动画经唯一 WindowPlacementAnimator（#12 例外条款），测试注入手动时钟逐帧断言。
 /// </summary>
 public sealed partial class MainWindowInteractionTests
 {
+    private const string EdgeHideDefaultLabel =
+        "一次性收进屏幕边缘：鼠标离开后缩成边缘把手，移上把手自动展开";
+    private const string EdgeHideArmedLabel =
+        "已准备收进屏幕边缘，鼠标移开即缩成把手；再按一次取消";
+    private const string EdgePeekLabel = "已收进屏幕边缘：移上把手或用唤起快捷键展开";
+
     private static void ToggleEdgeHide(MainWindow window) =>
         InvokePrivate(
             window,
@@ -26,69 +36,138 @@ public sealed partial class MainWindowInteractionTests
     private static EdgeHideStateMachine EdgeHideState(MainWindow window) =>
         GetPrivateField<EdgeHideStateMachine>(window, "_edgeHide");
 
-    private static DispatcherTimer RecallTimer(MainWindow window) =>
-        GetPrivateField<DispatcherTimer>(window, "_edgeHideRecallTimer");
+    private static WindowPlacementAnimator? PeekAnimator(MainWindow window) =>
+        GetPrivateField<WindowPlacementAnimator?>(window, "_edgePeekAnimator");
 
-    private static PhysicalRectangle RecallZone(MainWindow window) =>
-        GetPrivateField<PhysicalRectangle>(window, "_edgeHideRecallZone");
+    /// <summary>注入窗口私有字段（#12 例外条款测试：把测试自建的 animator 注册进
+    /// 窗口的矩形权威位，ApplyPlacement 的取消语义才对它生效）。</summary>
+    private static void SetPrivateField<T>(MainWindow window, string fieldName, T value)
+    {
+        var field = typeof(MainWindow).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.IsNotNull(field, $"私有字段 {fieldName} 不存在。");
+        field.SetValue(window, value);
+    }
+
+    private static System.Windows.Controls.Grid PeekHandleLayer(MainWindow window) =>
+        (System.Windows.Controls.Grid)window.FindName("EdgePeekHandleLayer")!;
+
+    private static bool PanelHoldActive(MainWindow window) =>
+        GetPrivateField<PanelStateMachine>(window, "_panelState").IsPanelHoldActive;
+
+    /// <summary>当前窗口 DIP→物理换算系数（X 轴），用于把手几何与账本收口断言。</summary>
+    private static double PeekDpiScale(MainWindow window)
+    {
+        var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+        var source = System.Windows.Interop.HwndSource.FromHwnd(handle);
+        Assert.IsNotNull(source?.CompositionTarget);
+        return source.CompositionTarget.TransformToDevice.M11;
+    }
+
+    /// <summary>peek 几何锚点（物理像素）：工作区右缘与把手宽（按窗口当前 DPI 换算）。</summary>
+    private static (int WorkRightPx, int HandleWidthPx) PeekAnchor(MainWindow window)
+    {
+        var workArea = SystemParameters.WorkArea;
+        var scale = PeekDpiScale(window);
+        return (
+            (int)Math.Round((workArea.Left + workArea.Width) * scale),
+            Math.Max(1, (int)Math.Round(DesignTokens.EdgePeekHandleWidthPx * scale)));
+    }
 
     /// <summary>
-    /// armed + 模拟指针离开 + 收起节奏 tick → 整窗贴边隐藏。回位轮询真实定时器
-    /// 立即停用（回位驻留由模拟轮询单独锁定），避免测试机真实光标位置影响几何断言。
+    /// armed + 模拟指针离开 + 收起节奏 tick → 收缩为 peek 把手（减动效路径：一次直达
+    /// 终态，确定性无帧）；带动画路径由注入手动时钟的用例单独锁定。
     /// </summary>
-    private static void HideWindowAtEdge(MainWindow window)
+    private static void PeekWindowAtEdge(MainWindow window)
     {
         ToggleEdgeHide(window);
         InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
         InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-        RecallTimer(window).Stop();
-        Assert.IsTrue(EdgeHideState(window).IsDocked, "前置条件：窗口已贴边隐藏。");
+        Assert.IsTrue(EdgeHideState(window).IsPeek, "前置条件：窗口已收缩为 peek 把手。");
     }
 
-    private static void AssertIntersectsNoMonitor(in NativeRect rectangle)
+    private static void AssertRestoredToOriginal(
+        MainWindow window,
+        in NativeRect before,
+        string because)
     {
-        foreach (var monitor in MonitorBounds.AllMonitors())
-        {
-            Assert.IsTrue(
-                rectangle.Right <= monitor.Left || rectangle.Left >= monitor.Right,
-                $"隐藏矩形 {rectangle} 与显示器 [{monitor.Left},{monitor.Top},{monitor.Right},{monitor.Bottom}] 不得相交。");
-        }
+        var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+        Assert.IsTrue(GetWindowRect(handle, out var restored), because);
+        Assert.AreEqual(before.Left, restored.Left, 1, because);
+        Assert.AreEqual(before.Top, restored.Top, 1, because);
+        Assert.AreEqual(before.Width, restored.Width, 1, because);
+        Assert.AreEqual(before.Height, restored.Height, 1, because);
     }
 
     [STATestMethod]
-    public void EdgeHide_ArmedLeaveMovesWindowOffscreenKeepsPanelExpanded()
+    public void EdgePeek_ArmedLeaveCollapsesToHandleWithAnimation()
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
-        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+        // CI 代理机关闭系统动效——动画链测试显式强制开（仓内既有手法）。
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
+        var clock = new ManualPlacementAnimationClock();
+        window.PlacementAnimationClockOverride = clock;
 
         try
         {
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
-            var expandedWidth = window.Width;
-            var expandedHeight = window.Height;
             var viewModel = (MainWindowViewModel)window.DataContext;
             var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
             Assert.IsTrue(GetWindowRect(handle, out var before));
+            var (workRightPx, handleWidthPx) = PeekAnchor(window);
 
-            HideWindowAtEdge(window);
-            CompleteLayout(window);
+            ToggleEdgeHide(window);
+            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
 
-            Assert.IsTrue(GetWindowRect(handle, out var after));
+            // 提交即进入 Peek；动画起点＝当前矩形（首帧不跳变）。
+            Assert.IsTrue(EdgeHideState(window).IsPeek, "armed＋离开即提交 peek。");
+            var animator = PeekAnimator(window);
+            Assert.IsNotNull(animator);
+            Assert.IsTrue(animator.IsRunning, "收缩动画在途（167ms NormalDurationMs）。");
+            Assert.IsTrue(GetWindowRect(handle, out var first));
+            Assert.AreEqual(before.Left, first.Left, 1, "动画首帧仍在原矩形。");
+
+            // 中段帧：介于初终态之间、Top/宽高不变（纯平移）。
+            clock.AdvanceTo(80);
+            Assert.IsTrue(GetWindowRect(handle, out var mid));
+            Assert.IsTrue(
+                mid.Left > before.Left && mid.Left < workRightPx - handleWidthPx,
+                $"中段帧 Left={mid.Left} 必须介于原左缘 {before.Left} 与把手左缘 {workRightPx - handleWidthPx} 之间。");
+            Assert.AreEqual(before.Top, mid.Top, 1, "收缩是纯平移，Top 不变。");
+            Assert.AreEqual(before.Width, mid.Width, 1, "收缩是同尺寸，宽不变。");
+            Assert.AreEqual(before.Height, mid.Height, 1);
+
+            // 越过 167ms → 精确落终态：与工作区交集宽恰＝把手宽；面板保持展开。
+            clock.AdvanceTo(DesignTokens.NormalDurationMs + 40);
+            Assert.IsFalse(animator.IsRunning, "到达时长后动画完成。");
+            Assert.IsTrue(GetWindowRect(handle, out var peeked));
+            Assert.AreEqual(workRightPx - handleWidthPx, peeked.Left, 1, "把手左缘＝工作区右缘−把手宽。");
+            Assert.AreEqual(workRightPx, peeked.Left + handleWidthPx, 1, "屏内保留宽恰＝把手宽。");
+            Assert.AreEqual(before.Width, peeked.Width, 1);
+            Assert.AreEqual(before.Top, peeked.Top, 1);
+            Assert.IsTrue(viewModel.IsPanelExpanded, "peek 期间面板保持展开、内容冻结。");
             Assert.AreEqual(
-                before.Width,
-                after.Width,
-                1,
-                "贴边隐藏是同尺寸纯移动，不得收起或缩放。");
-            Assert.AreEqual(before.Height, after.Height, 1);
-            AssertIntersectsNoMonitor(after);
-            Assert.AreEqual(before.Top, after.Top, 1, "垂直位置不变。");
+                Visibility.Visible,
+                PeekHandleLayer(window).Visibility,
+                "收缩完成把手视觉登场。");
+            // 登场淡入（FillBehavior.Stop）完成后必须回落基线 1——基线写 0 会让把手
+            // 在 83ms 淡入结束后整体隐形（实测根因回归锁）。
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+            Assert.AreEqual(
+                1d,
+                PeekHandleLayer(window).Opacity,
+                0.01,
+                "登场淡入完成后把手不隐形。");
 
-            Assert.IsTrue(viewModel.IsPanelExpanded, "隐藏期间面板保持展开、内容冻结。");
-            Assert.AreEqual(expandedWidth, window.Width, 0.5);
-            Assert.AreEqual(expandedHeight, window.Height, 0.5);
+            // WPF Left/Top 账本在动画完成时一次收口。
+            Assert.AreEqual(
+                (workRightPx - handleWidthPx) / PeekDpiScale(window),
+                window.Left,
+                0.6,
+                "动画完成时 WPF 账本一次收口到把手放置。");
         }
         finally
         {
@@ -97,7 +176,51 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void EdgeHide_RecallDwellRestoresOriginalPlacementAndDisarms()
+    public void EdgePeek_ReducedMotionCollapsesDirectlyToTerminalState()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            Assert.IsTrue(GetWindowRect(handle, out var before));
+            var (workRightPx, handleWidthPx) = PeekAnchor(window);
+
+            PeekWindowAtEdge(window);
+            CompleteLayout(window);
+
+            // 减动效：不经 animator，一次矩形变更直达终态；把手即时出现（零帧淡入）。
+            Assert.IsNull(PeekAnimator(window), "减动效不创建放置动画。");
+            Assert.IsTrue(GetWindowRect(handle, out var peeked));
+            Assert.AreEqual(workRightPx - handleWidthPx, peeked.Left, 1);
+            Assert.AreEqual(before.Width, peeked.Width, 1, "同尺寸纯平移。");
+            Assert.AreEqual(before.Top, peeked.Top, 1);
+            Assert.IsTrue(viewModel.IsPanelExpanded);
+            var layer = PeekHandleLayer(window);
+            Assert.AreEqual(Visibility.Visible, layer.Visibility, "把手即时出现。");
+            Assert.AreEqual(1d, layer.Opacity, 0.01, "减动效把手无登场淡入。");
+
+            // peek 态下再离开/收起 tick 不收起（把手驻留等待展开）。
+            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+            CompleteLayout(window);
+            Assert.IsTrue(EdgeHideState(window).IsPeek, "peek 态不得普通收起。");
+            Assert.IsTrue(viewModel.IsPanelExpanded);
+        }
+        finally
+        {
+            RestoreAndClose(window);
+        }
+    }
+
+    [STATestMethod]
+    public void EdgePeek_HandleHoverDwellExpandsToOriginalPlacementAndDisarms()
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
@@ -110,30 +233,133 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
             Assert.IsTrue(GetWindowRect(handle, out var before));
+            var savedCursor = SaveCursorPosition();
 
-            HideWindowAtEdge(window);
-            var zone = RecallZone(window);
-            var cursorX = (zone.Left + zone.Right) / 2;
-            var cursorY = (zone.Top + zone.Bottom) / 2;
+            PeekWindowAtEdge(window);
+            Assert.IsTrue(GetWindowRect(handle, out var peeked));
+            var midY = (peeked.Top + peeked.Bottom) / 2;
 
-            // 首次命中只记起点；驻留不足 200ms 不得恢复。
-            InvokePrivate(window, "HandleEdgeHideRecallPoll", cursorX, cursorY, 1000L);
-            Assert.IsTrue(EdgeHideState(window).IsDocked);
-            InvokePrivate(window, "HandleEdgeHideRecallPoll", cursorX, cursorY, 1149L);
-            Assert.IsTrue(EdgeHideState(window).IsDocked);
+            // 意图事务布防后指针已离开窗口：到期重验失败，不得展开。
+            InvokePrivate(window, "Root_MouseEnter", window, NewMouseEventArgs());
+            Assert.IsTrue(
+                SetCursorPos(peeked.Left - 60, midY),
+                "真实光标必须可移动到窗口外。");
+            InvokePrivate(window, "EdgePeekExpandIntentTimer_Tick", null, EventArgs.Empty);
+            Assert.IsTrue(EdgeHideState(window).IsPeek, "指针不在窗口内，意图到期不得展开。");
 
-            // 驻留达阈值 → 恢复原矩形原形并解除（一次性）。
-            InvokePrivate(window, "HandleEdgeHideRecallPoll", cursorX, cursorY, 1200L);
+            // 指针在把手内：到期重验通过 → 展开回原放置并解除（一次性）。
+            Assert.IsTrue(
+                SetCursorPos(peeked.Left + 4, midY),
+                "真实光标必须可移上把手。");
+            InvokePrivate(window, "Root_MouseEnter", window, NewMouseEventArgs());
+            InvokePrivate(window, "EdgePeekExpandIntentTimer_Tick", null, EventArgs.Empty);
             CompleteLayout(window);
 
-            Assert.IsFalse(EdgeHideState(window).IsDocked);
+            Assert.IsFalse(EdgeHideState(window).IsPeek, "把手 hover 展开后解除（一次性）。");
             Assert.IsFalse(EdgeHideState(window).IsArmed);
-            Assert.IsFalse(RecallTimer(window).IsEnabled, "恢复后必须停轮询。");
-            Assert.IsTrue(GetWindowRect(handle, out var restored));
-            Assert.AreEqual(before.Left, restored.Left, 1, "回位必须回到原矩形。");
-            Assert.AreEqual(before.Top, restored.Top, 1);
-            Assert.AreEqual(before.Width, restored.Width, 1);
-            Assert.AreEqual(before.Height, restored.Height, 1);
+            AssertRestoredToOriginal(window, before, "展开必须回到原矩形原形。");
+            Assert.AreEqual(
+                Visibility.Collapsed,
+                PeekHandleLayer(window).Visibility,
+                "展开后把手视觉退场。");
+            Assert.IsTrue(((MainWindowViewModel)window.DataContext).IsPanelExpanded);
+            RestoreCursorPosition(savedCursor);
+        }
+        finally
+        {
+            RestoreAndClose(window);
+        }
+    }
+
+    [STATestMethod]
+    public void EdgePeek_ReverseRescueDuringCollapseInterruptsAndExpandsFromCurrentOffset()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+        // CI 代理机关闭系统动效——动画链测试显式强制开（仓内既有手法）。
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
+        var clock = new ManualPlacementAnimationClock();
+        window.PlacementAnimationClockOverride = clock;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            Assert.IsTrue(GetWindowRect(handle, out var before));
+            var (workRightPx, handleWidthPx) = PeekAnchor(window);
+            var savedCursor = SaveCursorPosition();
+
+            ToggleEdgeHide(window);
+            InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
+            InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
+            Assert.IsTrue(EdgeHideState(window).IsPeek);
+
+            // 收缩中段（ExitEasing 前慢后快，80ms 时进度约 10%）：指针追入窗口本体。
+            clock.AdvanceTo(80);
+            Assert.IsTrue(GetWindowRect(handle, out var midCollapse));
+            Assert.IsTrue(
+                midCollapse.Left > before.Left && midCollapse.Left < workRightPx - handleWidthPx,
+                "前置：收缩进行中（介于初终态之间）。");
+            Assert.IsTrue(
+                SetCursorPos(midCollapse.Left + 4, (midCollapse.Top + midCollapse.Bottom) / 2),
+                "真实光标必须可追入收缩中的窗口。");
+            InvokePrivate(window, "Root_MouseEnter", window, NewMouseEventArgs());
+
+            // 60ms 意图事务（真实 DispatcherTimer）到期重验指针在内 → 从当前进度反转。
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(200));
+
+            var animator = PeekAnimator(window);
+            Assert.IsNotNull(animator);
+            Assert.IsTrue(animator.IsRunning, "救援触发展开动画（Redirect）。");
+            Assert.IsFalse(EdgeHideState(window).IsPeek, "展开提交即解除一次性相位。");
+            Assert.IsTrue(GetWindowRect(handle, out var atReverse));
+            Assert.IsTrue(
+                atReverse.Left >= midCollapse.Left - 1 && atReverse.Left <= workRightPx,
+                $"反转起点＝当前实时进度 {midCollapse.Left}，禁原点重放。");
+
+            // 推完重映射时长（封顶 250ms）→ 回到原放置，账本一次收口。
+            clock.AdvanceTo(80 + DesignTokens.SlowDurationMs + 100);
+            Assert.IsFalse(animator.IsRunning);
+            AssertRestoredToOriginal(window, before, "救援展开必须回到原矩形。");
+            Assert.AreEqual(
+                before.Left / PeekDpiScale(window),
+                window.Left,
+                1.5,
+                "账本收口到原放置。");
+            RestoreCursorPosition(savedCursor);
+        }
+        finally
+        {
+            RestoreAndClose(window);
+        }
+    }
+
+    [STATestMethod]
+    public void EdgePeek_GlobalHotkeyRestoresPeekWindow()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            Assert.IsTrue(
+                GetWindowRect(
+                    new System.Windows.Interop.WindowInteropHelper(window).Handle,
+                    out var before));
+
+            PeekWindowAtEdge(window);
+            InvokePrivate(window, "OnGlobalHotkeyPressed");
+            CompleteLayout(window);
+
+            Assert.IsFalse(EdgeHideState(window).IsPeek, "热键是找回兜底，必须立即展开。");
+            Assert.IsFalse(EdgeHideState(window).IsArmed);
+            AssertRestoredToOriginal(window, before, "热键展开必须回到原矩形。");
             Assert.IsTrue(((MainWindowViewModel)window.DataContext).IsPanelExpanded);
         }
         finally
@@ -143,7 +369,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void EdgeHide_RecallLeaveResetsDwellProgress()
+    public void EdgePeek_DisplayEnvironmentChangeRestoresPeekWindow()
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
@@ -154,24 +380,18 @@ public sealed partial class MainWindowInteractionTests
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
-            HideWindowAtEdge(window);
-            var zone = RecallZone(window);
-            var insideX = (zone.Left + zone.Right) / 2;
-            var insideY = (zone.Top + zone.Bottom) / 2;
-            var outsideX = zone.Left - 100;
-            var outsideY = zone.Top - 100;
-
-            InvokePrivate(window, "HandleEdgeHideRecallPoll", insideX, insideY, 1000L);
-            // 离开回位区即重置驻留进度，重新进入重新计时。
-            InvokePrivate(window, "HandleEdgeHideRecallPoll", outsideX, outsideY, 1150L);
-            InvokePrivate(window, "HandleEdgeHideRecallPoll", insideX, insideY, 1160L);
-            InvokePrivate(window, "HandleEdgeHideRecallPoll", insideX, insideY, 1300L);
             Assert.IsTrue(
-                EdgeHideState(window).IsDocked,
-                "重进后 140ms 不得恢复（扫边/短停不得唤回）。");
+                GetWindowRect(
+                    new System.Windows.Interop.WindowInteropHelper(window).Handle,
+                    out var before));
 
-            InvokePrivate(window, "HandleEdgeHideRecallPoll", insideX, insideY, 1361L);
-            Assert.IsFalse(EdgeHideState(window).IsDocked, "重进后驻留 201ms 必须恢复。");
+            PeekWindowAtEdge(window);
+            InvokePrivate(window, "OnDisplayEnvironmentChanged");
+            CompleteLayout(window);
+
+            // 显示器布局变化后把手可能失去找回路径，必须立即展开（防找不到窗口）。
+            Assert.IsFalse(EdgeHideState(window).IsPeek);
+            AssertRestoredToOriginal(window, before, "显示器变化必须立即展开并贴齐工作区。");
         }
         finally
         {
@@ -180,7 +400,54 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void EdgeHide_AfterRecallNextLeaveCollapsesToRailNormally()
+    public void EdgePeek_HandleHoverRealInputDwellExpands()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            Assert.IsTrue(GetWindowRect(handle, out var before));
+            var savedCursor = SaveCursorPosition();
+
+            PeekWindowAtEdge(window);
+            Assert.IsTrue(GetWindowRect(handle, out var peeked));
+            var midY = (peeked.Top + peeked.Bottom) / 2;
+
+            // 契约 #13：把手 hover 展开必须 Win32 消息直驱守护——SetCursorPos 生成
+            // 真实 WM_MOUSEMOVE，走完整 WPF 输入管线（MouseEnter → 意图布防 → 60ms
+            // 到期重验 → 展开），全程不注入合成路由事件。先移到窗外建立「在外」态
+            //（前序测试可能把真实光标留在窗口矩形内，驻留指针不产生 enter 转换），
+            // 再移上把手保证 outside→inside 转换真实发生。
+            Assert.IsTrue(
+                SetCursorPos(peeked.Left - 60, midY),
+                "真实光标必须可移动到窗口外。");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(80));
+            Assert.IsTrue(
+                SetCursorPos(peeked.Left + 4, midY),
+                "真实光标必须可移上把手。");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(250));
+            CompleteLayout(window);
+
+            Assert.IsFalse(
+                EdgeHideState(window).IsPeek,
+                "真实鼠标移上把手（完整输入管线）必须触发展开。");
+            AssertRestoredToOriginal(window, before, "真实输入展开回到原矩形。");
+            RestoreCursorPosition(savedCursor);
+        }
+        finally
+        {
+            RestoreAndClose(window);
+        }
+    }
+
+    [STATestMethod]
+    public void EdgePeek_AfterExpandNextLeaveCollapsesToRailNormally()
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
@@ -193,28 +460,17 @@ public sealed partial class MainWindowInteractionTests
             CompleteLayout(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
 
-            HideWindowAtEdge(window);
-            var zone = RecallZone(window);
-            InvokePrivate(
-                window,
-                "HandleEdgeHideRecallPoll",
-                (zone.Left + zone.Right) / 2,
-                (zone.Top + zone.Bottom) / 2,
-                1000L);
-            InvokePrivate(
-                window,
-                "HandleEdgeHideRecallPoll",
-                (zone.Left + zone.Right) / 2,
-                (zone.Top + zone.Bottom) / 2,
-                1300L);
-            Assert.IsFalse(EdgeHideState(window).IsDocked);
+            PeekWindowAtEdge(window);
+            InvokePrivate(window, "OnGlobalHotkeyPressed");
+            CompleteLayout(window);
+            Assert.IsFalse(EdgeHideState(window).IsPeek);
 
-            // 一次性：恢复后再次离开只剩普通轨道收起，不再次隐藏。
+            // 一次性：展开后再次离开只剩普通轨道收起，不再次收缩。
             InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
             InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
             CompleteLayout(window);
 
-            Assert.IsFalse(viewModel.IsPanelExpanded, "恢复后离开必须普通收起。");
+            Assert.IsFalse(viewModel.IsPanelExpanded, "展开后离开必须普通收起。");
             Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);
             Assert.AreEqual(EdgeHidePhase.Idle, EdgeHideState(window).Phase);
         }
@@ -237,8 +493,6 @@ public sealed partial class MainWindowInteractionTests
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
             var viewModel = (MainWindowViewModel)window.DataContext;
-            var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-            Assert.IsTrue(GetWindowRect(handle, out var before));
 
             ToggleEdgeHide(window);
             Assert.IsTrue(EdgeHideState(window).IsArmed);
@@ -260,7 +514,7 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
-    public void EdgeHide_PanelHoldSuppressesDockUntilReleased()
+    public void EdgeHide_PanelHoldActivationDisarmsArmedAndLaterLeaveCollapsesNormally()
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
@@ -274,93 +528,117 @@ public sealed partial class MainWindowInteractionTests
             var expandedWidth = window.Width;
             var viewModel = (MainWindowViewModel)window.DataContext;
 
-            // 抑制复用：保持展开（PanelHold）同样抑制贴边隐藏，armed 保留不悬置丢失。
+            // 互斥（R2，后激活者胜）：armed 与保持展开不得并存——激活保持展开即解除
+            // 贴边待命（armed 即灭），此后保持期间离开仍不得收缩或收起。
             ToggleEdgeHide(window);
+            Assert.IsTrue(EdgeHideState(window).IsArmed);
             TogglePanelHold(window);
+
+            Assert.AreEqual(
+                EdgeHidePhase.Idle,
+                EdgeHideState(window).Phase,
+                "激活保持展开必须解除贴边待命。");
             InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
             InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
             CompleteLayout(window);
 
-            Assert.IsTrue(viewModel.IsPanelExpanded, "保持展开期间不得隐藏。");
-            Assert.IsTrue(EdgeHideState(window).IsArmed, "抑制期间 armed 保留。");
+            Assert.IsTrue(viewModel.IsPanelExpanded, "保持展开期间不得收缩。");
+            Assert.IsTrue(PanelHoldActive(window));
             Assert.AreEqual(expandedWidth, window.Width, 0.5);
 
-            // 解除保持后下一次离开节奏提交贴边隐藏（armed 仍在）。
+            // 解除保持后的离开走常规收起（贴边待命已被互斥解除，不再恢复收缩）。
             TogglePanelHold(window);
             InvokePrivate(window, "Root_MouseLeave", window, NewMouseEventArgs());
             InvokePrivate(window, "CollapseTimer_Tick", null, EventArgs.Empty);
-            RecallTimer(window).Stop();
             CompleteLayout(window);
 
-            Assert.IsTrue(EdgeHideState(window).IsDocked, "解除保持后的离开应提交贴边隐藏。");
-            Assert.IsTrue(viewModel.IsPanelExpanded);
+            Assert.IsFalse(viewModel.IsPanelExpanded, "解除保持后的离开必须普通收起。");
+            Assert.AreEqual(WindowSettings.TabWidth, window.Width, 0.5);
+            Assert.AreEqual(EdgeHidePhase.Idle, EdgeHideState(window).Phase);
         }
         finally
         {
-            RestoreAndClose(window);
+            CloseWindow(window);
         }
     }
 
     [STATestMethod]
-    public void EdgeHide_GlobalHotkeyRestoresDockedWindow()
+    public void EdgeHide_MutexActivatingHoldDisarmsArmedEdgeHide()
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
-        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
 
         try
         {
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
-            var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-            Assert.IsTrue(GetWindowRect(handle, out var before));
+            var edgeButton = (Button)window.FindName("EdgeHideButton");
+            var holdButton = (Button)window.FindName("PanelHoldButton");
+            Assert.IsNotNull(edgeButton);
+            Assert.IsNotNull(holdButton);
+            var accent = window.FindResource("AccentBrush");
+            var secondary = window.FindResource("SecondaryTextBrush");
 
-            HideWindowAtEdge(window);
-            InvokePrivate(window, "OnGlobalHotkeyPressed");
-            CompleteLayout(window);
+            ToggleEdgeHide(window);
+            Assert.IsTrue(EdgeHideState(window).IsArmed);
+            Assert.AreEqual(accent, edgeButton.Foreground, "待命态贴边按钮点亮。");
 
-            Assert.IsFalse(EdgeHideState(window).IsDocked, "热键是找回兜底，必须立即恢复。");
-            Assert.IsTrue(GetWindowRect(handle, out var restored));
-            Assert.AreEqual(before.Left, restored.Left, 1);
-            Assert.AreEqual(before.Top, restored.Top, 1);
-            Assert.AreEqual(before.Width, restored.Width, 1);
-            Assert.IsTrue(((MainWindowViewModel)window.DataContext).IsPanelExpanded);
+            // 互斥（后激活者胜）：激活保持展开即解除贴边待命，两按钮任何时刻不同时点亮。
+            TogglePanelHold(window);
+
+            Assert.IsTrue(PanelHoldActive(window), "保持展开接管互斥组。");
+            Assert.AreEqual(
+                EdgeHidePhase.Idle,
+                EdgeHideState(window).Phase,
+                "保持展开激活必须解除贴边待命。");
+            Assert.AreEqual(secondary, edgeButton.Foreground, "贴边按钮前景即灭。");
+            Assert.AreEqual(EdgeHideDefaultLabel, edgeButton.ToolTip, "解除后按钮文案回到默认。");
+            Assert.AreEqual(accent, holdButton.Foreground, "保持展开按钮点亮。");
         }
         finally
         {
-            RestoreAndClose(window);
+            CloseWindow(window);
         }
     }
 
     [STATestMethod]
-    public void EdgeHide_DisplayEnvironmentChangeRestoresDockedWindow()
+    public void EdgeHide_MutexActivatingEdgeHideEndsPanelHold()
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
-        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
 
         try
         {
             window.Show();
             ExpandCategory(window, BoardCategory.Inbox);
             CompleteLayout(window);
-            var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-            Assert.IsTrue(GetWindowRect(handle, out var before));
+            var edgeButton = (Button)window.FindName("EdgeHideButton");
+            var holdButton = (Button)window.FindName("PanelHoldButton");
+            Assert.IsNotNull(edgeButton);
+            Assert.IsNotNull(holdButton);
+            var accent = window.FindResource("AccentBrush");
+            var secondary = window.FindResource("SecondaryTextBrush");
 
-            HideWindowAtEdge(window);
-            InvokePrivate(window, "OnDisplayEnvironmentChanged");
-            CompleteLayout(window);
+            TogglePanelHold(window);
+            Assert.IsTrue(PanelHoldActive(window));
+            Assert.AreEqual(accent, holdButton.Foreground, "保持展开态按钮点亮。");
 
-            // 显示器布局变化后离屏窗口可能失去回位路径，必须立即恢复（防找不到窗口）。
-            Assert.IsFalse(EdgeHideState(window).IsDocked);
-            Assert.IsTrue(GetWindowRect(handle, out var restored));
-            Assert.AreEqual(before.Left, restored.Left, 1);
-            Assert.AreEqual(before.Width, restored.Width, 1);
+            // 互斥（后激活者胜）：激活贴边待命即解除保持展开，两按钮任何时刻不同时点亮。
+            ToggleEdgeHide(window);
+
+            Assert.IsTrue(EdgeHideState(window).IsArmed, "贴边待命接管互斥组。");
+            Assert.IsFalse(PanelHoldActive(window), "贴边待命激活必须解除保持展开。");
+            Assert.AreEqual(secondary, holdButton.Foreground, "保持展开按钮前景即灭。");
+            Assert.AreEqual(
+                "保持展开，暂停自动收起",
+                holdButton.ToolTip,
+                "解除后按钮文案回到默认。");
+            Assert.AreEqual(accent, edgeButton.Foreground, "贴边按钮点亮。");
         }
         finally
         {
-            RestoreAndClose(window);
+            CloseWindow(window);
         }
     }
 
@@ -382,15 +660,12 @@ public sealed partial class MainWindowInteractionTests
             ToggleEdgeHide(window);
             Assert.IsTrue(EdgeHideState(window).IsArmed);
 
-            // 面板经外部拖放离开展开态且未进入 Docked → 自动解除，不留悬置 armed。
+            // 面板经外部拖放离开展开态且未进入 Peek → 自动解除，不留悬置 armed。
             InvokePrivate(window, "RevealExternalDropRail");
             CompleteLayout(window);
 
             Assert.AreEqual(EdgeHidePhase.Idle, EdgeHideState(window).Phase);
-            Assert.AreEqual(
-                "一次性移出屏幕：鼠标离开后收进屏幕边缘，移回原位自动展开",
-                button.ToolTip,
-                "解除后按钮文案回到默认。");
+            Assert.AreEqual(EdgeHideDefaultLabel, button.ToolTip, "解除后按钮文案回到默认。");
 
             InvokePrivate(window, "HideExternalDropRail");
             CompleteLayout(window);
@@ -406,6 +681,7 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = false;
 
         try
         {
@@ -418,18 +694,15 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsNotNull(actions);
             var accent = window.FindResource("AccentBrush");
             var secondary = window.FindResource("SecondaryTextBrush");
-            var defaultLabel = "一次性移出屏幕：鼠标离开后收进屏幕边缘，移回原位自动展开";
 
-            Assert.AreEqual(defaultLabel, button.ToolTip);
+            Assert.AreEqual(EdgeHideDefaultLabel, button.ToolTip);
             Assert.AreEqual(
-                defaultLabel,
+                EdgeHideDefaultLabel,
                 System.Windows.Automation.AutomationProperties.GetName(button));
             Assert.AreEqual(secondary, button.Foreground, "默认前景与相邻头部按钮一致。");
 
             ToggleEdgeHide(window);
-            Assert.AreEqual(
-                "已准备贴边隐藏，鼠标移开即移出屏幕；再按一次取消",
-                button.ToolTip);
+            Assert.AreEqual(EdgeHideArmedLabel, button.ToolTip);
             Assert.AreEqual(accent, button.Foreground, "待命态前景切强调色。");
 
             // 待命期间头部常显：指针离开（MouseLeave → SetHeaderActionsVisible(false)）
@@ -442,19 +715,28 @@ public sealed partial class MainWindowInteractionTests
             Assert.IsFalse(
                 FloatingTransferStation.Views.FadeAnimation.GetIsActive(actions),
                 "解除待命后头部恢复默认悬停显隐。");
-            Assert.AreEqual(defaultLabel, button.ToolTip);
+            Assert.AreEqual(EdgeHideDefaultLabel, button.ToolTip);
             Assert.AreEqual(secondary, button.Foreground);
+
+            // peek 态：按钮保持强调色与 peek 文案，头部常显（收缩动画帧里的指示）。
+            PeekWindowAtEdge(window);
+            Assert.AreEqual(EdgePeekLabel, button.ToolTip, "peek 态按钮文案切换。");
+            Assert.AreEqual(accent, button.Foreground, "peek 态前景保持强调色。");
+            InvokePrivate(window, "SetHeaderActionsVisible", false);
+            Assert.IsTrue(
+                FloatingTransferStation.Views.FadeAnimation.GetIsActive(actions),
+                "peek 期间头部常显。");
         }
         finally
         {
-            CloseWindow(window);
+            RestoreAndClose(window);
         }
     }
 
-    /// <summary>收尾：仍在 Docked 则先恢复再关闭，让窗口离屏前回到屏幕内。</summary>
+    /// <summary>收尾：仍在 Peek 则先展开再关闭，让窗口回屏内。</summary>
     private static void RestoreAndClose(MainWindow window)
     {
-        if (EdgeHideState(window).IsDocked)
+        if (EdgeHideState(window).IsPeek)
         {
             InvokePrivate(window, "RestoreFromEdgeHide");
             CompleteLayout(window);
