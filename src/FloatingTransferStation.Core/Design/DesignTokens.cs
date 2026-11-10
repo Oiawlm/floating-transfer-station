@@ -127,9 +127,13 @@ public static class DesignTokens
     /// <summary>瓦片入场交错步进与封顶（M1：min(i,8)×40ms）。</summary>
     public const int TileEntranceStaggerMs = ItemEntranceStaggerMs;
     public const int TileEntranceStaggerCap = 8;
+    /// <summary>瓦片入场纵向位移（px，M1 表面展开交错入场；卡片走 ContentEntranceOffsetPx 6）。</summary>
+    public const double TileEntranceOffsetPx = 8;
     /// <summary>瓦片按压缩放（#30 §五）。</summary>
     public const double TilePressScale = 0.96;
-    /// <summary>瓦片悬停抬升位移（瓦片 −2px，区别于卡片 LiftedOffsetPx −1）。</summary>
+    /// <summary>启动确认脉冲峰值缩放（M7：1→1.06→1，峰时 LaunchConfirmMs/2）。</summary>
+    public const double LaunchConfirmPulseScale = 1.06;
+    /// <summary>瓦片悬停抬升位移（瓦片 −2px，区别于卡片 CardHoverLiftPx −1）。</summary>
     public const double TileHoverLiftPx = -2;
 
     // 缓动曲线（WPF KeySpline 控制点；入场为减速曲线，出场为加速曲线）。
@@ -178,16 +182,17 @@ public static class DesignTokens
     // XAML 资源 ShellCornerRadius 由锁定测试镜像它——不设第二个壳圆角 token。
     // 两档阶梯（#30 修订 2026-10-18，Issue #186 D9）：控件级 4（输入框/按钮/下拉/
     // 记录编辑框/行内编辑器）、表面级 8（卡/瓦片/弹窗壳/主壳——CardCornerRadius
-    // 同源收敛）；识别元素（选择环 r5 等）保留原值不入阶梯。
+    // 同源收敛）；识别元素（选择环 r5 等）保留原值不入阶梯。头部钮/徽章 7 与置顶钮 6
+    // 是阶梯外登记值（2026-11-08 视觉语言收敛：token 与 XAML 资源同名对仗，废弃的
+    // HeaderSurfaceCornerRadius/ScrollThumbCornerRadius 零引用残留同批删除——头部
+    // 表面左上 11 与滑块 2 是样式内既有字面量，按派生规则登记 design.md 不设 token）。
     public const int DwmCornerRadius = 8;
-    public const int HeaderSurfaceCornerRadius = 11;
     public const int ControlCornerRadiusPx = 4;
     public const int SurfaceCornerRadiusPx = 8;
     public const int CardCornerRadius = 8;
-    public const int ControlCornerRadius = 7;
+    public const int HeaderActionCornerRadiusPx = 7;
     public const int PinButtonCornerRadius = 6;
     public const int CheckboxCornerRadius = 5;
-    public const int ScrollThumbCornerRadius = 2;
 
     // 间距与位移（像素）。
     public const double ContentEntranceOffsetPx = 6;
@@ -195,6 +200,14 @@ public static class DesignTokens
     public const int CardInsetPx = 12;
     public const int CardGutterPx = 4;
     public const int CardPaddingPx = 12;
+    /// <summary>卡片悬停抬升位移（LiftAnimation.LiftedOffsetPx 同源；区别于瓦片
+    /// TileHoverLiftPx −2）。</summary>
+    public const double CardHoverLiftPx = -1;
+
+    // 禁用态不透明度（2026-11-08 视觉语言收敛：五档并存归一两档——控件族归一 0.4、
+    // 整卡灰化 0.6（设置卡先例 #57③）；消费者经 x:Static 引用，锁定测试互锁）。
+    public const double ControlDisabledOpacity = 0.4;
+    public const double CardDisabledOpacity = 0.6;
 
     // 快捷启动瓦片布局（#30 §五；2026-10-18 修订＝拉伸填充单一几何源，Issue #186）：
     // 瓦片高 100、沟道 8、宽 84=下限（域内构造保证）、节距=下限宽+沟道=92（最小单元格，

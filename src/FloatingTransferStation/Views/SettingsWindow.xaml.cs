@@ -1972,7 +1972,10 @@ public partial class SettingsWindow : Window
     private void ShowDeepSeekStatus(string message, bool isError = true)
     {
         DeepSeekStatusText.Text = message;
-        DeepSeekStatusText.Foreground = (System.Windows.Media.Brush)FindResource(
+        // SetResourceReference 保持动态解析（契约 #28 同族，2026-11-08 视觉语言收敛：
+        // 原 FindResource 快照不随主题活切换）；成功反馈色键统一 AccentBrush。
+        DeepSeekStatusText.SetResourceReference(
+            System.Windows.Documents.TextElement.ForegroundProperty,
             isError ? "DangerBrush" : "AccentBrush");
         DeepSeekStatusText.Visibility = Visibility.Visible;
     }

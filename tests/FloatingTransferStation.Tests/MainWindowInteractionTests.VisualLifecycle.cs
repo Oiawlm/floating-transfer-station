@@ -91,9 +91,17 @@ public sealed partial class MainWindowInteractionTests
         Assert.IsTrue(animation.Duration.HasTimeSpan);
         Assert.AreEqual(TimeSpan.FromMilliseconds(120), animation.Duration.TimeSpan);
         Assert.AreEqual(FillBehavior.Stop, animation.FillBehavior);
-        var easing = animation.EasingFunction as CubicEase;
-        Assert.IsNotNull(easing);
-        Assert.AreEqual(EasingMode.EaseOut, easing.EasingMode);
+        // 2026-11-08 视觉语言收敛（A1/A2）：时长锚 FadeVisibilityMs、缓动收编进
+        // FadeAnimation 单点实例——不再锁定旧 CubicEase 实现类型，改锁「与通用
+        // 减速曲线同实例＋#41 边界口径（入场前半程快速推进）」。
+        Assert.AreSame(
+            FadeAnimation.EnterEasing,
+            animation.EasingFunction,
+            "缓动必须消费 FadeAnimation.EnterEasing 单点实例（入场方向）。");
+        Assert.IsNotNull(animation.EasingFunction);
+        Assert.IsTrue(
+            animation.EasingFunction.Ease(0.5) > 0.8,
+            "入场曲线前半程应快速推进（减速曲线，契约 #41 边界口径）。");
     }
 
     [STATestMethod]

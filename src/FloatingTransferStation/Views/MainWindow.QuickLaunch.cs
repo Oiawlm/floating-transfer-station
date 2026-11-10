@@ -1000,7 +1000,8 @@ public partial class MainWindow
             UIElement.OpacityProperty,
             new DoubleAnimation(target, new Duration(TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs)))
             {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                // 缓动按语义（进入高亮态=减速，撤离=加速），与 FadeAnimation 同源。
+                EasingFunction = active ? FadeAnimation.EnterEasing : FadeAnimation.ExitEasing
             });
     }
 
@@ -1160,7 +1161,8 @@ public partial class MainWindow
             TranslateTransform.YProperty,
             new DoubleAnimation(target, new Duration(TimeSpan.FromMilliseconds(DesignTokens.HoverFeedbackMs)))
             {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                // 缓动按语义（抬升=减速、回落=加速），与卡片 LiftAnimation 同源。
+                EasingFunction = lifted ? FadeAnimation.EnterEasing : FadeAnimation.ExitEasing
             });
     }
 
@@ -1184,11 +1186,16 @@ public partial class MainWindow
         }
 
         var duration = new Duration(TimeSpan.FromMilliseconds(DesignTokens.PressFeedbackMs));
-        scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(target, duration));
-        scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(target, duration));
+        var pressAnimation = new DoubleAnimation(target, duration)
+        {
+            // 进入按压态语义（2026-11-08 视觉语言收敛：原线性动画并入 EnterEasing 减速）。
+            EasingFunction = FadeAnimation.EnterEasing
+        };
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, pressAnimation);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, pressAnimation);
     }
 
-    /// <summary>启动确认 M7：250ms Scale 1→1.06→1 + accent 20% 闪 83ms/淡出 167ms（减动效=accent 闪即时）。</summary>
+    /// <summary>启动确认 M7：250ms Scale 1→LaunchConfirmPulseScale→1 + accent 20% 闪 83ms/淡出 167ms（减动效=accent 闪即时）。</summary>
     private void PlayLauncherConfirmPulse(Border tile)
     {
         var scale = LauncherTileScale(tile);
@@ -1198,7 +1205,7 @@ public partial class MainWindow
             {
                 Duration = new Duration(TimeSpan.FromMilliseconds(DesignTokens.LaunchConfirmMs))
             };
-            animation.KeyFrames.Add(new EasingDoubleKeyFrame(1.06, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(125))));
+            animation.KeyFrames.Add(new EasingDoubleKeyFrame(DesignTokens.LaunchConfirmPulseScale, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(DesignTokens.LaunchConfirmMs / 2))));
             animation.KeyFrames.Add(new EasingDoubleKeyFrame(1.0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(DesignTokens.LaunchConfirmMs))));
             scale.BeginAnimation(ScaleTransform.ScaleXProperty, animation);
             scale.BeginAnimation(ScaleTransform.ScaleYProperty, animation);
@@ -1359,7 +1366,7 @@ public partial class MainWindow
                 var translate = LauncherTileTranslate(tile);
                 translate?.BeginAnimation(
                     TranslateTransform.YProperty,
-                    new DoubleAnimation(8, 0, TimeSpan.FromMilliseconds(DesignTokens.NormalDurationMs)));
+                    new DoubleAnimation(DesignTokens.TileEntranceOffsetPx, 0, TimeSpan.FromMilliseconds(DesignTokens.NormalDurationMs)));
             }
         }
         finally
@@ -2433,9 +2440,12 @@ public partial class MainWindow
 
         if (!ReferenceEquals(_launcherDropTargetTile, target))
         {
-            _launcherDropTargetTile?.SetCurrentValue(Border.BorderBrushProperty, Brushes.Transparent);
+            // 高亮描边走 SetResourceReference 动态解析（主题切换即跟随，契约 #28 同族，
+            // 2026-11-08 视觉语言收敛：原 FindResource 快照曾让活切换后停在旧主题画刷实例）；
+            // 撤销 ClearValue 移除本地资源引用，回落瓦片模板基值 Transparent。
+            _launcherDropTargetTile?.ClearValue(Border.BorderBrushProperty);
             _launcherDropTargetTile = target;
-            target?.SetCurrentValue(Border.BorderBrushProperty, (Brush)FindResource("AccentBrush"));
+            target?.SetResourceReference(Border.BorderBrushProperty, "AccentBrush");
         }
 
         _launcherDropTargetIndex = targetIndex;
@@ -2448,14 +2458,14 @@ public partial class MainWindow
         ClearLauncherDragHitCache();
         if (_launcherDraggingId is not { } draggingId)
         {
-            _launcherDropTargetTile?.SetCurrentValue(Border.BorderBrushProperty, Brushes.Transparent);
+            _launcherDropTargetTile?.ClearValue(Border.BorderBrushProperty);
             _launcherDropTargetTile = null;
             _launcherDropTargetIndex = -1;
             return;
         }
 
         _launcherDraggingId = null;
-        _launcherDropTargetTile?.SetCurrentValue(Border.BorderBrushProperty, Brushes.Transparent);
+        _launcherDropTargetTile?.ClearValue(Border.BorderBrushProperty);
         _launcherDropTargetTile = null;
         var targetIndex = _launcherDropTargetIndex;
         _launcherDropTargetIndex = -1;

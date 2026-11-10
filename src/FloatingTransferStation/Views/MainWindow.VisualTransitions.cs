@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using FloatingTransferStation.Design;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.Services;
 using FloatingTransferStation.ViewModels;
@@ -228,7 +229,7 @@ public partial class MainWindow : Window
     private static DoubleAnimation CreateCategoryRevealAnimation(double from, double to) =>
         new(from, to, new Duration(CategoryRevealAnimationDuration))
         {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            EasingFunction = FadeAnimation.EnterEasing,
             FillBehavior = FillBehavior.Stop,
         };
 
@@ -285,7 +286,7 @@ public partial class MainWindow : Window
                 ? SwitchContentAnimationDuration
                 : ExpandContentAnimationDuration
             : ReducedMotionContentAnimationDuration;
-        var startX = fullMotion && !isCategorySwitch ? 6d : 0d;
+        var startX = fullMotion && !isCategorySwitch ? DesignTokens.ContentEntranceOffsetPx : 0d;
 
         StopPanelContentAnimation();
 
@@ -296,7 +297,7 @@ public partial class MainWindow : Window
                 From = 0d,
                 To = 1d,
                 Duration = new Duration(duration),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                EasingFunction = FadeAnimation.EnterEasing
             },
             HandoffBehavior.SnapshotAndReplace);
 
@@ -312,7 +313,7 @@ public partial class MainWindow : Window
                 From = startX,
                 To = 0d,
                 Duration = new Duration(duration),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                EasingFunction = FadeAnimation.EnterEasing
             },
             HandoffBehavior.SnapshotAndReplace);
     }
