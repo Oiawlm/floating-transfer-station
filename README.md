@@ -103,7 +103,7 @@
 | 操作 | 效果 | 演示 |
 |---|---|---|
 | 双击卡片左半 | 文字卡就地编辑（图片卡不可编辑） | — |
-| 编辑中点击编辑器外部 | 提交并退出（四处编辑位共用；记录为立即保存） | — |
+| 编辑中点击编辑器外部 | 提交并退出（五处编辑位共用；记录为立即保存） | — |
 | 单击卡片右半 | 复制这一张到剪贴板（修饰键不影响） | — |
 | 单击卡片左半（文字卡） | 全文送达当前输入框（双击时限后触发；双击仍是编辑、拖出仍是拖拽） | [送达输入框](docs/images/card-deliver-input.gif) |
 | 右键卡片任意位置 | 选中；再点一次取消（裸右键与 `Ctrl + 右键` 等效） | [多选与置顶](docs/images/multi-select-batch-pin.gif) |
@@ -122,7 +122,7 @@
 | 直接输入 | 停顿后自动保存到当天 `reviews/yyyy-MM-dd.md` | [按天记录](docs/images/review-tab.gif) |
 | `‹` / `›` | 前一天 / 后一天 | 同上 |
 | `«` / `»` | 直接跳到上一个 / 下一个有记录的日子（空白日自动跳过） | [双层箭头跳转](docs/images/review-date-jump.gif) |
-| 「阅读 / 编辑」切换 | 实验性 Markdown 阅读视图（设置 → 通用开启） | [阅读视图](docs/images/review-markdown-toggle.gif) |
+| 「阅读 / 编辑」切换 | Markdown 阅读视图（默认开启；设置 → 通用 → 实验性可关闭） | [阅读视图](docs/images/review-markdown-toggle.gif) |
 
 **快捷启动**
 
@@ -305,7 +305,7 @@
 
 ## 💬 联系与反馈
 
-也可以直接联系开发者：微信号 `niubizhe_gengzhudong`（扫码或加好友时请注明来意），或在 [GitHub Issues](https://github.com/Oiawlm/floating-transfer-station/issues) 留言。设置窗口页脚的「关于」区同样可以扫码与一键复制微信号。
+也可以直接联系开发者：微信号 `niubizhe_gengzhudong`（扫码或加好友时请注明来意），或在 [GitHub Issues](https://github.com/Oiawlm/floating-transfer-station/issues) 留言。设置窗口页脚的「关于」区同样可以扫码，点微信号行即可复制、右键二维码可复制二维码图片。
 
 <p align="center"><img src="docs/images/wechat-qr.png" width="200" alt="开发者微信二维码：扫码加好友时请注明来意"></p>
 

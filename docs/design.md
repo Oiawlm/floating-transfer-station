@@ -134,7 +134,7 @@
 | PinButtonCornerRadius | 6 | 置顶按钮、卡片图标钮族、瓦片右键菜单行 |
 | CheckboxCornerRadius | 5 | 选择环 r5——卡片与瓦片勾选钮、选择器 CheckBox、类型 chip、菜单行共用（WPF 资源 `SelectionRingCornerRadius` 镜像） |
 
-**派生规则例外**（不入表、成文即可）：胶囊/圆形＝高的一半（开关 Track 10/Thumb 7、警告角标 16×16 圆角 8）；线状件＝宽的一半（滑块悬停层 3、导航指示条 1.5、分隔线 0.5）；内层＝外层−描边（卡片填充层 7＝8−1、放置高亮内层 6＝8−2）；弹层小件 6（下拉弹层）；头部表面左上 11（`HeaderSurfaceStyle` 的 `11,0,0,0`/设置窗头部 `11,11,0,0`）与滑块 2 是样式内既有字面量（废弃 token `HeaderSurfaceCornerRadius`/`ScrollThumbCornerRadius` 零引用残留已于 2026-11-08 删除，字面量按本条登记）。窗壳 `WindowChrome.CornerRadius=0`（圆角由 DWM 承载）为结构性豁免。
+**派生规则例外**（不入表、成文即可）：胶囊/圆形＝高的一半（开关 Track 10/Thumb 7、警告角标 16×16 圆角 8）；线状件＝宽的一半（滑块悬停层 3、导航指示条 1.5、贴边 peek 把手竖条 1.5〔宽 3，#17〕、分隔线 0.5）；内层＝外层−描边（卡片填充层 7＝8−1、放置高亮内层 6＝8−2）；弹层小件 6（下拉弹层）；头部表面左上 11（`HeaderSurfaceStyle` 的 `11,0,0,0`/设置窗头部 `11,11,0,0`）与滑块 2 是样式内既有字面量（废弃 token `HeaderSurfaceCornerRadius`/`ScrollThumbCornerRadius` 零引用残留已于 2026-11-08 删除，字面量按本条登记）。窗壳 `WindowChrome.CornerRadius=0`（圆角由 DWM 承载）为结构性豁免。
 
 ## 五、排版与布局（字号、行高、字重、间距与布局范式）
 
