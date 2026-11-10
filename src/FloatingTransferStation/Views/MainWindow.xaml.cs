@@ -253,6 +253,7 @@ public partial class MainWindow : Window
         InitializeCategoryNameEditing();
         InitializeSubgroupNameEditing();
         InitializePanelTextEditing();
+        _imeGuard = ImeCompositionGuard.Attach(this);
         InitializeCardEditSessionTracking();
         InitializeEditingCommit();
         InitializeBoardEmptyState();

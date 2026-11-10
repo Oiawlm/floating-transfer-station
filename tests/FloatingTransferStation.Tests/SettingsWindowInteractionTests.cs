@@ -1980,6 +1980,90 @@ public sealed class SettingsWindowInteractionTests
     }
 
     [STATestMethod]
+    public void SettingsClose_EscapeDuringCompositionKeepsWindowOpenUntilCompositionEnds()
+    {
+        // 契约 #63 公共守卫：提示词组合中按 Esc＝想取消候选，不是关窗——关窗冲刷
+        // （#5）只能保存已终结文本，在途组合串会被丢弃；组合终结后 Esc 照常关窗
+        // 并冲刷（标记技法，合成组合事件）。
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeEnabled = true }
+        };
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            new FakeStartupManager(),
+            preferences: preferencesStore.Seeded);
+
+        try
+        {
+            var settings = OpenSettings(window);
+            NavigateToAiPage(settings);
+            var promptBox = settings.FindName("AiOrganizePromptBox") as TextBox;
+            Assert.IsNotNull(promptBox);
+            Assert.IsTrue(promptBox.Focus(), "前置条件：提示词草稿持焦（组合期的实况焦点位）。");
+            promptBox.Text = "整理提示词草稿";
+            CompleteLayout(settings);
+
+            promptBox.RaiseEvent(new TextCompositionEventArgs(
+                Keyboard.PrimaryDevice,
+                new TextComposition(InputManager.Current, promptBox, "zuhe"))
+            {
+                RoutedEvent = TextCompositionManager.PreviewTextInputStartEvent,
+                Source = promptBox
+            });
+            settings.RaiseEvent(new KeyEventArgs(
+                Keyboard.PrimaryDevice,
+                PresentationSource.FromVisual(settings)!,
+                Environment.TickCount,
+                Key.Escape)
+            {
+                RoutedEvent = Keyboard.PreviewKeyDownEvent,
+                Source = settings
+            });
+            PumpDispatcherUntil(
+                settings.Dispatcher,
+                Task.Delay(TimeSpan.FromMilliseconds(200)));
+
+            Assert.IsTrue(settings.IsLoaded, "IME 组合期的 Esc 属输入法操作（取消候选），不关窗。");
+            Assert.IsNull(preferencesStore.LastSaved, "组合期不触发关窗，草稿仍在编辑、零写盘。");
+
+            promptBox.RaiseEvent(new TextCompositionEventArgs(
+                Keyboard.PrimaryDevice,
+                new TextComposition(InputManager.Current, promptBox, "草稿继续"))
+            {
+                RoutedEvent = TextCompositionManager.PreviewTextInputEvent,
+                Source = promptBox
+            });
+            settings.RaiseEvent(new KeyEventArgs(
+                Keyboard.PrimaryDevice,
+                PresentationSource.FromVisual(settings)!,
+                Environment.TickCount,
+                Key.Escape)
+            {
+                RoutedEvent = Keyboard.PreviewKeyDownEvent,
+                Source = settings
+            });
+            PumpDispatcherUntil(
+                settings.Dispatcher,
+                Task.Delay(TimeSpan.FromMilliseconds(200)));
+
+            Assert.IsFalse(settings.IsLoaded, "组合结束后 Esc 照常关闭设置窗（关窗语义不变）。");
+            Assert.IsNotNull(preferencesStore.LastSaved, "关窗冲刷照常经 ApplyPreferences 管线提交。");
+            Assert.AreEqual(
+                "整理提示词草稿",
+                preferencesStore.LastSaved!.AiOrganizeSystemPromptOverride,
+                "组合终结后的草稿按失焦路径保存，不得静默丢弃。");
+        }
+        finally
+        {
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void SettingsClose_CloseButtonWhileKeyBoxFocusedCommitsKey()
     {
         using var directory = new TestDirectory();

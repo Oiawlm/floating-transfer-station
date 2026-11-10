@@ -195,6 +195,49 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void InstalledPicker_EscapeDuringCompositionKeepsWindowOpenUntilCompositionEnds()
+    {
+        // 契约 #63 公共守卫：中文过滤组合中按 Esc＝想取消候选，不是丢弃已勾选清单
+        // ——组合中整窗不关，组合终结后 Esc 照常取消（标记技法，合成组合事件）。
+        var picker = CreateInstalledPicker(
+            DesignTheme.Light,
+            [FakeInstalledApp("app.calc", "计算器"), FakeInstalledApp("app.note", "记事本")]);
+        picker.Show();
+        picker.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+        try
+        {
+            CompleteLayout(picker);
+            CheckPickerRow(picker, 0);
+            var searchBox = (TextBox)picker.FindName("PickerSearchBox")!;
+            Assert.IsTrue(searchBox.Focus(), "前置条件：搜索框持焦（组合期的实况焦点位）。");
+            searchBox.Text = "计算";
+
+            searchBox.RaiseEvent(NewTextCompositionEventArgs(
+                TextCompositionManager.PreviewTextInputStartEvent, searchBox, "jisuan"));
+            picker.RaiseEvent(NewKeyEventArgs(picker, Key.Escape));
+            CompleteLayout(picker);
+
+            Assert.IsTrue(picker.IsLoaded, "IME 组合期的 Esc 属输入法操作（取消候选），不关窗。");
+            Assert.AreEqual("添加（1）", picker.PickerConfirmButton.Content, "已勾选清单不受组合期 Esc 影响。");
+
+            searchBox.RaiseEvent(NewTextCompositionEventArgs(
+                TextCompositionManager.PreviewTextInputEvent, searchBox, "计算"));
+            picker.RaiseEvent(NewKeyEventArgs(picker, Key.Escape));
+            CompleteLayout(picker);
+
+            Assert.IsFalse(picker.IsLoaded, "组合结束后 Esc 照常关闭选择器。");
+            Assert.AreEqual(0, picker.Selection.Count, "Esc=取消（空回传）不变。");
+        }
+        finally
+        {
+            if (picker.IsLoaded)
+            {
+                picker.Close();
+            }
+        }
+    }
+
+    [STATestMethod]
     public void InstalledPicker_EmptySourceShowsEnumerationHint()
     {
         var picker = CreateInstalledPicker(DesignTheme.Light, []);

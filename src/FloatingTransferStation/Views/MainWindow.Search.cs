@@ -15,6 +15,11 @@ namespace FloatingTransferStation.Views;
 /// </summary>
 public partial class MainWindow
 {
+    // Esc 退出搜索态的 IME 组合期公共守卫（契约 #63）：组合进行中按 Esc 属输入法
+    // 操作（取消候选），不退出搜索；组合结束后 Esc 照常。四对话框与设置窗关窗
+    // 消费同一守卫机制。
+    private readonly ImeCompositionGuard _imeGuard;
+
     private void SearchButton_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
@@ -52,8 +57,9 @@ public partial class MainWindow
 
     private void SearchInput_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        // 输入框内按 Esc 直接退出搜索态（窗口级 Esc 分支因 TextBox 焦点不生效）。
-        if (e.Key == Key.Escape)
+        // 输入框内按 Esc 直接退出搜索态（窗口级 Esc 分支因 TextBox 焦点不生效）；
+        // IME 组合期的 Esc 属输入法操作（取消候选），不退出搜索（契约 #63）。
+        if (e.Key == Key.Escape && !_imeGuard.IsComposing)
         {
             e.Handled = true;
             ExitSearchMode();
