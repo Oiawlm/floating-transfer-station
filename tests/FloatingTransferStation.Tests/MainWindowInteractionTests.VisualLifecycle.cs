@@ -1044,6 +1044,9 @@ public sealed partial class MainWindowInteractionTests
             // 注册进窗口的矩形权威位：ApplyPlacement 的「先取消动画」仲裁对本实例
             // 生效（单一权威的完整闭环，否则测试自建 animator 游离在窗口账本之外）。
             SetPrivateField(window, "_edgePeekAnimator", animator);
+            // 起始账本快照：动画帧移动 HWND 时 WPF 的 Left/Top DP 随 WM_MOVE 同步
+            // （中段读 window.Left 拿到的是飞行中位置）——段②的新放置以快照为准。
+            var ledgerAtStart = new WindowPlacement(window.Left, window.Top, window.Width, window.Height);
 
             // ① 连续受控迁移：收缩方向的加速出场段。
             var completed = 0;
@@ -1086,10 +1089,7 @@ public sealed partial class MainWindowInteractionTests
                 onCompleted: () => canceledSegmentCompletions++);
             clock.AdvanceTo(DesignTokens.NormalDurationMs + 40);
             Assert.IsTrue(animator.IsRunning, "前置：第二段动画在途。");
-            InvokePrivate(
-                window,
-                "ApplyPlacement",
-                new WindowPlacement(window.Left, window.Top, window.Width, window.Height));
+            InvokePrivate(window, "ApplyPlacement", ledgerAtStart);
             Assert.IsFalse(animator.IsRunning, "单一权威：ApplyPlacement 取消在途动画。");
             Assert.AreEqual(0, canceledSegmentCompletions, "取消路径不回调完成。");
             Assert.IsTrue(GetWindowRect(handle, out var appliedRect));
