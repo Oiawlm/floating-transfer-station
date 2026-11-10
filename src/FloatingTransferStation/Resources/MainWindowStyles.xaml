@@ -384,13 +384,14 @@
   </Style>
 
   <!-- ＋ 添加菜单弹层表面（三个入口与「系统位置」子菜单共用单一来源，#30 扩展）：
-       HeaderBrush 弹层＋1px 边框＋表面级圆角 7＋内边距 4；Margin 12 让出阴影透明区，
+       HeaderBrush 弹层＋1px 边框＋阶梯外圆角 7（HeaderActionCornerRadius 同值族，
+       复审轮 S3 起引资源）＋内边距 4；Margin 12 让出阴影透明区，
        阴影为样式内共享单一实例（Effect 不逐元素实例化）。 -->
   <Style x:Key="LauncherAddMenuSurfaceStyle" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource HeaderBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="CornerRadius" Value="{StaticResource HeaderActionCornerRadius}" />
     <Setter Property="Padding" Value="4" />
     <Setter Property="Margin" Value="12" />
     <Setter Property="Effect">
@@ -827,7 +828,7 @@
 
   <Style x:Key="CategoryActiveLayerStyle" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource ActiveCategoryBrush}" />
-    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="CornerRadius" Value="{StaticResource HeaderActionCornerRadius}" />
     <Setter Property="Opacity" Value="0" />
     <Setter Property="IsHitTestVisible" Value="False" />
     <Setter Property="views:CategoryFeedbackAnimation.IsActive" Value="{Binding IsActive}" />
@@ -1937,7 +1938,7 @@
     <Setter Property="Background" Value="{DynamicResource StatusSurfaceBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="CornerRadius" Value="{StaticResource HeaderActionCornerRadius}" />
     <Setter Property="IsHitTestVisible" Value="False" />
     <Setter Property="Visibility" Value="Collapsed" />
     <Setter Property="views:FadeAnimation.IsActive"
@@ -1963,7 +1964,7 @@
     <Setter Property="Background" Value="{DynamicResource HeaderBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="CornerRadius" Value="{StaticResource HeaderActionCornerRadius}" />
     <Setter Property="IsHitTestVisible" Value="False" />
     <Setter Property="Opacity" Value="0" />
     <Setter Property="views:FadeAnimation.IsActive"

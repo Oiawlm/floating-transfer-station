@@ -1010,6 +1010,9 @@
                           Style="{StaticResource LauncherAddMenuButtonStyle}"
                           AutomationProperties.Name="添加应用文件"
                           Click="LauncherAddFileMenu_Click" />
+                  <!-- 自动化名与选择器标题（InstalledAppPickerTexts.Title）同短语但
+                       角色不同（菜单动作名 vs 弹窗标题）——XAML 单点保留，复审轮
+                       S3 豁免论证。 -->
                   <Button x:Name="LauncherAddInstalledMenuButton"
                           Content="已安装应用…"
                           Style="{StaticResource LauncherAddMenuButtonStyle}"

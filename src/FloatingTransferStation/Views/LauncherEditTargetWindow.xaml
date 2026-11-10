@@ -62,6 +62,8 @@
                    Foreground="{DynamicResource PrimaryTextBrush}"
                    VerticalAlignment="Center"
                    IsHitTestVisible="False" />
+        <!-- 通用词「关闭」ToolTip＝独立窗单点字面量（三小对话框同词不跨窗资源化；
+             设置/试运行窗按窗口专名「关闭设置/关闭试运行」——复审轮 S3 豁免论证）。 -->
         <Button x:Name="CloseButton"
                 Style="{StaticResource HeaderActionButtonStyle}"
                 HorizontalAlignment="Right"
@@ -92,8 +94,9 @@
                    MaxLength="2048"
                    AutomationProperties.Name="目标地址"
                    TextChanged="TargetInputBox_TextChanged" />
+          <!-- 输入样例提示按 Kind 由构造器赋值（唯一来源＝code-behind
+               UrlTargetHintText；复审轮 S3 消除 XAML 默认值双写）。 -->
           <TextBlock x:Name="TargetInputHint"
-                     Text="例如 github.com"
                      FontSize="13"
                      Foreground="{DynamicResource SecondaryTextBrush}"
                      VerticalAlignment="Center"

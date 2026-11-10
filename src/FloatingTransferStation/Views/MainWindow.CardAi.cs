@@ -22,6 +22,9 @@ namespace FloatingTransferStation.Views;
 /// </summary>
 public partial class MainWindow
 {
+    // AI 忙碌指示的连续旋转周期＝场景语义时长（连续旋转节奏，非 83/167/250 过渡三档）
+    // ——豁免依据 docs/design.md §六「行为计时器」行（AI 旋转 1.2s），复审轮 S3
+    // 注释豁免论证。
     private static readonly TimeSpan AiBusyRotationPeriod = TimeSpan.FromSeconds(1.2);
 
     private readonly AiTextOrganizer _aiTextOrganizer;

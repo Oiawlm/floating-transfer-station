@@ -234,9 +234,14 @@ public partial class MainWindow : Window
         //（App 组合根），构造期即同步；后续目录变化经设置路径刷新（见
         // MainWindow.Settings.cs）。
         SyncPluginActionsAvailability();
+        // 面板悬停展开意图窗（#30 Issue #173）：60ms 场景值与 DesignTokens.EdgePeekExpandDwellMs
+        // 同值异义（彼为贴边把手展开意图事务），禁止共用——独立保留字面量，豁免依据
+        // docs/design.md §六「行为计时器」行（意图窗 60ms），复审轮 S3 注释豁免论证。
         _expandIntentTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(60) };
         _expandIntentTimer.Tick += ExpandIntentTimer_Tick;
-        _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        // 收起驻留（指针离面→到期收起）：250ms＝SlowDurationMs 收起节奏同源，复审轮
+        // S3 裁决引 token（同值零变化；design.md §六豁免行同步除名）。
+        _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(DesignTokens.SlowDurationMs) };
         _collapseTimer.Tick += CollapseTimer_Tick;
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _statusTimer.Tick += StatusTimer_Tick;
