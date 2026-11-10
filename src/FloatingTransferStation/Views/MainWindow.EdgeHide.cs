@@ -186,8 +186,10 @@ public partial class MainWindow : Window
             EasingFunction = FadeAnimation.EnterEasing,
             FillBehavior = FillBehavior.Stop,
         };
+        // 基线必须落在终值 1（FillBehavior.Stop 完成后回落基线；入场 0→1 的基线是 1，
+        // 出场才是 0——写反会把把手在 83ms 淡入结束后整体隐形，实测根因）。
         EdgePeekHandleLayer.BeginAnimation(UIElement.OpacityProperty, null);
-        EdgePeekHandleLayer.SetValue(UIElement.OpacityProperty, 0d);
+        EdgePeekHandleLayer.SetValue(UIElement.OpacityProperty, 1d);
         EdgePeekHandleLayer.BeginAnimation(UIElement.OpacityProperty, entrance);
     }
 

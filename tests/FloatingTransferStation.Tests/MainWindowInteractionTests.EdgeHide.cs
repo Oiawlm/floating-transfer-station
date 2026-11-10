@@ -153,6 +153,14 @@ public sealed partial class MainWindowInteractionTests
                 Visibility.Visible,
                 PeekHandleLayer(window).Visibility,
                 "收缩完成把手视觉登场。");
+            // 登场淡入（FillBehavior.Stop）完成后必须回落基线 1——基线写 0 会让把手
+            // 在 83ms 淡入结束后整体隐形（实测根因回归锁）。
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(150));
+            Assert.AreEqual(
+                1d,
+                PeekHandleLayer(window).Opacity,
+                0.01,
+                "登场淡入完成后把手不隐形。");
 
             // WPF Left/Top 账本在动画完成时一次收口。
             Assert.AreEqual(
