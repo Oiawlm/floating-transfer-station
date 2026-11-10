@@ -73,6 +73,17 @@ public static class DesignTokens
     /// 取 120 覆盖手抖频率（≥4Hz 的断言间隔都低于它），又不至于让真离开的
     /// 高亮消退有可感知迟滞。</summary>
     public const int DropTargetWithdrawHoldMs = 120;
+    /// <summary>边缘 peek 把手屏内保留宽（DIP，R12 契约 #17，Issue #353）：整窗同尺寸
+    /// 平移收缩后与工作区交集宽恰等于此值——视觉宽＝命中宽＝屏内保留宽同值（Mica
+    /// 不透明窗无透明命中区，三值解耦会在屏内露出内容切边）；窗口左缘自带 DWM 恒定
+    /// 圆角即把手左侧圆角（#6 豁免口径见 #17 替换文本）。8-16 经验区间取上沿：全高
+    /// 竖条好命中。XAML 把手层宽度是本值的镜像（锁定测试互锁）。DIP→物理换算由
+    /// 调用方经 CompositionTarget 一次完成。</summary>
+    public const int EdgePeekHandleWidthPx = 16;
+    /// <summary>边缘 peek 把手 hover 展开的意图事务时长（ms，R12 契约 #17，Issue #353）：
+    /// 布防 → timer → 到期重验指针仍在窗口/把手内才提交展开——悬停意图事务复用 #42
+    /// 既有先例（把手悬停展开同族），防扫边误触由事务重验达成，不另设防抖层。</summary>
+    public const int EdgePeekExpandDwellMs = 60;
     /// <summary>二维码放大层容器级 container transform（实验性，2026-11-06 工作流
     /// B；2026-11-07 容器级重调）：时长与缓动独立成组——不并入 83/167/250 三档
     /// 体系、也不加第四档（档位制红线），仅本场景专用。口径＝容器级「从哪来到

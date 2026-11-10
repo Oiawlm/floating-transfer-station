@@ -82,11 +82,13 @@
 | 启动后排队收起延迟（#30） | LaunchCollapseDelayMs | 250（时序性延迟，减动效保留） |
 | 单击启动重入门闩（#30） | LaunchReentryLatchMs | 500 |
 | 瓦片入场交错步长/封顶/位移（#30） | TileEntranceStaggerMs / TileEntranceStaggerCap / TileEntranceOffsetPx | 40 / 8 / 8（位移区别于卡片 ContentEntranceOffsetPx 6） |
+| 边缘 peek 收缩/展开（#17 peek 化，R12，2026-11-10 落轨） | 复用 NormalDurationMs / SlowDurationMs（不加档） | 167 / 250（收缩加速出场、展开减速入场，经唯一放置动画服务，可中断反转） |
+| 边缘 peek 把手 hover 意图事务（#17，#42 同族） | EdgePeekExpandDwellMs | 60（布防→到期重验指针在内才提交展开） |
 | 二维码容器过渡（独立组，契约 #24，不进三档） | QrZoomInMs/QrZoomOutMs/QrTextFadeInBeginMs/QrTextFadeInMs/QrTextFadeOutMs/QrThumbFadeMs/QrThumbRevealBeginMs/QrHandoverFadeMs | 450/250/270/180/90/150/180/70（后两枚＝收回交接：缩略图回显起点（95% 回程反解）与换手段时长，Issue #325） |
 
 **缓动曲线与选择规则**——通用两条：入场（减速）`0,0,0,1`、出场（加速）`1,0,1,1`（WPF KeySpline；C# 侧 `FadeAnimation.EnterEasing/ExitEasing` 单点实例，全部动效经此消费，禁 `new CubicEase` 散布）；减弱动效 Linear。**缓动按语义选、不按数值方向**（2026-11-08 定则）：进入某视觉态（淡入、抬升、入场）＝减速曲线，离开（淡出、回落、出场）＝加速曲线——位移可正可负，「to<from」这类数值判据会把负向进入错配加速曲线（LiftAnimation 曾实测与宣称相反）。二维码遮罩纱收回与容器同用 `QrZoomOutKeySpline`（组内专用，经 `FadeAnimation.ExitEaseToken` 指定，不新增通用曲线；Issue #325）。
 
-**编排与退化**：动画可中断可重定向（SnapshotAndReplace＋`FillBehavior.Stop`，契约 #41）；「减弱动效」（系统偏好或 `AnimationsEnabled=false`）全部退化为 83ms 纯淡入或立即定格终值。**非线性容器级动画先例**＝二维码放大（container transform：整卡含框飞行、方→矩形形变、文字后段浮现，独立时长组＋专用曲线，契约 #24）；边缘 peek（c2，右侧收缩把手 hover 展开）规划为窗口级首例——**未落轨，本表占位，落轨后补入**。
+**编排与退化**：动画可中断可重定向（SnapshotAndReplace＋`FillBehavior.Stop`，契约 #41）；「减弱动效」（系统偏好或 `AnimationsEnabled=false`）全部退化为 83ms 纯淡入或立即定格终值（peek 全链直达终态）。**非线性动画两级先例**：容器级＝二维码放大（container transform：整卡含框飞行、方→矩形形变、文字后段浮现，独立时长组＋专用曲线，契约 #24）；**窗口级首例＝边缘 peek**（2026-11-10 c2 落轨：整窗同尺寸纯平移的连续受控迁移，经唯一放置动画服务 `WindowPlacementAnimator` 承载 §五·C 例外通道——时长/缓动全部复用既有 token，无新档无新曲线；语义与把手视觉见 §五·D）。
 
 ## 三、按钮与交互状态（类型学×五态）
 
@@ -106,6 +108,7 @@
 | 自绘 chip/「全部」chip/分类标签 | hover 层淡入+边框瞬切 | — | 无 |
 | 启动瓦片 | −2px 位移 167ms（TileHoverLiftPx） | 0.96 缩放 83ms | 无禁用 |
 | 微信号复制行（伪按钮） | HoverSurface 瞬切底（2026-11-08 补齐） | — | — |
+| peek 把手（窗口级命中面，#17 peek 化） | 提亮＋Accent 指示 167ms；hover 60ms 意图事务提交展开（#42 同族） | —（命中面非钮） | 无 |
 | QR 缩略钮 | 仅换边 | Opacity 0.85（孤例） | 无 |
 | TextBox/PasswordBox | — | — | 0.4＋Accent 聚焦描边 |
 | 滚动条 thumb | 加宽 4→6＋换色 167ms | — | — |
@@ -167,13 +170,13 @@
 - 窗口壳弃用 `AllowsTransparency` 分层透明，改用 `WindowChrome`（`GlassFrameThickness=-1` 整窗玻璃帧）承载 DWM 材质，经 `DWMWA_SYSTEMBACKDROP_TYPE` 应用 Mica；材质不可用的旧系统回退到不透明壳色。
 - 圆角由 DWM（`DWMWA_WINDOW_CORNER_PREFERENCE=ROUND`）裁剪，内容层以 `DesignTokens.DwmCornerRadius = 8` 四角同步自裁剪，保证渲染位图与屏幕一致。可见态窗口完整落在工作区内，四角圆角在任务栏停靠侧、多显示器、显示器插拔与系统广播下恒定（2026-10-08 决策删除 1.8.0 的右缘越屏裁切与内容层右内缩，1.21.0 起）；`WM_DISPLAYCHANGE`/`WM_SETTINGCHANGE` 后按当前面板状态重新贴齐。
 - 壳表面为半透明 Mica 色调（浅 `#CCF7F8FA`、深 `#CC202021`，`WindowShellTintHex` / `WindowShellTintDarkHex`），深浅切换时同步 `DWMWA_USE_IMMERSIVE_DARK_MODE`。
-- **迁移原子性（1.8.1 起）**：一次面板状态迁移只允许一次窗口矩形变更。已创建 HWND 的窗口经单次 Win32 `SetWindowPos` 应用终态矩形（物理像素；两条锚定边各自取整后相减，右缘与底缘不因取整漂移），随后在 `WM_WINDOWPOSCHANGING` 守卫下对齐 WPF 尺寸/位置账本——守卫把对齐期间任何中间矩形改写回终态，陈旧 DP 混合值不会重推出可见中间态。构造期（HWND 未创建）保留纯属性路径。STA 契约：观察到的每个窗口矩形 ∈ {初始, 终态}（`*ChangesTheObservedWindowRectangleOnlyBetweenStableStates` 系列锁定）。禁止用 `SetWindowRgn` 或动效/延迟/隐藏窗口装饰性掩盖。
+- **迁移原子性（1.8.1 起）**：一次面板状态迁移只允许一次窗口矩形变更。已创建 HWND 的窗口经单次 Win32 `SetWindowPos` 应用终态矩形（物理像素；两条锚定边各自取整后相减，右缘与底缘不因取整漂移），随后在 `WM_WINDOWPOSCHANGING` 守卫下对齐 WPF 尺寸/位置账本——守卫把对齐期间任何中间矩形改写回终态，陈旧 DP 混合值不会重推出可见中间态。构造期（HWND 未创建）保留纯属性路径。STA 契约：观察到的每个窗口矩形 ∈ {初始, 终态}（`*ChangesTheObservedWindowRectangleOnlyBetweenStableStates` 系列锁定）。禁止用 `SetWindowRgn` 或动效/延迟/隐藏窗口装饰性掩盖。唯一例外通道（2026-11-09 起，R12 peek）：经唯一放置动画服务 `WindowPlacementAnimator` 的连续迁移允许中间矩形——单一矩形权威（任何 `ApplyPlacement` 先取消动画到达终态）、逐帧单调、终态唯一、可中断可重定向（禁原点重放）、减动效直达；`PlacementAnimation_SingleAuthorityMonotonicTerminalUnique` 锁定。
 - 本机预览与截图取证：设 `FTS_PREVIEW_DATA_DIR`（隔离数据目录、独立单实例锁）与可选 `FTS_PREVIEW_THEME=dark|light` 启动，不影响已安装应用。
 
 ## 五·D、卡片文字避让与一次性贴边隐藏（1.20.0）
 
 - **文字避让操作列（1.20.0 起；1.24.0 扩为三列，1.29.0 扩为四列，1.33.0 改右上两列网格）**：文字卡正文右侧为右上角操作按钮网格预留排他空间，任何时刻（悬停/非悬停）零像素争用。内缩量唯一来源是 WPF 派生资源 `CardTextReservedRightInset`（两列 `CardOperationColumnWidth` 30×2 + 4 DIP 间隙 = 64；1.20.0 两列横排为 64，1.24.0 三列 94，1.29.0 四列 124，1.33.0 随按钮区网格化回归 64），不得在别处写死第二个数值；操作按钮网格为固定两列 × 按钮行（列与按钮行绝对 30 DIP，按钮行间 4 DIP 独立间隔行，行优先序 选择|删除|置顶|备注，按钮隐藏时格子留空不漂移）；命中层对半分区与图片卡全幅不变。310px 最窄面板下每行文字约损失 25% 宽度（64/260），是消除像素争用的确定代价。
-- **一次性贴边隐藏（1.20.0 起）**：头部按钮（贴缘面板图标右侧、「箭头收入右缘」图标）切换语义；待命期间按钮转强调色、头部操作区常显（鼠标离开恰是最需要看到待命指示的时刻）。隐藏 = 整窗**同尺寸纯移动**到所有显示器右缘之外（含 DWM 阴影余量 32 物理像素，目标矩形与每一个显示器零交集），面板保持展开、内容冻结，沿用迁移原子性（隐藏与恢复各一次矩形变更）；触发融入既有 250ms 收起节奏，抑制条件复用 `PanelStateMachine.WouldCollapse`。回位区 = 隐藏时刻屏幕内可见矩形外扩 8 物理像素，以物理像素保存（此后不做运行时 DPI 换算），光标驻留 ≥200ms 恢复；恢复即回原位原形并自动解除（一次性），热键与显示器变化兜底。图标遵守 14.5×14.5 + 1.5 描边规范；窗口位移不做动画（全仓放置迁移一致）。行为契约全文见设计契约清单（维护者本地资料，不入库）第 16、17 条。
+- **一次性贴边隐藏 peek 化（1.20.0 起；2026-11-09 R12 重设计）**：头部按钮（贴缘面板图标右侧、「箭头收入右缘」图标）切换语义；待命与 peek 期间按钮转强调色、头部操作区常显（鼠标离开恰是最需要看到待命指示的时刻）。收缩 = 整窗**同尺寸纯平移**到右缘 peek 态——绝大部分出屏、屏内仅留左侧把手（宽＝`EdgePeekHandleWidthPx`＝16 DIP，视觉宽＝命中宽＝屏内保留宽同值；窗口左缘自带 DWM 恒定圆角即把手左侧圆角，天然 signifier），面板保持展开、内容冻结；触发融入既有 250ms 收起节奏，抑制条件复用 `PanelStateMachine.WouldCollapse`。收缩 167ms 加速出场（`NormalDurationMs`＋Exit 缓动）、展开 250ms 减速入场（`SlowDurationMs`＋Enter 缓动），经唯一放置动画服务 `WindowPlacementAnimator` 连续受控迁移（§五·C 例外通道）；把手视觉 83ms 淡入登场、hover 提亮（167ms）＋Accent 指示。展开触发 = 把手 hover 意图事务（60ms 重验指针在内才提交，`EdgePeekExpandDwellMs`，#42 同族）；收缩途中指针追入把手/窗口＝同样经 60ms 事务从当前进度反转展开（禁原点重放），展开途中不中断；恢复即回原放置并自动解除（一次性），热键与显示器变化在 peek 态立即展开兜底；减动效全链直达终态。回位区轮询机制（100ms 轮询＋8px 容差驻留 ≥200ms）已随 peek 化删除。图标遵守 14.5×14.5 + 1.5 描边规范。行为契约全文见设计契约清单（维护者本地资料，不入库）第 12、17 条。
 - **默认接收分类标记（2026-11-05 W2 重设计；2026-11-07 改双态环语法；2026-11-08 chip 环独占化）**：标签与子分组 chip 右上角标记为单段圆弧描边圆环（viewbox 24×24、半径 8 描边圆、无内圈无中心点），10×10 + 1.25 描边——自 2026-11-05 起**脱离**上一行的头部按钮图标 14.5×14.5 + 1.5 规范（全仓唯一例外，锁于 `CategoryDefaultMarkerStyle` 与 `MainWindowInteractionTests` 几何断言）；右上位置（`Margin="0,3,4,0"`）、`Panel.ZIndex=1` 层级语义不变。**双态环语法（主标签恒环双枚、chip 恰一枚独占环）**：紫＝当前有效默认落点（`AccentBrush`），灰＝`SecondaryTextBrush` 复用（非新 token），无环＝永不具备落点能力（记录/启动主标签）。主标签臂：内容桶恰两枚恒环——紫＝默认接收分类、灰＝另一内容桶（环兼任「落点能力」判别子，记录/启动 None 的对照）；chip 臂：轨可见时恰一枚独占环——chip＝其分类默认子分组（未设兜底显示序首槽、恒灰），其余槽 chip None；两宿主共享不变量「紫＝当前有效默认落点」，显隐与用色唯一驱动＝两宿主同名属性 `DefaultMarkerState` 的样式触发器单点。
 
 ## 五·E、设置窗口（双栏导航、冻结几何与几何持久化）

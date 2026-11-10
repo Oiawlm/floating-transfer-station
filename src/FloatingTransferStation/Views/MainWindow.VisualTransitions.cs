@@ -339,6 +339,9 @@ public partial class MainWindow : Window
         StopPanelContentAnimation();
         _collapseTimer.Stop();
         _panelState.EnterSurface();
+        // peek 态指针回到窗口/把手（含收缩途中反向救援——窗口同一 HWND 持续可命中）：
+        // 布防展开意图事务（60ms 后重验指针仍内才提交，#42 同族）。
+        ArmEdgePeekExpandIntent();
         // 指针入场时刻捕获外部前台窗口为送达目标快照（需求 6）：入场时面板尚未
         // 被任何点击激活，前台＝用户刚才打字的窗口。按压时刻会再刷新一次。
         _inputDelivery.CaptureForegroundTarget();
@@ -348,6 +351,9 @@ public partial class MainWindow : Window
     {
         _expandIntentTimer.Stop();
         _collapseTimer.Stop();
+        // peek 态离开＝本次展开意图作废（把手驻留等待下一次 hover；意图事务到期
+        // 重验也会拦下，这里提前取消）。
+        _edgePeekExpandIntentTimer.Stop();
         // 编辑保持与覆盖交互（＋菜单/模态对话框=独立 HWND）期间的 MouseLeave 多为
         // 假离开（IME 候选窗/弹层遮挡光标，消息可能迟到）：吞掉——不落 LeaveSurface、
         // 不武装收起计时，释放后由表面重估按指针几何位置统一裁决（#30 覆盖交互抑制）。
@@ -357,7 +363,9 @@ public partial class MainWindow : Window
         }
 
         _panelState.LeaveSurface();
-        if (_panelState.IsExpanded)
+        // peek 态不收起：窗口已让出屏幕、把手驻留等待展开（面板逻辑上仍展开——
+        // 收缩是平移不是变形；armed 一次性授权已在 peek 提交时消费）。
+        if (_panelState.IsExpanded && !_edgeHide.IsPeek)
         {
             _collapseTimer.Start();
         }
@@ -366,6 +374,12 @@ public partial class MainWindow : Window
     private void CollapseTimer_Tick(object? sender, EventArgs e)
     {
         _collapseTimer.Stop();
+        // peek 态不收起（防御自动化路径误触发；真实路径 MouseLeave 已拦）。
+        if (_edgeHide.IsPeek)
+        {
+            return;
+        }
+
         // chip 过滤态抑制自动收起（契约 #57，沿 #37 搜索态口径；本方法是一切收起
         // 计时的收敛点，单点守卫覆盖全部启动路径）。
         if (IsPanelEditHoldActive() || IsSubgroupFilterActive || !_panelState.WouldCollapse)
@@ -373,8 +387,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 一次性贴边隐藏融入既有收起节奏：armed 且抑制复用成立时整窗移出屏幕，
-        // 不走收起；否则既有收起流程原样。
+        // 一次性贴边隐藏融入既有收起节奏：armed 且抑制复用成立时整窗收缩为右缘
+        // peek 把手，不走收起；否则既有收起流程原样。
         if (_edgeHide.IsArmed && TryCommitEdgeHide())
         {
             return;

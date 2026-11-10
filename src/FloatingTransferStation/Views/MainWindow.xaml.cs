@@ -242,8 +242,11 @@ public partial class MainWindow : Window
         _statusTimer.Tick += StatusTimer_Tick;
         _topmostTimer = new DispatcherTimer { Interval = TopmostReassertInterval };
         _topmostTimer.Tick += (_, _) => ReassertTopmost();
-        _edgeHideRecallTimer = new DispatcherTimer { Interval = EdgeHideRecallPollInterval };
-        _edgeHideRecallTimer.Tick += EdgeHideRecallTimer_Tick;
+        _edgePeekExpandIntentTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(DesignTokens.EdgePeekExpandDwellMs),
+        };
+        _edgePeekExpandIntentTimer.Tick += EdgePeekExpandIntentTimer_Tick;
         InitializeDailyReviewEditing();
         InitializeAutoCleanup();
         InitializeUpdates();
@@ -327,7 +330,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_edgeHide.IsDocked)
+        if (_edgeHide.IsPeek)
         {
             RestoreFromEdgeHide();
             return;
@@ -499,13 +502,14 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 显示器/工作区环境变化（WM_DISPLAYCHANGE、WM_SETTINGCHANGE）：贴边隐藏的
-    /// 离屏窗口在新显示器布局下可能失去回位路径，立即恢复（防找不到窗口）；
+    /// 显示器/工作区环境变化（WM_DISPLAYCHANGE、WM_SETTINGCHANGE）：peek 态窗口
+    /// 在新显示器布局下可能失去找回路径，立即展开恢复（防找不到窗口）——展开动画
+    /// 随后的重贴齐应用会被 ReapplyCurrentPlacement 取消并落到新布局的展开放置；
     /// 工作区可能已改变，按当前面板状态重新贴齐，可见态外形不变。
     /// </summary>
     private void OnDisplayEnvironmentChanged()
     {
-        if (_edgeHide.IsDocked)
+        if (_edgeHide.IsPeek)
         {
             RestoreFromEdgeHide();
         }

@@ -354,9 +354,10 @@ public partial class MainWindow : Window
 
     private void SetHeaderActionsVisible(bool visible)
     {
-        // 贴边隐藏待命期间头部常显：鼠标离开恰是最需要看到待命指示的时刻
-        // （否则待命生效的瞬间就是按钮淡出的瞬间，用户无从得知已进入待命）。
-        var effective = visible || _edgeHide.IsArmed;
+        // 贴边隐藏待命/peek 期间头部常显：鼠标离开恰是最需要看到待命指示的时刻
+        // （否则待命生效的瞬间就是按钮淡出的瞬间，用户无从得知已进入待命）；peek
+        // 期间收缩/展开动画帧里按钮保持强调色可见（契约 #17）。
+        var effective = visible || _edgeHide.IsArmed || _edgeHide.IsPeek;
         FadeAnimation.SetIsActive(HeaderActions, effective);
         HeaderActions.IsHitTestVisible = effective;
     }

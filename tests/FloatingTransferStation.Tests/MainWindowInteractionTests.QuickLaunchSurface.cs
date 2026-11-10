@@ -2651,7 +2651,7 @@ public sealed partial class MainWindowInteractionTests
                     CompleteLayout(window);
                 });
 
-            Assert.IsFalse(EdgeHideState(window).IsDocked, "菜单打开期间 tick 不得提交贴边隐藏。");
+            Assert.IsFalse(EdgeHideState(window).IsPeek, "菜单打开期间 tick 不得提交贴边收缩。");
             Assert.IsTrue(viewModel.IsPanelExpanded, "菜单打开期间面板保持展开。");
             Assert.IsTrue(window.LauncherAddMenu.IsOpen);
         }

@@ -118,8 +118,11 @@ $overrides = @(
         'src/FloatingTransferStation/Views/MainWindow.DailyReview.cs', 'src/FloatingTransferStation.Core/Services/IDailyReviewStore.cs') },
     @{ Name = 'DataRelocation'; Filter = 'FullyQualifiedName~Relocation|FullyQualifiedName~DataDirectory'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.DataRelocation.cs') },
-    @{ Name = 'EdgeHide'; Filter = 'FullyQualifiedName~EdgeHide|FullyQualifiedName~WindowController'; Globs = @(
-        'src/FloatingTransferStation/Views/MainWindow.EdgeHide.cs', 'src/FloatingTransferStation/Services/MonitorBounds.cs') },
+    # R12 peek 化（2026-11-09，Issue #353）：peek 窗口层族（EdgePeek_*）＋几何（WindowController）
+    # ＋唯一放置动画服务（WindowPlacementAnimator，其 #12 例外条款锁定测试
+    # PlacementAnimation_* 宿主在 VisualLifecycle 文件）。
+    @{ Name = 'EdgeHide'; Filter = 'FullyQualifiedName~EdgeHide|FullyQualifiedName~EdgePeek|FullyQualifiedName~WindowController|FullyQualifiedName~PlacementAnimation'; Globs = @(
+        'src/FloatingTransferStation/Views/MainWindow.EdgeHide.cs', 'src/FloatingTransferStation/Services/MonitorBounds.cs', 'src/FloatingTransferStation/Services/WindowPlacementAnimator.cs') },
     @{ Name = 'PanelHold'; Filter = 'FullyQualifiedName~PanelHold|FullyQualifiedName~PanelStateMachine'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.PanelHold.cs', 'src/FloatingTransferStation/Views/MainWindow.PanelTextEditing.cs') },
     # 置顶重申与 IME 抑制（2026-10-24）：置顶 z 序行为（Lifecycle.ReassertTopmost）与
@@ -253,13 +256,14 @@ $globalFulls = @(
     @{ Reason = '视觉/动画基础设施（F2 §三.J KEEP-FULL×4：FadeAnimation 卡片模板约 90 处挂载→渲染真实卡片的测试全部间接；LiftAnimation＝CardRootStyle 每卡根样式悬停触发；CardEntrance 经 CollectionChanged 任何新增卡片驱动；VisualTransitions CollapseTimer_Tick＝共享 harness 与 10 文件 InvokePrivate 驱动——共享路径间接消费机制实证，R-AppStem/L2 派生不能接管）'; Category = 'C5'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.VisualTransitions.cs', 'src/FloatingTransferStation/Views/MainWindow.CardEntrance.cs',
         'src/FloatingTransferStation/Views/FadeAnimation.cs', 'src/FloatingTransferStation/Views/LiftAnimation.cs') },
-    @{ Reason = '共享测试设施（F2 §三.K KEEP-FULL：TestDirectory 102 文件消费 70%、tests GlobalUsings 全工程隐式 using、MIT.cs 58 partial 共享壳＋全测试类窗口组合接缝（含 harness 密封缺省，契约 #53）、双 fixture 跨族联合消费 10 文件；TestTempRoot＝两测试项目共享的仓库内临时根，TestDirectory 与七个用例根消费；RealInputGate＝真实键盘注入前台谓词（QuickLaunch/CardAi 真输入族共享，2026-11-02 W2）；UiSuiteMachineGate＝程序集级机器准入网关薄壳（全 UI 套件 AssemblyInitialize 消费，2026-11-02 W2 落地、2026-11-03 重构为薄壳）；MachineAdmissionGate＝准入网关内核与四探针（薄壳与语义测试 MachineAdmissionGateTests 消费，2026-11-03，契约 #53））'; Category = 'C5'; Globs = @(
+    @{ Reason = '共享测试设施（F2 §三.K KEEP-FULL：TestDirectory 102 文件消费 70%、tests GlobalUsings 全工程隐式 using、MIT.cs 58 partial 共享壳＋全测试类窗口组合接缝（含 harness 密封缺省，契约 #53）、双 fixture 跨族联合消费 10 文件；TestTempRoot＝两测试项目共享的仓库内临时根，TestDirectory 与七个用例根消费；RealInputGate＝真实键盘注入前台谓词（QuickLaunch/CardAi 真输入族共享，2026-11-02 W2）；UiSuiteMachineGate＝程序集级机器准入网关薄壳（全 UI 套件 AssemblyInitialize 消费，2026-11-02 W2 落地、2026-11-03 重构为薄壳）；MachineAdmissionGate＝准入网关内核与四探针（薄壳与语义测试 MachineAdmissionGateTests 消费，2026-11-03，契约 #53）；ManualPlacementAnimationClock＝放置动画手动帧时钟（EdgeHide/VisualLifecycle 两文件消费，R12 契约 #12 例外条款，2026-11-09））'; Category = 'C5'; Globs = @(
         'tests/FloatingTransferStation.Tests/TestDirectory.cs', 'tests/FloatingTransferStation.Tests/GlobalUsings.cs',
         'tests/FloatingTransferStation.Tests/TestTempRoot.cs',
         'tests/FloatingTransferStation.Tests/FailingFirstSaveBoardStore.cs',
         'tests/FloatingTransferStation.Tests/GatedSettingsBoardStore.cs', 'tests/FloatingTransferStation.Tests/MainWindowInteractionTests.cs',
         'tests/FloatingTransferStation.Tests/RealInputGate.cs', 'tests/FloatingTransferStation.Tests/UiSuiteMachineGate.cs',
-        'tests/FloatingTransferStation.Tests/MachineAdmissionGate.cs') },
+        'tests/FloatingTransferStation.Tests/MachineAdmissionGate.cs',
+        'tests/FloatingTransferStation.Tests/ManualPlacementAnimationClock.cs') },
     @{ Reason = '构建/测试基础设施脚本（F2 §三.L KEEP-FULL：引导、打包、卫生检查、安装/发行契约链无测试级消费面——结构性全域；显式清单，新脚本默认 L3 全量）'; Category = 'C5'; Globs = @(
         'scripts/bootstrap-dotnet.ps1', 'scripts/bootstrap-inno.ps1', 'scripts/build-release.ps1', 'scripts/check-repo-hygiene.ps1',
         'scripts/run-adversarial.ps1', 'scripts/test-bootstrap-inno-path-contract.ps1', 'scripts/test-bootstrap-tool-versions.ps1',
@@ -299,7 +303,7 @@ $interactionTestPrefixes = @{
     'DesignTokens'           = @('DesignTokens', 'WindowAnimationDurations')
     'DragAndDrop'            = @('AnimatedImageFile', 'BoardInsertionFeedback', 'BoardListBlankHover', 'CategoryDropFeedback', 'CategoryHoverDuringInternalDragKeepsSourcePanelAndSelection', 'DragLifecycle', 'ExternalDropRailProjection', 'ExternalFileDrop', 'ExternalOrderedFileDrop', 'ExternalRail', 'ExternalTextDrop', 'FailedExternalImport', 'ImageCard', 'InsertionIndicatorWithdraw', 'InternalBatchCategoryDrop', 'InternalBatchEquivalentListDropDoesNotSaveAndKeepsSelection', 'InternalBatchListDrop', 'InternalCategoryDrop', 'InternalDragData', 'InternalImageBatch', 'MidpointJitterDrop', 'MixedPinBatch', 'NormalCardMidpointDrag', 'NormalCategoryDrop', 'PinnedBoundaryDrag', 'PinnedDrag', 'RejectedExternalDrop', 'SamePositionDrag', 'SupportedExternalText', 'UnsupportedExternalDrag', 'UnsupportedOrInternalData')
     'EdgeGeometry'           = @('CollapsedGeometry', 'DisplayChange', 'ExpandedGeometry', 'ResetAction', 'SettingChange', 'WidthResize')
-    'EdgeHide'               = @('EdgeHide')
+    'EdgeHide'               = @('EdgeHide', 'EdgePeek')
     'EditingCommit'          = @('EditingCommit')
     'ExpandPipeline'         = @('ColdExpandImageCategory', 'ExpandImageCategory', 'ExpandWithSavedDeepOffset')
     'FocusVisuals'           = @('FocusVisual')
@@ -338,7 +342,7 @@ $interactionTestPrefixes = @{
     'TopmostImeSuppression'  = @('TopmostReassert')
     'Undo'                   = @('DeleteThenUndoFromPanel', 'Undo')
     'Updates'                = @('AutoUpdateCheckToggle', 'Evidence', 'UpdateButton', 'UpdateCheck')
-    'VisualLifecycle'        = @('ActiveCategoryFeedback', 'BeginPanelDrag', 'BoardList', 'CardOperationColumns', 'CategoryFeedback', 'CategoryHover', 'CategorySwitch', 'CategoryTab', 'Close', 'Collapse', 'CollapsedCategoryHover', 'CollapsedHandle', 'CollapsedPlacement', 'CollapsedWindow', 'DisablingClientAreaAnimations', 'ExpandedCategoryHover', 'ExpandedPlacement', 'ExpandedRailReveal', 'ExternalRailPlacement', 'FailedFinalSave', 'Header', 'ImageCard', 'PanelContentAnimation', 'PinnedBoundary', 'RapidCollapsedCategoryHover', 'ResetAction', 'RootMouseEnter', 'StatusOverlay', 'TextCard', 'Topmost', 'WindowResources', 'WindowShell')
+    'VisualLifecycle'        = @('ActiveCategoryFeedback', 'BeginPanelDrag', 'BoardList', 'CardOperationColumns', 'CategoryFeedback', 'CategoryHover', 'CategorySwitch', 'CategoryTab', 'Close', 'Collapse', 'CollapsedCategoryHover', 'CollapsedHandle', 'CollapsedPlacement', 'CollapsedWindow', 'DisablingClientAreaAnimations', 'ExpandedCategoryHover', 'ExpandedPlacement', 'ExpandedRailReveal', 'ExternalRailPlacement', 'FailedFinalSave', 'Header', 'ImageCard', 'PanelContentAnimation', 'PinnedBoundary', 'PlacementAnimation', 'RapidCollapsedCategoryHover', 'ResetAction', 'RootMouseEnter', 'StatusOverlay', 'TextCard', 'Topmost', 'WindowResources', 'WindowShell')
     'VisualTransitions'      = @('CollapseExit', 'PendingCollapse')
     'W6Evidence'             = @('W6Evidence')
 }
