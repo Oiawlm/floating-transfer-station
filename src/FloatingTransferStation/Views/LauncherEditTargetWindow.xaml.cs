@@ -25,6 +25,11 @@ internal sealed record LauncherEditedTarget(
 /// </summary>
 internal partial class LauncherEditTargetWindow : Window
 {
+    /// <summary>URL 类目标的输入样例提示（Url 分支与默认回退共用；复审轮 S3 起为
+    /// 本窗唯一来源——XAML 不再携带同文案默认值。同文案另见
+    /// LauncherUrlInputWindow，彼为独立窗单点，不跨窗资源化）。</summary>
+    private const string UrlTargetHintText = "例如 github.com";
+
     private readonly LauncherKind _kind;
     private bool _shownAsDialog;
     private bool _dialogShellApplied;
@@ -64,7 +69,7 @@ internal partial class LauncherEditTargetWindow : Window
         {
             case LauncherKind.Url:
                 DialogTitle.Text = "编辑网页地址";
-                TargetInputHint.Text = "例如 github.com";
+                TargetInputHint.Text = UrlTargetHintText;
                 break;
             case LauncherKind.Application:
                 DialogTitle.Text = "编辑应用目标";
@@ -79,6 +84,12 @@ internal partial class LauncherEditTargetWindow : Window
                 TargetInputHint.Text = string.Empty;
                 BrowseButton.Visibility = Visibility.Visible;
                 BrowseButton.Content = "重新选择…";
+                break;
+            default:
+                // ShellLocation 等其余类别维持既有回退：沿用 URL 样例提示（复审轮 S3
+                // 消除 XAML 默认值与 code-behind 的同文件双写，本分支承接原 XAML
+                // 默认的回退语义，值零变化）。
+                TargetInputHint.Text = UrlTargetHintText;
                 break;
         }
 
@@ -151,9 +162,9 @@ internal partial class LauncherEditTargetWindow : Window
         var currentAumid = TargetInputBox.Text;
         var picker = new MultiItemPickerWindow(
             DesignThemeManager.DetectSystemTheme(),
-            "添加已安装应用",
-            "搜索应用",
-            "未枚举到已安装应用",
+            InstalledAppPickerTexts.Title,
+            InstalledAppPickerTexts.SearchPlaceholder,
+            InstalledAppPickerTexts.EmptySourceHint,
             InstalledAppsEnumerator.Enumerate()
                 .Select(app => new MultiItemPickerWindow.PickerRow(
                     app,

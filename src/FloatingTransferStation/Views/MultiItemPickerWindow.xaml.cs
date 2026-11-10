@@ -40,6 +40,11 @@ internal partial class MultiItemPickerWindow : Window
 
     private const string NoMatchHintText = "没有匹配的应用";
 
+    /// <summary>确认钮默认文案（唯一来源，复审轮 S3 起构造期经 UpdateConfirmButton
+    /// 赋给 XAML 钮——XAML 不再携带同文案默认值，计数形「添加（N）」也由本常量
+    /// 派生）。跨窗同词「添加」为通用动词、独立窗各自单点，不跨窗资源化。</summary>
+    private const string ConfirmContentDefault = "添加";
+
     private readonly List<PickerRow> _rows;
     private readonly string _emptySourceHint;
     private bool _shownAsDialog;
@@ -164,7 +169,9 @@ internal partial class MultiItemPickerWindow : Window
     private void UpdateConfirmButton()
     {
         var checkedCount = _rows.Count(row => row.IsChecked);
-        PickerConfirmButton.Content = checkedCount > 0 ? $"添加（{checkedCount}）" : "添加";
+        PickerConfirmButton.Content = checkedCount > 0
+            ? $"{ConfirmContentDefault}（{checkedCount}）"
+            : ConfirmContentDefault;
         PickerConfirmButton.IsEnabled = checkedCount > 0;
     }
 

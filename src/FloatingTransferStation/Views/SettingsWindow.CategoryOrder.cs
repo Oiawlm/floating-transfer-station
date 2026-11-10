@@ -59,7 +59,7 @@ public partial class SettingsWindow
         var row = new Border
         {
             Height = CategoryOrderPitch,
-            CornerRadius = new CornerRadius(4),
+            CornerRadius = new CornerRadius(DesignTokens.ControlCornerRadiusPx),
             BorderThickness = new Thickness(1),
             Tag = category
         };

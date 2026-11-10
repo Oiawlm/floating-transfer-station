@@ -300,9 +300,9 @@ public partial class MainWindow
             .ToList();
         var picker = new MultiItemPickerWindow(
             CurrentTheme,
-            "添加已安装应用",
-            "搜索应用",
-            "未枚举到已安装应用",
+            InstalledAppPickerTexts.Title,
+            InstalledAppPickerTexts.SearchPlaceholder,
+            InstalledAppPickerTexts.EmptySourceHint,
             rows)
         { Owner = this };
         _panelState.BeginOverlayInteraction(PanelOverlayReason.ModalDialog);

@@ -695,8 +695,10 @@ public partial class MainWindow : Window
 
     private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        // 快捷启动键盘层级（#30 §一）：①改名编辑器原生 → ②编辑态 → ③查看态
-        // （Enter/Space 启动、方向键导航、Delete 无操作）；消费后短路既有窗口级处理
+        // 快捷启动键盘层级（#30 §一；2026-11-10 注释随 #30 修订对齐）：①改名编辑器
+        // 原生 → ②编辑态 → ③查看态（Enter/Space 启动、方向键导航、Delete=删除——
+        // 选择非空整批、否则焦点项，均带撤销；实证 MainWindow.QuickLaunch.cs
+        // HandleLauncherPreviewKey 的 Key.Delete 分支）；消费后短路既有窗口级处理
         // （Ctrl+Z/F 等窗口级命令在层级④，未被启动表面消费时照常到达）。
         if (HandleLauncherPreviewKey(e))
         {

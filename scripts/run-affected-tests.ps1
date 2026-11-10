@@ -62,6 +62,9 @@ $overrides = @(
         'src/FloatingTransferStation/Views/LauncherTilePanel.cs',
         'src/FloatingTransferStation/Views/LauncherUrlInputWindow*', 'src/FloatingTransferStation/Views/MultiItemPickerWindow*',
         'src/FloatingTransferStation/Views/LauncherEditTargetWindow*', 'src/FloatingTransferStation/Launcher/*',
+        # InstalledAppPickerTexts＝已安装应用选择器固定文案（复审轮 S3 唯一来源化）：
+        # 消费面即 QuickLaunch/EditTarget 选择器流程，随本族缩圈（消除 C1 未命中）。
+        'src/FloatingTransferStation/Views/InstalledAppPickerTexts.cs',
         'src/FloatingTransferStation/Services/ShellInterop.cs',
         'src/FloatingTransferStation.Core/Services/Launcher*.cs', 'src/FloatingTransferStation.Core/Services/VolatileLauncher*.cs',
         'src/FloatingTransferStation.Core/Services/ILauncherStore.cs', 'src/FloatingTransferStation.Core/Services/ILauncherDiscoveryStore.cs',

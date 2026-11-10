@@ -61,6 +61,8 @@
                    Foreground="{DynamicResource PrimaryTextBrush}"
                    VerticalAlignment="Center"
                    IsHitTestVisible="False" />
+        <!-- 通用词「关闭」ToolTip＝独立窗单点字面量（三小对话框同词不跨窗资源化；
+             设置/试运行窗按窗口专名「关闭设置/关闭试运行」——复审轮 S3 豁免论证）。 -->
         <Button x:Name="CloseButton"
                 Style="{StaticResource HeaderActionButtonStyle}"
                 HorizontalAlignment="Right"
@@ -172,8 +174,9 @@
                   Style="{StaticResource ThemedActionButtonStyle}"
                   AutomationProperties.Name="取消选择"
                   Click="CancelButton_Click" />
+          <!-- 确认钮文案唯一来源＝code-behind ConfirmContentDefault（构造期
+               UpdateConfirmButton 赋「添加」/「添加（N）」，复审轮 S3 消除双写）。 -->
           <Button x:Name="PickerConfirmButton"
-                  Content="添加"
                   FontSize="12"
                   Height="32"
                   Padding="14,0"

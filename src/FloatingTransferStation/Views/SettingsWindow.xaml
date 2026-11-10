@@ -118,7 +118,7 @@
               <Grid>
                 <Border x:Name="ItemSurface"
                         Background="Transparent"
-                        CornerRadius="7" />
+                        CornerRadius="{StaticResource HeaderActionCornerRadius}" />
                 <Border x:Name="SelectionIndicator"
                         Width="3"
                         Margin="0,8"
@@ -722,6 +722,8 @@
                             Style="{StaticResource ThemedActionButtonStyle}"
                             AutomationProperties.Name="浏览监视文件夹"
                             Click="LauncherDiscoveryFolderBrowse_Click" />
+                    <!-- 通用动词「添加」＝独立窗各自单点（此处为添加监视文件夹；
+                         与网页地址输入/选择器同词不同动作，不跨窗资源化——S3 豁免）。 -->
                     <Button x:Name="LauncherDiscoveryFolderAddButton"
                             Grid.Column="2"
                             Content="添加"

@@ -41,6 +41,8 @@ public partial class SettingsWindow : Window
 
     private const string WeChatCopiedFeedbackText = "已复制";
     private const string WeChatCopyFailedFeedbackText = "复制失败";
+    // 复制反馈回位延迟＝场景语义时长（非 83/167/250 动画三档）——豁免依据
+    // docs/design.md §六「行为计时器」行（反馈复位 1.6s），复审轮 S3 注释豁免论证。
     private static readonly TimeSpan WeChatCopyFeedbackRevertDelay = TimeSpan.FromSeconds(1.6);
 
     private DispatcherTimer? _wechatCopyFeedbackTimer;
@@ -2212,12 +2214,13 @@ public partial class SettingsWindow : Window
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        // 卡片行语言与「标签顺序」行同族：Card 底 + Border 描边 + 圆角 4，颜色走主题键；
+        // 卡片行语言与「标签顺序」行同族：Card 底 + Border 描边 + 圆角 4（ControlCornerRadiusPx，
+        // 复审轮 S3 起引 token），颜色走主题键；
         // 画刷经动态资源引用解析（对齐全仓 DynamicResource 语义），主题活切换即跟随。
         var surface = new Border
         {
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
+            CornerRadius = new CornerRadius(DesignTokens.ControlCornerRadiusPx),
             Padding = new Thickness(10, 8, 10, 8),
             Margin = new Thickness(0, 0, 0, 6),
             Child = content

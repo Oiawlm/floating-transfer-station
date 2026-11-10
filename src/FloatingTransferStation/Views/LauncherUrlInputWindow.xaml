@@ -58,6 +58,8 @@
                    Foreground="{DynamicResource PrimaryTextBrush}"
                    VerticalAlignment="Center"
                    IsHitTestVisible="False" />
+        <!-- 通用词「关闭」ToolTip＝独立窗单点字面量（三小对话框同词不跨窗资源化；
+             设置/试运行窗按窗口专名「关闭设置/关闭试运行」——复审轮 S3 豁免论证）。 -->
         <Button x:Name="CloseButton"
                 Style="{StaticResource HeaderActionButtonStyle}"
                 HorizontalAlignment="Right"
@@ -83,6 +85,8 @@
                  MaxLength="2048"
                  AutomationProperties.Name="网页地址"
                  TextChanged="UrlInputBox_TextChanged" />
+        <!-- URL 输入样例提示＝本窗单点字面量（编辑目标窗同文案由其 code-behind
+             常量唯一来源；独立窗不跨窗资源化——复审轮 S3 豁免论证）。 -->
         <TextBlock x:Name="UrlInputHint"
                    Text="例如 github.com"
                    FontSize="13"
@@ -113,6 +117,8 @@
                   Style="{StaticResource ThemedActionButtonStyle}"
                   AutomationProperties.Name="取消添加网页地址"
                   Click="CancelButton_Click" />
+          <!-- 通用动词「添加」＝独立窗各自单点（确认添加网页地址；选择器侧唯一来源
+               见 MultiItemPickerWindow.ConfirmContentDefault——不跨窗资源化，S3 豁免）。 -->
           <Button x:Name="UrlConfirmButton"
                   Content="添加"
                   FontSize="12"
