@@ -2962,10 +2962,13 @@ public sealed partial class MainWindowInteractionTests
                 mutations => mutations.DeleteManyAsync([first.Id], BoardDeleteMode.Undoable));
             AssertCounts(0, 1, 0, 0, totalCount: 2);
 
-            // 指派（拖卡归属路径＝AssignSubgroupAsync，无集合变化）。
-            RunMutationsTask(
-                window,
-                mutations => mutations.AssignSubgroupAsync([added.Id], 2));
+            // 指派（拖卡归属＝唯一指派手势，经真实 Drop 路径——SubgroupChip_Drop
+            // 内联喂数；直调 AssignSubgroupAsync 绕过 UI 手势不在此口径内）。
+            var chipHost = FindSubgroupChip(window, 2);
+            var dragData = new DragPayloadService().BuildInternalBatch([added]);
+            chipHost.RaiseEvent(NewDragEventArgs(dragData, DragDrop.DropEvent, chipHost));
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(500));
+            CompleteLayout(window);
             AssertCounts(0, 0, 1, 0, totalCount: 2);
 
             void AssertCounts(int slot0, int slot1, int slot2, int slot3, int totalCount)
