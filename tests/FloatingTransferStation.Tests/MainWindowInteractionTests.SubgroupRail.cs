@@ -3095,6 +3095,11 @@ public sealed partial class MainWindowInteractionTests
                 CompleteLayout(window);
                 Assert.IsTrue(window.IsSubgroupFilterActive, "证据帧必须含开态点击激活态。");
                 SaveVisualEvidence(shell!, $"subgroup-clickswitch-active-{themeName}.png", "FTS_SUBGROUP_EVIDENCE_DIR");
+                // 迭代间清过滤（toggle 语义）：暗色轮开局若沿用浅色轮激活态、再点＝回根，
+                // 激活断言必红（本地实红根因）——Esc 退出沿既有路径，两轮同构起步。
+                window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
+                CompleteLayout(window);
+                Assert.IsFalse(window.IsSubgroupFilterActive, "迭代间清过滤回根态。");
             }
         }
         finally
