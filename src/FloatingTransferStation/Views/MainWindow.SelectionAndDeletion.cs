@@ -74,8 +74,10 @@ public partial class MainWindow : Window
         if (_viewModel.ActivePanel is { } activePanel)
         {
             AttachCardEntrance(activePanel.Items);
-            // 轨名按激活分类的名清单逐槽解析刷新（形态①作用域＝内容桶）。
+            // 轨名按激活分类的名清单逐槽解析刷新（形态①作用域＝内容桶）；
+            // 计数/驻留提示随激活分类换轨同步喂数（契约 #62）。
             _viewModel.RefreshSubgroupChips(_settings, activePanel.Category);
+            RefreshSubgroupChipHints();
         }
 
         UpdatePanelSurface();

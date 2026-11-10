@@ -923,6 +923,36 @@
                   </Grid>
                   <TextBlock Style="{StaticResource NoteCaptionStyle}"
                              Text="开启后图片卡可直接拖出为图片文件。" />
+                  <!-- 实验性第四项（2026-11-08 批次 d1，契约 #62）：子分组轨点击
+                       切换——悬停误触治理（R13）：开启后按钮轨悬停只高亮（驻留
+                       显示分组内卡片数），点击切换分组、Ctrl+单击设收集落点；
+                       关闭＝悬停即切换、单击设收集落点（现状）。即时生效＋原子
+                       保存（契约 #5 同路）。 -->
+                  <Grid Background="Transparent" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="子分组轨点击切换"
+                               Style="{StaticResource RowCaptionStyle}"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center">
+                      <TextBlock.ToolTip>
+                        <ToolTip>
+                          <TextBlock Text="实验性功能，默认关闭：分组按钮横在卡片与顶部按钮之间，悬停即切换会误触。开启后悬停只高亮（停顿显示分组内卡片数），点击才切换分组、再点取消，Ctrl+单击设收集落点，「全部」查看全部分类内容。关闭＝悬停即切换、单击设收集落点。" TextWrapping="Wrap" MaxWidth="320" />
+                        </ToolTip>
+                      </TextBlock.ToolTip>
+                    </TextBlock>
+                    <CheckBox x:Name="SubgroupRailClickSwitchToggle"
+                              Grid.Column="1"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              AutomationProperties.Name="子分组轨点击切换"
+                              Checked="SubgroupRailClickSwitchToggle_Checked"
+                              Unchecked="SubgroupRailClickSwitchToggle_Unchecked" />
+                  </Grid>
+                  <TextBlock Style="{StaticResource NoteCaptionStyle}"
+                             Text="开启后按钮轨悬停只高亮，点击切换分组、Ctrl+单击设收集落点。" />
                 </StackPanel>
               </Border>
             </StackPanel>

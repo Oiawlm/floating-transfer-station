@@ -957,4 +957,56 @@ public sealed class AppPreferencesTests
             restored.ExperimentalDefaultsMigrationVersion,
             "旧 preferences.json 缺戳字段时必须回落 0（未迁移＝下次启动重放迁移，幂等收敛）。");
     }
+
+    [TestMethod]
+    public void Default_DisablesSubgroupRailClickSwitch()
+    {
+        // 子分组轨点击切换（契约 #62，批次 2026-11-08-interaction-unify-batch d1）：
+        // 实验性默认关＝全用户零行为变化（悬停即进＋单击设默认现状逐字保留）。
+        Assert.IsFalse(
+            AppPreferences.Default.SubgroupRailClickSwitchEnabled,
+            "默认关＝零打扰，沿实验开关先例。");
+    }
+
+    [TestMethod]
+    public void JsonRoundTrip_PreservesSubgroupRailClickSwitchEnabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        foreach (var enabled in new[] { false, true })
+        {
+            var preferences = AppPreferences.Default with { SubgroupRailClickSwitchEnabled = enabled };
+
+            var serialized = JsonSerializer.Serialize(preferences, storeOptions);
+            StringAssert.Contains(
+                serialized,
+                "\"subgroupRailClickSwitchEnabled\"",
+                "落盘键名必须是 subgroupRailClickSwitchEnabled（camelCase）。");
+            var restored = JsonSerializer.Deserialize<AppPreferences>(serialized, storeOptions);
+
+            Assert.AreEqual(preferences, restored);
+            Assert.AreEqual(enabled, restored!.SubgroupRailClickSwitchEnabled);
+        }
+    }
+
+    [TestMethod]
+    public void OlderJson_WithoutSubgroupRailClickSwitchField_FallsBackToDisabled()
+    {
+        var storeOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var restored = JsonSerializer.Deserialize<AppPreferences>(
+            """{"themeMode":"Light","interfaceFont":null}""",
+            storeOptions);
+
+        Assert.IsNotNull(restored);
+        Assert.IsFalse(
+            restored.SubgroupRailClickSwitchEnabled,
+            "旧 preferences.json 缺字段时必须回落默认关闭（免迁移；不进 #59 一次性迁移）。");
+    }
 }

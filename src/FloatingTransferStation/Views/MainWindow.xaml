@@ -130,17 +130,21 @@
           </Grid>
         </Border>
       </DataTemplate>
-      <!-- 子分组 chip（实验性，契约 #57 修订）：视觉沿分类轨标签语言（边框/圆角/
-           hover/激活 accent）；悬停过滤、单击设收集落点（照分类轨「悬停即进入、
-           单击设默认接收」同构）、双击改名、拖卡入 chip＝批量归属该槽（照「拖卡入
-           标签=移动分类」先例）。改名会话与分类改名同一套机器（IME 守卫＋Enter/
-           Esc/失焦提交）。 -->
+      <!-- 子分组 chip（实验性，契约 #57 修订＋#62 点击切换门控）：视觉沿分类轨
+           标签语言（边框/圆角/hover/激活 accent）；关态＝悬停过滤、单击设收集
+           落点（照分类轨「悬停即进入、单击设默认接收」同构）；开态＝悬停纯视觉
+           （驻留 300ms 计数/手势 ToolTip，绑定 VM ToolTipText——关态恒 null 不
+           显示）、裸单击 toggle 过滤、Ctrl+单击设收集落点；双击改名、拖卡入
+           chip＝批量归属该槽（照「拖卡入标签=移动分类」先例）两态共用。改名
+           会话与分类改名同一套机器（IME 守卫＋Enter/Esc/失焦提交）。 -->
       <DataTemplate x:Key="SubgroupChipTemplate"
                     DataType="{x:Type vm:SubgroupChipViewModel}">
         <Border x:Name="ChipSurface"
                 Style="{StaticResource SubgroupChipContainerStyle}"
                 Tag="{Binding Slot}"
                 AllowDrop="True"
+                ToolTip="{Binding ToolTipText}"
+                ToolTipService.InitialShowDelay="300"
                 MouseEnter="SubgroupChip_MouseEnter"
                 MouseLeftButtonDown="SubgroupChip_MouseLeftButtonDown"
                 MouseLeftButtonUp="SubgroupChip_MouseLeftButtonUp"
@@ -178,15 +182,20 @@
         </Border>
       </DataTemplate>
       <!-- 子分组「全部」伪 chip（契约 #60；结构性恒居轨首）：无槽身份——不参与
-           槽序拖排/改名/拖放归属/默认落点（无环、无编辑器）；悬停＝进入全量过滤
-           视图（Filter=null＋全 chip 激活态），单击无操作。视觉复用槽 chip 样式族
-           （容器/hover/激活层/文字按 IsFilterActive 同名鸭子类型命中）。 -->
+           槽序拖排/改名/拖放归属/默认落点（无环、无编辑器）；关态＝悬停进入全量
+           过滤视图（Filter=null＋全 chip 激活态）、单击无操作；开态（契约 #62）＝
+           悬停纯视觉（驻留 300ms 计数/手势 ToolTip）、单击进全量态/再点回根
+           （Up 处理器关态＝无操作）。视觉复用槽 chip 样式族（容器/hover/激活层/
+           文字按 IsFilterActive 同名鸭子类型命中）。 -->
       <DataTemplate x:Key="SubgroupAllChipTemplate"
                     DataType="{x:Type vm:SubgroupAllChipViewModel}">
         <Border x:Name="ChipSurface"
                 Style="{StaticResource SubgroupChipContainerStyle}"
                 Tag="{x:Static models:SubgroupCatalog.AllChipName}"
-                MouseEnter="SubgroupAllChip_MouseEnter">
+                ToolTip="{Binding ToolTipText}"
+                ToolTipService.InitialShowDelay="300"
+                MouseEnter="SubgroupAllChip_MouseEnter"
+                MouseLeftButtonUp="SubgroupAllChip_MouseLeftButtonUp">
           <Grid Background="Transparent">
             <Border x:Name="ChipHoverLayer"
                     Background="{DynamicResource HoverSurfaceBrush}"

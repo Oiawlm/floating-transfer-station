@@ -110,6 +110,8 @@ public partial class SettingsWindow : Window
         ReviewMarkdownViewToggle.IsChecked = host.CurrentPreferences.ReviewMarkdownViewEnabled;
         // 图片拖出为文件（契约 #58 实验性第三项）：构造同步段回显。
         DragOutAsFileToggle.IsChecked = host.CurrentPreferences.DragOutAsFileEnabled;
+        // 子分组轨点击切换（契约 #62 实验性第四项，默认关）：构造同步段回显。
+        SubgroupRailClickSwitchToggle.IsChecked = host.CurrentPreferences.SubgroupRailClickSwitchEnabled;
         // 子分组三态（契约 #57 实验性第二项）：枚举设置一律 ComboBox（仓库先例），
         /// 选中项按 Tag 匹配、不依赖下标。
         var subgroupItems = new[]
@@ -1796,6 +1798,26 @@ public partial class SettingsWindow : Window
         }
 
         _host.ApplyPreferences(_host.CurrentPreferences with { DragOutAsFileEnabled = enabled });
+    }
+
+    // ---- 实验性第四项（契约 #62）：子分组轨点击切换（悬停误触治理）。经
+    // ApplyPreferences 唯一管线即时生效＋原子持久化（契约 #5 同路）；开关状态
+    // 在构造同步段回显。----
+
+    private void SubgroupRailClickSwitchToggle_Checked(object sender, RoutedEventArgs e) =>
+        ApplySubgroupRailClickSwitchPreference(enabled: true);
+
+    private void SubgroupRailClickSwitchToggle_Unchecked(object sender, RoutedEventArgs e) =>
+        ApplySubgroupRailClickSwitchPreference(enabled: false);
+
+    private void ApplySubgroupRailClickSwitchPreference(bool enabled)
+    {
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        _host.ApplyPreferences(_host.CurrentPreferences with { SubgroupRailClickSwitchEnabled = enabled });
     }
 
     // ---- 实验性第二项（契约 #57）：分类内子分组三态。经 ApplyPreferences 唯一

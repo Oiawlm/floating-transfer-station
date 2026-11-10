@@ -27,6 +27,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _statusText = string.Empty;
     private bool _aiOrganizeEnabled = true;
     private bool _hasEnabledPluginActions;
+    private bool _subgroupRailClickSwitchEnabled;
     private IReadOnlyList<SubgroupChipViewModel> _subgroupChips = Array.Empty<SubgroupChipViewModel>();
     private IReadOnlyList<object> _subgroupRailItems = Array.Empty<object>();
     private readonly Dictionary<BoardCategory, IReadOnlyList<int>> _subgroupOrders = new();
@@ -283,6 +284,16 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         get => _aiOrganizeEnabled;
         set => SetProperty(ref _aiOrganizeEnabled, value);
+    }
+
+    /// <summary>子分组轨点击切换实验开关（契约 #62，默认关）：由 ApplyPreferences
+    /// 唯一管线＋构造段镜像喂值（照 ShortCardNotesEnabled 先例，#58 构造段教训）；
+    /// 开关判断唯一存在于轨手势路由层（关＝悬停即进＋单击设默认现状逐字保留；开＝
+    /// 悬停纯视觉＋裸单击 toggle 过滤＋Ctrl+单击设默认），过滤状态机零开关感知。</summary>
+    public bool SubgroupRailClickSwitchEnabled
+    {
+        get => _subgroupRailClickSwitchEnabled;
+        set => SetProperty(ref _subgroupRailClickSwitchEnabled, value);
     }
 
     /// <summary>插件目录存在已启用动作（Issue #240 插件动作钮可见性的目录态，
