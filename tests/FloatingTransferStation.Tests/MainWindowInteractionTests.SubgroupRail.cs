@@ -2963,9 +2963,10 @@ public sealed partial class MainWindowInteractionTests
             AssertCounts(0, 1, 0, 0, totalCount: 2);
 
             // 指派（拖卡归属＝唯一指派手势，经真实 Drop 路径——SubgroupChip_Drop
-            // 内联喂数；直调 AssignSubgroupAsync 绕过 UI 手势不在此口径内）。
+            // 内联喂数；直调 AssignSubgroupAsync 绕过 UI 手势不在此口径内；单卡
+            // 拖放载荷＝BuildDrag，BuildInternalBatch 要求 ≥2 项）。
             var chipHost = FindSubgroupChip(window, 2);
-            var dragData = new DragPayloadService().BuildInternalBatch([added]);
+            var dragData = new DragPayloadService().BuildDrag(added);
             chipHost.RaiseEvent(NewDragEventArgs(dragData, DragDrop.DropEvent, chipHost));
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(500));
             CompleteLayout(window);
