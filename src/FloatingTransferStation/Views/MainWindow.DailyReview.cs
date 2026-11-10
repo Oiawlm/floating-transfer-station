@@ -85,8 +85,10 @@ public partial class MainWindow
         }
         else
         {
-            // 切标签：改名会话提交、多选清空；提示条与撤销记录随切标签一起销毁
-            // （#30 §三.7；2026-10-18 起「编辑模式自动退出」由前两者承接）。
+            // 切标签：瓦片改名会话提交、多选清空；提示条与撤销记录随切标签一起销毁
+            // （#30 §三.7；2026-10-18 起「编辑模式自动退出」由前两者承接）。分类/chip
+            // 改名会话已在 ActivatePanel 顶部经 FlushEditingSessionsForPanelSwitch 统一
+            // 冲刷（契约 #49 修订），此处保留瓦片的表面切换提交（调用面更宽，含非切换路径）。
             CommitLauncherTileRename();
             ClearLauncherSelection();
             DestroyLauncherUndoToast();

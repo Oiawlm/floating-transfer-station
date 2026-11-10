@@ -1,19 +1,59 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Threading;
 using FloatingTransferStation.Models;
 using FloatingTransferStation.ViewModels;
 
 namespace FloatingTransferStation.Views;
 
+/// <summary>
+/// 分类名改名会话（共享协调器机器，契约 #49 修订）：会话状态机（Begin/限长/IME 组合守卫/
+/// Enter 提交/Esc 取消/失焦提交）由 <see cref="InlineRenameSession{TSubject}"/> 承载，
+/// 本面只注入 subject 参数（分类集/限长/查询缝）与乐观保存单点（SaveCategoryNameAsync）；
+/// 事件入口沿 InitializeCardEditSessionTracking 先例做窗口级挂接（编辑器在 DataTemplate
+/// 内，不经 XAML 特性散挂）。「点击编辑器外部＝提交」隧道与面板切换冲刷经协调器登记清单
+/// 统一分发，不再各自感知分类面。
+/// </summary>
 public partial class MainWindow : Window
 {
     private readonly HashSet<TextBox> _activeCategoryNameCompositions = [];
 
+    private InlineRenameSession<CategoryViewModel> _categoryRenameSession = null!;
+
     private void InitializeCategoryNameEditing()
     {
+        _categoryRenameSession = new InlineRenameSession<CategoryViewModel>(
+            Dispatcher,
+            _activeCategoryNameCompositions,
+            subjects: () => _viewModel.Categories,
+            isEditing: category => category.IsEditingName,
+            findEditor: TryGetCategoryNameEditor,
+            findDescendantEditor: FindDescendant<TextBox>,
+            limitDraft: BoardCategoryCatalog.LimitDisplayName,
+            beginSession: category => _viewModel.BeginCategoryNameEdit(category),
+            endSession: (category, draftName) => _viewModel.EndCategoryNameEdit(category, draftName),
+            cancelSession: category => _viewModel.CancelCategoryNameEdit(category),
+            saveIfChanged: (category, name) =>
+            {
+                if (name == category.DisplayName)
+                {
+                    return;
+                }
+
+                TrackPendingOperation(SaveCategoryNameAsync(category, name));
+            },
+            afterSessionEnd: ReconcileSurfaceAfterEditing);
+        AddHandler(
+            Keyboard.KeyDownEvent,
+            new KeyEventHandler(CategoryNameEditor_KeyDown));
+        AddHandler(
+            Keyboard.LostKeyboardFocusEvent,
+            new KeyboardFocusChangedEventHandler(CategoryNameEditor_LostKeyboardFocus));
+        AddHandler(
+            TextBoxBase.TextChangedEvent,
+            new TextChangedEventHandler(CategoryNameEditor_TextChanged));
         AddHandler(
             TextCompositionManager.PreviewTextInputStartEvent,
             new TextCompositionEventHandler(CategoryNameEditor_CompositionStartedOrUpdated),
@@ -43,121 +83,32 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void BeginCategoryNameEdit(CategoryViewModel category, Border tab)
-    {
-        _viewModel.BeginCategoryNameEdit(category);
-        Dispatcher.BeginInvoke(
-            DispatcherPriority.Input,
-            new Action(() =>
-            {
-                if (!category.IsEditingName ||
-                    FindDescendant<TextBox>(tab) is not { } editor)
-                {
-                    return;
-                }
+    private void BeginCategoryNameEdit(CategoryViewModel category, Border tab) =>
+        _categoryRenameSession.Begin(category, tab);
 
-                editor.Focus();
-                editor.SelectAll();
-            }));
-    }
-
-    private void CategoryNameEditor_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (sender is not TextBox editor ||
-            editor.DataContext is not CategoryViewModel category ||
-            !category.IsEditingName ||
-            _activeCategoryNameCompositions.Contains(editor))
-        {
-            return;
-        }
-
-        var limited = BoardCategoryCatalog.LimitDisplayName(editor.Text);
-        if (limited == editor.Text)
-        {
-            return;
-        }
-
-        editor.Text = limited;
-        editor.CaretIndex = editor.Text.Length;
-    }
+    private void CategoryNameEditor_TextChanged(object sender, TextChangedEventArgs e) =>
+        _categoryRenameSession.HandleTextChanged(e);
 
     private void CategoryNameEditor_CompositionStartedOrUpdated(
         object sender,
-        TextCompositionEventArgs e)
-    {
-        if (e.OriginalSource is TextBox
-            {
-                DataContext: CategoryViewModel { IsEditingName: true }
-            } editor)
-        {
-            _activeCategoryNameCompositions.Add(editor);
-        }
-    }
+        TextCompositionEventArgs e) =>
+        _categoryRenameSession.HandleCompositionStartedOrUpdated(e);
 
     private void CategoryNameEditor_CompositionCompleted(
         object sender,
-        TextCompositionEventArgs e)
-    {
-        if (e.OriginalSource is TextBox editor)
-        {
-            _activeCategoryNameCompositions.Remove(editor);
-        }
-    }
+        TextCompositionEventArgs e) =>
+        _categoryRenameSession.HandleCompositionCompleted(e);
 
-    private void CategoryNameEditor_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (sender is not TextBox editor ||
-            editor.DataContext is not CategoryViewModel category)
-        {
-            return;
-        }
-
-        if (_activeCategoryNameCompositions.Contains(editor))
-        {
-            return;
-        }
-
-        if (e.Key == Key.Enter)
-        {
-            e.Handled = true;
-            CommitCategoryNameEdit(category, editor.Text);
-        }
-        else if (e.Key == Key.Escape)
-        {
-            e.Handled = true;
-            _activeCategoryNameCompositions.Remove(editor);
-            _viewModel.CancelCategoryNameEdit(category);
-            ReconcileSurfaceAfterEditing();
-        }
-    }
+    private void CategoryNameEditor_KeyDown(object sender, KeyEventArgs e) =>
+        _categoryRenameSession.HandleKeyDown(e);
 
     private void CategoryNameEditor_LostKeyboardFocus(
         object sender,
-        KeyboardFocusChangedEventArgs e)
-    {
-        if (sender is TextBox { DataContext: CategoryViewModel category } editor)
-        {
-            _activeCategoryNameCompositions.Remove(editor);
-            CommitCategoryNameEdit(category, editor.Text);
-        }
-    }
+        KeyboardFocusChangedEventArgs e) =>
+        _categoryRenameSession.HandleLostKeyboardFocus(e);
 
-    private void CommitCategoryNameEdit(CategoryViewModel category, string draftName)
-    {
-        if (!category.IsEditingName)
-        {
-            return;
-        }
-
-        var name = _viewModel.EndCategoryNameEdit(category, draftName);
-        ReconcileSurfaceAfterEditing();
-        if (name == category.DisplayName)
-        {
-            return;
-        }
-
-        TrackPendingOperation(SaveCategoryNameAsync(category, name));
-    }
+    private void CommitCategoryNameEdit(CategoryViewModel category, string draftName) =>
+        _categoryRenameSession.Commit(category, draftName);
 
     private async Task SaveCategoryNameAsync(CategoryViewModel category, string name)
     {
@@ -186,22 +137,11 @@ public partial class MainWindow : Window
     private bool IsCategoryNameEditActive() =>
         _viewModel.Categories.Any(category => category.IsEditingName);
 
-    /// <summary>当前改名会话的编辑器（「点击编辑器外部＝提交」协调查询缝）：
-    /// 编辑中的分类在标签栏/收起把手中的名字编辑器。改名会话不存在时为 null；
-    /// 会话在而编辑器未实现（模板未挂）同样为 null——调用方据此跳过本次触发，
-    /// 会话交回失焦等既有通道处置。</summary>
-    private TextBox? TryGetActiveCategoryNameEditor()
-    {
-        var editingCategory = _viewModel.Categories.FirstOrDefault(
-            category => category.IsEditingName);
-        if (editingCategory is null)
-        {
-            return null;
-        }
-
-        return FindCategoryNameEditor(CategoryRail, editingCategory) ??
-            FindCategoryNameEditor(CollapsedCategoryHandle, editingCategory);
-    }
+    /// <summary>指定分类的名字编辑器（协调器查询缝）：编辑中的分类在标签栏/收起把手中的
+    /// 名字编辑器。编辑器未实现（模板未挂）为 null——会话交回失焦等既有通道处置。</summary>
+    private TextBox? TryGetCategoryNameEditor(CategoryViewModel category) =>
+        FindCategoryNameEditor(CategoryRail, category) ??
+        FindCategoryNameEditor(CollapsedCategoryHandle, category);
 
     /// <summary>按 DataContext 引用等值在子树内找该分类的名字编辑器（模板内
     /// TextBox 不带名，与 FindCardEditor 同法递归；两处宿主树都很小，无虚拟化）。</summary>

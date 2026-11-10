@@ -3107,4 +3107,70 @@ public sealed partial class MainWindowInteractionTests
             CloseWindow(window);
         }
     }
+    // ---- R6：chip 改名中悬停切另一标签＝切换且草稿先提交（面板切换统一冲刷，
+    //      契约 #49 修订；「改名会话中悬停不进入」守卫只作用轨内 chip 过滤切换——
+    //      #57 修订②的有意差异） ----
+
+    [STATestMethod]
+    public void SubgroupRename_HoverTabSwitchCommitsDraftBeforePanelSwitch()
+    {
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("内容", BoardCategory.Inbox);
+        var window = CreateSubgroupWindow(directory, board, SubgroupDisplayMode.ChipRail);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var inbox = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.Inbox);
+            var reference = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.Reference);
+
+            DoubleClickChip(window, 1);
+            FindChipEditor(window, 1).Text = "要事";
+
+            var referenceTab = FindCategoryTab(window, reference);
+            referenceTab.RaiseEvent(NewMouseEventArgs(UIElement.MouseEnterEvent, referenceTab));
+            CompleteLayout(window);
+
+            Assert.IsFalse(
+                viewModel.SubgroupChips.Single(chip => chip.Slot == 1).IsEditingName,
+                "悬停切换面板必须先冲刷 chip 改名会话。");
+            Assert.AreEqual(
+                BoardCategory.Reference,
+                viewModel.ActivePanel?.Category,
+                "悬停切换不被阻止、照常完成。");
+            InvokePrivateTask(window, "DrainPendingOperationsAsync");
+            var persisted = ReadPersistedJson<WindowSettings>(directory, "settings.json");
+            Assert.IsNotNull(persisted);
+            Assert.AreEqual(
+                "要事",
+                persisted!.SubgroupName(BoardCategory.Inbox, 1),
+                "切换冲刷必须持久化 chip 名（名清单单一事实源）");
+
+            // 切回：轨名按已提交名清单解析、会话不复活、无草稿/焦点残留。
+            var inboxTab = FindCategoryTab(window, inbox);
+            inboxTab.RaiseEvent(NewMouseEventArgs(UIElement.MouseEnterEvent, inboxTab));
+            CompleteLayout(window);
+
+            Assert.AreEqual(
+                "要事",
+                viewModel.SubgroupChips.Single(chip => chip.Slot == 1).DisplayName,
+                "切回后轨名＝已提交名（草稿不残留）。");
+            Assert.IsFalse(
+                viewModel.SubgroupChips.Single(chip => chip.Slot == 1).IsEditingName,
+                "切回不得复活改名会话。");
+            Assert.IsFalse(
+                FindChipEditor(window, 1).IsVisible,
+                "切回后编辑器收起，无草稿残留。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
 }

@@ -1915,6 +1915,153 @@ public sealed class SettingsWindowInteractionTests
         }
     }
 
+    // ---- 关窗冲刷持焦草稿（契约 #5 增补，R5/R6 批次 b1）：Esc/关闭钮/系统菜单三路
+    //      都汇 Close()→OnClosing 单点；焦点门控＝草稿唯一逃逸 LostFocus 的状态。 ----
+
+    private static void NavigateToAiPage(SettingsWindow settings)
+    {
+        var aiNav = settings.FindName("SettingsNavAi") as RadioButton;
+        Assert.IsNotNull(aiNav, "设置窗必须有「AI」导航项。");
+        aiNav.IsChecked = true;
+        CompleteLayout(settings);
+    }
+
+    [STATestMethod]
+    public void SettingsClose_EscapeWhileAiPromptFocusedCommitsDraft()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeEnabled = true }
+        };
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            new FakeStartupManager(),
+            preferences: preferencesStore.Seeded);
+
+        try
+        {
+            var settings = OpenSettings(window);
+            NavigateToAiPage(settings);
+
+            var promptBox = settings.FindName("AiOrganizePromptBox") as TextBox;
+            Assert.IsNotNull(promptBox);
+            Assert.IsTrue(promptBox.Focus(), "前置条件：提示词草稿持键盘焦点。");
+            promptBox.Text = "整理提示词草稿";
+
+            // Esc 关窗路径：Close() 前经 OnClosing 冲刷持焦草稿（不经焦点迁移，
+            // 失焦提交不会自行触发——关窗冲刷补的就是这个缺口）。
+            settings.RaiseEvent(new KeyEventArgs(
+                Keyboard.PrimaryDevice,
+                PresentationSource.FromVisual(settings)!,
+                Environment.TickCount,
+                Key.Escape)
+            {
+                RoutedEvent = Keyboard.PreviewKeyDownEvent,
+                Source = settings
+            });
+            PumpDispatcherUntil(
+                settings.Dispatcher,
+                Task.Delay(TimeSpan.FromMilliseconds(200)));
+
+            Assert.IsFalse(settings.IsLoaded, "Esc 仍关闭设置窗（关窗语义不变）。");
+            Assert.IsNotNull(preferencesStore.LastSaved, "关窗冲刷必须经 ApplyPreferences 管线提交。");
+            Assert.AreEqual(
+                "整理提示词草稿",
+                preferencesStore.LastSaved!.AiOrganizeSystemPromptOverride,
+                "关窗时持焦的提示词草稿必须按失焦路径保存，不得静默丢弃。");
+        }
+        finally
+        {
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void SettingsClose_CloseButtonWhileKeyBoxFocusedCommitsKey()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore
+        {
+            Seeded = AppPreferences.Default with { AiOrganizeEnabled = true }
+        };
+        var window = CreateWindow(
+            directory,
+            preferencesStore,
+            new FakeStartupManager(),
+            preferences: preferencesStore.Seeded);
+
+        try
+        {
+            var settings = OpenSettings(window);
+            NavigateToAiPage(settings);
+
+            var keyBox = settings.FindName("DeepSeekKeyBox") as PasswordBox;
+            Assert.IsNotNull(keyBox);
+            Assert.IsTrue(keyBox.Focus(), "前置条件：AI Key 草稿持键盘焦点。");
+            keyBox.Password = "sk-close-flush-fake-key";
+
+            var closeButton = settings.FindName("CloseButton") as Button;
+            Assert.IsNotNull(closeButton);
+            closeButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpDispatcherUntil(
+                settings.Dispatcher,
+                Task.Delay(TimeSpan.FromMilliseconds(200)));
+
+            Assert.IsFalse(settings.IsLoaded, "关闭按钮仍关闭设置窗（关窗语义不变）。");
+            Assert.IsNotNull(preferencesStore.LastSaved, "关窗冲刷必须经 ApplyPreferences 管线提交。");
+            Assert.IsNotNull(
+                preferencesStore.LastSaved!.DeepSeekApiKeyProtected,
+                "关窗时持焦的 AI Key 必须按失焦路径提交密文。");
+            Assert.IsFalse(
+                preferencesStore.LastSaved.DeepSeekApiKeyProtected
+                    .Contains("sk-close-flush-fake-key", StringComparison.Ordinal),
+                "存储值必须不含明文。");
+        }
+        finally
+        {
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void SettingsClose_WithoutFocusedDraftEditorsClosesWithoutPreferenceWrite()
+    {
+        using var directory = new TestDirectory();
+        var preferencesStore = new RecordingPreferencesStore();
+        var window = CreateWindow(directory, preferencesStore, new FakeStartupManager());
+
+        try
+        {
+            var settings = OpenSettings(window);
+            NavigateToAiPage(settings);
+
+            // 焦点不在任何草稿编辑器上：关窗零写盘（焦点门控避免 DPAPI 无草稿重提交
+            // 把每次关窗变成偏好写盘）。
+            ((RadioButton)settings.FindName("SettingsNavAi")!).Focus();
+            CompleteLayout(settings);
+            var closeButton = settings.FindName("CloseButton") as Button;
+            Assert.IsNotNull(closeButton);
+            closeButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpDispatcherUntil(
+                settings.Dispatcher,
+                Task.Delay(TimeSpan.FromMilliseconds(200)));
+
+            Assert.IsFalse(settings.IsLoaded, "无草稿关窗照常关闭。");
+            Assert.IsNull(
+                preferencesStore.LastSaved,
+                "无持焦草稿的关窗不得写偏好盘（零无谓写盘）。");
+        }
+        finally
+        {
+            CloseLeftoverSettingsWindow(window);
+            CloseWindow(window);
+        }
+    }
+
     private sealed class IdleClipboardReader : IClipboardReader
     {
         public Task<ClipboardSnapshot> ReadAsync(CancellationToken cancellationToken = default) =>

@@ -799,4 +799,129 @@ public sealed partial class MainWindowInteractionTests
             }
         }
     }
+
+    // ---- R6：编辑中悬停切另一标签＝切换且草稿先提交（面板切换统一冲刷，契约 #49 修订） ----
+
+    [STATestMethod]
+    public void CategoryRename_HoverTabSwitchCommitsDraftBeforePanelSwitch()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(new BoardService(), store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var inbox = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.Inbox);
+            var reference = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.Reference);
+
+            inbox.BeginNameEdit();
+            CompleteLayout(window);
+            var editor = FindDescendants<TextBox>(FindCategoryTab(window, inbox)).Single();
+            Assert.IsTrue(editor.Focus());
+            editor.Text = "悬停切走";
+
+            // 面板已展开：悬停另一标签＝立即切换（EvaluateHoverIntent 展开态先例），
+            // 切换前经 FlushEditingSessionsForPanelSwitch 冲刷在途改名草稿（R6）。
+            var referenceTab = FindCategoryTab(window, reference);
+            referenceTab.RaiseEvent(NewMouseEventArgs(UIElement.MouseEnterEvent, referenceTab));
+            CompleteLayout(window);
+
+            Assert.IsFalse(
+                inbox.IsEditingName,
+                "悬停切换面板必须先终结改名会话（草稿提交，不悬挂）。");
+            Assert.AreEqual(
+                BoardCategory.Reference,
+                viewModel.ActivePanel?.Category,
+                "悬停切换不被阻止、照常完成。");
+            InvokePrivateTask(window, "DrainPendingOperationsAsync");
+            Assert.AreEqual("悬停切走", inbox.DisplayName, "切换冲刷必须乐观上屏。");
+            Assert.AreEqual(
+                "悬停切走",
+                store.LastSavedSettings!.CategoryName(BoardCategory.Inbox),
+                "切换冲刷必须持久化分类名。");
+
+            // 切回无草稿残留：编辑器收起、显示已提交名称（回显示态）。
+            var inboxTab = FindCategoryTab(window, inbox);
+            inboxTab.RaiseEvent(NewMouseEventArgs(UIElement.MouseEnterEvent, inboxTab));
+            CompleteLayout(window);
+
+            Assert.IsFalse(inbox.IsEditingName, "切回不得复活改名会话。");
+            Assert.AreEqual("悬停切走", inbox.DisplayName, "切回显示已提交名称。");
+            Assert.IsFalse(
+                FindDescendants<TextBox>(FindCategoryTab(window, inbox)).Single().IsVisible,
+                "切回后编辑器收起，无草稿残留。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void CategoryRename_HoverTabSwitchDuringCompositionCommitsCompositionText()
+    {
+        using var directory = new TestDirectory();
+        var store = new RecordingBoardStore(directory.Root);
+        var window = CreateWindow(new BoardService(), store, WindowSettings.Default);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            var inbox = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.Inbox);
+            var reference = viewModel.Categories.Single(
+                category => category.Category == BoardCategory.Reference);
+
+            inbox.BeginNameEdit();
+            CompleteLayout(window);
+            var editor = FindDescendants<TextBox>(FindCategoryTab(window, inbox)).Single();
+
+            // 组合进行中（标记技法）：组合期文本已在编辑器 Text 里（WPF 实况）。
+            editor.RaiseEvent(NewTextCompositionEventArgs(
+                TextCompositionManager.PreviewTextInputStartEvent,
+                editor,
+                "zuhe"));
+            editor.Text = "组合切走";
+            Assert.IsTrue(
+                GetPrivateField<HashSet<TextBox>>(window, "_activeCategoryNameCompositions")
+                    .Contains(editor),
+                "前置条件：组合标记已置位。");
+
+            var referenceTab = FindCategoryTab(window, reference);
+            referenceTab.RaiseEvent(NewMouseEventArgs(UIElement.MouseEnterEvent, referenceTab));
+            CompleteLayout(window);
+
+            // IME 组合期切走＝组合文本一并保存、不阻止切换（契约 #49 修订终裁 D2）。
+            Assert.IsFalse(inbox.IsEditingName, "组合期切换仍须终结会话（提交路径）。");
+            Assert.AreEqual(
+                BoardCategory.Reference,
+                viewModel.ActivePanel?.Category,
+                "IME 组合期不阻止切换。");
+            InvokePrivateTask(window, "DrainPendingOperationsAsync");
+            Assert.AreEqual(
+                "组合切走",
+                inbox.DisplayName,
+                "组合文本随切换冲刷一并保存，不得丢失。");
+            Assert.AreEqual(
+                "组合切走",
+                store.LastSavedSettings!.CategoryName(BoardCategory.Inbox));
+            Assert.IsFalse(
+                GetPrivateField<HashSet<TextBox>>(window, "_activeCategoryNameCompositions")
+                    .Contains(editor),
+                "会话终结后组合标记必须清理（防下次 Enter/Esc 失效）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
 }
