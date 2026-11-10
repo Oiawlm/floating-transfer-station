@@ -736,8 +736,11 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 搜索态 Esc 退出：IME 组合进行中属输入法操作（取消候选），不退出搜索、
+        // 不清空已输入（契约 #63；组合结束后 Esc 照常退出）。
         if (e.Key == Key.Escape &&
             !_isClosing &&
+            !_imeGuard.IsComposing &&
             _viewModel.IsSearchActive)
         {
             e.Handled = true;

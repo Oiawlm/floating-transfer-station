@@ -18,6 +18,7 @@ internal partial class PluginActionTrialWindow : Window
     private readonly string _actionId;
     private bool _isRunning;
     private bool _dialogShellApplied;
+    private readonly ImeCompositionGuard _imeGuard;
 
     public PluginActionTrialWindow(ISettingsHost host, string pluginId, string actionId)
     {
@@ -25,6 +26,7 @@ internal partial class PluginActionTrialWindow : Window
         _pluginId = pluginId;
         _actionId = actionId;
         InitializeComponent();
+        _imeGuard = ImeCompositionGuard.Attach(this);
         var theme = host.CurrentTheme;
         DesignThemeManager.Apply(this, theme);
         // 构造期应用进程级当前界面字体（偏好 InterfaceFont；null=默认），与主题应用同点。
@@ -65,7 +67,9 @@ internal partial class PluginActionTrialWindow : Window
 
     private void TrialWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape)
+        // IME 组合期的 Esc 属输入法操作（取消候选），不关窗——多行中文试运行文本
+        // 组合中按 Esc 是想取消候选而非关闭对话框（契约 #63 公共守卫）。
+        if (e.Key == Key.Escape && !_imeGuard.IsComposing)
         {
             e.Handled = true;
             Close();

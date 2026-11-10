@@ -139,6 +139,47 @@ public sealed partial class MainWindowInteractionTests
         }
     }
 
+    [STATestMethod]
+    public void UrlInput_EscapeDuringCompositionKeepsWindowOpenUntilCompositionEnds()
+    {
+        // 契约 #63 公共守卫（标记技法，同 ReviewEditorEscape/EditingCommit 家族）：
+        // STA 无法构造真实组合窗，按组合事件路由合成——组合中 Esc 不关窗，
+        // 组合终结后 Esc 照常取消。
+        var dialog = new LauncherUrlInputWindow(DesignTheme.Light);
+        dialog.Show();
+        dialog.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+        try
+        {
+            CompleteLayout(dialog);
+            var input = dialog.UrlInputBox;
+            Assert.IsTrue(input.Focus(), "前置条件：输入框持焦（组合期的实况焦点位）。");
+            input.Text = "github.com";
+
+            input.RaiseEvent(NewTextCompositionEventArgs(
+                TextCompositionManager.PreviewTextInputStartEvent, input, "zuhe"));
+            dialog.RaiseEvent(NewKeyEventArgs(dialog, Key.Escape));
+            CompleteLayout(dialog);
+
+            Assert.IsTrue(dialog.IsLoaded, "IME 组合期的 Esc 属输入法操作（取消候选），不关窗。");
+            Assert.IsNull(dialog.Result, "组合期不产出取消结果。");
+
+            input.RaiseEvent(NewTextCompositionEventArgs(
+                TextCompositionManager.PreviewTextInputEvent, input, "组合文字"));
+            dialog.RaiseEvent(NewKeyEventArgs(dialog, Key.Escape));
+            CompleteLayout(dialog);
+
+            Assert.IsFalse(dialog.IsLoaded, "组合结束后 Esc 照常关闭对话框。");
+            Assert.IsNull(dialog.Result, "Esc=取消（空回传）不变。");
+        }
+        finally
+        {
+            if (dialog.IsLoaded)
+            {
+                dialog.Close();
+            }
+        }
+    }
+
     // ---- ＋菜单第三项与添加流程 ----
 
     [STATestMethod]

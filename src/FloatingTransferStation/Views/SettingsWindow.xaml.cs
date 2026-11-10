@@ -35,6 +35,7 @@ public partial class SettingsWindow : Window
     private bool _isChangingDataDirectory;
     private bool _isDeepSeekKeyVisible;
     private bool _isTestingDeepSeekConnection;
+    private readonly ImeCompositionGuard _imeGuard;
 
     // ---- 页脚关于区联系方式（W5 2026-11-05；2026-11-06 复制按钮删除，
     //      反馈位改就微信号 Run 文本翻转）----
@@ -72,6 +73,7 @@ public partial class SettingsWindow : Window
     {
         _host = host;
         InitializeComponent();
+        _imeGuard = ImeCompositionGuard.Attach(this);
         DesignThemeManager.Apply(this, host.CurrentTheme);
         // 构造期应用进程级当前界面字体（偏好 InterfaceFont；null=默认），与主题应用同点。
         InterfaceFontManager.Apply(this);
@@ -1207,8 +1209,10 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        if (e.Key == Key.Escape && !_isChangingDataDirectory)
+        if (e.Key == Key.Escape && !_isChangingDataDirectory && !_imeGuard.IsComposing)
         {
+            // IME 组合期的 Esc 属输入法操作（取消候选），不关窗（契约 #63）——
+            // 关窗冲刷（#5）只能保存已终结文本，在途组合串会被丢弃。
             e.Handled = true;
             Close();
         }

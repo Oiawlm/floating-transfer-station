@@ -266,6 +266,48 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void QuickLaunch_EditTarget_EscapeDuringCompositionKeepsDialogOpenUntilCompositionEnds()
+    {
+        // 契约 #63 公共守卫：目标输入框组合中按 Esc＝想取消候选，不是丢弃整个编辑
+        // ——组合中对话框不关，组合终结后 Esc 照常取消（标记技法，合成组合事件）。
+        var dialog = new LauncherEditTargetWindow(
+            DesignTheme.Light,
+            new LauncherItem(Guid.NewGuid(), LauncherKind.Url, "https://x.example.com/", "x", DateTimeOffset.UtcNow));
+        dialog.Show();
+        dialog.Resources[SystemParameters.ClientAreaAnimationKey] = false;
+        try
+        {
+            CompleteLayout(dialog);
+            var input = (TextBox)dialog.FindName("TargetInputBox")!;
+            Assert.IsTrue(input.Focus(), "前置条件：目标输入框持焦（组合期的实况焦点位）。");
+            input.Text = "github.com";
+
+            input.RaiseEvent(NewTextCompositionEventArgs(
+                TextCompositionManager.PreviewTextInputStartEvent, input, "zuhe"));
+            dialog.RaiseEvent(NewKeyEventArgs(dialog, Key.Escape));
+            CompleteLayout(dialog);
+
+            Assert.IsTrue(dialog.IsLoaded, "IME 组合期的 Esc 属输入法操作（取消候选），不关对话框。");
+            Assert.IsNull(dialog.Result, "组合期不产出取消结果。");
+
+            input.RaiseEvent(NewTextCompositionEventArgs(
+                TextCompositionManager.PreviewTextInputEvent, input, "组合文字"));
+            dialog.RaiseEvent(NewKeyEventArgs(dialog, Key.Escape));
+            CompleteLayout(dialog);
+
+            Assert.IsFalse(dialog.IsLoaded, "组合结束后 Esc 照常关闭对话框。");
+            Assert.IsNull(dialog.Result, "Esc=取消（空回传）不变。");
+        }
+        finally
+        {
+            if (dialog.IsLoaded)
+            {
+                dialog.Close();
+            }
+        }
+    }
+
+    [STATestMethod]
     public void QuickLaunch_FailedTile_ToolTipShowsTargetAndContextMenuAvailable()
     {
         // D10：失败瓦片保持可修复入口——右键菜单可用（灰态不挡）、名称 ToolTip 含

@@ -33,6 +33,7 @@ internal partial class LauncherEditTargetWindow : Window
     private readonly LauncherKind _kind;
     private bool _shownAsDialog;
     private bool _dialogShellApplied;
+    private readonly ImeCompositionGuard _imeGuard;
 
     /// <summary>确认结果（null = 取消/未确认）。</summary>
     public LauncherEditedTarget? Result { get; private set; }
@@ -51,6 +52,7 @@ internal partial class LauncherEditTargetWindow : Window
     {
         InitializeComponent();
         _kind = item.Kind;
+        _imeGuard = ImeCompositionGuard.Attach(this);
         DesignThemeManager.Apply(this, theme);
         // 构造期应用进程级当前界面字体（偏好 InterfaceFont；null=默认），与主题应用同点。
         InterfaceFontManager.Apply(this);
@@ -114,7 +116,8 @@ internal partial class LauncherEditTargetWindow : Window
 
     private void EditTargetWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape)
+        // IME 组合期的 Esc 属输入法操作（取消候选），不关窗（契约 #63 公共守卫）。
+        if (e.Key == Key.Escape && !_imeGuard.IsComposing)
         {
             e.Handled = true;
             Close();

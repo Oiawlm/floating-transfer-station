@@ -348,4 +348,49 @@ public sealed partial class MainWindowInteractionTests
             CloseWindow(window);
         }
     }
+
+    [STATestMethod]
+    public void Search_EscapeDuringCompositionKeepsSearchActiveUntilCompositionEnds()
+    {
+        // 契约 #63 公共守卫：搜索框组合中按 Esc＝想取消候选，不是退出搜索清空输入
+        // ——组合中搜索态保持、已输入保留，组合终结后 Esc 照常退出（标记技法，
+        // 合成组合事件；窗口级与搜索框内两条 Esc 分支同守卫）。
+        using var directory = new TestDirectory();
+        var board = new BoardService();
+        board.AddText("苹果新鲜到货", BoardCategory.Inbox);
+        var window = CreateWindow(directory, board);
+
+        try
+        {
+            window.Show();
+            ExpandCategory(window, BoardCategory.Inbox);
+            CompleteLayout(window);
+            var viewModel = (MainWindowViewModel)window.DataContext;
+            window.EnterSearchMode();
+            CompleteLayout(window);
+            var input = (TextBox)window.FindName("SearchInput");
+            Assert.IsTrue(input.Focus(), "前置条件：搜索框持焦（组合期的实况焦点位）。");
+            input.Text = "苹果";
+            CompleteLayout(window);
+
+            input.RaiseEvent(NewTextCompositionEventArgs(
+                TextCompositionManager.PreviewTextInputStartEvent, input, "pingguo"));
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
+            CompleteLayout(window);
+
+            Assert.IsTrue(viewModel.IsSearchActive, "IME 组合期的 Esc 属输入法操作（取消候选），不退出搜索。");
+            Assert.AreEqual("苹果", input.Text, "组合期 Esc 不得清空已输入内容。");
+
+            input.RaiseEvent(NewTextCompositionEventArgs(
+                TextCompositionManager.PreviewTextInputEvent, input, "苹果"));
+            window.RaiseEvent(NewKeyEventArgs(window, Key.Escape));
+            CompleteLayout(window);
+
+            Assert.IsFalse(viewModel.IsSearchActive, "组合结束后 Esc 照常退出搜索态。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
 }

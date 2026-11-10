@@ -56,7 +56,8 @@ $changesetNoisePrefixes = @()
 $overrides = @(
     # 快捷启动（启动器）：瓦片/URL/选择器/图标/目录/存储/Shell 互操作/网格几何（取证 2026-10-19 缩圈）；
     # 2026-10-24 增 LauncherTilePanel 网格承载与 LauncherColumn 列数策略词根（设置窗交互旅程断言面板重排，属启动器消费面）。
-    @{ Name = 'Launcher'; Filter = 'FullyQualifiedName~QuickLaunch|FullyQualifiedName~UrlInput|FullyQualifiedName~Discovery|FullyQualifiedName~LauncherColumn'; Globs = @(
+    # 2026-11-10 增 InstalledPicker 词根对齐 MultiItemPickerWindow glob（该文件的 Esc/IME 守卫锁定族，契约 #63）。
+    @{ Name = 'Launcher'; Filter = 'FullyQualifiedName~QuickLaunch|FullyQualifiedName~UrlInput|FullyQualifiedName~Discovery|FullyQualifiedName~LauncherColumn|FullyQualifiedName~InstalledPicker'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.QuickLaunch*.cs',
         'src/FloatingTransferStation/Views/MainWindow.LauncherDiscovery*.cs',
         'src/FloatingTransferStation/Views/LauncherTilePanel.cs',
@@ -202,8 +203,9 @@ $overrides = @(
     @{ Name = 'DesignTheme'; Filter = 'FullyQualifiedName~ThemeEvidence|FullyQualifiedName~ThemeSwitch'; Globs = @(
         'src/FloatingTransferStation/Services/DesignThemeManager.cs') },
     # 插件动作管线（2026-10-27 登记缩圈，OQ-1 裁决）：Pipeline 字面 0 命中（旧泛型派生已腐烂）＋
-    # 试用窗口三文件同族（真实测试族＝PluginActionsCoreTests＋PluginActionMenuTests；F2 复核覆盖面）
-    @{ Name = 'Core.PluginActions'; Filter = 'FullyQualifiedName~PluginActions|FullyQualifiedName~PluginActionMenu'; Globs = @(
+    # 试用窗口三文件同族（真实测试族＝PluginActionsCoreTests＋PluginActionMenuTests；F2 复核覆盖面）；
+    # 2026-11-10 增 TrialRunDialog 词根（试用窗 Esc/IME 守卫锁定族在 SettingsWindowPluginTests，契约 #63）。
+    @{ Name = 'Core.PluginActions'; Filter = 'FullyQualifiedName~PluginActions|FullyQualifiedName~PluginActionMenu|FullyQualifiedName~TrialRunDialog'; Globs = @(
         'src/FloatingTransferStation.Core/Services/PluginActionPipeline.cs',
         'src/FloatingTransferStation/Views/PluginActionTrialWindow.xaml', 'src/FloatingTransferStation/Views/PluginActionTrialWindow.xaml.cs') },
     # 应用图标管线（2026-10-27 登记缩圈）：生成器工程与规格源（契约 #35 锁定面＝AppIconContractTests）
@@ -217,6 +219,11 @@ $overrides = @(
     # 多选器/插件试用窗），测试面＝QuickLaunch 104＋SettingsWindowPlugin 12。
     @{ Name = 'DialogShell'; Filter = 'FullyQualifiedName~QuickLaunch|FullyQualifiedName~SettingsWindowPlugin'; Globs = @(
         'src/FloatingTransferStation/Views/DialogShellFallback.cs') },
+    # Esc 宿主语义 IME 组合守卫（2026-11-10，契约 #63）：单文件公共守卫被六点消费
+    # （四对话框＋主窗搜索退出＋设置窗关窗），真实锁定面＝六点各自的 Esc 族词根
+    # （UrlInput/InstalledPicker/QuickLaunch_EditTarget/Search_Escape/SettingsClose_Escape/TrialRunDialog）。
+    @{ Name = 'ImeCompositionGuard'; Filter = 'FullyQualifiedName~UrlInput|FullyQualifiedName~InstalledPicker|FullyQualifiedName~QuickLaunch_EditTarget|FullyQualifiedName~Search_Escape|FullyQualifiedName~SettingsClose_Escape|FullyQualifiedName~TrialRunDialog'; Globs = @(
+        'src/FloatingTransferStation/Views/ImeCompositionGuard.cs') },
     # 选择器契约区域（2026-10-27 scripts 自噬消灭）：改选择器两文件不再全量，
     # 由本契约测试脚本承接（Kind=Script：Core 基线后子进程运行，非 0 退出＝失败；
     # 恒非零语义＝契约测试自身 0 场景即 exit 1）。
