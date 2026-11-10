@@ -118,8 +118,11 @@ $overrides = @(
         'src/FloatingTransferStation/Views/MainWindow.DailyReview.cs', 'src/FloatingTransferStation.Core/Services/IDailyReviewStore.cs') },
     @{ Name = 'DataRelocation'; Filter = 'FullyQualifiedName~Relocation|FullyQualifiedName~DataDirectory'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.DataRelocation.cs') },
-    @{ Name = 'EdgeHide'; Filter = 'FullyQualifiedName~EdgeHide|FullyQualifiedName~WindowController'; Globs = @(
-        'src/FloatingTransferStation/Views/MainWindow.EdgeHide.cs', 'src/FloatingTransferStation/Services/MonitorBounds.cs') },
+    # R12 peek 化（2026-11-09，Issue #353）：peek 窗口层族（EdgePeek_*）＋几何（WindowController）
+    # ＋唯一放置动画服务（WindowPlacementAnimator，其 #12 例外条款锁定测试
+    # PlacementAnimation_* 宿主在 VisualLifecycle 文件）。
+    @{ Name = 'EdgeHide'; Filter = 'FullyQualifiedName~EdgeHide|FullyQualifiedName~EdgePeek|FullyQualifiedName~WindowController|FullyQualifiedName~PlacementAnimation'; Globs = @(
+        'src/FloatingTransferStation/Views/MainWindow.EdgeHide.cs', 'src/FloatingTransferStation/Services/MonitorBounds.cs', 'src/FloatingTransferStation/Services/WindowPlacementAnimator.cs') },
     @{ Name = 'PanelHold'; Filter = 'FullyQualifiedName~PanelHold|FullyQualifiedName~PanelStateMachine'; Globs = @(
         'src/FloatingTransferStation/Views/MainWindow.PanelHold.cs', 'src/FloatingTransferStation/Views/MainWindow.PanelTextEditing.cs') },
     # 置顶重申与 IME 抑制（2026-10-24）：置顶 z 序行为（Lifecycle.ReassertTopmost）与
