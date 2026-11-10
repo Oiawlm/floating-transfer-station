@@ -152,66 +152,55 @@ public sealed class WindowControllerTests
     }
 
     [TestMethod]
-    public void EdgeHidden_PlacesWindowBeyondEveryMonitorWithZeroIntersection()
+    public void EdgePeekPlacement_KeepsHandleWidthIntersectionWithWorkArea()
     {
-        // 单显示器：与「贴本屏右缘外移」等价（另有阴影余量）。
+        // R12 peek（契约 #17）：整窗同尺寸纯平移收缩，屏内仅留把手。
         var window = new PhysicalRectangle(1502, 80, 1928, 720);
-        var hidden = WindowController.EdgeHidden(window, [new MonitorBounds(0, 0, 1920, 1080)]);
+        var workArea = new PhysicalRectangle(0, 0, 1920, 1080);
 
-        Assert.AreEqual(window.Width, hidden.Width, "贴边隐藏是同尺寸纯移动。");
-        Assert.AreEqual(window.Top, hidden.Top, "垂直位置不变。");
-        Assert.AreEqual(window.Bottom, hidden.Bottom);
-        Assert.AreEqual(1920 + WindowController.EdgeHideOffscreenClearancePx, hidden.Left);
+        var peek = WindowController.EdgePeekPlacement(window, workArea, handleWidthPx: 16);
+
+        Assert.AreEqual(window.Width, peek.Width, "peek 收缩是同尺寸纯移动。");
+        Assert.AreEqual(window.Top, peek.Top, "垂直位置不变。");
+        Assert.AreEqual(window.Bottom, peek.Bottom);
+        Assert.AreEqual(workArea.Right - 16, peek.Left, "把手左缘锚定工作区右缘内缩把手宽。");
+        var intersectionWidth =
+            Math.Min(peek.Right, workArea.Right) - Math.Max(peek.Left, workArea.Left);
+        Assert.AreEqual(16, intersectionWidth, "与工作区交集宽恰等于把手宽。");
     }
 
     [TestMethod]
     [TestCategory("Adversarial")]
-    public void EdgeHidden_ClearsRightNeighborMonitorAndNegativeOriginScreens()
+    public void EdgePeekPlacement_AnchorsToGivenWorkAreaNotGlobalRightEdge()
     {
-        // 右邻显示器存在时，仅贴本屏右缘的滑出像素会被邻居接住；目标必须越过
-        // 所有显示器的最右缘。虚拟屏原点为负（左侧主屏外接副屏）同理。
+        // 多显示器：锚定收缩时刻所在工作区右缘（传入参数），而非全部显示器最右缘——
+        // 右邻屏存在时滑出像素被邻居接住是允许的（把手在本屏右缘，空间记忆锚点）。
+        // 虚拟屏原点为负（左侧主屏外接副屏）同理。
         var window = new PhysicalRectangle(-418, 80, 0, 720);
-        var monitors = new[]
-        {
-            new MonitorBounds(-1920, 0, 0, 1080),
-            new MonitorBounds(0, 0, 1920, 1080),
-            new MonitorBounds(1920, -300, 3840, 780)
-        };
+        var leftWorkArea = new PhysicalRectangle(-1920, 0, 0, 1080);
 
-        var hidden = WindowController.EdgeHidden(window, monitors);
+        var peek = WindowController.EdgePeekPlacement(window, leftWorkArea, handleWidthPx: 16);
 
-        Assert.AreEqual(3840 + WindowController.EdgeHideOffscreenClearancePx, hidden.Left);
-        Assert.AreEqual(window.Width, hidden.Width);
-        foreach (var monitor in monitors)
-        {
-            Assert.IsTrue(
-                hidden.Left >= monitor.Right || hidden.Right <= monitor.Left,
-                $"隐藏矩形 {hidden} 与显示器 {monitor} 不得相交。");
-        }
+        Assert.AreEqual(-16, peek.Left);
+        Assert.AreEqual(window.Width, peek.Width);
+        var intersectionWidth =
+            Math.Min(peek.Right, leftWorkArea.Right) - Math.Max(peek.Left, leftWorkArea.Left);
+        Assert.AreEqual(16, intersectionWidth);
     }
 
     [TestMethod]
-    public void EdgeHidden_RejectsEmptyMonitorList()
+    public void EdgePeekPlacement_ClampsDegenerateWindowNarrowerThanHandle()
     {
-        Assert.ThrowsExactly<ArgumentException>(() =>
-            WindowController.EdgeHidden(
-                new PhysicalRectangle(0, 0, 100, 100),
-                Array.Empty<MonitorBounds>()));
-    }
+        // 退化输入：窗口比把手还窄 → 全窗留在屏内，交集宽＝窗口宽（钳制为更小者）。
+        var window = new PhysicalRectangle(1904, 80, 1908, 720);
+        var workArea = new PhysicalRectangle(0, 0, 1920, 1080);
 
-    [TestMethod]
-    public void EdgeRecallZone_InflatesVisibleRectangleByToleranceInPhysicalPixels()
-    {
-        var visibleAtHide = new PhysicalRectangle(100, 200, 400, 600);
+        var peek = WindowController.EdgePeekPlacement(window, workArea, handleWidthPx: 16);
 
-        var zone = WindowController.EdgeRecallZone(visibleAtHide, tolerance: 8);
-
-        Assert.AreEqual(new PhysicalRectangle(92, 192, 408, 608), zone);
-        // 光标比对物理像素直比：边界含左上、不含右下（与 Win32 矩形语义一致）。
-        Assert.IsTrue(zone.Contains(92, 192));
-        Assert.IsTrue(zone.Contains(407, 607));
-        Assert.IsFalse(zone.Contains(408, 607));
-        Assert.IsFalse(zone.Contains(407, 608));
-        Assert.IsFalse(zone.Contains(91, 192), "回位区外的点不得命中。");
+        Assert.AreEqual(workArea.Right - window.Width, peek.Left);
+        Assert.AreEqual(
+            window.Width,
+            Math.Min(peek.Right, workArea.Right) - Math.Max(peek.Left, workArea.Left),
+            "把手宽大于窗口宽时交集宽钳制为窗口宽。");
     }
 }
