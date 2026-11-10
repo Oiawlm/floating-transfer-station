@@ -226,6 +226,10 @@ public partial class MainWindow : Window
         // 自动重整队会覆盖用户在 GroupedView 内拖出的有意新 run。
         _viewModel.SubgroupDisplay = _preferences.SubgroupDisplay;
         _board.SetSubgroupDisplay(_preferences.SubgroupDisplay, _settings);
+        // 子分组轨点击切换实验开关（契约 #62）：构造段镜像——启动不走
+        // ApplyPreferences，漏本行＝重启后开关失效（沿 DragOut 镜像先例，#58 教训）；
+        // 默认关＝现状零行为变化。
+        _viewModel.SubgroupRailClickSwitchEnabled = _preferences.SubgroupRailClickSwitchEnabled;
         // 插件目录态（Issue #240 插件钮可见性单一来源）：启动装载先于窗口构造
         //（App 组合根），构造期即同步；后续目录变化经设置路径刷新（见
         // MainWindow.Settings.cs）。

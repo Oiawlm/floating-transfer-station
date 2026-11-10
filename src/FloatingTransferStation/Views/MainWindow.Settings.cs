@@ -263,7 +263,7 @@ public partial class MainWindow : Window, ISettingsHost
         settings.Show();
     }
 
-    /// <summary>立即应用偏好（主题/界面字体/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/AI 整理开关/AI 识图命名开关/启动·自动发现/启动器列数策略/记录 Markdown 阅读视图/分类内子分组/图片拖出为文件）并异步原子持久化；持久化失败经状态条提示。</summary>
+    /// <summary>立即应用偏好（主题/界面字体/动效/全局快捷键/复制手势/垃圾桶行为/自动检查更新/置顶分隔样式/短卡片备注开关/AI 整理开关/AI 识图命名开关/启动·自动发现/启动器列数策略/记录 Markdown 阅读视图/分类内子分组/子分组轨点击切换/图片拖出为文件）并异步原子持久化；持久化失败经状态条提示。</summary>
     public void ApplyPreferences(AppPreferences preferences)
     {
         // 开关翻转基准在整体换基前捕获：false→true 翻转触发存量未命名图片补扫。
@@ -290,6 +290,7 @@ public partial class MainWindow : Window, ISettingsHost
         }
 
         ApplySubgroupDisplayPreference(preferences.SubgroupDisplay);
+        ApplySubgroupRailClickSwitchPreference(preferences.SubgroupRailClickSwitchEnabled);
         ApplyReviewMarkdownViewPreference();
         ApplyLauncherDiscoveryPreference(preferences);
         ApplyLauncherColumnStrategy();
@@ -315,6 +316,23 @@ public partial class MainWindow : Window, ISettingsHost
         }
 
         UpdateGroupedViewGuidance();
+    }
+
+    /// <summary>
+    /// 子分组轨点击切换开关下发（契约 #62 唯一管线＝ApplyPreferences 的一部分）：
+    /// 镜像到手势路由层唯一消费点（VM 开关属性）；开→关零残留——过滤激活先清
+    ///（照 ApplySubgroupDisplayPreference 同法，ClearSubgroupFilter 内置无激活
+    /// 早退）＋驻留 ToolTip 归 null（RefreshSubgroupChipHints 关态组稿恒 null）。
+    /// </summary>
+    private void ApplySubgroupRailClickSwitchPreference(bool enabled)
+    {
+        _viewModel.SubgroupRailClickSwitchEnabled = enabled;
+        if (!enabled)
+        {
+            ClearSubgroupFilter(reapplyFilter: true);
+        }
+
+        RefreshSubgroupChipHints();
     }
 
     /// <summary>GroupedView 进入分区：对两个内容桶分类逐个尝试稳定分区（已聚簇的分类
