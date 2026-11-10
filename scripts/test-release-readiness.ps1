@@ -47,6 +47,20 @@ if (-not [version]::TryParse($localVersionText, [ref]$localVersion)) {
     throw ('Release readiness failed: version.txt does not contain a parseable version: ' + $localVersionText)
 }
 
+# README download-section sync assertion: the download URL embeds the version,
+# so the train cannot bump version.txt without syncing the README download
+# section in the same change (linkage audit gap J-1 item 1, 2026-11-10).
+$readmePath = Join-Path (Split-Path -Parent $VersionPath) 'README.md'
+if (-not (Test-Path -LiteralPath $readmePath -PathType Leaf)) {
+    throw ('Release readiness failed: README.md not found next to version.txt: ' + $readmePath)
+}
+$readmeText = Get-Content -Raw -Encoding UTF8 -LiteralPath $readmePath
+$readmeDownloadMarker = 'releases/download/v' + $localVersionText
+if (-not $readmeText.Contains($readmeDownloadMarker)) {
+    throw ('Release readiness failed: README download section does not reference ' + $readmeDownloadMarker + '. Sync the README download section with version.txt on the release train.')
+}
+Write-Host ('Release readiness passed: README download section references ' + $readmeDownloadMarker + '.')
+
 # Fetch first, assert separately; a failed fetch must error out, never silently pass.
 & git -C $RepoRoot fetch --tags | Out-Null
 if ($LASTEXITCODE -ne 0) {

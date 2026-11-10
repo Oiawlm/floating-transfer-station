@@ -3,7 +3,7 @@
     Repository hygiene checks for floating-transfer-station.
 
 .DESCRIPTION
-    Three checks, all must pass (exit 0) or the script fails (exit 1):
+    Four checks, all must pass (exit 0) or the script fails (exit 1):
 
       A. Root entry whitelist
          Every root-level entry tracked by git must be listed in
@@ -22,6 +22,16 @@
          policy landed (design contract #52). Exemptions: .gitignore (the
          ignore list itself) and this script (its pattern table legitimately
          contains the strings).
+
+      D. Design-contract locked test-name existence (local-only input)
+         When the maintainer-local design contract list
+         (docs/design-contracts.md, gitignored, absent in CI) exists, every
+         backtick-quoted test-shaped identifier it references (exact name, or
+         a `Prefix_*` wildcard matched by prefix) must resolve to a method
+         declared under tests/. Tokens that merely look like tests but are
+         documented non-test identifiers are listed in
+         $ContractLockExemptIdentifiers below (frozen baseline, may only
+         shrink). When the file is absent the check reports a skip.
 
     All violations are collected before the script exits; it never stops at
     the first failure.
@@ -379,6 +389,134 @@ foreach ($trackedFile in $trackedFiles) {
 
 if (-not $checkCRequired) {
     Write-Output ("[OK] All local-path references are within the frozen baseline ({0} file(s) with references, {1} below baseline)." -f $checkCFilesWithReferences, $checkCBelowBaseline)
+}
+
+Write-Output ''
+
+# ---------------------------------------------------------------------------
+# Check D: design-contract locked test-name existence (local-only input)
+# ---------------------------------------------------------------------------
+
+# The design contract list is a gitignored maintainer-local document; CI and
+# fresh clones do not have it, so the whole check self-skips when absent.
+$ContractListRelativePath = 'docs/design-contracts.md'
+$contractListPath = Join-Path -Path $repoRootPath -ChildPath ($ContractListRelativePath.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
+
+# Backtick-quoted tokens that look like test identifiers but are documented
+# non-test identifiers. Frozen baseline: entries may only be removed, never
+# added. Groups: Win32 messages/flags, WPF template parts, WPF code-behind
+# event handlers (production code, not tests), evidence-gating environment
+# variables read by tests.
+$ContractLockExemptIdentifiers = @(
+    'WM_DISPLAYCHANGE'
+    'WM_SETTINGCHANGE'
+    'WM_GETMINMAXINFO'
+    'WM_EXITSIZEMOVE'
+    'WM_HOTKEY'
+    'SHGFI_ICON'
+    'SHGFI_SYSICONINDEX'
+    'DWMWA_SYSTEMBACKDROP_TYPE'
+    'HWND_NOTOPMOST'
+    'CFSTR_PREFERREDDROPEFFECT'
+    'Win32_Product'
+    'PART_*'
+    'PART_ContentHost'
+    'WidthThumb_DragDelta'
+    'BoardList_PreviewMouseRightButtonUp'
+    'BoardList_ButtonClick'
+    'Root_PreviewLostKeyboardFocus'
+    'CategoryTab_MouseLeftButtonUp'
+    'CategoryTab_Drop'
+    'CategoryTab_MouseEnter'
+    'Root_MouseLeave'
+    'ReviewEditor_TextChanged'
+    'DailyReviews_Changed'
+    'SearchClearFilterButton_Click'
+    'SubgroupChip_MouseEnter'
+    'FTS_W5_EVIDENCE_DIR'
+    'FTS_REVIEW_EMPTY_STATE_EVIDENCE_DIR'
+    'FTS_PREVIEW_THEME'
+    'FTS_PREVIEW_DATA_DIR'
+    'FTS_FONT_EVIDENCE_DIR'
+    'FTS_RING_EVIDENCE_DIR'
+    'FTS_SUBGROUP_EVIDENCE_DIR'
+)
+
+# A token participates in the check when it is PascalCase with one or more
+# underscore-separated segments (the repository test naming convention), or a
+# wildcard `Prefix_*` whose prefix is PascalCase.
+$ContractTestShapePattern = '^[A-Z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+$'
+$ContractTestPrefixShapePattern = '^[A-Z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*$'
+$ContractWildcardSuffix = '_*'
+
+Write-Output '--- Check D: design-contract locked test-name existence ---'
+
+if (-not (Test-Path -LiteralPath $contractListPath -PathType Leaf)) {
+    Write-Output ("[SKIP] {0} not present (maintainer-local document); nothing to check." -f $ContractListRelativePath)
+}
+else {
+    # Method universe: every test method declared under tests/, regardless of
+    # runner attributes (a superset keeps the check free of false positives).
+    $testMethodNames = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($trackedFile in $trackedFiles) {
+        if ($trackedFile -notmatch '^tests/.*\.cs$') { continue }
+
+        $testContentPath = Join-Path -Path $repoRootPath -ChildPath ($trackedFile.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
+        $testContent = [System.IO.File]::ReadAllText($testContentPath)
+        foreach ($methodMatch in [regex]::Matches($testContent, '(?m)^\s*public\s+(?:async\s+)?(?:Task|void)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(')) {
+            [void]$testMethodNames.Add($methodMatch.Groups[1].Value)
+        }
+    }
+
+    $contractText = Get-Content -LiteralPath $contractListPath -Raw -Encoding UTF8
+    $checkedCount = 0
+    $missingLockReferences = New-Object System.Collections.Generic.List[string]
+    $seenTokens = @{}
+    foreach ($tokenMatch in [regex]::Matches($contractText, '`([^`\r\n]+)`')) {
+        $token = $tokenMatch.Groups[1].Value.Trim()
+        if ($token -eq '' -or $seenTokens.ContainsKey($token)) { continue }
+        $seenTokens[$token] = $true
+
+        $isWildcard = $token.EndsWith($ContractWildcardSuffix)
+        $referenceName = $token
+        if ($isWildcard) {
+            $referenceName = $token.Substring(0, $token.Length - $ContractWildcardSuffix.Length)
+            if ($referenceName -cnotmatch $ContractTestPrefixShapePattern) { continue }
+        }
+        elseif ($referenceName -cnotmatch $ContractTestShapePattern) {
+            continue
+        }
+
+        if ($ContractLockExemptIdentifiers -ccontains $token) { continue }
+
+        $resolved = $false
+        if ($isWildcard) {
+            foreach ($methodName in $testMethodNames) {
+                if ($methodName.StartsWith($referenceName, [System.StringComparison]::Ordinal)) {
+                    $resolved = $true
+                    break
+                }
+            }
+        }
+        else {
+            $resolved = $testMethodNames.Contains($referenceName)
+        }
+
+        $checkedCount++
+        if (-not $resolved) {
+            $missingLockReferences.Add($token)
+        }
+    }
+
+    if ($missingLockReferences.Count -eq 0) {
+        Write-Output ("[OK] All {0} distinct locked test identifier(s) resolve to methods under tests/." -f $checkedCount)
+    }
+    else {
+        foreach ($token in $missingLockReferences) {
+            Write-Output ("[FAIL] Locked test identifier does not exist under tests/: {0}" -f $token)
+            Add-Violation ("Check D: design contract references test identifier '{0}' with no matching method under tests/ (stale lock field or renamed test; align the contract lock wording)." -f $token)
+        }
+    }
 }
 
 Write-Output ''
