@@ -1041,6 +1041,9 @@ public sealed partial class MainWindowInteractionTests
             var forward = start with { Left = start.Left + shift, Right = start.Right + shift };
             var clock = new ManualPlacementAnimationClock();
             var animator = new WindowPlacementAnimator(handle, clock);
+            // 注册进窗口的矩形权威位：ApplyPlacement 的「先取消动画」仲裁对本实例
+            // 生效（单一权威的完整闭环，否则测试自建 animator 游离在窗口账本之外）。
+            SetPrivateField(window, "_edgePeekAnimator", animator);
 
             // ① 连续受控迁移：收缩方向的加速出场段。
             var completed = 0;

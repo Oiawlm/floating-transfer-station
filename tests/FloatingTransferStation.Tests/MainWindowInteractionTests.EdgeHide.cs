@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -37,6 +38,15 @@ public sealed partial class MainWindowInteractionTests
 
     private static WindowPlacementAnimator? PeekAnimator(MainWindow window) =>
         GetPrivateField<WindowPlacementAnimator?>(window, "_edgePeekAnimator");
+
+    /// <summary>注入窗口私有字段（#12 例外条款测试：把测试自建的 animator 注册进
+    /// 窗口的矩形权威位，ApplyPlacement 的取消语义才对它生效）。</summary>
+    private static void SetPrivateField<T>(MainWindow window, string fieldName, T value)
+    {
+        var field = typeof(MainWindow).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.IsNotNull(field, $"私有字段 {fieldName} 不存在。");
+        field.SetValue(window, value);
+    }
 
     private static System.Windows.Controls.Grid PeekHandleLayer(MainWindow window) =>
         (System.Windows.Controls.Grid)window.FindName("EdgePeekHandleLayer")!;
@@ -93,6 +103,8 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
+        // CI 代理机关闭系统动效——动画链测试显式强制开（仓内既有手法）。
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
         var clock = new ManualPlacementAnimationClock();
         window.PlacementAnimationClockOverride = clock;
 
@@ -256,6 +268,8 @@ public sealed partial class MainWindowInteractionTests
     {
         using var directory = new TestDirectory();
         var window = CreateWindow(directory, new BoardService());
+        // CI 代理机关闭系统动效——动画链测试显式强制开（仓内既有手法）。
+        window.Resources[SystemParameters.ClientAreaAnimationKey] = true;
         var clock = new ManualPlacementAnimationClock();
         window.PlacementAnimationClockOverride = clock;
 
@@ -395,12 +409,19 @@ public sealed partial class MainWindowInteractionTests
 
             PeekWindowAtEdge(window);
             Assert.IsTrue(GetWindowRect(handle, out var peeked));
+            var midY = (peeked.Top + peeked.Bottom) / 2;
 
             // 契约 #13：把手 hover 展开必须 Win32 消息直驱守护——SetCursorPos 生成
             // 真实 WM_MOUSEMOVE，走完整 WPF 输入管线（MouseEnter → 意图布防 → 60ms
-            // 到期重验 → 展开），全程不注入合成路由事件。
+            // 到期重验 → 展开），全程不注入合成路由事件。先移到窗外建立「在外」态
+            //（前序测试可能把真实光标留在窗口矩形内，驻留指针不产生 enter 转换），
+            // 再移上把手保证 outside→inside 转换真实发生。
             Assert.IsTrue(
-                SetCursorPos(peeked.Left + 4, (peeked.Top + peeked.Bottom) / 2),
+                SetCursorPos(peeked.Left - 60, midY),
+                "真实光标必须可移动到窗口外。");
+            PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(80));
+            Assert.IsTrue(
+                SetCursorPos(peeked.Left + 4, midY),
                 "真实光标必须可移上把手。");
             PumpDispatcherFor(window.Dispatcher, TimeSpan.FromMilliseconds(250));
             CompleteLayout(window);
