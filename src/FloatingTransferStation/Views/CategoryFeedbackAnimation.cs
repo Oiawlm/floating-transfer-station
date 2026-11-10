@@ -1,11 +1,14 @@
 using System.Windows;
 using System.Windows.Media.Animation;
+using FloatingTransferStation.Design;
 
 namespace FloatingTransferStation.Views;
 
 public static class CategoryFeedbackAnimation
 {
-    internal static readonly TimeSpan TransitionDuration = TimeSpan.FromMilliseconds(120);
+    // 显隐淡入淡出场景，时长/缓动与 FadeAnimation 同源（2026-11-08 视觉语言收敛：
+    // 裸值 120 与硬编码 CubicEase 收编进 DesignTokens/FadeAnimation 单点）。
+    internal static readonly TimeSpan TransitionDuration = TimeSpan.FromMilliseconds(DesignTokens.FadeVisibilityMs);
     internal static readonly HandoffBehavior AnimationHandoffBehavior = HandoffBehavior.SnapshotAndReplace;
 
     public static readonly DependencyProperty IsActiveProperty = DependencyProperty.RegisterAttached(
@@ -35,7 +38,7 @@ public static class CategoryFeedbackAnimation
     internal static DoubleAnimation CreateOpacityAnimation(double from, double to) =>
         new(from, to, new Duration(TransitionDuration))
         {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            EasingFunction = to < from ? FadeAnimation.ExitEasing : FadeAnimation.EnterEasing,
             FillBehavior = FillBehavior.Stop,
         };
 

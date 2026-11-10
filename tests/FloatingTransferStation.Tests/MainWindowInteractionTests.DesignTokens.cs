@@ -61,11 +61,63 @@ public sealed partial class MainWindowInteractionTests
                 new CornerRadius(DesignTokens.CardCornerRadius),
                 (CornerRadius)window.FindResource("CardCornerRadius"));
             Assert.AreEqual(
-                new CornerRadius(DesignTokens.ControlCornerRadius),
+                new CornerRadius(DesignTokens.HeaderActionCornerRadiusPx),
                 (CornerRadius)window.FindResource("HeaderActionCornerRadius"));
             Assert.AreEqual(
                 new CornerRadius(DesignTokens.PinButtonCornerRadius),
                 (CornerRadius)window.FindResource("PinButtonCornerRadius"));
+            // 2026-11-08 视觉语言收敛（A19/A20）：两档阶梯资源与全部阶梯外登记
+            // 资源逐键镜像 token——资源字面量漂移即互锁失败。
+            Assert.AreEqual(
+                new CornerRadius(DesignTokens.ControlCornerRadiusPx),
+                (CornerRadius)window.FindResource("ControlCornerRadius"),
+                "ControlCornerRadius 资源必须镜像 ControlCornerRadiusPx（控件级阶梯）。");
+            Assert.AreEqual(
+                new CornerRadius(DesignTokens.SurfaceCornerRadiusPx),
+                (CornerRadius)window.FindResource("SurfaceCornerRadius"),
+                "SurfaceCornerRadius 资源必须镜像 SurfaceCornerRadiusPx（表面级阶梯）。");
+            Assert.AreEqual(
+                new CornerRadius(DesignTokens.HeaderActionCornerRadiusPx),
+                (CornerRadius)window.FindResource("SelectedCountBadgeCornerRadius"),
+                "选中计数徽章与头部操作钮同档（HeaderActionCornerRadiusPx）。");
+            Assert.AreEqual(
+                new CornerRadius(DesignTokens.CheckboxCornerRadius),
+                (CornerRadius)window.FindResource("SelectionRingCornerRadius"),
+                "SelectionRingCornerRadius 资源必须镜像 CheckboxCornerRadius（识别元素 r5）。");
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void DesignTokens_CardFamilyThicknessResourcesMirrorTokens()
+    {
+        // 2026-11-08 视觉语言收敛（A10）：卡片族 Margin/Padding 镜像资源接回
+        // DesignTokens 间距三 token（此前 token 零引用、实为字面量双口径）。
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+
+        try
+        {
+            var root = (Thickness)window.FindResource("CardRootMargin");
+            Assert.AreEqual(DesignTokens.CardInsetPx, root.Left, "卡根左距=CardInsetPx。");
+            Assert.AreEqual(DesignTokens.CardInsetPx, root.Right, "卡根右距=CardInsetPx。");
+            Assert.AreEqual(DesignTokens.CardGutterPx, root.Top, "卡根上距=CardGutterPx。");
+            Assert.AreEqual(DesignTokens.CardGutterPx, root.Bottom, "卡根下距=CardGutterPx。");
+
+            var boundary = (Thickness)window.FindResource("CardRootBoundaryMargin");
+            Assert.AreEqual(DesignTokens.CardInsetPx, boundary.Left);
+            Assert.AreEqual(DesignTokens.CardInsetPx, boundary.Right);
+            Assert.AreEqual(10, boundary.Top, "边界卡上距 10＝置顶分隔呼吸空间（#27）组成部分，登记值。");
+            Assert.AreEqual(DesignTokens.CardGutterPx, boundary.Bottom);
+
+            var padding = (Thickness)window.FindResource("CardPadding");
+            Assert.AreEqual(DesignTokens.CardPaddingPx, padding.Left);
+            Assert.AreEqual(DesignTokens.CardPaddingPx, padding.Top);
+            Assert.AreEqual(DesignTokens.CardPaddingPx, padding.Right);
+            Assert.AreEqual(DesignTokens.CardPaddingPx, padding.Bottom);
         }
         finally
         {

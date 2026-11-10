@@ -1,14 +1,14 @@
 # 设计规范（Design Tokens）
 
-> 唯一数值来源是共享核心 `src/FloatingTransferStation.Core/Design/DesignTokens.cs`。WPF 资源字典（`src/FloatingTransferStation/Resources/MainWindowStyles.xaml`）引用这些值；Windows 端 STA 测试（`MainWindowInteractionTests.DesignTokens.cs`）锁定 WPF 镜像与 Core 相等。修改任何值必须同步本文件与 Core。
+> 唯一数值来源是共享核心 `src/FloatingTransferStation.Core/Design/DesignTokens.cs`。WPF 资源字典（`src/FloatingTransferStation/Resources/MainWindowStyles.xaml`）引用这些值；Windows 端 STA 测试（`MainWindowInteractionTests.DesignTokens.cs` 等）锁定 WPF 镜像与 Core 相等。本文是**映射叙述**（哪个场景用哪枚 token、为什么），不立第二数值权威。修改任何值必须同步本文件与 Core。
 >
-> 历史注记：2026-10-08 起 Mac 端已停止并从仓库移除，涉及另一端镜像的历史表述随之失效；带日期的历史记录不改写。
+> 历史注记：2026-10-08 起 Mac 端已停止并从仓库移除，涉及另一端镜像的历史表述随之失效；带日期的历史记录不改写。2026-11-08 视觉语言体系化收敛（h1）把全文扩为六章：配色体系／动效全景／按钮与交互状态／圆角／排版与布局／动效原则与反例豁免。
 
 设计基线为 Windows 11 Fluent（微软官方动效规范），参考调研见 `docs/research/2026-09-22-ui-motion-resources.md`（维护者本地资料，不入库）。
 
-## 一、色板（浅色主题）
+## 一、配色体系（色板与语义分工）
 
-强调色为紫 `#6D5DFB` 及其派生色族（2026-09-22 决策：保留既有识别度）。
+强调色为紫 `#6D5DFB` 及其派生色族（2026-09-22 决策：保留既有识别度）。**语义分工**：中性面（窗壳/轨道/头部/卡片底）只走灰阶层——`WindowShell→TabRail→Header/Card` 由浅入深的表面层级；`Accent` 只承担「选中/活动/指示/插入」语义（焦点描边、置顶指示、选中环、拖放目标、链接、成功反馈），不作装饰底色；`Danger` 只承担破坏性语义（清空/删除/退出/失败反馈）；`SecondaryText` 兼任次级图标前景与灰态环（#56 复用，非新 token）。文案反馈色规则：成功＝`AccentBrush`（DeepSeek 状态与插件试运行统一，2026-11-08）、失败＝`DangerBrush`、中性提示＝`SecondaryTextBrush`。
 
 | Token | 值 | 用途 |
 |---|---|---|
@@ -58,9 +58,11 @@
 
 深色主题的卡片阴影为 `#000000`、透明度 0.35（浅色为 `#1D1D1F`、0.12）。
 
-## 二、动效时长（三档 + 场景映射）
+**配色豁免清单**（有意不进主题键，登记于 §六）：二维码白底码面（扫码可扫性是主题不变量而非调色板颜色——放大层与页脚缩略两宿主自 2026-11-09 f1 落轨起为**岛式呈现**：白底码面＋共享卡片阴影层（`CardShadowLayerStyle` 派生）以主题高程把码面「岛」抬出暗背景，浅深两主题均带高程、码面恒白；圆角走 ControlCornerRadius/CardCornerRadius 资源）；Mica 色调 `WindowShellTintHex/DarkHex`（材质层，非表面色）；IconTool 预览底色（独立工具非主题面）；结构性 `Transparent`（命中层/占位底，非颜色语义）。代码侧画刷一律 `DynamicResource`/`SetResourceReference` 活解析（契约 #28），禁止 `FindResource` 快照。
 
-三档取自微软 `timing-and-easing` 官方表：**83ms**（微交互、按压、减弱动效纯淡入）/ **167ms**（悬停、快速反馈、标准入场）/ **250ms**（标准控件动画）。
+## 二、动效全景（时长、缓动与编排）
+
+三档取自微软 `timing-and-easing` 官方表：**83ms**（微交互、按压、减弱动效纯淡入）/ **167ms**（悬停、快速反馈、标准入场）/ **250ms**（标准控件动画）。**新增场景不加档、复用既有时长档**（#30 起锚定原则）。
 
 | 场景 | Token | 值 |
 |---|---|---|
@@ -71,69 +73,94 @@
 | 面板收起出场 | PanelCollapseExitMs | 200 |
 | 悬停反馈 | HoverFeedbackMs | 167 |
 | 按压反馈 | PressFeedbackMs | 83 |
-| 显隐淡入淡出 | FadeVisibilityMs | 120 |
+| 显隐淡入淡出（含分类标签反馈层） | FadeVisibilityMs | 120 |
 | 删除反馈 | DeleteFeedbackMs | 120 |
 | 新条目交错步长 | ItemEntranceStaggerMs | 40（区间 30–50 取中） |
 | 拖放目标撤离保持窗（#51） | DropTargetWithdrawHoldMs | 120（覆盖手抖频率，真离开无感知迟滞） |
-| 启动确认脉冲（#30） | LaunchConfirmMs | 250（＝SlowDurationMs，不加档） |
+| 启动确认脉冲（#30） | LaunchConfirmMs | 250（＝SlowDurationMs，不加档；峰值缩放 LaunchConfirmPulseScale=1.06 于半程） |
 | 启动项落位（#30） | ItemLandingMs | 250（＝SlowDurationMs，不加档） |
 | 启动后排队收起延迟（#30） | LaunchCollapseDelayMs | 250（时序性延迟，减动效保留） |
 | 单击启动重入门闩（#30） | LaunchReentryLatchMs | 500 |
-| 瓦片入场交错步长/封顶（#30） | TileEntranceStaggerMs / TileEntranceStaggerCap | 40 / 8（min(i,8)×40ms） |
-| 边缘 peek 收缩/展开（#17 peek 化，R12） | 复用 NormalDurationMs / SlowDurationMs（不加档） | 167 / 250（收缩加速出场、展开减速入场，经唯一放置动画服务，可中断反转） |
+| 瓦片入场交错步长/封顶/位移（#30） | TileEntranceStaggerMs / TileEntranceStaggerCap / TileEntranceOffsetPx | 40 / 8 / 8（位移区别于卡片 ContentEntranceOffsetPx 6） |
+| 边缘 peek 收缩/展开（#17 peek 化，R12，2026-11-10 落轨） | 复用 NormalDurationMs / SlowDurationMs（不加档） | 167 / 250（收缩加速出场、展开减速入场，经唯一放置动画服务，可中断反转） |
 | 边缘 peek 把手 hover 意图事务（#17，#42 同族） | EdgePeekExpandDwellMs | 60（布防→到期重验指针在内才提交展开） |
 | 二维码容器过渡（独立组，契约 #24，不进三档） | QrZoomInMs/QrZoomOutMs/QrTextFadeInBeginMs/QrTextFadeInMs/QrTextFadeOutMs/QrThumbFadeMs/QrThumbRevealBeginMs/QrHandoverFadeMs | 450/250/270/180/90/150/180/70（后两枚＝收回交接：缩略图回显起点（95% 回程反解）与换手段时长，Issue #325） |
 
-## 三、缓动曲线
+**缓动曲线与选择规则**——通用两条：入场（减速）`0,0,0,1`、出场（加速）`1,0,1,1`（WPF KeySpline；C# 侧 `FadeAnimation.EnterEasing/ExitEasing` 单点实例，全部动效经此消费，禁 `new CubicEase` 散布）；减弱动效 Linear。**缓动按语义选、不按数值方向**（2026-11-08 定则）：进入某视觉态（淡入、抬升、入场）＝减速曲线，离开（淡出、回落、出场）＝加速曲线——位移可正可负，「to<from」这类数值判据会把负向进入错配加速曲线（LiftAnimation 曾实测与宣称相反）。二维码遮罩纱收回与容器同用 `QrZoomOutKeySpline`（组内专用，经 `FadeAnimation.ExitEaseToken` 指定，不新增通用曲线；Issue #325）。
 
-| 场景 | WPF KeySpline |
-|---|---|
-| 入场（减速） | `0,0,0,1` |
-| 出场（加速） | `1,0,1,1` |
-| 减弱动效 | Linear |
+**编排与退化**：动画可中断可重定向（SnapshotAndReplace＋`FillBehavior.Stop`，契约 #41）；「减弱动效」（系统偏好或 `AnimationsEnabled=false`）全部退化为 83ms 纯淡入或立即定格终值（peek 全链直达终态）。**非线性动画两级先例**：容器级＝二维码放大（container transform：整卡含框飞行、方→矩形形变、文字后段浮现，独立时长组＋专用曲线，契约 #24）；**窗口级首例＝边缘 peek**（2026-11-10 c2 落轨：整窗同尺寸纯平移的连续受控迁移，经唯一放置动画服务 `WindowPlacementAnimator` 承载 §五·C 例外通道——时长/缓动全部复用既有 token，无新档无新曲线；语义与把手视觉见 §五·D）。
 
-二维码遮罩纱收回与容器同用 `QrZoomOutKeySpline`（组内专用，经 `FadeAnimation.ExitEaseToken` 指定，不新增通用曲线；Issue #325）。
+## 三、按钮与交互状态（类型学×五态）
 
-## 四、圆角
+全仓按钮收敛为下表类型（H/P/D/F 四态，可见性类按钮另有状态矩阵）。**hover 双轨**：①层淡入＝复合图标元素（头部图标钮/卡片操作钮/分类标签/chip——HoverLayer＋FadeAnimation 167ms）；②属性瞬切＝单表面轻控件（文字钮/过滤 chip/导航/分段/菜单项/瓦片名带，触发器直换）；③仅描边＝密集内容控件（ComboBox/QR 缩略钮/设置开关——只换 `HoverBorderBrush` 描边，不换底不位移）。**pressed 三范式**：换色 `ActiveCategoryBrush`（标准钮族）/缩放 `TilePressScale` 0.96（瓦片族）/透明度 0.85（QR 缩略，白底岛配套孤例）；轻量选择类（勾选钮/导航/分段/开关/下拉/chip）无按压态。**禁用两档**：控件族 `ControlDisabledOpacity` 0.4、整卡灰化 `CardDisabledOpacity` 0.6（#57 先例；钮叠加在卡内 ≈0.24 已裁定可接受）；禁用表达原则＝矩阵隐藏＋守卫优先、IsEnabled 置灰为辅（#19）。**Focus**：全仓 `Focusable=False`＋`FocusVisualStyle=null`（W6 治理），可见键盘焦点仅两处——文本输入框 Accent 描边（功能反馈保留）与瓦片勾选钮键盘聚焦显隐。
 
-两档阶梯（1.50.0 起收敛进 token，Issue #186 D9／2026-10-18，契约 #34）：**控件级 4／表面级 8**；识别元素保留原值、逐个登记、不入阶梯。
+| 类型 | Hover | Pressed | Disabled |
+|---|---|---|---|
+| 头部图标钮（含危险钮） | 层淡入 HoverSurface+HoverBorder | 层 ActiveCategory 83ms | 0.4 |
+| 通用文字钮/折叠 ToggleButton | 瞬切换底+换边 | 瞬切 ActiveCategory | 0.4 |
+| 卡片操作钮网格（选择/删除/置顶/备注/AI/插件） | 层淡入+图标转 Accent | 层 ActiveCategory | 不禁用（矩阵隐藏＋守卫） |
+| 勾选钮（卡/瓦片/选择器 CheckBox） | 环换 Accent 167ms | —（即时选中反馈） | 无禁用 |
+| 过滤 chip（toggle） | 瞬切换底+换边 | 瞬切 ActiveCategory | 0.4 |
+| 设置开关（自绘 CheckBox） | 仅描边（2026-11-08 补齐） | — | 0.4 |
+| 设置导航/分段 RadioButton | 瞬切 HoverSurface | — | 无 |
+| ComboBox（本体/Item） | 本体仅换边；Item 换底 | —（开弹层即反馈） | 代码 IsEnabled（未决） |
+| 菜单项 | IsHighlighted→HoverSurface | 顶层换 ActiveCategory | 0.4 |
+| 自绘 chip/「全部」chip/分类标签 | hover 层淡入+边框瞬切 | — | 无 |
+| 启动瓦片 | −2px 位移 167ms（TileHoverLiftPx） | 0.96 缩放 83ms | 无禁用 |
+| 微信号复制行（伪按钮） | HoverSurface 瞬切底（2026-11-08 补齐） | — | — |
+| peek 把手（窗口级命中面，#17 peek 化） | 提亮＋Accent 指示 167ms；hover 60ms 意图事务提交展开（#42 同族） | —（命中面非钮） | 无 |
+| QR 缩略钮 | 仅换边 | Opacity 0.85（孤例） | 无 |
+| TextBox/PasswordBox | — | — | 0.4＋Accent 聚焦描边 |
+| 滚动条 thumb | 加宽 4→6＋换色 167ms | — | — |
+| 设置卡（整卡灰化） | —（卡非钮） | — | 0.6 |
+
+**命中区规格**（按类型登记，不 token 化）：图标钮 30×30（命中层语义宽，图标 14.5 或 16 两制）；文字钮高 30（对话框覆写 32、退出钮 34）；下拉 32；导航项 34；分段 26；撤销钮 Padding=8,2 热区偏小列候选。
+
+## 四、圆角（两档阶梯与登记例外）
+
+两档阶梯（1.50.0 起收敛进 token，Issue #186 D9／2026-10-18，契约 #34）：**控件级 4／表面级 8**。**判定规则**（2026-11-08 成文）：输入/动作类控件（输入框、按钮、下拉、记录编辑框、行内编辑器、菜单行、类型 chip）＝4；承载内容的表面（卡片、瓦片、弹窗壳、主壳、标签容器、放大层）＝8。识别元素保留原值、逐个登记、不入阶梯。
 
 | Token | 值 | 用途 |
 |---|---|---|
-| ControlCornerRadiusPx | 4 | 控件级：输入框、按钮、下拉、记录编辑框、行内编辑器（WPF 镜像资源 `ControlCornerRadius`） |
-| SurfaceCornerRadiusPx | 8 | 表面级：卡片、瓦片、弹窗壳、主壳（WPF 镜像资源 `SurfaceCornerRadius`；`CardCornerRadius` 与瓦片/卡片资源 `CardCornerRadius` 同源收敛=8） |
+| ControlCornerRadiusPx | 4 | 控件级（WPF 镜像资源 `ControlCornerRadius`） |
+| SurfaceCornerRadiusPx | 8 | 表面级（WPF 镜像资源 `SurfaceCornerRadius`；`CardCornerRadius` 同源收敛=8） |
 | DwmCornerRadius（Windows） | 8 | Windows 窗壳：DWM 四角圆角与内容层自裁剪同值（WPF 资源 `ShellCornerRadius` 镜像，不设第二个壳圆角 token）；可见态窗口完整落在工作区内，四角圆角恒定（2026-10-08 决策删除 1.8.0 的右缘越屏裁切，1.21.0 起） |
 
-阶梯外登记的既有值（识别元素/头部钮/徽章小件，不强制收编——见 `MainWindowStyles.xaml` 资源头注释）：
+阶梯外登记值（识别元素/头部钮/徽章小件，数值零变化、2026-11-08 起全仓以资源引用消费）：
 
 | Token | 值 | 用途 |
 |---|---|---|
-| ControlCornerRadius | 7 | 头部操作按钮与选中计数徽章（WPF 资源 `HeaderActionCornerRadius`／`SelectedCountBadgeCornerRadius`） |
-| PinButtonCornerRadius | 6 | 置顶按钮 |
-| CheckboxCornerRadius | 5 | 选择环 r5——卡片与瓦片勾选钮共用（WPF 资源 `SelectionRingCornerRadius` 镜像） |
+| HeaderActionCornerRadiusPx | 7 | 头部操作按钮与选中计数徽章（WPF 资源 `HeaderActionCornerRadius`／`SelectedCountBadgeCornerRadius`；2026-11-08 由 ControlCornerRadius 重命名对仗——旧名与 4 档资源同名交叉错位） |
+| PinButtonCornerRadius | 6 | 置顶按钮、卡片图标钮族、瓦片右键菜单行 |
+| CheckboxCornerRadius | 5 | 选择环 r5——卡片与瓦片勾选钮、选择器 CheckBox、类型 chip、菜单行共用（WPF 资源 `SelectionRingCornerRadius` 镜像） |
 
-头部表面左上 11 与滚动条滑块 2 是 `MainWindowStyles.xaml` 里的既有样式字面量（`HeaderSurfaceStyle` 的 `11,0,0,0`、滑块模板的 `2`）；`HeaderSurfaceCornerRadius` 与 `ScrollThumbCornerRadius` 两个常量已无任何引用（废弃残留，待代码侧清理，不在此表登记）。
+**派生规则例外**（不入表、成文即可）：胶囊/圆形＝高的一半（开关 Track 10/Thumb 7、警告角标 16×16 圆角 8）；线状件＝宽的一半（滑块悬停层 3、导航指示条 1.5、分隔线 0.5）；内层＝外层−描边（卡片填充层 7＝8−1、放置高亮内层 6＝8−2）；弹层小件 6（下拉弹层）；头部表面左上 11（`HeaderSurfaceStyle` 的 `11,0,0,0`/设置窗头部 `11,11,0,0`）与滑块 2 是样式内既有字面量（废弃 token `HeaderSurfaceCornerRadius`/`ScrollThumbCornerRadius` 零引用残留已于 2026-11-08 删除，字面量按本条登记）。窗壳 `WindowChrome.CornerRadius=0`（圆角由 DWM 承载）为结构性豁免。
 
-## 五、间距与位移
+## 五、排版与布局（字号、行高、字重、间距与布局范式）
+
+**字号十档全表**（7 基础＋3 阅读档；2026-11-08 起全部为正式档，值零变化）：9（徽标计数）／11（辅助说明、瓦片名、选择器副题）／12（次级正文：状态文本、备注、菜单行、提示行）／13（次级正文：设置行/导航/下拉/搜索 chip）／14（卡片正文 `CardTextFontSize`，显示/编辑两态同源）／16（标题档：窗标题、设置窗标题——2026-11-08 设置标题 15 归位 16）＋阅读档 20/17/15（H1–H3，`ReadingHeading*FontSize`；H4–H6＝正文＋SemiBold）。`TextFormattingMode=Display` 点名面：卡片正文/备注/记录编辑器（14、12）、状态文本（12）、徽标计数（9）、标签/chip 文字（12）——13/11 暂缓（渲染回归候选）。
+
+**行高链**：正文行高 19＝`ceil(14×LineSpacing＋1)` 推导（资源 `CardTextLineHeight`，#25/#48）；瓦片名 16（12 号两行，模板内推导自洽）。**字重单档**：全仓仅 SemiBold 一档强调（标题/激活态/选中段），无 Bold（瓦片警告角标「!」2026-11-08 归位 SemiBold）、无 Light。
+
+**间距节奏**（约定成文、不 token 化——Margin 语义异质，token 膨胀负收益）：元素横向间距 8、卡片水平内缩 12（`CardInsetPx`）、卡片纵向间距 4（`CardGutterPx`）、卡片内边距 12（`CardPaddingPx`；镜像 Thickness 资源 `CardRootMargin/CardRootBoundaryMargin/CardPadding` 三件 2026-11-08 接回）、标题缩进 24。结构性尺寸（轨道宽 58、面板宽 310–640、最小窗高 360 等）不属于设计 token，权威来源是 Core 的 `WindowSettings`：结构不为任何内容让步、禁止为内容加宽结构（滚动条不占布局宽 #23、卡片为操作钮预留 #16 同族；标签轨道 `TabWidth`＝58 即此原则的当前案例——两字/行自适应折行，禁按名长特判，契约 #54）。
+
+**布局范式索引**（正文见各节）：三行面板（头部/内容/状态，§五·D 上下文）；卡片三层结构与列表（§五·B）；瓦片网格（拉伸填充单一几何源，DesignTokens 瓦片常量）；双栏设置窗（§五·E）；overlay 滚动视口（§五·B 末两条）；对话框壳（`DialogShellStyle`，DWM 圆角唯一来源）。
 
 | Token | 值 | 用途 |
 |---|---|---|
-| ContentEntranceOffsetPx | 6 | 内容入场位移 |
+| ContentEntranceOffsetPx | 6 | 内容入场位移（面板展开/分类揭示） |
 | CollapseExitOffsetPx | 24 | 面板收起出场向轨道方向的位移 |
-| CardInsetPx | 12 | 卡片水平内缩 |
-| CardGutterPx | 4 | 卡片纵向间距 |
-| CardPaddingPx | 12 | 卡片内边距 |
+| CardInsetPx / CardGutterPx / CardPaddingPx | 12 / 4 / 12 | 卡片水平内缩／纵向间距／内边距（镜像 Thickness 资源三件） |
 | TilePressScale | 0.96 | 启动瓦片按压缩放（#30） |
-| TileHoverLiftPx | -2 | 启动瓦片悬停抬升位移（#30；区别于卡片 LiftedOffsetPx -1） |
+| TileHoverLiftPx | -2 | 启动瓦片悬停抬升位移（#30；区别于卡片 CardHoverLiftPx −1） |
+| CardHoverLiftPx | -1 | 卡片悬停抬升位移（`LiftAnimation.LiftedOffsetPx` 同源；与瓦片 −2 对仗） |
 | LauncherTileViewportInsetPx | 8 | 启动瓦片视口顶/底内衬（W6 顶排圆角裁切修复 2026-11-03）：吸收悬停上浮 −2 与确认脉冲 1.06 上下各溢 ≈3 的 RenderTransform 溢出，护住首/末行圆角——内衬随内容滚动，恰在列表自然停位（停顶/停底）提供余量；面板拉伸填充几何不变 |
-
-结构性尺寸（轨道宽 58、面板宽 310–640、最小窗高 360 等）不属于设计 token，权威来源是 Core 的 `WindowSettings`。结构尺寸内容无关：结构不为任何内容让步、禁止为内容加宽结构——同族先例是滚动条不占布局宽（契约 #23）与卡片为操作钮预留而非面板加宽（契约 #16）。标签轨道（`WindowSettings.TabWidth`＝58）即此原则的当前案例：轨道宽固定，标签内容按两字/行自适应折行（设计契约 #54）——实现是纯布局约束：`CategoryLabelTextStyle` 的两字宽文本列（30 DIP：2 字 24≤30＜3 字 36）＋既有 Wrap 自然换行，「快捷启动」＝快捷/启动 两行居中、「重要/记录」单行、自定义名至多 6 字 → 至多 3 行无截断；禁止按名字长度特判的转换器/代码分支，禁止截断；头部标题仍用全名单行，不受此规则约束。
 
 ## 五·B、层级（Elevation）
 
 - 卡片模板为三层结构（1.11.3 起）：根容器（`CardRootStyle`，承载外距与悬停上浮，无 Effect）+ 阴影层（`CardShadowLayerStyle`，与卡片同形状的不透明底 + 共享冻结 `CardShadowEffect`，不承载内容、不参与命中）+ 内容面（`CardContainerStyle`，不透明卡片底、描边与焦点态，**不得携带 Effect**）。带 `Effect` 的元素会把整个子树渲染进中间位图并强制关闭 ClearType（卡片正文发糊主因），阴影因此必须隔离在文字子树之外；小字号文本（卡片正文/记录编辑器 14、状态文本 12、徽标计数 9）按像素对齐渲染（`TextFormattingMode=Display`），16px 标题保持 Ideal。
 - 卡片统一携带共享冻结的 `CardShadowEffect`（浅色 `#1D1D1F`/0.12、深色 `#000000`/0.35，模糊 8、深度 2、方向 270°），不逐卡片实例化以保证虚拟化列表性能。
-- 卡片悬停时以渲染位移上浮 1px（`LiftAnimation.LiftedOffsetPx = -1`，167ms 减速曲线，回落用加速曲线），不参与布局、不影响命中测试。
+- 卡片悬停时以渲染位移上浮 1px（`LiftAnimation.LiftedOffsetPx`＝`CardHoverLiftPx` −1，167ms 减速曲线抬升、加速曲线回落——按语义不按位移方向），不参与布局、不影响命中测试。
 - 滚动条滑块悬停时经 6px 宽悬停层交叉淡入表现展宽（基宽 4px）。
 - BoardList 滚动条为 overlay 布局（1.31.0 起）：列表作用域的 overlay ScrollViewer 模板（`OverlayScrollViewerStyle`，经 BoardList.Resources 作用域隐式样式挂接）让垂直滚动条与内容同格、右缘悬浮其上、不占布局宽——viewport 几何与滚动条可见性解耦，卡片几何不随滚动条出现/消失漂移（默认模板的 Auto 独立列 + 主题样式的系统滚动条宽度下限曾是漂移根因，条带 `MinWidth/MinHeight=0` 压掉该下限）。条带宽 8 落在卡片右缘外边距带 12 内、与卡片内容零遮挡；`Auto` 语义不变（需要时才出现），滑块、透明轨道与悬停展宽 token 全部继续有效。设计契约 #23。
 - 记录编辑器滚动条同为 overlay 布局（文本输入表面，2026-11-06 起）：派生样式 `OverlayScrollTextBoxStyle`（基于 `ThemedTextBoxStyle`，仅重写模板把内容宿主直引 `OverlayScrollViewerStyle`）——打字途中滚动条出现/消失不改变排版宽，Wrap 全文不再重排；与基样式的模板差异是内边距从内容宿主外边距改为 Padding 透传（overlay 模板把 Padding 施加在内容台上、条带贴满宽右缘），条带宽 8 落在编辑器右内边距 12 带内、与文字零相交。设计契约 #23。
@@ -181,7 +208,9 @@
 - **字号链路**：正文沿用 `CardTextFontSize`（14，卡片正文同源）；标题阶梯只有 H1–H3 三档显式 token。**颜色零新增**：正文/引用文字＝`PrimaryTextBrush`、次级说明＝`SecondaryTextBrush`、链接＝`AccentBrush`（下划线）、代码块底与行内代码底＝`HoverSurfaceBrush`、代码块描边与引用竖条/分隔线＝`BorderBrush`——全部经 DynamicResource 引用主题字典，浅深两主题整本替换即时切换（锁定测试断言解析为字典实例）。
 - **交互**：阅读/编辑分段切换（RadioButton 分段、选中 `ActiveCategoryBrush` 底）只在实验开关开启且记录表面激活时可见；软换行按 Obsidian 惯例渲染为换行；链接仅 http/https 可点击（UseShellExecute 开默认浏览器），不加载远程图片。
 
-## 六、动效原则（评审基准）
+## 六、动效原则（评审基准）与反例豁免清单
+
+动效六原则（评审基准）：
 
 1. 进入减速、出场加速，退出比进入快；面板展开 167ms / 收起 200ms 不对称。
 2. 动效可中断、可重定向：新动画或停止必须先复位终值；不得让用户等动画播完。
@@ -189,3 +218,16 @@
 4. 系统开启「减弱动效」或用户在设置中关闭动效（`AppPreferences.AnimationsEnabled=false`，本地覆盖同一系统键）时，全部退化为 83ms 纯淡入或立即定格终值；恢复开启即移除覆盖、重新跟随系统。
 5. 收起动画不得破坏「收起视觉交接」防闪烁机制与面板状态机语义。
 6. 图标取自 fluentui-system-icons（MIT）几何重绘，不随应用分发字体文件。
+
+**反例与豁免清单**（有意不收编项总表；新增例外必须登记进本表并关联契约，禁止静默新增字面量）：
+
+| 项 | 内容 | 依据 |
+|---|---|---|
+| 配色豁免 | QR 白底码面（f1 落轨后岛式：主题阴影高程＋恒白码面，2026-11-09 实况）、Mica tint、IconTool 预览底色、结构性 Transparent | §一配色豁免清单 |
+| 圆角派生 | 胶囊/线状/内层−描边三类派生值与头部表面 11、滑块 2 | §四派生规则 |
+| 行为计时器 | 意图窗 60ms、收起驻留 250ms、状态 4s、反馈复位 1.6s、AI 旋转 1.2s、失败闪烁 1/0.2、PopupAnimation=Fade（系统）、拖拽线性归位、瓦片落位 0.8→1.0 幅值 | 时序编排/场景值非视觉档 |
+| 字号/图标尺寸 | 图标字形 28/36/16、瓦片勾选钮图标 16（脱离 14.5 规范已注记）、瓦片名 LineHeight 16 | 图标尺寸独立于文本字号档 |
+| Thickness 重复值 | `0,0,8,0`、`24,0,0,0` 等 | 间距节奏约定（§五），Margin 语义异质不 token 化 |
+| Hyperlink | 原生下划线 | 平台惯例 |
+| 焦点视觉 | 容器不画焦点框（W6 治理） | §三 Focus 矩阵；补键盘可见态为未决项（归 G 簇） |
+| 文案字面量 | 重复文案与同义不同文对 | 非视觉语言六面，归 G 簇（种子 #4） |

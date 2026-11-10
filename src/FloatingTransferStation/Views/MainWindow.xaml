@@ -103,7 +103,7 @@
           <Grid Background="Transparent">
             <Border x:Name="TabHoverLayer"
                     Background="{DynamicResource HoverSurfaceBrush}"
-                    CornerRadius="8"
+                    CornerRadius="{StaticResource SurfaceCornerRadius}"
                     Opacity="0"
                     IsHitTestVisible="False"
                     views:FadeAnimation.IsActive="{Binding IsMouseOver, ElementName=TabSurface}"
@@ -885,7 +885,7 @@
                      VerticalScrollBarVisibility="Auto"
                      HorizontalScrollBarVisibility="Disabled"
                      VerticalContentAlignment="Top"
-                     Padding="12"
+                     Padding="{StaticResource CardPadding}"
                      FontSize="14"
                  TextOptions.TextFormattingMode="Display"
                  TextChanged="ReviewEditor_TextChanged"
@@ -1231,7 +1231,7 @@
                         <Border x:Name="TileNameBand"
                                 Grid.Row="1"
                                 Padding="0,2,0,2"
-                                CornerRadius="4"
+                                CornerRadius="{StaticResource ControlCornerRadius}"
                                 Tag="{x:Static views:CardGestureZones.LauncherNameZone}">
                           <Border.Style>
                             <Style TargetType="Border">
@@ -1284,7 +1284,9 @@
                                      PreviewKeyDown="LauncherTileNameEditor_PreviewKeyDown" />
                           </Grid>
                         </Border>
-                        <!-- 警告角标（失败灰态）。 -->
+                        <!-- 警告角标（失败灰态）：16×16 圆角 8＝胶囊派生（高一半，
+                             design.md §四登记）；字重归一 SemiBold（2026-11-08 排版
+                             收编——全仓无第二字重档）。 -->
                         <Border x:Name="TileFailedBadge"
                                 Width="16"
                                 Height="16"
@@ -1292,12 +1294,12 @@
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Top"
                                 Background="{DynamicResource DangerBrush}"
-                                CornerRadius="8"
+                                CornerRadius="{StaticResource SurfaceCornerRadius}"
                                 Visibility="Collapsed">
                           <TextBlock HorizontalAlignment="Center"
                                      VerticalAlignment="Center"
                                      FontSize="11"
-                                     FontWeight="Bold"
+                                     FontWeight="SemiBold"
                                      Foreground="{DynamicResource OnAccentBrush}"
                                      Text="!" />
                         </Border>
@@ -1317,12 +1319,13 @@
               </ItemsControl>
             </ScrollViewer>
 
-            <!-- 放置态：松开以添加（2px accent 描边 + 8% 填充，描边层 167ms 淡入）。 -->
+            <!-- 放置态：松开以添加（2px accent 描边 + 8% 填充，描边层 167ms 淡入；
+                 内层 6＝外层 8−描边 2 派生，design.md §四登记）。 -->
             <Border x:Name="LauncherDropHighlight"
                     Grid.Row="1"
                     BorderBrush="{DynamicResource AccentBrush}"
                     BorderThickness="2"
-                    CornerRadius="8"
+                    CornerRadius="{StaticResource SurfaceCornerRadius}"
                     Opacity="0"
                     IsHitTestVisible="False">
               <Border Background="{DynamicResource AccentBrush}" Opacity="0.08" CornerRadius="6" />
@@ -1349,7 +1352,7 @@
                     Background="{DynamicResource StatusSurfaceBrush}"
                     BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="1"
-                    CornerRadius="8"
+                    CornerRadius="{StaticResource SurfaceCornerRadius}"
                     Visibility="Collapsed"
                     views:FadeAnimation.AnimationsEnabled="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"
                     views:FadeAnimation.ManageVisibility="True"
