@@ -43,6 +43,7 @@ internal partial class MultiItemPickerWindow : Window
     private readonly List<PickerRow> _rows;
     private readonly string _emptySourceHint;
     private bool _shownAsDialog;
+    private readonly ImeCompositionGuard _imeGuard;
 
     /// <summary>确认结果（空 = 取消；勾选行的 Payload 保留原对象身份）。ShowDialog 后读取。</summary>
     public IReadOnlyList<object> Selection { get; private set; } = [];
@@ -68,6 +69,7 @@ internal partial class MultiItemPickerWindow : Window
         string? bulkActionText = null)
     {
         InitializeComponent();
+        _imeGuard = ImeCompositionGuard.Attach(this);
         _emptySourceHint = emptySourceHint;
         _rows = [.. rows];
         Title = title;
@@ -120,7 +122,9 @@ internal partial class MultiItemPickerWindow : Window
 
     private void PickerWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape)
+        // IME 组合期的 Esc 属输入法操作（取消候选），不关窗——中文过滤组合中按
+        // Esc 是想取消候选而非丢弃已勾选清单（契约 #63 公共守卫）。
+        if (e.Key == Key.Escape && !_imeGuard.IsComposing)
         {
             e.Handled = true;
             Close();

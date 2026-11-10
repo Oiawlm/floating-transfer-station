@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using FloatingTransferStation.Models;
@@ -457,6 +458,72 @@ public sealed class SettingsWindowPluginTests
             StringAssert.Contains(status.Text, "耗时");
             StringAssert.Contains(status.Text, "规则命中 1 处");
             trial.Close();
+        }
+        finally
+        {
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
+    public void TrialRunDialog_EscapeDuringCompositionKeepsWindowOpenUntilCompositionEnds()
+    {
+        // 契约 #63 公共守卫：多行中文试运行文本组合中按 Esc＝想取消候选，不是关闭
+        // 对话框——组合中窗口不关，组合终结后 Esc 照常关闭（标记技法，合成组合事件）。
+        using var directory = new TestDirectory();
+        var catalog = CreateUserActionCatalog(directory);
+        var window = CreateWindow(directory, new RecordingPreferencesStore(), catalog);
+        try
+        {
+            window.Show();
+            CompleteLayout(window);
+            var trial = new PluginActionTrialWindow(window, "typography-tidy", "tidy-card");
+            trial.Show();
+            CompleteLayout(trial);
+            var input = (TextBox)trial.FindName("TrialInputBox")!;
+            Assert.IsTrue(input.Focus(), "前置条件：试运行输入框持焦（组合期的实况焦点位）。");
+            input.Text = "整理前的文本";
+
+            input.RaiseEvent(new TextCompositionEventArgs(
+                Keyboard.PrimaryDevice,
+                new TextComposition(InputManager.Current, input, "zuhe"))
+            {
+                RoutedEvent = TextCompositionManager.PreviewTextInputStartEvent,
+                Source = input
+            });
+            trial.RaiseEvent(new KeyEventArgs(
+                Keyboard.PrimaryDevice,
+                PresentationSource.FromVisual(trial)!,
+                Environment.TickCount,
+                Key.Escape)
+            {
+                RoutedEvent = Keyboard.PreviewKeyDownEvent,
+                Source = trial
+            });
+            CompleteLayout(trial);
+
+            Assert.IsTrue(trial.IsLoaded, "IME 组合期的 Esc 属输入法操作（取消候选），不关窗。");
+            Assert.AreEqual("整理前的文本", input.Text, "在途输入不受组合期 Esc 影响。");
+
+            input.RaiseEvent(new TextCompositionEventArgs(
+                Keyboard.PrimaryDevice,
+                new TextComposition(InputManager.Current, input, "组合完成"))
+            {
+                RoutedEvent = TextCompositionManager.PreviewTextInputEvent,
+                Source = input
+            });
+            trial.RaiseEvent(new KeyEventArgs(
+                Keyboard.PrimaryDevice,
+                PresentationSource.FromVisual(trial)!,
+                Environment.TickCount,
+                Key.Escape)
+            {
+                RoutedEvent = Keyboard.PreviewKeyDownEvent,
+                Source = trial
+            });
+            CompleteLayout(trial);
+
+            Assert.IsFalse(trial.IsLoaded, "组合结束后 Esc 照常关闭对话框。");
         }
         finally
         {
