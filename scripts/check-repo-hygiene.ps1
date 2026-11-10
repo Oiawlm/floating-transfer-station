@@ -3,11 +3,16 @@
     Repository hygiene checks for floating-transfer-station.
 
 .DESCRIPTION
-    Four checks, all must pass (exit 0) or the script fails (exit 1):
+    Eight checks, all must pass (exit 0) or the script fails (exit 1):
 
-      A. Root entry whitelist
+      A. Root entry whitelist + scripts naming whitelist
          Every root-level entry tracked by git must be listed in
          $AllowedRootEntries below. Extra or missing entries are reported.
+         Additionally every tracked scripts/*.ps1 must match the verb-prefix
+         whitelist $AllowedScriptNamePattern (bootstrap-/build-/check-/
+         clear-/run-/test-); the prefix table is hardcoded here on purpose
+         so adding a prefix requires a reviewed change (R11 file charter,
+         design contract #64).
 
       B. README local link integrity
          Every relative Markdown link in README.md must resolve to an
@@ -32,6 +37,35 @@
          documented non-test identifiers are listed in
          $ContractLockExemptIdentifiers below (frozen baseline, may only
          shrink). When the file is absent the check reports a skip.
+
+      E. Untracked stray files (merge residue / editor backups)
+         Untracked entries reported by git status whose base name ends in
+         .orig/.rej/.bak/.tmp/.swp or starts with '~' fail the check.
+         Gitignored directories never appear in git status output, so
+         maintainer-local evidence files are not affected; a clean CI
+         checkout has no untracked entries at all.
+
+      F. Handoff root whitelist (local-only input)
+         When the maintainer-local handoff directory (docs/handoff,
+         gitignored, absent in CI) exists, its root may only contain the
+         README, the archive directory, batch directories named
+         <yyyy-mm-dd>-<slug>, the frozen anchor files referenced by tracked
+         contracts, and the explicit legacy exceptions in
+         $HandoffRootLegacyExceptions (may only shrink).
+
+      G. Handoff batch index freshness (local-only input)
+         Batch directories under docs/handoff that contain execution reports
+         (report.md, or the multi-report form report-*.md) must be listed in
+         the handoff README index within 14 days of the batch start date
+         (parsed from the directory name; two legacy directories are
+         exempt). Prevents the index from lagging behind again.
+
+      H. Research root naming (local-only input)
+         When the maintainer-local research directory (docs/research,
+         gitignored, absent in CI) exists, root-level entries must follow
+         the new-style naming <yyyy-mm-dd>-<slug>.<md|csv|ps1> or be listed
+         in the frozen legacy exception table $ResearchLegacyExceptions
+         (18 legacy items, may only shrink).
 
     All violations are collected before the script exits; it never stops at
     the first failure.
@@ -199,7 +233,7 @@ Write-Output ''
 # Check A: root entry whitelist
 # ---------------------------------------------------------------------------
 
-Write-Output '--- Check A: root entry whitelist ---'
+Write-Output '--- Check A: root entry whitelist + scripts naming whitelist ---'
 
 $trackedFiles = @(Get-TrackedFiles -Root $repoRootPath)
 $actualRootEntries = @(
@@ -225,6 +259,29 @@ else {
     foreach ($entry in $missingEntries) {
         Write-Output ("[FAIL] Whitelisted entry missing from repository: {0}" -f $entry)
         Add-Violation ("Check A: whitelisted entry '{0}' is missing." -f $entry)
+    }
+}
+
+# Verb-prefix whitelist for tracked scripts (R11 file charter, design
+# contract #64). The prefix table is hardcoded here on purpose: a new prefix
+# means editing this pattern in a reviewed change.
+$AllowedScriptNamePattern = '^(bootstrap-|build-|check-|clear-|run-|test-)[a-z0-9-]+\.ps1$'
+
+$scriptFiles = @(
+    $trackedFiles |
+        ForEach-Object { $_.Replace('\', '/') } |
+        Where-Object { $_ -cmatch '^scripts/[^/]+\.ps1$' } |
+        Sort-Object
+)
+$badScriptNames = @($scriptFiles | Where-Object { (Split-Path -Leaf $_) -cnotmatch $AllowedScriptNamePattern })
+
+if ($badScriptNames.Count -eq 0) {
+    Write-Output ("[OK] All {0} tracked scripts/*.ps1 match the prefix whitelist." -f $scriptFiles.Count)
+}
+else {
+    foreach ($scriptFile in $badScriptNames) {
+        Write-Output ("[FAIL] Script name outside the prefix whitelist (expected bootstrap-/build-/check-/clear-/run-/test- prefix): {0}" -f $scriptFile)
+        Add-Violation ("Check A: script '{0}' does not match the scripts naming whitelist '{1}'." -f $scriptFile, $AllowedScriptNamePattern)
     }
 }
 
@@ -516,6 +573,231 @@ else {
             Write-Output ("[FAIL] Locked test identifier does not exist under tests/: {0}" -f $token)
             Add-Violation ("Check D: design contract references test identifier '{0}' with no matching method under tests/ (stale lock field or renamed test; align the contract lock wording)." -f $token)
         }
+    }
+}
+
+Write-Output ''
+
+# ---------------------------------------------------------------------------
+# Check E: untracked stray files (merge residue / editor backups)
+# ---------------------------------------------------------------------------
+
+# Untracked files that look like merge residue or editor backups. Gitignored
+# directories never appear in git status output, so maintainer-local evidence
+# files (e.g. handoff *.bak) are not affected (R11 file charter, design
+# contract #64).
+$UntrackedStrayExtensionPattern = '\.(orig|rej|bak|tmp|swp)$'
+
+Write-Output '--- Check E: untracked stray files ---'
+
+$statusOutput = & git -C $repoRootPath -c core.quotepath=false status --porcelain
+if ($LASTEXITCODE -ne 0) {
+    throw "git status failed with exit code $LASTEXITCODE."
+}
+
+$untrackedStrays = New-Object System.Collections.Generic.List[string]
+foreach ($line in @($statusOutput)) {
+    $text = [string]$line
+    if ($text.Length -lt 4) { continue }
+    if (-not $text.StartsWith('??')) { continue }
+
+    $statusPath = $text.Substring(3).Trim()
+    if ($statusPath.EndsWith('/')) { $statusPath = $statusPath.TrimEnd('/') }
+    $baseName = Split-Path -Leaf $statusPath
+    if ([string]::IsNullOrWhiteSpace($baseName)) { $baseName = $statusPath }
+
+    if ($baseName -cmatch $UntrackedStrayExtensionPattern -or $baseName.StartsWith('~')) {
+        $untrackedStrays.Add($statusPath)
+    }
+}
+
+if ($untrackedStrays.Count -eq 0) {
+    Write-Output '[OK] No untracked stray files (*.orig|*.rej|*.bak|*.tmp|*.swp|~*).'
+}
+else {
+    foreach ($strayPath in $untrackedStrays) {
+        Write-Output ("[FAIL] Untracked stray file (merge residue or editor backup): {0}" -f $strayPath)
+        Add-Violation ("Check E: untracked stray file '{0}' matches the residue pattern (*.orig|*.rej|*.bak|*.tmp|*.swp|~*); delete it or gitignore its location." -f $strayPath)
+    }
+}
+
+Write-Output ''
+
+# ---------------------------------------------------------------------------
+# Check F: handoff root whitelist (local-only input)
+# ---------------------------------------------------------------------------
+
+# The handoff directory is a gitignored maintainer-local area; CI and fresh
+# clones do not have it, so the check self-skips when absent (same pattern as
+# Check D). Root entries allowed: the README, the archive directory, batch
+# directories named <yyyy-mm-dd>-<slug>, the frozen anchor files referenced
+# by tracked contracts, and explicit legacy exceptions (may only shrink).
+$HandoffRelativePath = 'docs/handoff'
+$handoffRootPath = Join-Path -Path $repoRootPath -ChildPath ($HandoffRelativePath.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
+
+$HandoffRootAllowedFiles = @(
+    'README.md'
+    'RESEARCH-CATEGORYORDER-DROPFLICKER-20261014.md'
+    'RESEARCH-LAUNCHER-ICON-FAVICON-20261020.md'
+    'RESEARCH-LAUNCHER-UI-UNIFY-20261018.md'
+    'RESEARCH-QUICKLAUNCH-URL-20261017.md'
+)
+$HandoffRootLegacyExceptions = @(
+    'launcher-batch-20261023'
+    '2026-10-24-batch10'
+)
+$HandoffBatchDirPattern = '^\d{4}-\d{2}-\d{2}-[a-z0-9-]+$'
+
+Write-Output '--- Check F: handoff root whitelist ---'
+
+if (-not (Test-Path -LiteralPath $handoffRootPath -PathType Container)) {
+    Write-Output ("[SKIP] {0} not present (maintainer-local directory); nothing to check." -f $HandoffRelativePath)
+}
+else {
+    $handoffViolations = 0
+    foreach ($entry in (Get-ChildItem -LiteralPath $handoffRootPath | Sort-Object Name)) {
+        if ($entry.PSIsContainer) {
+            if ($entry.Name -ceq 'archive') { continue }
+            if ($entry.Name -cin $HandoffRootLegacyExceptions) { continue }
+            if ($entry.Name -cmatch $HandoffBatchDirPattern) { continue }
+        }
+        else {
+            if ($HandoffRootAllowedFiles -ccontains $entry.Name) { continue }
+        }
+
+        Write-Output ("[FAIL] Unexpected entry at the handoff root (allowed: README.md, archive/, <yyyy-mm-dd>-<slug>/ batch dirs, frozen anchors, legacy exceptions): {0}" -f $entry.Name)
+        Add-Violation ("Check F: unexpected handoff root entry '{0}/{1}' (stray file or non-conforming directory)." -f $HandoffRelativePath, $entry.Name)
+        $handoffViolations++
+    }
+
+    if ($handoffViolations -eq 0) {
+        Write-Output '[OK] Handoff root entries match the whitelist.'
+    }
+}
+
+Write-Output ''
+
+# ---------------------------------------------------------------------------
+# Check G: handoff batch index freshness (local-only input)
+# ---------------------------------------------------------------------------
+
+# Batch directories containing execution reports (report.md, or the
+# multi-report form report-*.md per the handoff README convention) must be
+# listed in the handoff README index within 14 days of the batch start date
+# (parsed from the directory name prefix, compared date-to-date so the
+# result does not depend on the time of day). Two legacy directories are
+# exempt (they predate the index). Prevents the index from lagging behind
+# again (R11 file charter, design contract #64).
+$HandoffIndexGraceDays = 14
+$HandoffIndexExemptDirs = @(
+    'launcher-batch-20261023'
+    '2026-10-24-batch10'
+)
+
+Write-Output '--- Check G: handoff batch index freshness ---'
+
+if (-not (Test-Path -LiteralPath $handoffRootPath -PathType Container)) {
+    Write-Output ("[SKIP] {0} not present (maintainer-local directory); nothing to check." -f $HandoffRelativePath)
+}
+else {
+    $handoffReadmePath = Join-Path -Path $handoffRootPath -ChildPath 'README.md'
+    if (-not (Test-Path -LiteralPath $handoffReadmePath -PathType Leaf)) {
+        Write-Output '[FAIL] docs/handoff/README.md not found (the batch index).'
+        Add-Violation 'Check G: docs/handoff/README.md is missing (batch index not readable).'
+    }
+    else {
+        $indexText = Get-Content -LiteralPath $handoffReadmePath -Raw -Encoding UTF8
+        if ($null -eq $indexText) { $indexText = '' }
+
+        $indexViolations = 0
+        $checkedBatches = 0
+        foreach ($entry in (Get-ChildItem -LiteralPath $handoffRootPath -Directory | Sort-Object Name)) {
+            if ($entry.Name -cin $HandoffIndexExemptDirs) { continue }
+            if ($entry.Name -cnotmatch $HandoffBatchDirPattern) { continue }
+
+            $reportFiles = @(
+                Get-ChildItem -LiteralPath $entry.FullName -File |
+                    Where-Object { $_.Name -ceq 'report.md' -or $_.Name -clike 'report-*.md' }
+            )
+            if ($reportFiles.Count -eq 0) { continue }
+
+            $batchDate = New-Object System.DateTime
+            if (-not [System.DateTime]::TryParseExact($entry.Name.Substring(0, 10), 'yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$batchDate)) {
+                Write-Output ("[FAIL] Batch directory date prefix is not a valid date: {0}" -f $entry.Name)
+                Add-Violation ("Check G: batch directory '{0}/{1}' has an unparseable date prefix." -f $HandoffRelativePath, $entry.Name)
+                $indexViolations++
+                continue
+            }
+
+            $ageDays = ((Get-Date).Date - $batchDate).TotalDays
+            if ($ageDays -le $HandoffIndexGraceDays) { continue }
+
+            $checkedBatches++
+            if (-not $indexText.Contains($entry.Name)) {
+                Write-Output ("[FAIL] Batch directory with execution report(s) older than {0} days is not listed in the handoff README index: {1}" -f $HandoffIndexGraceDays, $entry.Name)
+                Add-Violation ("Check G: batch directory '{0}/{1}' contains an execution report (report.md / report-*.md), is older than {2} days, and is missing from the README batch index." -f $HandoffRelativePath, $entry.Name, $HandoffIndexGraceDays)
+                $indexViolations++
+            }
+        }
+
+        if ($indexViolations -eq 0) {
+            Write-Output ("[OK] All {0} indexed-eligible batch directory(s) past the {1}-day grace period are listed in the index." -f $checkedBatches, $HandoffIndexGraceDays)
+        }
+    }
+}
+
+Write-Output ''
+
+# ---------------------------------------------------------------------------
+# Check H: research root naming (local-only input)
+# ---------------------------------------------------------------------------
+
+# Root-level entries of the gitignored research directory must follow the
+# new-style naming <yyyy-mm-dd>-<slug>.<md|csv|ps1> or be listed in the
+# frozen legacy exception table below (18 legacy items; may only shrink).
+$ResearchRelativePath = 'docs/research'
+$researchRootPath = Join-Path -Path $repoRootPath -ChildPath ($ResearchRelativePath.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
+
+$ResearchNewStylePattern = '^\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.(md|csv|ps1)$'
+$ResearchLegacyExceptions = @(
+    'RESEARCH-AFFECTED-COVERAGE-20261027.md'
+    'RESEARCH-AFFECTED-FULL-AUDIT-20261027.md'
+    'RESEARCH-AFFECTED-NARROW-20261027.md'
+    'RESEARCH-AFFECTED-SPEC-20261027.md'
+    'RESEARCH-AI-TEST-CONNECTION-20261014.md'
+    'RESEARCH-ARCH-REVIEW-20261028.md'
+    'RESEARCH-LAUNCHER-UX-PERF-20261016.md'
+    'RESEARCH-PANEL-EXPAND-PERF-20261013.md'
+    'RESEARCH-QUICKLAUNCH-20261014.md'
+    'DATA-AFFECTED-COVERAGE-MATRIX-20261027.csv'
+    'DATA-AFFECTED-COVERAGE-PROBE-20261027.ps1'
+    'DATA-AFFECTED-REPLAY-20261027.ps1'
+    'loop-2026-09.md'
+    'loop-2026-10.md'
+    'loop-2026-11.md'
+    'quicklaunch-brief-20261014.md'
+    'quicklaunch-proposal-zcode-20261014.md'
+    '_launcher-ux-perf-evidence'
+)
+
+Write-Output '--- Check H: research root naming ---'
+
+if (-not (Test-Path -LiteralPath $researchRootPath -PathType Container)) {
+    Write-Output ("[SKIP] {0} not present (maintainer-local directory); nothing to check." -f $ResearchRelativePath)
+}
+else {
+    $researchViolations = 0
+    foreach ($entry in (Get-ChildItem -LiteralPath $researchRootPath | Sort-Object Name)) {
+        if ($entry.Name -cmatch $ResearchNewStylePattern) { continue }
+        if ($ResearchLegacyExceptions -ccontains $entry.Name) { continue }
+
+        Write-Output ("[FAIL] Research root entry outside the new-style naming <yyyy-mm-dd>-<slug>.(md|csv|ps1) and not in the legacy exception table: {0}" -f $entry.Name)
+        Add-Violation ("Check H: research root entry '{0}/{1}' violates the naming whitelist and is not a frozen legacy exception." -f $ResearchRelativePath, $entry.Name)
+        $researchViolations++
+    }
+
+    if ($researchViolations -eq 0) {
+        Write-Output '[OK] Research root entries follow the new-style naming or the frozen legacy exception table.'
     }
 }
 
