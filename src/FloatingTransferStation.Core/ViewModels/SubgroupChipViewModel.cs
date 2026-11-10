@@ -16,6 +16,8 @@ public sealed class SubgroupChipViewModel : ObservableObject
     private bool _isFilterActive;
     private DefaultMarkerState _defaultMarkerState;
     private bool _isDropTarget;
+    private int _cardCount;
+    private string? _toolTipText;
 
     public SubgroupChipViewModel(int slot)
     {
@@ -67,6 +69,24 @@ public sealed class SubgroupChipViewModel : ObservableObject
     {
         get => _isDropTarget;
         set => SetProperty(ref _isDropTarget, value);
+    }
+
+    /// <summary>该槽卡片数（契约 #62）：该分类该槽全部卡（含置顶），窗口层在
+    /// RefreshSubgroupChips 触发点与既有集合变化/指派路径喂值；只消费于点击
+    /// 切换开态的驻留 ToolTip（关态不呈现）。</summary>
+    public int CardCount
+    {
+        get => _cardCount;
+        set => SetProperty(ref _cardCount, value);
+    }
+
+    /// <summary>驻留提示两行文本（契约 #62）：「&lt;chip 名&gt; · N 张卡片」＋手势
+    /// 提示（单击查看 · Ctrl+单击设为收集落点 · 双击改名）；窗口层按开关组稿——
+    /// 开关关时恒 null（模板 ToolTip 绑定 null 即不显示，现状零变化）。</summary>
+    public string? ToolTipText
+    {
+        get => _toolTipText;
+        set => SetProperty(ref _toolTipText, value);
     }
 
     public void BeginNameEdit()

@@ -155,6 +155,11 @@ public enum SubgroupDisplayMode
 /// 一次性偏好迁移版本戳（ExperimentalDefaultsMigration）：0＝未迁移，1＝实验
 /// 开关默认开启迁移已完成；启动装载后判定，戳 ≥ 1 后不再改动偏好——迁移后
 /// 用户显式关闭永不复翻。
+/// 子分组轨点击切换开关（2026-11-08 实验性，契约 #62；默认关＝零打扰，沿实验
+/// 开关先例）：开启后按钮轨手势重路由——悬停纯视觉（驻留计数/手势 ToolTip）、
+/// 裸单击 toggle 过滤、Ctrl+单击设收集落点（治 R13 悬停误触）；关闭＝悬停即进
+/// ＋单击设默认（现状）。只门控轨手势路由层，过滤状态机与全部消费点零改动；
+/// 不进 #59 迁移（无存量状态可变换）。旧配置缺字段免迁移回落关闭。
 /// 持久化为数据目录下的 preferences.json（原子写 + 备份回退）；
 /// 旧安装没有该文件或缺少新字段时全部取默认值。
 /// </summary>
@@ -186,7 +191,8 @@ public sealed record AppPreferences(
     bool ReviewMarkdownViewEnabled = true,
     SubgroupDisplayMode SubgroupDisplay = SubgroupDisplayMode.Off,
     bool DragOutAsFileEnabled = true,
-    int ExperimentalDefaultsMigrationVersion = 0)
+    int ExperimentalDefaultsMigrationVersion = 0,
+    bool SubgroupRailClickSwitchEnabled = false)
 {
     public static AppPreferences Default { get; } = new();
 }

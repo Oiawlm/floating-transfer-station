@@ -75,6 +75,8 @@ public partial class MainWindow
         // 激活桶内容增删/归组/GroupedView 纯重排（Move）同拍重评零指派引导条
         //（2026-11-06，#57 可用性扩展）：谓词读源集合，与空态单点共用本触发。
         UpdateGroupedViewGuidance();
+        // 增删卡改变槽计数（契约 #62 驻留提示口径）：与空态/引导条同拍喂数。
+        RefreshSubgroupChipHints();
     }
 
     private void ActivePanel_EmptyStateChanged(object? sender, PropertyChangedEventArgs e)
