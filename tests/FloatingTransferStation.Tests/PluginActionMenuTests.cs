@@ -106,18 +106,24 @@ public sealed class PluginActionMenuTests
         }
 
         /// <summary>反射调用内部执行入口并等待完成：UI 线程不得阻塞等待需要
-        /// Dispatcher 的续延，改为循环泵帧直到任务完成（上限防死循环）。</summary>
+        /// Dispatcher 的续延，改为循环泵帧直到任务完成。预算＝墙钟 10 秒
+        ///（泵帧预算加固，Issue #343 批次：帧数上限把完成时间绑在宿主每帧
+        /// 耗时上——执行链含 Task.Run 正则管线（预算 ≤2s）＋ UI 线程续延分发
+        /// ＋落盘 I/O，CI 负载下三现「未在泵帧预算内完成」误红（loop-2026-11
+        /// 台账）；墙钟预算与每帧耗时解耦，泵帧仍驱动续延分发，真挂死照旧
+        /// 10 秒响亮失败）。管线本身预算 ≤2s，10 秒＝5 倍余量。</summary>
         public void ExecuteAction(PluginActionHandle handle)
         {
             var task = (Task)typeof(MainWindow)
                 .GetMethod("ExecutePluginActionAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .Invoke(Window, [handle])!;
-            for (var i = 0; !task.IsCompleted && i < 500; i++)
+            var deadline = Environment.TickCount64 + 10_000;
+            while (!task.IsCompleted && Environment.TickCount64 < deadline)
             {
                 Pump(Window);
             }
 
-            Assert.IsTrue(task.IsCompleted, "插件动作执行未在泵帧预算内完成。");
+            Assert.IsTrue(task.IsCompleted, "插件动作执行未在时间预算（10 秒）内完成。");
             Pump(Window);
         }
 

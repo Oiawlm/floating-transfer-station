@@ -433,10 +433,10 @@ public partial class SettingsWindow : Window
         var current = WeChatQrOverlayCard.Opacity;
         WeChatQrOverlayCard.BeginAnimation(UIElement.OpacityProperty, null);
         WeChatQrOverlayCard.SetValue(UIElement.OpacityProperty, QrTextShownOpacity);
-        WeChatQrOverlayCard.BeginAnimation(
+        TrackedAnimationClocks.Begin(
+            WeChatQrOverlayCard,
             UIElement.OpacityProperty,
-            CreateQrOpacityAnimation(current, QrTextShownOpacity, DesignTokens.FastDurationMs, FadeAnimation.EnterEasing),
-            FadeAnimation.AnimationHandoffBehavior);
+            CreateQrOpacityAnimation(current, QrTextShownOpacity, DesignTokens.FastDurationMs, FadeAnimation.EnterEasing));
     }
 
     /// <summary>文字三元素（标题/微信号行/尾注）开层编排（Q5：不续走，按开层
@@ -462,7 +462,7 @@ public partial class SettingsWindow : Window
                 text.BeginAnimation(UIElement.OpacityProperty, null);
                 text.SetValue(UIElement.OpacityProperty, QrTextShownOpacity);
             };
-            text.BeginAnimation(UIElement.OpacityProperty, animation, FadeAnimation.AnimationHandoffBehavior);
+            TrackedAnimationClocks.Begin(text, UIElement.OpacityProperty, animation);
         }
     }
 
@@ -476,10 +476,10 @@ public partial class SettingsWindow : Window
             var current = text.Opacity;
             text.BeginAnimation(UIElement.OpacityProperty, null);
             text.SetValue(UIElement.OpacityProperty, QrTextClosedOpacity);
-            text.BeginAnimation(
+            TrackedAnimationClocks.Begin(
+                text,
                 UIElement.OpacityProperty,
-                CreateQrOpacityAnimation(current, QrTextClosedOpacity, DesignTokens.QrTextFadeOutMs, FadeAnimation.ExitEasing),
-                FadeAnimation.AnimationHandoffBehavior);
+                CreateQrOpacityAnimation(current, QrTextClosedOpacity, DesignTokens.QrTextFadeOutMs, FadeAnimation.ExitEasing));
         }
     }
 
@@ -490,10 +490,10 @@ public partial class SettingsWindow : Window
         var current = WeChatQrButton.Opacity;
         WeChatQrButton.BeginAnimation(UIElement.OpacityProperty, null);
         WeChatQrButton.SetValue(UIElement.OpacityProperty, QrTextClosedOpacity);
-        WeChatQrButton.BeginAnimation(
+        TrackedAnimationClocks.Begin(
+            WeChatQrButton,
             UIElement.OpacityProperty,
-            CreateQrOpacityAnimation(current, QrTextClosedOpacity, DesignTokens.QrThumbFadeMs, FadeAnimation.EnterEasing),
-            FadeAnimation.AnimationHandoffBehavior);
+            CreateQrOpacityAnimation(current, QrTextClosedOpacity, DesignTokens.QrThumbFadeMs, FadeAnimation.EnterEasing));
     }
 
     /// <summary>卡片收回编排（自持不透明度，收回关键帧全线性）：[0:当下值]→
@@ -506,10 +506,10 @@ public partial class SettingsWindow : Window
         var current = WeChatQrOverlayCard.Opacity;
         WeChatQrOverlayCard.BeginAnimation(UIElement.OpacityProperty, null);
         WeChatQrOverlayCard.SetValue(UIElement.OpacityProperty, QrTextShownOpacity);
-        WeChatQrOverlayCard.BeginAnimation(
+        TrackedAnimationClocks.Begin(
+            WeChatQrOverlayCard,
             UIElement.OpacityProperty,
-            CreateQrExitKeyFrames(current, QrTextShownOpacity, QrTextClosedOpacity),
-            FadeAnimation.AnimationHandoffBehavior);
+            CreateQrExitKeyFrames(current, QrTextShownOpacity, QrTextClosedOpacity));
     }
 
     /// <summary>缩略图收回编排（收回关键帧全线性，与卡片同时间轴）：[0:当下值]→
@@ -522,10 +522,10 @@ public partial class SettingsWindow : Window
         var current = WeChatQrButton.Opacity;
         WeChatQrButton.BeginAnimation(UIElement.OpacityProperty, null);
         WeChatQrButton.SetValue(UIElement.OpacityProperty, QrTextShownOpacity);
-        WeChatQrButton.BeginAnimation(
+        TrackedAnimationClocks.Begin(
+            WeChatQrButton,
             UIElement.OpacityProperty,
-            CreateQrExitKeyFrames(current, QrTextClosedOpacity, QrTextShownOpacity),
-            FadeAnimation.AnimationHandoffBehavior);
+            CreateQrExitKeyFrames(current, QrTextClosedOpacity, QrTextShownOpacity));
     }
 
     /// <summary>收回两段式关键帧（全线性，时间轴＝QrTextFadeOutMs→
@@ -584,18 +584,18 @@ public partial class SettingsWindow : Window
             WeChatQrOverlay.Visibility = Visibility.Collapsed;
             ResetQrTransitionState(QrTextClosedOpacity);
         };
-        WeChatQrOverlayCard.BeginAnimation(UIElement.OpacityProperty, cardFade, FadeAnimation.AnimationHandoffBehavior);
+        TrackedAnimationClocks.Begin(WeChatQrOverlayCard, UIElement.OpacityProperty, cardFade);
 
         var thumbCurrent = WeChatQrButton.Opacity;
         WeChatQrButton.BeginAnimation(UIElement.OpacityProperty, null);
         WeChatQrButton.SetValue(UIElement.OpacityProperty, QrTextShownOpacity);
-        WeChatQrButton.BeginAnimation(
+        TrackedAnimationClocks.Begin(
+            WeChatQrButton,
             UIElement.OpacityProperty,
             new DoubleAnimation(thumbCurrent, QrTextShownOpacity, TimeSpan.FromMilliseconds(DesignTokens.QrZoomOutMs))
             {
                 FillBehavior = FillBehavior.HoldEnd
-            },
-            FadeAnimation.AnimationHandoffBehavior);
+            });
     }
 
     /// <summary>文字三元素快照（标题/微信号行/尾注：容器级过渡的延迟浮现面）。</summary>
@@ -728,22 +728,22 @@ public partial class SettingsWindow : Window
             _qrZoomTranslate.Y = 0d;
         }
 
-        _qrZoomScale!.BeginAnimation(
+        TrackedAnimationClocks.Begin(
+            _qrZoomScale!,
             ScaleTransform.ScaleXProperty,
-            CreateQrZoomAnimation(fromScaleX, toScaleX, duration, easing, fill),
-            FadeAnimation.AnimationHandoffBehavior);
-        _qrZoomScale.BeginAnimation(
+            CreateQrZoomAnimation(fromScaleX, toScaleX, duration, easing, fill));
+        TrackedAnimationClocks.Begin(
+            _qrZoomScale!,
             ScaleTransform.ScaleYProperty,
-            CreateQrZoomAnimation(fromScaleY, toScaleY, duration, easing, fill),
-            FadeAnimation.AnimationHandoffBehavior);
-        _qrZoomTranslate!.BeginAnimation(
+            CreateQrZoomAnimation(fromScaleY, toScaleY, duration, easing, fill));
+        TrackedAnimationClocks.Begin(
+            _qrZoomTranslate!,
             TranslateTransform.XProperty,
-            translateXAnimation,
-            FadeAnimation.AnimationHandoffBehavior);
-        _qrZoomTranslate.BeginAnimation(
+            translateXAnimation);
+        TrackedAnimationClocks.Begin(
+            _qrZoomTranslate!,
             TranslateTransform.YProperty,
-            translateYAnimation,
-            FadeAnimation.AnimationHandoffBehavior);
+            translateYAnimation);
     }
 
     /// <summary>全对象终态卫生（原 ResetQrZoomTransform 扩展更名）：容器四属性
