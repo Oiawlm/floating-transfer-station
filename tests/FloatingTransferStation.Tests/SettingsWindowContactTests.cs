@@ -35,6 +35,11 @@ namespace FloatingTransferStation.Tests;
 /// 对象定格终态。岛式码面（2026-11-08）：双宿主（缩略图模板与放大层容器）拆
 /// 阴影层＋码面两子层——阴影单点复用/派生共享 CardShadowLayerStyle、随主题
 /// 字典活切换，码面双主题恒白（白底可扫性主题不变量升格为岛式规范）。
+/// 采样基建（2026-11-12 修订，Issue #343）：采样族全部迁受控帧源
+/// QrControlledAnimationDriver（TrackedAnimationClocks 显式时钟登记＋冻结＋
+/// SeekAlignedToLastTick 步进），采样密度＝窗长/步长的构造性质、不再依赖宿主
+/// 计时器分辨率；真实管线冒烟（QrOverlay_ExitZoomAnimatesTowardSourceAndEndsAtIdentity）
+/// 保留——真实时钟跑完整条动画、只断言终态与在飞判别，不依赖采样密度。
 /// </summary>
 [TestClass]
 public sealed class SettingsWindowContactTests
@@ -1081,11 +1086,15 @@ public sealed class SettingsWindowContactTests
             CompleteLayout(settings);
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
             var (scale, translate) = QrZoomTransforms(settings);
+            // 受控帧源（契约 #24 采样基建修订，Issue #343）：触发与冻结同回
+            // 合，入场时钟恒冻结在起点；虚拟推进到入场约 1/4 处（450ms 入场）
+            // 再 Esc——缩放已明显离开源尺寸，收回才有可观测的飞行段（过早打断
+            // From≈To 无动画可采样）。
+            using var driver = QrControlledAnimationDriver.Attach();
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
-            // 泵入入场约 1/4 处（450ms 入场）再 Esc：缩放已明显离开源尺寸，
-            // 收回才有可观测的飞行段（过早打断 From≈To 无动画可采样）。
-            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(100));
+            driver.Freeze();
+            driver.StepTo(100);
 
             var escape = new KeyEventArgs(
                 Keyboard.PrimaryDevice,
@@ -1102,11 +1111,12 @@ public sealed class SettingsWindowContactTests
             Assert.IsFalse(
                 FadeAnimation.GetIsActive((Border)settings.FindName("WeChatQrScrim")!),
                 "Esc 后层立即进入关闭路径（遮罩纱 IsActive 即刻翻 false）。");
-            // 收回途中采样：ScaleX 仍在飞行区间且单调递减（非瞬回恒等）。
-            var samples = SampleScaleDuringExit(settings, scale, pumpMs: 160);
+            // 收回途中采样：ScaleX 仍在飞行区间且单调递减（非瞬回恒等）——
+            // 受控时钟逐帧取值，采样密度是构造性质。
+            var samples = SampleScaleDuringExit(driver, scale, windowMs: 160);
             Assert.IsTrue(
                 samples.Count >= 3,
-                $"采样器必须在收回途中取到值（时钟在泵内推进；采样数={samples.Count}）。");
+                $"采样器必须在收回途中取到值（受控时钟逐帧推进；采样数={samples.Count}）。");
             Assert.IsTrue(
                 samples.All(value => value > 0.19d && value < 0.99d),
                 $"收回中途必须处于非恒等飞行态（未瞬回；下界＝按钮含框/容器宽比≈0.19；采样={FormatSamples(samples)}）。");
@@ -1114,6 +1124,9 @@ public sealed class SettingsWindowContactTests
                 samples.Zip(samples.Skip(1), (a, b) => b <= a + 1e-6).All(pair => pair),
                 $"收回途中 ScaleX 必须单调递减（动画续收；采样={FormatSamples(samples)}）。");
 
+            // 虚拟推进越过收回末端（250ms），交还真实时钟后单一完成点收尾。
+            driver.StepTo(driver.NowMs + DesignTokens.QrZoomOutMs + QrControlledAnimationDriver.StepMs);
+            driver.Release();
             PumpUntil(settings.Dispatcher, () => overlay.Visibility == Visibility.Collapsed);
             Assert.AreEqual(Visibility.Collapsed, overlay.Visibility, "Esc 在动画中途立即关层。");
             AssertQrTransformIdentity(scale, translate, "收回完成后四属性恒等（零残留）。");
@@ -1129,8 +1142,13 @@ public sealed class SettingsWindowContactTests
     public void QrOverlay_ExitZoomAnimatesTowardSourceAndEndsAtIdentity()
     {
         // 动效开：入场动画满（恒等定格）后单击关层——收回自当下恒等态动画回
-        // 当下实测源矩形（共用同一插值路径原路返回），收途中非恒等递减，
-        // 终态塌缩＋四属性恒等（HoldEnd 终值经 Completed 生命周期复位）。
+        // 当下实测源矩形（共用同一插值路径原路返回），终态塌缩＋四属性恒等
+        //（HoldEnd 终值经 Completed 生命周期复位）。真实管线冒烟（契约 #24
+        // 采样基建修订，Issue #343）：真实时钟跑完整条动画、不依赖采样密度——
+        // 收回飞行形状断言（≥3 采样/飞行区间/单调递减）与本例逐字相同的集合
+        // 由受控帧源例 QrOverlay_EscapeDuringEntranceStartsAnimatedExit 确定性
+        // 承载；本例以「泵 40ms 调度时间后层保持可见」判别动画路径真实在飞
+        //（收回 250ms vs 即时塌缩路径 0ms 即塌，泵窗余量 6 倍）。
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
         var window = CreateWindow(directory, preferencesStore);
@@ -1147,16 +1165,11 @@ public sealed class SettingsWindowContactTests
             Assert.AreEqual(1d, scale.ScaleX, "入场完成应处于恒等态（收回起点）。");
 
             RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
-            var samples = SampleScaleDuringExit(settings, scale, pumpMs: 160);
-            Assert.IsTrue(
-                samples.Count >= 3,
-                $"采样器必须在收回途中取到值（采样数={samples.Count}）。");
-            Assert.IsTrue(
-                samples.All(value => value > 0.19d && value < 0.99d),
-                $"收回中途必须非恒等（动画在飞；下界＝按钮含框/容器宽比≈0.19；采样={FormatSamples(samples)}）。");
-            Assert.IsTrue(
-                samples.Zip(samples.Skip(1), (a, b) => b <= a + 1e-6).All(pair => pair),
-                $"收回途中 ScaleX 必须单调递减（原路缩回；采样={FormatSamples(samples)}）。");
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(40));
+            Assert.AreEqual(
+                Visibility.Visible,
+                overlay.Visibility,
+                "收回进行中层保持可见（真实动画在飞，非即时塌缩）。");
 
             PumpUntil(settings.Dispatcher, () => overlay.Visibility == Visibility.Collapsed);
             Assert.AreEqual(Visibility.Collapsed, overlay.Visibility, "收回完成＝层塌缩。");
@@ -1183,16 +1196,20 @@ public sealed class SettingsWindowContactTests
             CompleteLayout(settings);
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
             var (scale, translate) = QrZoomTransforms(settings);
+            // 受控帧源（Issue #343）：入场虚拟推进到 120ms（中途）读当下插值态，
+            // 再单击反向收回——新收回时钟即时冻结、自当下虚拟时刻续算。
+            using var driver = QrControlledAnimationDriver.Attach();
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
-            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(120));
+            driver.Freeze();
+            driver.StepTo(120);
             var reversalSample = scale.ScaleX;
             Assert.IsTrue(
                 reversalSample > 0.2d && reversalSample < 0.99d,
                 $"入场中途应处于非恒等飞行态（实测 ScaleX={reversalSample:0.###}）。");
 
             RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
-            var samples = SampleScaleDuringExit(settings, scale, pumpMs: 120);
+            var samples = SampleScaleDuringExit(driver, scale, windowMs: 120);
             Assert.IsTrue(
                 samples.Count >= 2,
                 $"反向收回途中必须取到采样（采样数={samples.Count}）。");
@@ -1203,6 +1220,8 @@ public sealed class SettingsWindowContactTests
                 samples.Zip(samples.Skip(1), (a, b) => b <= a + 1e-6).All(pair => pair),
                 $"反向收回途中 ScaleX 必须递减（从当下态继续收；采样={FormatSamples(samples)}）。");
 
+            driver.StepTo(driver.NowMs + DesignTokens.QrZoomOutMs + QrControlledAnimationDriver.StepMs);
+            driver.Release();
             PumpUntil(settings.Dispatcher, () => overlay.Visibility == Visibility.Collapsed);
             Assert.AreEqual(Visibility.Collapsed, overlay.Visibility, "反向收回完成＝层塌缩。");
             AssertQrTransformIdentity(scale, translate, "反向收回完成态四属性恒等。");
@@ -1250,9 +1269,10 @@ public sealed class SettingsWindowContactTests
     [STATestMethod]
     public void QrOverlay_ZoomCompletesAtIdentityTransform()
     {
-        // 动效开：容器入场期间以调度器采样器收中途值（PushFrame 长泵内条件
-        // 只在首尾被求值，中途态必须由 Timer 采样捕获），泵过 450ms 入场全程
-        // 后断言 Scale/Translate 回恒等基值（FillBehavior.Stop，零残留）。
+        // 动效开：容器入场期间以受控帧源逐帧收中途值（契约 #24 采样基建修订，
+        // Issue #343——中途态由受控时钟步进取值，密度＝构造性质），虚拟推进过
+        // 450ms 入场全程后断言 Scale/Translate 回恒等基值（FillBehavior.Stop，
+        // 零残留）。
         using var directory = new TestDirectory();
         var preferencesStore = new RecordingPreferencesStore();
         var window = CreateWindow(directory, preferencesStore);
@@ -1262,24 +1282,20 @@ public sealed class SettingsWindowContactTests
             CompleteLayout(settings);
             var (scale, translate) = QrZoomTransforms(settings);
             var samples = new List<double>();
-            var sampler = new DispatcherTimer(DispatcherPriority.Render, settings.Dispatcher)
-            {
-                Interval = TimeSpan.FromMilliseconds(10)
-            };
-            sampler.Tick += (_, _) => samples.Add(scale.ScaleX);
-
-            sampler.Start();
+            using var driver = QrControlledAnimationDriver.Attach();
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
-            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
-            sampler.Stop();
+            driver.Freeze();
+            driver.StepThrough(600, _ => samples.Add(scale.ScaleX));
 
             Assert.IsTrue(
                 samples.Count > 0,
-                "采样器必须在入场期间取到值（时钟在泵内推进）。");
+                "采样器必须在入场期间取到值（受控时钟逐帧推进）。");
             Assert.IsTrue(
                 samples.Any(value => value > 0.1d && value < 0.99d),
                 $"入场中途必须采样到非恒等缩放态（动画确实在飞；采样={string.Join(",", samples.Select(v => v.ToString("0.###")))}）。");
+            driver.Release();
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(1));
             AssertQrTransformIdentity(scale, translate, "入场收尾必须回到恒等（无残留变换）。");
         }
         finally
@@ -1305,35 +1321,29 @@ public sealed class SettingsWindowContactTests
             var button = (Button)settings.FindName("WeChatQrButton")!;
             var (scale, translate) = QrZoomTransforms(settings);
 
-            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
-                new RoutedEventArgs(ButtonBase.ClickEvent));
             // 期望比例必须在开层之后取——容器首次开层前 Collapsed 不参与布局
-            //（ActualWidth=0）；开层路径 UpdateLayout 后尺寸即定稿。
-            var expectedScaleX = button.ActualWidth / card.ActualWidth;
-            var expectedScaleY = button.ActualHeight / card.ActualHeight;
-            // 起飞窗采样：Render 优先级 Timer 捕获入场早段（PushFrame 长泵内裸读
-            // 只见动画首尾提交值，中途态必须由 Timer 采样捕获——ZoomCompletes 口
-            // 径）；取 sX 落入「期望比例＋(0, 0.11]」的首个样本为贴地窗，比例断言
-            // 窗口化以吸收采样时钟抖动。
+            //（ActualWidth=0）；开层路径 UpdateLayout 后尺寸即定稿（布局静态，
+            // 冻结时钟不影响测量）。
             var fromSample = (Sx: 0d, Sy: 0d);
             var captured = false;
-            var sampler = new DispatcherTimer(DispatcherPriority.Render, settings.Dispatcher)
-            {
-                Interval = TimeSpan.FromMilliseconds(5)
-            };
-            sampler.Tick += (_, _) =>
+            using var driver = QrControlledAnimationDriver.Attach();
+            ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent));
+            driver.Freeze();
+            var expectedScaleX = button.ActualWidth / card.ActualWidth;
+            var expectedScaleY = button.ActualHeight / card.ActualHeight;
+            // 起飞窗采样：受控帧源逐帧捕获入场早段（契约 #24 采样基建修订，
+            // Issue #343——中途态由受控时钟步进取值，密度＝构造性质；ZoomCompletes
+            // 口径）；取 sX 落入「期望比例＋(0, 0.11]」的首个样本为贴地窗。
+            driver.StepThrough(600, _ =>
             {
                 if (!captured &&
                     scale.ScaleX > expectedScaleX && scale.ScaleX <= expectedScaleX + 0.11)
                 {
                     fromSample = (scale.ScaleX, scale.ScaleY);
                     captured = true;
-                    sampler.Stop();
                 }
-            };
-            sampler.Start();
-            PumpUntil(settings.Dispatcher, () => captured);
-            sampler.Stop();
+            });
 
             Assert.IsTrue(
                 captured,
@@ -1349,7 +1359,8 @@ public sealed class SettingsWindowContactTests
                 Math.Abs(fromSample.Sx - fromSample.Sy) > 0.015,
                 $"from 几何必须非等比（方→矩形形变；实测 sX={fromSample.Sx:0.###}、sY={fromSample.Sy:0.###}）。");
 
-            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+            driver.Release();
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(1));
             AssertQrTransformIdentity(scale, translate, "容器入场收尾回到恒等（终态零残留）。");
         }
         finally
@@ -1425,24 +1436,21 @@ public sealed class SettingsWindowContactTests
             var footnote = (System.Windows.UIElement)settings.FindName("WeChatQrFootnote")!;
             var thumb = (System.Windows.UIElement)settings.FindName("WeChatQrButton")!;
             var (scale, translate) = QrZoomTransforms(settings);
+            // 受控帧源（契约 #24 采样基建修订，Issue #343）：入场虚拟推进到恒等
+            // 定格，关层后逐帧采收回全程四元组（密度＝构造性质）。
+            using var driver = QrControlledAnimationDriver.Attach();
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
-            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+            driver.Freeze();
+            driver.StepTo(600);
             Assert.AreEqual(1d, title.Opacity, "前置：落位后标题应为 1。");
 
             RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
-            // 关层早段：Render 优先级 Timer 捕获收回全程四元组（文字三元素＋容器
-            // scale；裸条件轮询只见动画首尾提交值，中途态必须由 Timer 采样捕获）。
+            // 关层早段：受控时钟逐帧捕获收回全程四元组（文字三元素＋容器 scale；
+            // 中途态由受控 seek 取值，裸条件轮询只见动画首尾提交值）。
             var samples = new List<(double Scale, double Title, double IdRow, double Footnote)>();
-            var sampler = new DispatcherTimer(DispatcherPriority.Render, settings.Dispatcher)
-            {
-                Interval = TimeSpan.FromMilliseconds(5)
-            };
-            sampler.Tick += (_, _) =>
-                samples.Add((scale.ScaleX, title.Opacity, idRow.Opacity, footnote.Opacity));
-            sampler.Start();
-            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(200));
-            sampler.Stop();
+            driver.StepThrough(driver.NowMs + 200, _ =>
+                samples.Add((scale.ScaleX, title.Opacity, idRow.Opacity, footnote.Opacity)));
             Assert.IsTrue(
                 samples.Count >= 10,
                 $"收回段必须被采样捕获（采样数={samples.Count}）。");
@@ -1462,6 +1470,8 @@ public sealed class SettingsWindowContactTests
                 flight.First().Title >= flight.Last().Title,
                 $"飞行段标题单调下降（首={flight.First().Title:0.###}、末={flight.Last().Title:0.###}）。");
 
+            driver.StepTo(driver.NowMs + DesignTokens.QrZoomOutMs + QrControlledAnimationDriver.StepMs);
+            driver.Release();
             PumpUntil(settings.Dispatcher, () => overlay.Visibility == Visibility.Collapsed);
             Assert.AreEqual(0d, title.Opacity, "收回完成后标题基值 0（层关静止态）。");
             Assert.AreEqual(0d, idRow.Opacity, "收回完成后微信号行基值 0。");
@@ -1491,30 +1501,33 @@ public sealed class SettingsWindowContactTests
             var overlay = (Grid)settings.FindName("WeChatQrOverlay")!;
             var title = (System.Windows.UIElement)settings.FindName("WeChatQrTitle")!;
             var (scale, translate) = QrZoomTransforms(settings);
+            // 受控帧源（契约 #24 采样基建修订，Issue #343）：入场虚拟推进到恒等
+            // 定格后关层；关中途再开在受控帧回调内触发——再开新起的时钟由登记
+            // 回调即时冻结、epoch 记当下虚拟时刻，续走判定不再依赖采样供给。
+            using var driver = QrControlledAnimationDriver.Attach();
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
-            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+            driver.Freeze();
+            driver.StepTo(600);
 
             RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
-            // 关中途再开：Render 优先级 Timer 捕获收回中段首个落入 (0.35, 0.70)
-            // 的样本，并在**同一调度器批次内立刻再开**（再开若等到长泵返回，收回
-            // 动画可能已 Completed 复位恒等——续走断言的时序前提即「收回在飞时
-            // 再开」）；随后同采样器捕获再开入场首段提交值。
+            // 关中途再开：受控帧捕获收回中段首个落入 (0.35, 0.70) 的样本，并在
+            // **同一受控帧内立刻再开**（再开若等到收回末端，收回动画已 Completed
+            // 复位恒等——续走断言的时序前提即「收回在飞时再开」）；随后同帧源
+            // 捕获再开入场首段提交值。
             var midExitSample = 0d;
+            var reopenedAtMs = 0L;
             var reopened = false;
             var reopenSamples = new List<double>();
             var reopenTitleSamples = new List<double>();
-            var sampler = new DispatcherTimer(DispatcherPriority.Render, settings.Dispatcher)
-            {
-                Interval = TimeSpan.FromMilliseconds(5)
-            };
-            sampler.Tick += (_, _) =>
+            driver.StepThrough(driver.NowMs + DesignTokens.QrZoomOutMs, _ =>
             {
                 if (!reopened)
                 {
                     if (scale.ScaleX is > 0.35d and < 0.7d)
                     {
                         midExitSample = scale.ScaleX;
+                        reopenedAtMs = driver.NowMs;
                         ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                             new RoutedEventArgs(ButtonBase.ClickEvent));
                         reopened = true;
@@ -1530,10 +1543,7 @@ public sealed class SettingsWindowContactTests
                     reopenSamples.Add(scale.ScaleX);
                     reopenTitleSamples.Add(title.Opacity);
                 }
-            };
-            sampler.Start();
-            PumpUntil(settings.Dispatcher, () => reopened && reopenSamples.Count >= 3);
-            sampler.Stop();
+            });
             Assert.IsTrue(
                 midExitSample > 0.3d && midExitSample < 0.99d,
                 $"关中途应处于非恒等飞行态（实测 ScaleX={midExitSample:0.###}）。");
@@ -1551,7 +1561,9 @@ public sealed class SettingsWindowContactTests
                 $"文字不续走：再开后首段标题须仍为基值 0（重排队、延迟淡入未起步；" +
                 $"采样={FormatSamples(reopenTitleSamples)}）。");
 
-            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+            driver.StepTo(reopenedAtMs + 600);
+            driver.Release();
+            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(1));
             AssertQrTransformIdentity(scale, translate, "续走入场完成＝容器恒等。");
             Assert.AreEqual(1d, title.Opacity, "重排队文字落位后定格 1。");
         }
@@ -1563,7 +1575,8 @@ public sealed class SettingsWindowContactTests
 
     // ---- d1 2026-11-08：关闭回退「对齐落位」重编排阈值断言（report-plan-d.md
     //      §三.8 A-E；契约 #24 修订，Issue #325）——时间轴由容器几何反解，
-    //      消除挂钟与采样抖动（10ms 网格确定性采样，不真起渲染帧循环）----
+    //      消除挂钟与采样抖动；2026-11-12 起采样经受控帧源逐帧推进（Issue
+    //      #343：密度＝构造性质，不真起渲染帧循环、不依赖宿主性能）----
 
     [STATestMethod]
     public void QrOverlay_ExitThumbStaysHiddenUntilContainerNearlyHome()
@@ -1583,15 +1596,21 @@ public sealed class SettingsWindowContactTests
             var button = (Button)settings.FindName("WeChatQrButton")!;
             var card = (Grid)settings.FindName("WeChatQrOverlayCard")!;
             var (scale, _) = QrZoomTransforms(settings);
+            // 受控帧源（契约 #24 采样基建修订，Issue #343）：入场虚拟推进到恒等
+            // 定格，关层后受控逐帧采样（密度＝构造性质）。
+            using var driver = QrControlledAnimationDriver.Attach();
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
-            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+            driver.Freeze();
+            driver.StepTo(600);
             // 收回终末比例＝页脚缩略图按钮含框宽/容器宽（纯平移链路宽度直通；
-            // 必须开层后测——容器 Collapsed 不参与布局）。
+            // 必须开层后测——容器 Collapsed 不参与布局；布局静态，冻结不影响）。
             var landingScale = button.ActualWidth / card.ActualWidth;
 
             RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
-            var samples = SampleQrExitChoreography(settings, scale, scrim, 260);
+            var samples = SampleQrExitChoreography(driver, settings, scale, scrim, 260);
+            driver.StepTo(driver.NowMs + QrControlledAnimationDriver.StepMs);
+            driver.Release();
             Assert.IsTrue(
                 samples.Count >= 8,
                 $"收回段必须被采样捕获（采样数={samples.Count}）。");
@@ -1646,13 +1665,19 @@ public sealed class SettingsWindowContactTests
             var button = (Button)settings.FindName("WeChatQrButton")!;
             var card = (Grid)settings.FindName("WeChatQrOverlayCard")!;
             var (scale, _) = QrZoomTransforms(settings);
+            // 受控帧源（契约 #24 采样基建修订，Issue #343）：入场虚拟推进到恒等
+            // 定格，关层后受控逐帧采样（密度＝构造性质）。
+            using var driver = QrControlledAnimationDriver.Attach();
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
-            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+            driver.Freeze();
+            driver.StepTo(600);
             var landingScale = button.ActualWidth / card.ActualWidth;
 
             RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
-            var samples = SampleQrExitChoreography(settings, scale, scrim, 260);
+            var samples = SampleQrExitChoreography(driver, settings, scale, scrim, 260);
+            driver.StepTo(driver.NowMs + QrControlledAnimationDriver.StepMs);
+            driver.Release();
             Assert.IsTrue(
                 samples.Count >= 8,
                 $"收回段必须被采样捕获（采样数={samples.Count}）。");
@@ -1707,13 +1732,19 @@ public sealed class SettingsWindowContactTests
             var button = (Button)settings.FindName("WeChatQrButton")!;
             var card = (Grid)settings.FindName("WeChatQrOverlayCard")!;
             var (scale, _) = QrZoomTransforms(settings);
+            // 受控帧源（契约 #24 采样基建修订，Issue #343）：入场虚拟推进到恒等
+            // 定格，关层后受控逐帧采样（密度＝构造性质）。
+            using var driver = QrControlledAnimationDriver.Attach();
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
-            PumpFor(settings.Dispatcher, TimeSpan.FromMilliseconds(600));
+            driver.Freeze();
+            driver.StepTo(600);
             var landingScale = button.ActualWidth / card.ActualWidth;
 
             RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
-            var samples = SampleQrExitChoreography(settings, scale, scrim, 260);
+            var samples = SampleQrExitChoreography(driver, settings, scale, scrim, 260);
+            driver.StepTo(driver.NowMs + QrControlledAnimationDriver.StepMs);
+            driver.Release();
             Assert.IsTrue(
                 samples.Count >= 8,
                 $"收回段必须被采样捕获（采样数={samples.Count}）。");
@@ -1852,6 +1883,9 @@ public sealed class SettingsWindowContactTests
             var button = (Button)settings.FindName("WeChatQrButton")!;
             var card = (Grid)settings.FindName("WeChatQrOverlayCard")!;
             var (scale, _) = QrZoomTransforms(settings);
+            // 受控帧源（契约 #24 采样基建修订，Issue #343）：动效关开层无动画
+            // （登记表空），翻转动效开关后冻结——关层时钟经登记回调即时接管。
+            using var driver = QrControlledAnimationDriver.Attach();
             ((Button)settings.FindName("WeChatQrButton")!).RaiseEvent(
                 new RoutedEventArgs(ButtonBase.ClickEvent));
             CompleteLayout(settings);
@@ -1861,9 +1895,12 @@ public sealed class SettingsWindowContactTests
                 "前置：动效关开层缩略图定格 1（残留复现前提）。");
             // 动效开关走真实 UI 路径（Checked → ApplyPreferences）翻转运行中偏好。
             ((CheckBox)settings.FindName("AnimationsToggle")!).IsChecked = true;
+            driver.Freeze();
 
             RaisePointUp(overlay, UIElement.MouseLeftButtonUpEvent);
-            var samples = SampleQrExitChoreography(settings, scale, scrim, 260);
+            var samples = SampleQrExitChoreography(driver, settings, scale, scrim, 260);
+            driver.StepTo(driver.NowMs + QrControlledAnimationDriver.StepMs);
+            driver.Release();
             Assert.IsTrue(
                 samples.Count >= 8,
                 $"收回段必须被采样捕获（采样数={samples.Count}）。");
@@ -1924,62 +1961,28 @@ public sealed class SettingsWindowContactTests
         double MaskOpacity,
         double CardOpacity);
 
-    /// <summary>泵内高频采样帧（采样基建单点，2026-11-09 根因修复，Issue #335）：
-    /// 采样密度瓶颈不在「被动 vs 主动」，而在系统计时器分辨率——DispatcherTimer
-    /// 到期与 WPF 动画时钟的帧推进（无合成器的测试进程挂在系统计时器管线）同受
-    /// 默认 ~15.6ms 粒度限制，CI 负载叠加到期投递延迟后被动 10ms tick 在 260ms
-    /// 动画窗内仅 3-8 个有效样本（PR #339 CI 两笔采样数门槛红）。本帧内
-    /// timeBeginPeriod(1) 把进程计时器分辨率提至 1ms＋采样间隔降至 2ms——
-    /// 样本密度≈动画帧密度（约 10 倍提升，CI 负载下仍有数量级裕量）；计时器
-    /// 采样保留（每 tick 之间 dispatcher 有空档处理渲染/时钟管线，动画帧照常
-    /// 推进——忙循环回调链会持续占用 Render 队列、饿死帧推进使时钟冻结，
-    /// 本机实证收回全程读到恒等快照值）。进程级粒度提升随 timeEndPeriod 复原，
-    /// 不影响用户可见动画时长与效果。</summary>
-    private static void PumpSamplingFrame(Dispatcher dispatcher, int durationMs, Action sample)
-    {
-        timeBeginPeriod(1);
-        try
-        {
-            var sampler = new DispatcherTimer(DispatcherPriority.Render, dispatcher)
-            {
-                Interval = TimeSpan.FromMilliseconds(2)
-            };
-            sampler.Tick += (_, _) => sample();
-            sampler.Start();
-            PumpFor(dispatcher, TimeSpan.FromMilliseconds(durationMs));
-            sampler.Stop();
-        }
-        finally
-        {
-            timeEndPeriod(1);
-        }
-    }
-
-    [System.Runtime.InteropServices.DllImport("winmm.dll", SetLastError = true)]
-    private static extern uint timeBeginPeriod(uint period);
-
-    [System.Runtime.InteropServices.DllImport("winmm.dll", SetLastError = true)]
-    private static extern uint timeEndPeriod(uint period);
-
-    /// <summary>收回编排多属性确定性采样：泵内高频采样帧同步采四属性
-    ///（PumpSamplingFrame 口径，2026-11-09 密度根因修复）；前置采样
-    ///（收回启动前 ScaleX 恒等基值）与尾随采样（收回完成复位后的恒等态——
-    /// p 反解为 0 而终值 thumb=1/card=0 属终态卫生而非编排途中）均剥除，同
-    /// SampleScaleDuringExit 的前置剥除口径。时间轴不经挂钟——由容器进度反解
-    ///（QrExitProgressToMs）。</summary>
+    /// <summary>收回编排多属性确定性采样（受控帧源口径，契约 #24 采样基建修订，
+    /// Issue #343）：QrControlledAnimationDriver 以固定步长把收回窗虚拟推进到底、
+    /// 每帧同步采四属性——采样密度＝窗长/步长的构造性质（10ms 步长下 260ms 窗
+    /// 恒 26 帧），不再依赖宿主计时器分辨率与 CI 负载（2026-11-09 的
+    /// timeBeginPeriod＋2ms 间隔供给加密未消除「供给依赖宿主性能」的结构根因，
+    /// 本修订以受控推进根治）；前置采样（收回启动前 ScaleX 恒等基值）与尾随
+    /// 采样（收回完成复位后的恒等态——p 反解为 0 而终值 thumb=1/card=0 属终态
+    /// 卫生而非编排途中）均剥除，同 SampleScaleDuringExit 的前置剥除口径。时间
+    /// 轴不经挂钟——由容器进度反解（QrExitProgressToMs）。</summary>
     private static List<QrExitChoreographySample> SampleQrExitChoreography(
+        QrControlledAnimationDriver driver,
         SettingsWindow settings,
         ScaleTransform scale,
         UIElement mask,
-        int pumpMs)
+        int windowMs)
     {
         var thumb = (System.Windows.UIElement)settings.FindName("WeChatQrButton")!;
         var card = (System.Windows.UIElement)settings.FindName("WeChatQrOverlayCard")!;
         var samples = new List<QrExitChoreographySample>();
-        PumpSamplingFrame(
-            settings.Dispatcher,
-            pumpMs,
-            () => samples.Add(new QrExitChoreographySample(
+        driver.StepThrough(
+            driver.NowMs + windowMs,
+            _ => samples.Add(new QrExitChoreographySample(
                 scale.ScaleX, thumb.Opacity, mask.Opacity, card.Opacity)));
         while (samples.Count > 0 && samples[0].ScaleX >= 0.999d)
         {
@@ -2078,17 +2081,17 @@ public sealed class SettingsWindowContactTests
         return ((ScaleTransform)group.Children[0], (TranslateTransform)group.Children[1]);
     }
 
-    /// <summary>收回途中 ScaleX 采样：泵内高频采样帧逐次读 ScaleX（收回动画
-    /// 飞行段的当下插值态捕获；PumpSamplingFrame 口径，2026-11-09 密度根因
-    /// 修复——同根因单点）；收回启动后首帧推进前读到的是恒等基值，先剥掉
-    /// 这类前置采样。</summary>
+    /// <summary>收回途中 ScaleX 采样（受控帧源口径，契约 #24 采样基建修订，
+    /// Issue #343）：QrControlledAnimationDriver 逐帧读 ScaleX（收回动画飞行段
+    /// 的当下插值态捕获，密度＝构造性质，不依赖宿主性能）；收回启动后首帧
+    /// 推进前读到的是恒等基值，先剥掉这类前置采样。</summary>
     private static List<double> SampleScaleDuringExit(
-        SettingsWindow settings,
+        QrControlledAnimationDriver driver,
         ScaleTransform scale,
-        int pumpMs)
+        int windowMs)
     {
         var samples = new List<double>();
-        PumpSamplingFrame(settings.Dispatcher, pumpMs, () => samples.Add(scale.ScaleX));
+        driver.StepThrough(driver.NowMs + windowMs, _ => samples.Add(scale.ScaleX));
         while (samples.Count > 0 && samples[0] >= 0.999d)
         {
             samples.RemoveAt(0);

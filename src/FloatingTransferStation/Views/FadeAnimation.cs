@@ -166,7 +166,9 @@ public static class FadeAnimation
             };
         }
 
-        element.BeginAnimation(UIElement.OpacityProperty, animation, AnimationHandoffBehavior);
+        // 经时钟登记缝应用（契约 #24 采样基建修订，Issue #343）：与时间线重载
+        // 逐位等价，显式时钟句柄供测试受控帧源接管；生产默认零变化。
+        TrackedAnimationClocks.Begin(element, UIElement.OpacityProperty, animation);
     }
 
     private static void ApplyImmediateState(UIElement element, bool isActive)
