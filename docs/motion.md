@@ -8,7 +8,7 @@
 
 ## 一、档位（时长阶梯）
 
-三档取自微软 `timing-and-easing` 官方表（Win11 Fluent 基线，调研存档 `docs/research/2026-09-22-ui-motion-resources.md`）：
+三档取自微软 `timing-and-easing` 官方表（Win11 Fluent 基线，调研出处指针见 `docs/design.md` §二首段——维护者本地资料不入库，不再重复本地路径）：
 
 | 档 | Token | 示例值 | 典型场景 |
 |---|---|---|---|
