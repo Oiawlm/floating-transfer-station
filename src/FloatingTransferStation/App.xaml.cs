@@ -15,11 +15,23 @@ public partial class App : Application
 
     private AppLifecycleService? _lifecycle;
 
+    // 未处理异常观测（架构候选 C12 第一步，Issue #250）：复用 update.log 同款基建
+    //（UpdateDiagnosticsLog：追加式一行一记录、超 256KB 截断保尾部、IO 失败全静默、
+    // 写与截断同锁串行），落 <数据根>\logs\exceptions.log，为「致命/非致命」分级
+    // 决策积累频次/分类数据；分级处理本身仍是行为变化，待数据、未经用户裁决不实施。
+    private const string ExceptionLogPhase = "未处理异常";
+    private UpdateDiagnosticsLog? _exceptionLog;
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         DispatcherUnhandledException += (_, args) =>
         {
+            // 观测先行于弹窗：写在线程池不阻塞 UI，Write 内一切 IO 失败静默吞，
+            // 弹窗与 Handled=true 带伤续跑语义零变化。
+            var exception = args.Exception;
+            var log = _exceptionLog ??= CreateExceptionLog();
+            _ = Task.Run(() => WriteUnhandledExceptionRecord(log, exception));
             MessageBox.Show(
                 $"发生未处理的错误：{args.Exception.Message}",
                 ProductIdentity.DisplayName,
@@ -82,6 +94,9 @@ public partial class App : Application
             var paths = string.IsNullOrWhiteSpace(previewDataDirectory)
                 ? AppPaths.CreateDefault(new WindowsDataDirectorySettings())
                 : AppPaths.ForTests(previewDataDirectory);
+            // 数据根解析完成后观测日志改指实际位置（搬迁目录用户不再落到旧默认处）；
+            // 此前到达的异常按默认位置尽力落盘，已写记录不迁移。
+            _exceptionLog = CreateExceptionLog(paths.DataDirectory);
             if (string.Equals(previewTheme, "dark", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(previewTheme, "light", StringComparison.OrdinalIgnoreCase))
             {
@@ -319,6 +334,23 @@ public partial class App : Application
         _lifecycle?.Dispose();
         base.OnExit(e);
     }
+
+    /// <summary>
+    /// 观测日志落点（C12）：注入数据根优先，未解析前按默认位置尽力落盘。
+    /// </summary>
+    private static UpdateDiagnosticsLog CreateExceptionLog(string? dataRoot = null) =>
+        new(Path.Combine(dataRoot ?? AppPaths.DefaultDataDirectory(), "logs", "exceptions.log"));
+
+    /// <summary>
+    /// 观测记录（C12）：一行一异常，kind＝异常类型全名（分级决策的分类轴），消息段带
+    /// HResult、来源、消息与堆栈（日志基建折叠换行，堆栈单行化）。internal 供锁定测试
+    /// 直接断言字段，不经 WPF Application 启动。
+    /// </summary>
+    internal static void WriteUnhandledExceptionRecord(UpdateDiagnosticsLog log, Exception exception) =>
+        log.Write(
+            ExceptionLogPhase,
+            exception.GetType().FullName ?? exception.GetType().Name,
+            $"HResult=0x{exception.HResult:X8};来源={exception.Source};消息={exception.Message};堆栈={exception.StackTrace}");
 
     private static string PreviewMutexName(string previewDataDirectory)
     {
