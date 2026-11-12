@@ -1,5 +1,6 @@
 ## 未发布
 
+- 改进：未处理异常本地诊断日志（架构候选 C12 观测版，Issue #250）——`DispatcherUnhandledException` 处理器在既有「弹窗→带伤续跑」行为完全不变的前提下，先把异常观测落 `<内容存储位置>\logs\exceptions.log`（复用 update.log 同款基建：一行一记录，含时间戳、异常类型、`HResult`、来源、消息与堆栈；追加式、超 256KB 自动截断保近期记录、写失败绝不影响主流程、写线程池不阻塞界面；数据根解析完成前到达的异常按默认位置尽力落盘），为「致命/非致命」分级决策积累频次与分类数据；界面零变化——弹窗内容与续跑语义原样，分级处理待实际数据再议（行为变化，另行用户裁决）。
 - 改进：fts-style-system 风格 Skill（维护者复用资产）迁仓管理——Skill 源码、语义 token 数值快照与再提取流程迁移至独立设计系统仓 [fts-design-system](https://github.com/Oiawlm/fts-design-system)（`skill/fts-style-system/` 随仓版本化，`scripts/sync-skill.ps1` 幂等部署到用户级 skills 目录，再提取按其 `docs/extraction-protocol.md` 执行）；本仓库代码与公开文档零变化。
 
 ## 1.72.0
