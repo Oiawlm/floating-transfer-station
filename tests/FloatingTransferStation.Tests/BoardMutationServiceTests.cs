@@ -128,7 +128,7 @@ public sealed class BoardMutationServiceTests
         var top = board.AddText("top");
         var before = board.Items(BoardCategory.Inbox).ToArray();
         var store = new MutationStore(directory.Root) { FailSave = true };
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new BoardMutationService(board, store, messages.Add);
 
         var result = await service.SetPinnedAsync([bottom.Id], true);
@@ -138,7 +138,7 @@ public sealed class BoardMutationServiceTests
         Assert.IsFalse(bottom.IsPinned);
         Assert.AreSame(top, board.Items(BoardCategory.Inbox)[0]);
         CollectionAssert.AreEqual(
-            new[] { "置顶状态未保存，内容已恢复。" },
+            new[] { new StatusMessage(StatusMessageKind.PinSaveFailedRestored) },
             messages);
     }
 
@@ -276,7 +276,7 @@ public sealed class BoardMutationServiceTests
         var inboxBefore = board.Items(BoardCategory.Inbox).ToArray();
         var referenceBefore = board.Items(BoardCategory.Reference).ToArray();
         var store = new MutationStore(directory.Root) { FailSave = true };
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new BoardMutationService(board, store, messages.Add);
 
         var result = await service.MoveManyAsync(
@@ -291,7 +291,7 @@ public sealed class BoardMutationServiceTests
         Assert.AreSame(bottom, board.Items(BoardCategory.Inbox)[1]);
         Assert.AreSame(existing, board.Items(BoardCategory.Reference)[0]);
         CollectionAssert.AreEqual(
-            new[] { "移动未保存，内容已恢复到原位置。" },
+            new[] { new StatusMessage(StatusMessageKind.MoveSaveFailedRestored) },
             messages);
     }
 
@@ -342,7 +342,7 @@ public sealed class BoardMutationServiceTests
         board.MoveMany([last.Id], BoardCategory.Prompt, 2);
         var originalIds = board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray();
         var store = new MutationStore(directory.Root) { FailSave = true };
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new BoardMutationService(board, store, messages.Add);
 
         var success = await service.DeleteAsync(middle.Id);
@@ -354,7 +354,7 @@ public sealed class BoardMutationServiceTests
         Assert.IsTrue(File.Exists(path));
         Assert.AreEqual(0, store.DeleteCount);
         CollectionAssert.AreEqual(
-            new[] { "删除未保存，内容已恢复。" },
+            new[] { new StatusMessage(StatusMessageKind.DeleteSaveFailedRestored) },
             messages);
         for (var index = 0; index < restoredItems.Length; index++)
         {
@@ -411,7 +411,7 @@ public sealed class BoardMutationServiceTests
         var board = new BoardService();
         board.AddText("保留在待分类");
         var store = new MutationStore(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new BoardMutationService(board, store, messages.Add);
 
         var success = await service.ClearCategoryAsync(BoardCategory.Prompt);
@@ -437,7 +437,7 @@ public sealed class BoardMutationServiceTests
             BoardCategory.Prompt);
         var inbox = board.AddText("其他分类保留");
         var store = new MutationStore(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new BoardMutationService(board, store, messages.Add);
 
         var success = await service.ClearCategoryAsync(BoardCategory.Prompt);
@@ -475,7 +475,7 @@ public sealed class BoardMutationServiceTests
         var newer = board.AddText("较新", BoardCategory.Reference);
         var originalIds = board.Items(BoardCategory.Reference).Select(item => item.Id).ToArray();
         var store = new MutationStore(directory.Root) { FailSave = true };
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new BoardMutationService(board, store, messages.Add);
 
         var success = await service.ClearCategoryAsync(BoardCategory.Reference);
@@ -489,7 +489,7 @@ public sealed class BoardMutationServiceTests
         Assert.AreSame(older, board.Items(BoardCategory.Reference)[2]);
         Assert.IsTrue(File.Exists(imagePath));
         Assert.AreEqual(0, store.DeleteCount);
-        CollectionAssert.AreEqual(new[] { "清空未保存，内容已恢复。" }, messages);
+        CollectionAssert.AreEqual(new[] { new StatusMessage(StatusMessageKind.ClearSaveFailedRestored) }, messages);
     }
 
     [TestMethod]
@@ -500,7 +500,7 @@ public sealed class BoardMutationServiceTests
         board.AddImage(Guid.NewGuid(), "images/one.png", Path.Combine(directory.Root, "one.png"));
         board.AddImage(Guid.NewGuid(), "images/two.png", Path.Combine(directory.Root, "two.png"));
         var store = new MutationStore(directory.Root) { FailDelete = true };
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new BoardMutationService(board, store, messages.Add);
 
         var success = await service.ClearCategoryAsync(BoardCategory.Inbox);
@@ -514,7 +514,7 @@ public sealed class BoardMutationServiceTests
 
         Assert.AreEqual(2, store.DeleteCount);
         CollectionAssert.AreEqual(
-            new[] { "部分已删除的图片副本暂时无法清理。" },
+            new[] { new StatusMessage(StatusMessageKind.ImageCleanupPartiallyFailed) },
             messages);
     }
 
@@ -655,7 +655,7 @@ public sealed class BoardMutationServiceTests
         board.SetPinnedMany([pinnedTop.Id, pinnedSecond.Id], true);
         var before = board.Items(BoardCategory.Inbox).ToArray();
         var store = new MutationStore(directory.Root) { FailSave = true };
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new BoardMutationService(board, store, messages.Add);
 
         Assert.IsFalse(await service.ClearNonPinnedAsync(BoardCategory.Inbox));
@@ -663,7 +663,7 @@ public sealed class BoardMutationServiceTests
         CollectionAssert.AreEqual(
             before.Select(item => item.Id).ToArray(),
             board.Items(BoardCategory.Inbox).Select(item => item.Id).ToArray());
-        CollectionAssert.AreEquivalent(new[] { "清空未保存，内容已恢复。" }, messages);
+        CollectionAssert.AreEquivalent(new[] { new StatusMessage(StatusMessageKind.ClearSaveFailedRestored) }, messages);
         Assert.AreEqual(0, service.PendingUndoCount);
     }
 
@@ -760,7 +760,7 @@ public sealed class BoardMutationServiceTests
         var inboxBefore = board.Items(BoardCategory.Inbox).ToArray();
         var promptBefore = board.Items(BoardCategory.Prompt).ToArray();
         var store = new MutationStore(directory.Root) { FailSave = true };
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new BoardMutationService(board, store, messages.Add);
 
         var outcome = await service.ClearNonPinnedAsync(AutoCleanupSchedule.SweepCategories);
@@ -780,7 +780,7 @@ public sealed class BoardMutationServiceTests
         Assert.AreSame(referenceNormal, board.Items(BoardCategory.Reference).Single());
         Assert.AreEqual(0, service.PendingUndoCount, "保存失败不得进入撤销栈。");
         Assert.AreEqual(0, store.SaveCount);
-        CollectionAssert.AreEqual(new[] { "清空未保存，内容已恢复。" }, messages);
+        CollectionAssert.AreEqual(new[] { new StatusMessage(StatusMessageKind.ClearSaveFailedRestored) }, messages);
     }
 
     [TestMethod]
@@ -922,7 +922,7 @@ public sealed class BoardMutationServiceTests
         var cutoff = now - AutoCleanupSchedule.GetRetentionDuration(AutoCleanupRetention.TwentyFourHours);
         board.SetItemCreatedAt(expiredNormal.Id, cutoff);
         var store = new MutationStore(directory.Root) { FailSave = true };
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new BoardMutationService(board, store, messages.Add);
 
         var outcome = await service.ClearNonPinnedAsync(
@@ -937,7 +937,7 @@ public sealed class BoardMutationServiceTests
             "保存失败整批恢复原内容。");
         Assert.AreEqual(0, service.PendingUndoCount, "保存失败不得进入撤销栈。");
         Assert.AreEqual(0, store.SaveCount);
-        CollectionAssert.AreEqual(new[] { "清空未保存，内容已恢复。" }, messages);
+        CollectionAssert.AreEqual(new[] { new StatusMessage(StatusMessageKind.ClearSaveFailedRestored) }, messages);
     }
 
     private sealed class MutationStore(string root) : IBoardStore

@@ -76,7 +76,7 @@ public sealed partial class ClipboardCaptureServiceTests
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root);
         var clock = new MutableCaptureClock();
-        var pipelineMessages = new List<string>();
+        var pipelineMessages = new List<StatusMessage>();
         var schedulerMessages = new List<string>();
         var trackedRounds = new List<Task>();
         using var dispatcherThread = new StaDispatcherThread();

@@ -39,7 +39,7 @@ public sealed class BoardMutationService
 
     private readonly BoardService _board;
     private readonly IBoardStore _store;
-    private readonly Action<string> _showStatus;
+    private readonly Action<StatusMessage> _showStatus;
     private readonly BoardOperationGate _operationGate;
     // 有界 LIFO 撤销栈(1.41.0 泛化为可撤销操作批):尾端是最近批(撤销弹出端),
     // 头端是最旧批(驱逐端)。删除批与 AI 文本替换批共用同一条 LIFO/驱逐/丢弃语义。
@@ -48,7 +48,7 @@ public sealed class BoardMutationService
     public BoardMutationService(
         BoardService board,
         IBoardStore store,
-        Action<string> showStatus,
+        Action<StatusMessage> showStatus,
         BoardOperationGate? operationGate = null)
     {
         _board = board;
@@ -110,7 +110,7 @@ public sealed class BoardMutationService
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 _board.Undo(move);
-                _showStatus("移动未保存，内容已恢复到原位置。");
+                _showStatus(new StatusMessage(StatusMessageKind.MoveSaveFailedRestored));
                 return BoardBatchMoveResult.Failed;
             }
             catch
@@ -149,7 +149,7 @@ public sealed class BoardMutationService
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 _board.Undo(change);
-                _showStatus("置顶状态未保存，内容已恢复。");
+                _showStatus(new StatusMessage(StatusMessageKind.PinSaveFailedRestored));
                 return BoardPinResult.Failed;
             }
             catch
@@ -195,7 +195,7 @@ public sealed class BoardMutationService
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 _board.Restore(removed);
-                _showStatus("删除未保存，内容已恢复。");
+                _showStatus(new StatusMessage(StatusMessageKind.DeleteSaveFailedRestored));
                 return false;
             }
             catch
@@ -241,7 +241,7 @@ public sealed class BoardMutationService
                 cancellationToken,
                 apply: () => _board.UpdateText(itemId, text),
                 restore: () => _board.UpdateText(itemId, original),
-                failureStatus: "内容未保存，已还原原文本。");
+                failureStatus: StatusMessageKind.ItemTextSaveFailedRestored);
         }, cancellationToken);
 
     /// <summary>
@@ -271,7 +271,7 @@ public sealed class BoardMutationService
                 cancellationToken,
                 apply: () => _board.UpdateNote(itemId, note),
                 restore: () => _board.UpdateNote(itemId, original),
-                failureStatus: "备注未保存，已还原原备注。");
+                failureStatus: StatusMessageKind.ItemNoteSaveFailedRestored);
         }, cancellationToken);
 
     /// <summary>
@@ -301,7 +301,7 @@ public sealed class BoardMutationService
                 cancellationToken,
                 apply: () => _board.UpdateImageTitle(itemId, title),
                 restore: () => _board.UpdateImageTitle(itemId, original),
-                failureStatus: "图片命名未保存，已还原。");
+                failureStatus: StatusMessageKind.ImageTitleSaveFailedRestored);
         }, cancellationToken);
 
     /// <summary>
@@ -313,7 +313,7 @@ public sealed class BoardMutationService
         CancellationToken cancellationToken,
         Action apply,
         Action restore,
-        string failureStatus)
+        StatusMessageKind failureStatus)
     {
         apply();
         try
@@ -324,7 +324,7 @@ public sealed class BoardMutationService
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             restore();
-            _showStatus(failureStatus);
+            _showStatus(new StatusMessage(failureStatus));
             return false;
         }
         catch
@@ -362,7 +362,7 @@ public sealed class BoardMutationService
             if (expectedCurrentText is not null &&
                 !string.Equals(original, expectedCurrentText, StringComparison.Ordinal))
             {
-                _showStatus("卡片内容已变化，整理结果已放弃。");
+                _showStatus(new StatusMessage(StatusMessageKind.AiReplaceAbandonedTextChanged));
                 return false;
             }
 
@@ -375,7 +375,7 @@ public sealed class BoardMutationService
                 cancellationToken,
                 apply: () => _board.UpdateText(itemId, newText),
                 restore: () => _board.UpdateText(itemId, original),
-                failureStatus: "内容未保存，已还原原文本。");
+                failureStatus: StatusMessageKind.ItemTextSaveFailedRestored);
             if (!saved)
             {
                 return false;
@@ -413,14 +413,14 @@ public sealed class BoardMutationService
                 var item = _board.FindItem(replacement.ItemId);
                 if (item is not { Kind: BoardItemKind.Text })
                 {
-                    _showStatus("选中的卡片已变化，本次批量替换已放弃。");
+                    _showStatus(new StatusMessage(StatusMessageKind.BatchReplaceAbandonedCardMissing));
                     return false;
                 }
 
                 var original = item.Text ?? string.Empty;
                 if (!string.Equals(original, replacement.ExpectedCurrentText, StringComparison.Ordinal))
                 {
-                    _showStatus("选中的卡片内容已变化，本次批量替换已放弃。");
+                    _showStatus(new StatusMessage(StatusMessageKind.BatchReplaceAbandonedTextChanged));
                     return false;
                 }
 
@@ -454,7 +454,7 @@ public sealed class BoardMutationService
                     _board.UpdateText(itemId, previousTexts[itemId]);
                 }
 
-                _showStatus("内容未保存，已还原原文本。");
+                _showStatus(new StatusMessage(StatusMessageKind.ItemTextSaveFailedRestored));
                 return false;
             }
             catch
@@ -502,7 +502,7 @@ public sealed class BoardMutationService
             var saved = await SaveSubgroupChangeAsync(
                 cancellationToken,
                 undo: () => _board.Undo(change),
-                failureStatus: "子分组未保存，已恢复原分组。");
+                failureStatus: StatusMessageKind.SubgroupAssignSaveFailedRestored);
             if (!saved)
             {
                 return false;
@@ -540,7 +540,7 @@ public sealed class BoardMutationService
             var saved = await SaveSubgroupChangeAsync(
                 cancellationToken,
                 undo: () => _board.Undo(change),
-                failureStatus: "分组整理未保存，已恢复原顺序。");
+                failureStatus: StatusMessageKind.SubgroupPartitionSaveFailedRestored);
             if (!saved)
             {
                 return false;
@@ -558,7 +558,7 @@ public sealed class BoardMutationService
     private async Task<bool> SaveSubgroupChangeAsync(
         CancellationToken cancellationToken,
         Action undo,
-        string failureStatus)
+        StatusMessageKind failureStatus)
     {
         try
         {
@@ -568,7 +568,7 @@ public sealed class BoardMutationService
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             undo();
-            _showStatus(failureStatus);
+            _showStatus(new StatusMessage(failureStatus));
             return false;
         }
         catch
@@ -588,7 +588,7 @@ public sealed class BoardMutationService
         {
             if (_undoableBatches.Count == 0)
             {
-                _showStatus("没有可撤销的操作。");
+                _showStatus(new StatusMessage(StatusMessageKind.UndoEmpty));
                 return false;
             }
 
@@ -648,7 +648,7 @@ public sealed class BoardMutationService
 
         if (imageCleanupFailed)
         {
-            _showStatus("部分已删除的图片副本暂时无法清理。");
+            _showStatus(new StatusMessage(StatusMessageKind.ImageCleanupPartiallyFailed));
         }
     }
 
@@ -671,7 +671,7 @@ public sealed class BoardMutationService
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 _board.Restore(removed);
-                _showStatus("清空未保存，内容已恢复。");
+                _showStatus(new StatusMessage(StatusMessageKind.ClearSaveFailedRestored));
                 return false;
             }
             catch
@@ -736,7 +736,7 @@ public sealed class BoardMutationService
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 _board.Restore(removed);
-                _showStatus("清空未保存，内容已恢复。");
+                _showStatus(new StatusMessage(StatusMessageKind.ClearSaveFailedRestored));
                 return new ClearNonPinnedOutcome(false, removed.RemovedItems.Count);
             }
             catch
@@ -788,13 +788,13 @@ public sealed class BoardMutationService
             {
                 owner._board.RestoreInsert(removed);
                 await owner._store.SaveBoardAsync(owner._board.CreateSnapshot(), cancellationToken);
-                owner._showStatus("已恢复最近删除的内容。");
+                owner._showStatus(new StatusMessage(StatusMessageKind.UndoDeleteRestored));
                 return true;
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 _ = owner._board.RemoveMany(removed.RemovedItems.Select(item => item.Id).ToArray());
-                owner._showStatus("撤销未保存，内容保持删除状态。");
+                owner._showStatus(new StatusMessage(StatusMessageKind.UndoDeleteSaveFailedKeptDeleted));
                 return false;
             }
             catch
@@ -837,10 +837,10 @@ public sealed class BoardMutationService
                 cancellationToken,
                 apply: () => owner._board.UpdateText(itemId, originalText),
                 restore: () => owner._board.UpdateText(itemId, current),
-                failureStatus: "撤销未保存，卡片保持整理后的内容。");
+                failureStatus: StatusMessageKind.AiTextUndoSaveFailedKeptReplaced);
             if (restored)
             {
-                owner._showStatus("已恢复卡片原文。");
+                owner._showStatus(new StatusMessage(StatusMessageKind.AiTextUndoRestored));
             }
 
             return restored;
@@ -882,7 +882,7 @@ public sealed class BoardMutationService
 
             if (restorable.Count == 0)
             {
-                owner._showStatus("卡片内容已变化，没有需要恢复的原文。");
+                owner._showStatus(new StatusMessage(StatusMessageKind.MultiTextUndoNothingToRestore));
                 return true;
             }
 
@@ -895,7 +895,8 @@ public sealed class BoardMutationService
                 }
 
                 await owner._store.SaveBoardAsync(owner._board.CreateSnapshot(), cancellationToken);
-                owner._showStatus($"已恢复 {restorable.Count} 张卡片的原文。");
+                owner._showStatus(new StatusMessage(
+                    StatusMessageKind.MultiTextUndoRestored, restorable.Count));
                 return true;
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -905,7 +906,7 @@ public sealed class BoardMutationService
                     owner._board.UpdateText(itemId, currents[itemId]);
                 }
 
-                owner._showStatus("撤销未保存，卡片保持动作后的内容。");
+                owner._showStatus(new StatusMessage(StatusMessageKind.MultiTextUndoSaveFailedKeptReplaced));
                 return false;
             }
             catch
@@ -939,10 +940,10 @@ public sealed class BoardMutationService
             var saved = await owner.SaveSubgroupChangeAsync(
                 cancellationToken,
                 undo: RedoBestEffort,
-                failureStatus: "撤销未保存，卡片保持指派后的分组。");
+                failureStatus: StatusMessageKind.SubgroupAssignUndoSaveFailedKept);
             if (saved)
             {
-                owner._showStatus("已恢复卡片原分组。");
+                owner._showStatus(new StatusMessage(StatusMessageKind.SubgroupAssignUndoRestored));
             }
 
             return saved;
@@ -989,10 +990,10 @@ public sealed class BoardMutationService
             var saved = await owner.SaveSubgroupChangeAsync(
                 cancellationToken,
                 undo: () => _ = owner._board.PartitionNormalRegionBySubgroup(change.Category),
-                failureStatus: "撤销未保存，列表保持分组整理后的顺序。");
+                failureStatus: StatusMessageKind.SubgroupPartitionUndoSaveFailedKept);
             if (saved)
             {
-                owner._showStatus("已恢复分组整理前的顺序。");
+                owner._showStatus(new StatusMessage(StatusMessageKind.SubgroupPartitionUndoRestored));
             }
 
             return saved;

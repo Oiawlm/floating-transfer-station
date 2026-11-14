@@ -6,7 +6,7 @@ namespace FloatingTransferStation.Tests;
 
 public sealed partial class ClipboardCaptureServiceTests
 {
-    private const string DuplicateSuppressedMessage = "与最近收集的内容相同，未重复收集。";
+    private static readonly StatusMessage DuplicateSuppressedMessage = new(StatusMessageKind.DuplicateSuppressed);
 
     [TestMethod]
     public async Task HandleUpdate_IdenticalBackToBackImagesWithDifferentSequences_CreateOneItem()
@@ -16,7 +16,7 @@ public sealed partial class ClipboardCaptureServiceTests
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root);
         var clock = new MutableCaptureClock();
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new ClipboardCaptureService(
             new QueueClipboardReader(
                 new ClipboardSnapshot(101, null, [], null, [ClipboardImageCandidate.FromEncoded("PNG", encoded)]),
@@ -46,7 +46,7 @@ public sealed partial class ClipboardCaptureServiceTests
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root);
         var clock = new MutableCaptureClock();
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new ClipboardCaptureService(
             new QueueClipboardReader(
                 new ClipboardSnapshot(110, null, [sourcePath], null),
@@ -73,7 +73,7 @@ public sealed partial class ClipboardCaptureServiceTests
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root);
         var clock = new MutableCaptureClock();
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new ClipboardCaptureService(
             new QueueClipboardReader(
                 new ClipboardSnapshot(120, null, [], "same text"),
@@ -148,7 +148,7 @@ public sealed partial class ClipboardCaptureServiceTests
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root) { FailSaves = true };
         var clock = new MutableCaptureClock();
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new ClipboardCaptureService(
             new QueueClipboardReader(
                 new ClipboardSnapshot(150, null, [], "retry me"),
@@ -165,7 +165,7 @@ public sealed partial class ClipboardCaptureServiceTests
 
         Assert.AreEqual(1, board.Items(BoardCategory.Inbox).Count);
         Assert.AreEqual(1, store.SaveCount);
-        CollectionAssert.AreEqual(new[] { "本次内容未保存，请重新复制。" }, messages);
+        CollectionAssert.AreEqual(new[] { new StatusMessage(StatusMessageKind.ClipboardTextSaveFailed) }, messages);
     }
 
     [TestMethod]
@@ -178,7 +178,7 @@ public sealed partial class ClipboardCaptureServiceTests
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root);
         var clock = new MutableCaptureClock();
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new ClipboardCaptureService(
             new QueueClipboardReader(new ClipboardSnapshot(160, null, [sourcePath, sourcePath], null)),
             new ImageNormalizer(store.ImagesDirectory),

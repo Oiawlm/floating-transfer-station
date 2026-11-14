@@ -35,7 +35,7 @@ public sealed partial class ClipboardCaptureServiceTests
         var reader = new SequencedClipboardReader { Sequence = 902, Text = "first" };
         var board = new BoardService();
         var store = new BlockingFirstSaveStore(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new ClipboardCaptureService(
             reader, new FakeImageNormalizer(directory.Root), board, store, messages.Add,
             maximumPendingCaptures: 2);
@@ -67,7 +67,7 @@ public sealed partial class ClipboardCaptureServiceTests
         var reader = new SequencedClipboardReader { Sequence = 905, Text = "first" };
         var board = new BoardService();
         var store = new BlockingFirstSaveStore(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new ClipboardCaptureService(
             reader, new FakeImageNormalizer(directory.Root), board, store, messages.Add,
             maximumPendingBytes: 12);
@@ -93,7 +93,7 @@ public sealed partial class ClipboardCaptureServiceTests
         using var directory = new TestDirectory();
         var reader = new BusySequenceReader();
         var board = new BoardService();
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new ClipboardCaptureService(
             reader, new FakeImageNormalizer(directory.Root), board,
             new FakeBoardStore(directory.Root), messages.Add,

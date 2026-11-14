@@ -22,7 +22,7 @@ public sealed class BoardMutationServiceDeleteModeTests
         var item = board.AddText("永久删除不进栈");
         board.AddText("保留");
         var store = new DeleteModeStore(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new BoardMutationService(board, store, messages.Add);
 
         Assert.IsTrue(await service.DeleteManyAsync([item.Id], BoardDeleteMode.Permanent));
@@ -32,7 +32,7 @@ public sealed class BoardMutationServiceDeleteModeTests
         var undone = await service.UndoLastAsync();
         Assert.IsFalse(undone, "撤销栈为空（永久删除不记批）。");
         Assert.IsNull(board.FindItem(item.Id), "Ctrl+Z 不得恢复永久删除的卡。");
-        CollectionAssert.Contains(messages, "没有可撤销的操作。");
+        CollectionAssert.Contains(messages, new StatusMessage(StatusMessageKind.UndoEmpty));
     }
 
     [TestMethod]
@@ -62,7 +62,7 @@ public sealed class BoardMutationServiceDeleteModeTests
         WritePng(path, 3, 3);
         var image = board.AddImage(Guid.NewGuid(), "images/rollback.png", path, BoardCategory.Inbox);
         var store = new DeleteModeStore(directory.Root) { FailSave = true };
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new BoardMutationService(board, store, messages.Add);
 
         Assert.IsFalse(await service.DeleteManyAsync([text.Id, image.Id], BoardDeleteMode.Permanent));
@@ -70,7 +70,7 @@ public sealed class BoardMutationServiceDeleteModeTests
         Assert.IsNotNull(board.FindItem(image.Id), "保存失败必须整批回滚图片条目。");
         Assert.IsTrue(File.Exists(path), "保存失败不得清理图片文件。");
         Assert.AreEqual(0, store.DeleteCount);
-        CollectionAssert.Contains(messages, "删除未保存，内容已恢复。");
+        CollectionAssert.Contains(messages, new StatusMessage(StatusMessageKind.DeleteSaveFailedRestored));
     }
 
     [TestMethod]
@@ -105,7 +105,7 @@ public sealed class BoardMutationServiceDeleteModeTests
         var permanent = board.AddText("永久删除", BoardCategory.Inbox);
         board.AddText("保留");
         var store = new DeleteModeStore(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new BoardMutationService(board, store, messages.Add);
 
         Assert.IsTrue(await service.DeleteManyAsync([undoable.Id]));
@@ -116,7 +116,7 @@ public sealed class BoardMutationServiceDeleteModeTests
 
         Assert.IsNotNull(board.FindItem(undoable.Id), "撤销恢复的是可撤销批。");
         Assert.IsNull(board.FindItem(permanent.Id), "永久删除不得随邻批撤销恢复。");
-        CollectionAssert.Contains(messages, "已恢复最近删除的内容。");
+        CollectionAssert.Contains(messages, new StatusMessage(StatusMessageKind.UndoDeleteRestored));
     }
 
     private static void WritePng(string path, int width, int height)

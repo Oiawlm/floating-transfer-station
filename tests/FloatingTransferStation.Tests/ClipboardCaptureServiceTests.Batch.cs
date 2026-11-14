@@ -44,7 +44,7 @@ public sealed partial class ClipboardCaptureServiceTests
         await File.WriteAllTextAsync(sources[1], "synthetic invalid image");
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new ClipboardCaptureService(
             new QueueClipboardReader(new ClipboardSnapshot(801, null, sources, null)),
             new ImageNormalizer(store.ImagesDirectory), board, store, messages.Add);
@@ -73,7 +73,7 @@ public sealed partial class ClipboardCaptureServiceTests
         var board = new BoardService();
         var existing = board.AddText("keep");
         var store = new FakeBoardStore(directory.Root) { FailSaves = true };
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new ClipboardCaptureService(
             new QueueClipboardReader(new ClipboardSnapshot(802, null, sources, null)),
             new ImageNormalizer(store.ImagesDirectory), board, store, messages.Add);

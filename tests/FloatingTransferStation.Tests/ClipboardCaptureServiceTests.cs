@@ -360,7 +360,7 @@ public sealed partial class ClipboardCaptureServiceTests
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root);
         var normalizer = new BlockingClipboardImageNormalizer(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new ClipboardCaptureService(
             reader, normalizer, board, store, messages.Add,
             retryDelays: [TimeSpan.Zero, TimeSpan.Zero]);
@@ -381,7 +381,7 @@ public sealed partial class ClipboardCaptureServiceTests
         Assert.AreEqual("newer text", board.Items(BoardCategory.Inbox)[0].Text);
         Assert.AreEqual(5, reader.ReadCount);
         Assert.AreEqual(2, store.SaveCount);
-        Assert.AreEqual("本次剪贴板内容暂时无法读取，请重新复制。", messages.Single());
+        Assert.AreEqual(new StatusMessage(StatusMessageKind.ClipboardReadFailed), messages.Single());
     }
 
     [TestMethod]
@@ -396,7 +396,7 @@ public sealed partial class ClipboardCaptureServiceTests
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root);
         var normalizer = new BlockingClipboardImageNormalizer(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = new ClipboardCaptureService(reader, normalizer, board, store, messages.Add);
         using var cancellation = new CancellationTokenSource();
 
@@ -482,7 +482,7 @@ public sealed partial class ClipboardCaptureServiceTests
     public async Task HandleUpdate_ClipboardRemainsBusyReportsStatusWithoutChangingBoard()
     {
         using var directory = new TestDirectory();
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var reader = new AlwaysBusyClipboardReader();
         var board = new BoardService();
         var service = new ClipboardCaptureService(
@@ -497,7 +497,7 @@ public sealed partial class ClipboardCaptureServiceTests
 
         Assert.AreEqual(3, reader.ReadCount);
         Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
-        Assert.AreEqual("本次剪贴板内容暂时无法读取，请重新复制。", messages.Single());
+        Assert.AreEqual(new StatusMessage(StatusMessageKind.ClipboardReadFailed), messages.Single());
     }
 
     [TestMethod]
@@ -505,7 +505,7 @@ public sealed partial class ClipboardCaptureServiceTests
     public async Task HandleUpdate_SaveFailureRollsBackItemAndReportsStatus()
     {
         using var directory = new TestDirectory();
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root) { FailSaves = true };
         var service = new ClipboardCaptureService(
@@ -518,7 +518,7 @@ public sealed partial class ClipboardCaptureServiceTests
         await service.HandleClipboardUpdateAsync();
 
         Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
-        Assert.AreEqual("本次内容未保存，请重新复制。", messages.Single());
+        Assert.AreEqual(new StatusMessage(StatusMessageKind.ClipboardTextSaveFailed), messages.Single());
     }
 
     [TestMethod]
@@ -528,7 +528,7 @@ public sealed partial class ClipboardCaptureServiceTests
         using var directory = new TestDirectory();
         var source = Path.Combine(directory.Root, "source.png");
         await File.WriteAllBytesAsync(source, [0x00]);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root) { FailSaves = true };
         var service = new ClipboardCaptureService(
@@ -543,14 +543,14 @@ public sealed partial class ClipboardCaptureServiceTests
         Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
         Assert.IsFalse(Directory.Exists(store.ImagesDirectory) &&
                        Directory.EnumerateFiles(store.ImagesDirectory).Any());
-        Assert.AreEqual("本次图片未保存，请重新复制。", messages.Single());
+        Assert.AreEqual(new StatusMessage(StatusMessageKind.ClipboardImageSaveFailed), messages.Single());
     }
 
     [TestMethod]
     public async Task HandleUpdate_CorruptImageRepresentationFallsBackToOneSavedImage()
     {
         using var directory = new TestDirectory();
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root);
         var normalizer = new ImageNormalizer(store.ImagesDirectory);
@@ -585,7 +585,7 @@ public sealed partial class ClipboardCaptureServiceTests
     public async Task HandleUpdate_AllImageRepresentationsCorruptDoesNotFallBackToText()
     {
         using var directory = new TestDirectory();
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root);
         var damaged = (await CreateEncodedImageAsync(4, 4, new Rgba32(255, 0, 0, 255)))[..33];
@@ -601,7 +601,7 @@ public sealed partial class ClipboardCaptureServiceTests
 
         Assert.IsEmpty(board.Items(BoardCategory.Inbox));
         Assert.AreEqual(0, store.SaveCount);
-        Assert.AreEqual("本次图片未保存，请重新复制。", messages.Single());
+        Assert.AreEqual(new StatusMessage(StatusMessageKind.ClipboardImageSaveFailed), messages.Single());
         Assert.IsFalse(Directory.Exists(store.ImagesDirectory) && Directory.EnumerateFiles(store.ImagesDirectory).Any());
     }
 
@@ -763,7 +763,7 @@ public sealed partial class ClipboardCaptureServiceTests
         await operationGate.SealAndRunAsync(() => Task.CompletedTask);
         var board = new BoardService();
         var store = new FakeBoardStore(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var clipboard = new ClipboardCaptureService(
             new QueueClipboardReader(new ClipboardSnapshot(72, null, [source], null)),
             new FakeImageNormalizer(directory.Root),
@@ -776,7 +776,7 @@ public sealed partial class ClipboardCaptureServiceTests
 
         Assert.AreEqual(0, board.Items(BoardCategory.Inbox).Count);
         Assert.IsFalse(Directory.EnumerateFiles(store.ImagesDirectory).Any());
-        Assert.AreEqual("本次图片未保存，请重新复制。", messages.Single());
+        Assert.AreEqual(new StatusMessage(StatusMessageKind.ClipboardImageSaveFailed), messages.Single());
     }
 
     [TestMethod]

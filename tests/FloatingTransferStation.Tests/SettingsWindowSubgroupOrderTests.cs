@@ -918,13 +918,13 @@ public sealed class SettingsWindowSubgroupOrderTests
         var normalizer = new ImageNormalizer(store.ImagesDirectory);
         var operationGate = new BoardOperationGate();
         MainWindow? window = null;
-        void ShowStatus(string message) => window?.ShowStatus(message);
+        void ShowServiceStatus(StatusMessage message) => window?.ShowStatus(message.ToDisplayText());
         var clipboard = new ClipboardCaptureService(
             new IdleClipboardReader(),
             normalizer,
             board,
             store,
-            ShowStatus,
+            ShowServiceStatus,
             operationGate: operationGate);
         var settings = configureSettings(
             WindowSettings.Default with
@@ -936,14 +936,14 @@ public sealed class SettingsWindowSubgroupOrderTests
             store,
             settings,
             clipboard,
-            new BoardMutationService(board, store, ShowStatus, operationGate),
+            new BoardMutationService(board, store, ShowServiceStatus, operationGate),
             new DragPayloadService(),
             new ExternalDropPayloadReader(new WindowsDataImageReader()),
             new ExternalDropImportService(
                 normalizer,
                 board,
                 store,
-                ShowStatus,
+                ShowServiceStatus,
                 operationGate),
             dataDirectory: directory.Root,
             preferences: preferences);
