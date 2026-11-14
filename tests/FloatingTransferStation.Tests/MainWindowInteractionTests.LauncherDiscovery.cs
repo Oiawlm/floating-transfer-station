@@ -240,7 +240,6 @@ public sealed partial class MainWindowInteractionTests
         var operationGate = new BoardOperationGate();
         var normalizer = new ImageNormalizer(store.ImagesDirectory);
         MainWindow? window = null;
-        void ShowStatus(string message) => window!.ShowStatus(message);
         void ShowServiceStatus(StatusMessage message) => window!.ShowStatus(message.ToDisplayText());
         var clipboard = new ClipboardCaptureService(
             new NeverReadClipboardReader(), normalizer, board, store, ShowServiceStatus, operationGate: operationGate);
@@ -401,7 +400,6 @@ public sealed partial class MainWindowInteractionTests
         var operationGate = new BoardOperationGate();
         var normalizer = new ImageNormalizer(store.ImagesDirectory);
         MainWindow? window = null;
-        void ShowStatus(string message) => window!.ShowStatus(message);
         void ShowServiceStatus(StatusMessage message) => window!.ShowStatus(message.ToDisplayText());
         var clipboard = new ClipboardCaptureService(
             new NeverReadClipboardReader(), normalizer, board, store, ShowServiceStatus, operationGate: operationGate);

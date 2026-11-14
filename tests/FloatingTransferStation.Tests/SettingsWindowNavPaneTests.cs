@@ -478,7 +478,6 @@ public sealed class SettingsWindowNavPaneTests
         var normalizer = new ImageNormalizer(store.ImagesDirectory);
         var operationGate = new BoardOperationGate();
         MainWindow? window = null;
-        void ShowStatus(string message) => window?.ShowStatus(message);
         void ShowServiceStatus(StatusMessage message) => window?.ShowStatus(message.ToDisplayText());
         var clipboard = new ClipboardCaptureService(
             new IdleClipboardReader(),

@@ -93,7 +93,6 @@ public sealed partial class MainWindowInteractionTests
         updateService ??= SealedUpdateService.Instance;
         operationGate ??= new BoardOperationGate();
         MainWindow? window = null;
-        void ShowStatus(string message) => window?.ShowStatus(message);
         void ShowServiceStatus(StatusMessage message) => window?.ShowStatus(message.ToDisplayText());
         var clipboard = new ClipboardCaptureService(
             clipboardReader ?? new NeverReadClipboardReader(),
