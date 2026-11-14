@@ -13,6 +13,7 @@
 | 使用问题（功能行为/边界/快捷键） | [操作手册](usage.md) | 想知道某项功能的完整行为、边界与失败处理时 | 门面 README 只留速览与导航，细节以手册为准 |
 | 架构（组件/数据流） | [架构说明](architecture.md) | 了解主要组件与数据流时 | 不要凭测试名反推语义 |
 | UI（界面/样式/动效/布局） | [设计规范](design.md) | 了解配色、动效、按钮与交互状态、圆角、排版布局任一面，或查反例豁免清单时 | 改任何 token 必须同步本文件与 Core |
+| UI 动效与交互状态纵深 | [动效规范](motion.md)、[交互状态规范](interaction-states.md) | 做动效编排或交互状态设计需要正文纵深时 | 数值速查仍以设计规范与 Core DesignTokens 为准 |
 | 插件（扩展/动作协议） | [插件系统](plugins.md) | 编写或启用插件之前 | 插件不能改写应用的核心契约 |
 | 视觉资产 | [images/README.md](images/README.md) | 了解 README 视觉资产的构成与再生方式时 | — |
 
@@ -22,6 +23,8 @@
 
 - [架构说明](architecture.md)：主要组件与数据流。
 - [设计规范](design.md)：视觉语言六章——配色体系、动效全景、按钮与交互状态、圆角、排版与布局、动效原则与反例豁免（数值权威=Core DesignTokens）。
+- [动效规范](motion.md)：动效专题纵深——档位、缓动、编排、例外通道、减动效退化与原则（design.md §二/§六的正文纵深，数值均为示例值，权威仍是 Core DesignTokens）。
+- [交互状态规范](interaction-states.md)：交互状态专题纵深——控件类型学、hover 双轨、pressed 三范式、禁用档、Focus 矩阵与分层叠加（design.md §三/§五·B 的正文纵深）。
 - [插件系统](plugins.md)：插件清单、text-cleaner 与动作协议（能力阶梯与 L2 准入条件）。
 - [操作手册](usage.md)：用户口径的功能行为、边界与全部快捷键。
 - [images/README.md](images/README.md)：README 视觉资产的构成与再生方式。
