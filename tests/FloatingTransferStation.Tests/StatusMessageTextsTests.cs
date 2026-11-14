@@ -25,7 +25,7 @@ public sealed class StatusMessageTextsTests
     [TestMethod]
     public void Texts_MatchFrozenBaseline_Verbatim()
     {
-        // 冻结文案表逐字基线（docs/handoff/2026-11-12-backlog-burndown/evidence-w5）。
+        // 冻结文案表逐字基线（维护者本地批次档案 evidence-w5/frozen-status-messages.md）。
         var expected = new Dictionary<StatusMessageKind, string>
         {
             // —— BoardMutationService ——

@@ -69,7 +69,7 @@ public enum StatusMessageKind
     DuplicateSuppressed,
     /// <summary>文本采集保存失败，请重新复制。</summary>
     ClipboardTextSaveFailed,
-    /// <summary>图片采集失败，请重新复制（剪贴板图片/文件图片共用）。</summary>
+    /// <summary>图片采集失败，请重新复制（剪贴板图片与文件图片共用）。</summary>
     ClipboardImageSaveFailed,
 
     // —— ExternalDropImportService ——
