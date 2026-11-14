@@ -9,7 +9,7 @@ public sealed class ClipboardCaptureService
     private readonly IImageNormalizer _normalizer;
     private readonly BoardService _board;
     private readonly IBoardStore _store;
-    private readonly Action<string> _showStatus;
+    private readonly Action<StatusMessage> _showStatus;
     private readonly IReadOnlyList<TimeSpan> _retryDelays;
     private readonly BoardOperationGate _operationGate;
     private readonly DefaultCaptureCategoryState _defaultCaptureCategory;
@@ -32,7 +32,7 @@ public sealed class ClipboardCaptureService
         IImageNormalizer normalizer,
         BoardService board,
         IBoardStore store,
-        Action<string> showStatus,
+        Action<StatusMessage> showStatus,
         IReadOnlyList<TimeSpan>? retryDelays = null,
         BoardOperationGate? operationGate = null,
         DefaultCaptureCategoryState? defaultCaptureCategory = null,
@@ -124,7 +124,7 @@ public sealed class ClipboardCaptureService
             _capacityReported = true;
         }
 
-        _showStatus("待处理剪贴板内容过多或过大，本次未收集，请稍后重新复制。");
+        _showStatus(new StatusMessage(StatusMessageKind.ClipboardCapacityExceeded));
     }
 
     private bool TryAcceptSequence(uint sequenceNumber)
@@ -294,7 +294,7 @@ public sealed class ClipboardCaptureService
             }
         }
 
-        _showStatus("本次剪贴板内容暂时无法读取，请重新复制。");
+        _showStatus(new StatusMessage(StatusMessageKind.ClipboardReadFailed));
         return null;
     }
 
@@ -317,7 +317,7 @@ public sealed class ClipboardCaptureService
         {
             if (_deduplicationGate is { } gate && gate.IsRecentDuplicate(fingerprint))
             {
-                _showStatus("与最近收集的内容相同，未重复收集。");
+                _showStatus(new StatusMessage(StatusMessageKind.DuplicateSuppressed));
                 return true;
             }
 
@@ -330,7 +330,7 @@ public sealed class ClipboardCaptureService
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 _board.Remove(item.Id);
-                _showStatus("本次内容未保存，请重新复制。");
+                _showStatus(new StatusMessage(StatusMessageKind.ClipboardTextSaveFailed));
             }
             catch
             {
@@ -356,7 +356,7 @@ public sealed class ClipboardCaptureService
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            _showStatus("本次图片未保存，请重新复制。");
+            _showStatus(new StatusMessage(StatusMessageKind.ClipboardImageSaveFailed));
         }
     }
 
@@ -415,7 +415,7 @@ public sealed class ClipboardCaptureService
 
         if (hadFailure)
         {
-            _showStatus("本次图片未保存，请重新复制。");
+            _showStatus(new StatusMessage(StatusMessageKind.ClipboardImageSaveFailed));
         }
     }
 
@@ -498,7 +498,7 @@ public sealed class ClipboardCaptureService
                 _store.TryDeleteImage(stored.AbsolutePath);
             }
 
-            _showStatus("与最近收集的内容相同，未重复收集。");
+            _showStatus(new StatusMessage(StatusMessageKind.DuplicateSuppressed));
             return;
         }
 

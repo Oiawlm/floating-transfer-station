@@ -241,17 +241,18 @@ public sealed partial class MainWindowInteractionTests
         var normalizer = new ImageNormalizer(store.ImagesDirectory);
         MainWindow? window = null;
         void ShowStatus(string message) => window!.ShowStatus(message);
+        void ShowServiceStatus(StatusMessage message) => window!.ShowStatus(message.ToDisplayText());
         var clipboard = new ClipboardCaptureService(
-            new NeverReadClipboardReader(), normalizer, board, store, ShowStatus, operationGate: operationGate);
+            new NeverReadClipboardReader(), normalizer, board, store, ShowServiceStatus, operationGate: operationGate);
         window = new MainWindow(
             board,
             store,
             WindowSettings.Default,
             clipboard,
-            new BoardMutationService(board, store, ShowStatus, operationGate),
+            new BoardMutationService(board, store, ShowServiceStatus, operationGate),
             new DragPayloadService(),
             new ExternalDropPayloadReader(new WindowsDataImageReader()),
-            new ExternalDropImportService(normalizer, board, store, ShowStatus, operationGate),
+            new ExternalDropImportService(normalizer, board, store, ShowServiceStatus, operationGate),
             preferencesStore: preferencesStore,
             launcherStore: store);
         var source = new MutableDiscoverySource();
@@ -401,17 +402,18 @@ public sealed partial class MainWindowInteractionTests
         var normalizer = new ImageNormalizer(store.ImagesDirectory);
         MainWindow? window = null;
         void ShowStatus(string message) => window!.ShowStatus(message);
+        void ShowServiceStatus(StatusMessage message) => window!.ShowStatus(message.ToDisplayText());
         var clipboard = new ClipboardCaptureService(
-            new NeverReadClipboardReader(), normalizer, board, store, ShowStatus, operationGate: operationGate);
+            new NeverReadClipboardReader(), normalizer, board, store, ShowServiceStatus, operationGate: operationGate);
         window = new MainWindow(
             board,
             store,
             WindowSettings.Default,
             clipboard,
-            new BoardMutationService(board, store, ShowStatus, operationGate),
+            new BoardMutationService(board, store, ShowServiceStatus, operationGate),
             new DragPayloadService(),
             new ExternalDropPayloadReader(new WindowsDataImageReader()),
-            new ExternalDropImportService(normalizer, board, store, ShowStatus, operationGate),
+            new ExternalDropImportService(normalizer, board, store, ShowServiceStatus, operationGate),
             preferencesStore: preferencesStore,
             launcherStore: store);
         PumpUntilDiscoveryReady(window);

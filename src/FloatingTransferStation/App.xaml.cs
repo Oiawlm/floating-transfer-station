@@ -109,6 +109,9 @@ public partial class App : Application
             await pluginCatalog.LoadAsync();
             MainWindow? window = null;
             void ShowStatus(string message) => window?.ShowStatus(message);
+            // 三服务（板变更/剪贴板/外部拖入）结果消息通道（Issue #248）：Core 只递
+            // 语义，中文文案经窗口层唯一映射表落状态条；文案与触发时机逐字不变。
+            void ShowServiceStatus(StatusMessage message) => window?.ShowStatus(message.ToDisplayText());
             var boardOperationGate = new BoardOperationGate();
             var defaultCaptureCategory = new DefaultCaptureCategoryState();
             // 收集落点子分组（契约 #57 修订，会话态）：镜像 defaultCaptureCategory 装配
@@ -118,7 +121,7 @@ public partial class App : Application
             var windowsDataImageReader = new WindowsDataImageReader();
             var externalDropPayloadReader = new ExternalDropPayloadReader(
                 windowsDataImageReader);
-            var mutations = new BoardMutationService(board, store, ShowStatus, boardOperationGate);
+            var mutations = new BoardMutationService(board, store, ShowServiceStatus, boardOperationGate);
             // DeepSeek 接入地基（1.27.0）：显式装配，别处不做隐藏加密调用或请求构造。
             // AI 整理编排（1.41.0）复用同一客户端实例（契约 #28 唯一模型口径）。
             var secretProtector = new DpapiSecretProtector();
@@ -143,7 +146,7 @@ public partial class App : Application
                 normalizer,
                 board,
                 store,
-                ShowStatus,
+                ShowServiceStatus,
                 operationGate: boardOperationGate,
                 defaultCaptureCategory: defaultCaptureCategory,
                 pluginCatalog: pluginCatalog,
@@ -154,7 +157,7 @@ public partial class App : Application
                 normalizer,
                 board,
                 store,
-                ShowStatus,
+                ShowServiceStatus,
                 boardOperationGate,
                 pluginCatalog,
                 defaultSubgroup,

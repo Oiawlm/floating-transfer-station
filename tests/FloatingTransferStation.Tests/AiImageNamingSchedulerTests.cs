@@ -58,7 +58,9 @@ public sealed class AiImageNamingSchedulerTests
         Func<AppPreferences> preferencesProvider) => new(
             new AiImageNamingOrganizer(new DeepSeekClient(handler)),
             board,
-            new BoardMutationService(board, store, messages.Add),
+            // mutations 只作落板通道：其状态消息（StatusMessage 结果对象）不参与本
+            // 套件断言，scheduler 文案仍走 string 收集器（范围外通道，Issue #248）。
+            new BoardMutationService(board, store, _ => { }),
             new PassthroughSecretProtector(),
             preferencesProvider,
             messages.Add,

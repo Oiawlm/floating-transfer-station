@@ -7,7 +7,7 @@ public sealed class ExternalDropImportService
     private readonly IImageNormalizer _normalizer;
     private readonly BoardService _board;
     private readonly IBoardStore _store;
-    private readonly Action<string> _showStatus;
+    private readonly Action<StatusMessage> _showStatus;
     private readonly BoardOperationGate _operationGate;
     private readonly PluginCatalog? _pluginCatalog;
     private readonly DefaultSubgroupState _defaultSubgroup;
@@ -17,7 +17,7 @@ public sealed class ExternalDropImportService
         IImageNormalizer normalizer,
         BoardService board,
         IBoardStore store,
-        Action<string> showStatus,
+        Action<StatusMessage> showStatus,
         BoardOperationGate? operationGate = null,
         PluginCatalog? pluginCatalog = null,
         DefaultSubgroupState? defaultSubgroup = null,
@@ -53,7 +53,7 @@ public sealed class ExternalDropImportService
             var cleaned = _pluginCatalog?.TextCleaner.Apply(droppedText.Value) ?? droppedText.Value;
             if (string.IsNullOrWhiteSpace(cleaned))
             {
-                _showStatus("拖入的文本被启用插件清空，本次未保存。");
+                _showStatus(new StatusMessage(StatusMessageKind.DropTextClearedByPlugin));
                 return false;
             }
 
@@ -106,9 +106,9 @@ public sealed class ExternalDropImportService
         catch
         {
             var cleanupSucceeded = Cleanup(storedImages);
-            _showStatus(cleanupSucceeded
-                ? "拖入内容未保存，请重试。"
-                : "拖入内容未保存，且部分图片副本暂时无法删除。");
+            _showStatus(new StatusMessage(cleanupSucceeded
+                ? StatusMessageKind.DropSaveFailedRetry
+                : StatusMessageKind.DropSaveFailedCleanupIncomplete));
             return false;
         }
     }

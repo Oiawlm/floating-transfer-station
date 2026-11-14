@@ -94,12 +94,13 @@ public sealed partial class MainWindowInteractionTests
         operationGate ??= new BoardOperationGate();
         MainWindow? window = null;
         void ShowStatus(string message) => window?.ShowStatus(message);
+        void ShowServiceStatus(StatusMessage message) => window?.ShowStatus(message.ToDisplayText());
         var clipboard = new ClipboardCaptureService(
             clipboardReader ?? new NeverReadClipboardReader(),
             normalizer,
             board,
             store,
-            ShowStatus,
+            ShowServiceStatus,
             operationGate: operationGate,
             defaultCaptureCategory: defaultCaptureCategory);
         window = new MainWindow(
@@ -107,14 +108,14 @@ public sealed partial class MainWindowInteractionTests
             store,
             settings,
             clipboard,
-            new BoardMutationService(board, store, ShowStatus, operationGate),
+            new BoardMutationService(board, store, ShowServiceStatus, operationGate),
             new DragPayloadService(),
             new ExternalDropPayloadReader(new WindowsDataImageReader()),
             new ExternalDropImportService(
                 normalizer,
                 board,
                 store,
-                ShowStatus,
+                ShowServiceStatus,
                 operationGate),
             defaultCaptureCategory,
             updateService: updateService,

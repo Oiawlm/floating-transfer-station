@@ -18,7 +18,7 @@ public sealed class ExternalDropImportServiceTests
         var board = new BoardService();
         var existing = board.AddText("existing", BoardCategory.CustomerOriginal);
         var store = new RecordingBoardStore(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var defaultCategory = new DefaultCaptureCategoryState();
         defaultCategory.Set(BoardCategory.Inbox);
         var service = CreateService(directory.Root, board, store, messages);
@@ -45,7 +45,7 @@ public sealed class ExternalDropImportServiceTests
         using var directory = new TestDirectory();
         var board = new BoardService();
         var store = new RecordingBoardStore(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var defaultSubgroup = new DefaultSubgroupState();
         defaultSubgroup.Set(BoardCategory.CustomerOriginal, 3);
         var service = CreateService(
@@ -75,7 +75,7 @@ public sealed class ExternalDropImportServiceTests
         var existing = board.AddText("existing", BoardCategory.CustomerOriginal);
         var store = new RecordingBoardStore(directory.Root);
         var normalizer = new RecordingImageNormalizer(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = CreateService(board, store, messages, normalizer);
 
         var imported = await service.ImportAsync(
@@ -129,7 +129,7 @@ public sealed class ExternalDropImportServiceTests
         var existing = board.AddText("existing", BoardCategory.Reference);
         var store = new RecordingBoardStore(directory.Root);
         var normalizer = new RecordingImageNormalizer(directory.Root) { FailFileCall = 2 };
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = CreateService(board, store, messages, normalizer);
 
         var imported = await service.ImportAsync(
@@ -140,7 +140,7 @@ public sealed class ExternalDropImportServiceTests
         Assert.AreSame(existing, board.Items(BoardCategory.Reference).Single());
         Assert.AreEqual(0, store.SaveCount);
         AssertNoManagedImages(store.ImagesDirectory);
-        CollectionAssert.AreEqual(new[] { "拖入内容未保存，请重试。" }, messages);
+        CollectionAssert.AreEqual(new[] { new StatusMessage(StatusMessageKind.DropSaveFailedRetry) }, messages);
     }
 
     [TestMethod]
@@ -157,7 +157,7 @@ public sealed class ExternalDropImportServiceTests
         WriteGif(source, frameCount: 2);
         var board = new BoardService();
         var store = new RecordingBoardStore(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = CreateService(
             board,
             store,
@@ -170,7 +170,7 @@ public sealed class ExternalDropImportServiceTests
         Assert.AreEqual(0, board.Items(BoardCategory.Reference).Count);
         Assert.AreEqual(0, store.SaveCount);
         AssertNoManagedImages(store.ImagesDirectory);
-        CollectionAssert.AreEqual(new[] { "拖入内容未保存，请重试。" }, messages);
+        CollectionAssert.AreEqual(new[] { new StatusMessage(StatusMessageKind.DropSaveFailedRetry) }, messages);
     }
 
     [TestMethod]
@@ -185,7 +185,7 @@ public sealed class ExternalDropImportServiceTests
         var originalIds = board.Items(BoardCategory.Prompt).Select(item => item.Id).ToArray();
         var store = new RecordingBoardStore(directory.Root) { SaveFailure = new IOException("save failed") };
         var normalizer = new RecordingImageNormalizer(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = CreateService(board, store, messages, normalizer);
 
         var imported = await service.ImportAsync(
@@ -201,7 +201,7 @@ public sealed class ExternalDropImportServiceTests
         CollectionAssert.AreEqual(
             normalizer.Created.Select(image => image.AbsolutePath).ToArray(),
             store.DeletedPaths.ToArray());
-        CollectionAssert.AreEqual(new[] { "拖入内容未保存，请重试。" }, messages);
+        CollectionAssert.AreEqual(new[] { new StatusMessage(StatusMessageKind.DropSaveFailedRetry) }, messages);
     }
 
     [TestMethod]
@@ -221,7 +221,7 @@ public sealed class ExternalDropImportServiceTests
             ThrowDeleteFailure = throwOnFirstDelete
         };
         var normalizer = new RecordingImageNormalizer(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = CreateService(board, store, messages, normalizer);
 
         var imported = await service.ImportAsync(
@@ -234,7 +234,7 @@ public sealed class ExternalDropImportServiceTests
             normalizer.Created.Select(image => image.AbsolutePath).ToArray(),
             store.DeletedPaths.ToArray());
         CollectionAssert.AreEqual(
-            new[] { "拖入内容未保存，且部分图片副本暂时无法删除。" },
+            new[] { new StatusMessage(StatusMessageKind.DropSaveFailedCleanupIncomplete) },
             messages);
     }
 
@@ -258,7 +258,7 @@ public sealed class ExternalDropImportServiceTests
         var board = new BoardService();
         var store = new RecordingBoardStore(directory.Root);
         var normalizer = new RecordingImageNormalizer(directory.Root, signalAfterFileCalls: paths.Length);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = CreateService(board, store, messages, normalizer, gate);
         using var cancellation = new CancellationTokenSource();
 
@@ -308,7 +308,7 @@ public sealed class ExternalDropImportServiceTests
             ThrowDeleteFailure = true
         };
         var normalizer = new RecordingImageNormalizer(directory.Root, signalAfterFileCalls: paths.Length);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = CreateService(board, store, messages, normalizer, gate);
         using var cancellation = new CancellationTokenSource();
 
@@ -347,7 +347,7 @@ public sealed class ExternalDropImportServiceTests
         var board = new BoardService();
         var store = new RecordingBoardStore(directory.Root);
         var normalizer = new RecordingImageNormalizer(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = CreateService(board, store, messages, normalizer, gate);
 
         var imported = await service.ImportAsync(
@@ -358,7 +358,7 @@ public sealed class ExternalDropImportServiceTests
         Assert.AreEqual(0, board.Items(BoardCategory.CustomerOriginal).Count);
         Assert.AreEqual(0, store.SaveCount);
         AssertNoManagedImages(store.ImagesDirectory);
-        CollectionAssert.AreEqual(new[] { "拖入内容未保存，请重试。" }, messages);
+        CollectionAssert.AreEqual(new[] { new StatusMessage(StatusMessageKind.DropSaveFailedRetry) }, messages);
     }
 
     [TestMethod]
@@ -370,7 +370,7 @@ public sealed class ExternalDropImportServiceTests
         var existing = board.AddText("existing", BoardCategory.Inbox);
         var store = new FailingFirstSaveBoardStore(directory.Root);
         var gate = new BoardOperationGate();
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var mutations = new BoardMutationService(board, store, messages.Add, gate);
         var paths = CreateSourceFiles(directory.Root, "A.png");
         var normalizer = new RecordingImageNormalizer(directory.Root, signalAfterFileCalls: 1);
@@ -405,7 +405,7 @@ public sealed class ExternalDropImportServiceTests
         var board = new BoardService();
         var store = new RecordingBoardStore(directory.Root);
         var normalizer = new RecordingImageNormalizer(directory.Root);
-        var messages = new List<string>();
+        var messages = new List<StatusMessage>();
         var service = CreateService(board, store, messages, normalizer);
 
         await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => service.ImportAsync(
@@ -421,7 +421,7 @@ public sealed class ExternalDropImportServiceTests
         string root,
         BoardService board,
         IBoardStore store,
-        List<string> messages,
+        List<StatusMessage> messages,
         DefaultSubgroupState? defaultSubgroup = null) =>
         CreateService(
             board,
@@ -433,7 +433,7 @@ public sealed class ExternalDropImportServiceTests
     private static ExternalDropImportService CreateService(
         BoardService board,
         IBoardStore store,
-        List<string> messages,
+        List<StatusMessage> messages,
         IImageNormalizer normalizer,
         BoardOperationGate? gate = null,
         DefaultSubgroupState? defaultSubgroup = null,
@@ -453,7 +453,7 @@ public sealed class ExternalDropImportServiceTests
         using var directory = new TestDirectory();
         var board = new BoardService();
         var store = new RecordingBoardStore(directory.Root);
-        var pipelineMessages = new List<string>();
+        var pipelineMessages = new List<StatusMessage>();
         var schedulerMessages = new List<string>();
         var trackedRounds = new List<Task>();
         using var dispatcherThread = new StaDispatcherThread();
