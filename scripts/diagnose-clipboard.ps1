@@ -8,7 +8,7 @@
   （Raymond Chen 2024-04-10）。占用状态无变更通知，只能轮询（-Watch 默认 1Hz）。
   竞态容忍：持锁窗口转瞬即逝或进程已退出时如实记「无/已释放/?」，不报错。
   本脚本默认只读：绝不结束进程、绝不改机器配置、绝不读写剪贴板内容本身。
-  完整判定阶梯见 -Guided；规格出处＝docs/research/2026-11-16-clipboard-lockdown.md §6（本地维护文档）。
+  完整判定阶梯见 -Guided；规格出处＝维护者本地调研底稿 §6（2026-11-16 剪贴板锁死事故批次）。
 .PARAMETER Once
   单次快照：锁持有者/数据 owner（各含 HWND/TID/PID/进程名/窗口类/标题）＋剪贴板序号＋时间。默认动作。
 .PARAMETER Watch
@@ -105,7 +105,7 @@ if ($Guided) {
     Write-Host @'
 
 == 剪贴板锁死复发判定阶梯（先采集后处置，不要先重启） ==
-出处：docs/research/2026-11-16-clipboard-lockdown.md §6.3（本地维护文档）
+出处：维护者本地调研底稿 §6.3（2026-11-16 剪贴板锁死事故批次）
 
 第 0 步（先采集留档）：PowerShell 跑本脚本 -Watch 30–60 秒
         日志自动留档 %TEMP%\FloatingTransferStation\forensics\clipboard-incident-*.log，
