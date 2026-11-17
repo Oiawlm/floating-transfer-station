@@ -61,6 +61,89 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     internal static extern uint GetClipboardSequenceNumber();
 
+    // ---- 剪贴板访问层（2026-11-16 锁死事故根治，R3 Win32 RAII 写＋R6 占用者遥测）----
+    // 单入口 ClipboardAccessService 专用：生产代码其余位置不得直接调用。
+
+    internal const uint GmemMoveable = 0x0002;
+    internal const uint CfUnicodeText = 13;
+    internal const uint CfDib = 8;
+    internal const uint CfDibV5 = 17;
+    internal const uint CfHdrop = 15;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool OpenClipboard(nint hwndNewOwner);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool CloseClipboard();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool EmptyClipboard();
+
+    /// <summary>成功后 HGLOBAL 所有权移交系统（不得再释放）；失败时调用方自行释放。</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern nint SetClipboardData(uint format, nint hMem);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern uint RegisterClipboardFormat(string name);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    internal static extern nint GlobalAlloc(uint flags, nuint bytes);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    internal static extern nint GlobalLock(nint hMem);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GlobalUnlock(nint hMem);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    internal static extern nint GlobalFree(nint hMem);
+
+    [DllImport("user32.dll")]
+    internal static extern nint GetOpenClipboardWindow();
+
+    [DllImport("user32.dll")]
+    internal static extern nint GetClipboardOwner();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern int GetClassName(nint hWnd, System.Text.StringBuilder className, int maxCount);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern int GetWindowText(nint hWnd, System.Text.StringBuilder text, int maxCount);
+
+    [DllImport("ole32.dll")]
+    internal static extern int OleInitialize(nint reserved);
+
+    [DllImport("ole32.dll")]
+    internal static extern void OleUninitialize();
+
+    /// <summary>message-only 属主窗口（HWND_MESSAGE）：OpenClipboard 需要真实窗口——
+    /// MSDN：OpenClipboard(NULL)＋EmptyClipboard 会把 owner 置 NULL，后续
+    /// SetClipboardData 失败。用系统窗口类 STATIC 免注册类。</summary>
+    internal static readonly nint HwndMessage = -3;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern nint CreateWindowExW(
+        uint extendedStyle,
+        string className,
+        string windowName,
+        uint style,
+        int x,
+        int y,
+        int width,
+        int height,
+        nint parent,
+        nint menu,
+        nint instance,
+        nint parameter);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool DestroyWindow(nint hwnd);
+
     [DllImport("dwmapi.dll", PreserveSig = true)]
     internal static extern int DwmSetWindowAttribute(nint hwnd, int attribute, ref int value, int size);
 
@@ -94,9 +177,56 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(nint hwnd, out uint processId);
 
+    /// <summary>窗口归属进程 ID（0＝窗口已消亡的竞态；占用者遥测容忍 NULL 用）。</summary>
+    internal static uint GetWindowProcessId(nint hwnd) =>
+        GetWindowThreadProcessId(hwnd, out var processId) == 0 ? 0 : processId;
+
     /// <summary>窗口句柄是否属于本进程（送达目标捕获排除自身面板）。</summary>
     internal static bool IsOwnProcessWindow(nint hwnd) =>
         GetWindowThreadProcessId(hwnd, out var processId) != 0 && processId == Environment.ProcessId;
+
+    // ---- STA 工作线程消息等待（等待期泵 SEND——.NET ClipboardCore 同法，剪贴板
+    // 属主消息〔WM_DESTROYCLIPBOARD/WM_RENDERALLFORMATS〕不阻塞发送方）----
+
+    internal const uint QsSendMessage = 0x0004;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativeMessage
+    {
+        public nint Hwnd;
+        public uint Message;
+        public nint WParam;
+        public nint LParam;
+        public uint Time;
+        public Point Position;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PeekMessageW(
+        out NativeMessage message,
+        nint hwnd,
+        uint minimumMessage,
+        uint maximumMessage,
+        uint removalFlags);
+
+    /// <summary>递送挂起的发送消息（PeekMessage 调用期内完成投递；PM_REMOVE(1) 顺带
+    /// 丢弃意外到达的投递消息——本线程只服务属主发送消息、无投递消息语义，无消息
+    /// 即返回 false 停转）。</summary>
+    internal static void DispatchPendingSentMessages()
+    {
+        while (PeekMessageW(out _, 0, 0, 0, 1))
+        {
+        }
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern uint MsgWaitForMultipleObjectsEx(
+        uint count,
+        nint handles,
+        uint milliseconds,
+        uint wakeMask,
+        uint flags);
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct GuiThreadInfo

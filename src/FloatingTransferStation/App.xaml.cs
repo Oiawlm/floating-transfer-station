@@ -14,6 +14,7 @@ public partial class App : Application
     private static readonly TimeSpan RelocatedMutexRetryInterval = TimeSpan.FromMilliseconds(200);
 
     private AppLifecycleService? _lifecycle;
+    private ClipboardAccessService? _clipboardAccess;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -116,6 +117,13 @@ public partial class App : Application
             var defaultSubgroup = new DefaultSubgroupState();
             var captureDeduplicationGate = new CaptureDeduplicationGate();
             var windowsDataImageReader = new WindowsDataImageReader();
+            // 剪贴板访问单入口（2026-11-16 根治重构）：全进程一份——采集读、复制/送达
+            // 写、备份读、设置窗写共享同一 STA 线程与 clipboard.log；诊断面沿
+            // update.log 的 logs 惯例落数据根。
+            var clipboardAccess = new ClipboardAccessService(
+                new ClipboardPayloadReader(windowsDataImageReader),
+                new DiagnosticsLog(Path.Combine(paths.DataDirectory, "logs", "clipboard.log")));
+            _clipboardAccess = clipboardAccess;
             var externalDropPayloadReader = new ExternalDropPayloadReader(
                 windowsDataImageReader);
             var mutations = new BoardMutationService(board, store, ShowStatus, boardOperationGate);
@@ -139,7 +147,7 @@ public partial class App : Application
                 () => window?.WindowOperationToken ?? CancellationToken.None,
                 Dispatcher);
             var clipboardCapture = new ClipboardCaptureService(
-                new WpfClipboardReader(windowsDataImageReader),
+                clipboardAccess,
                 normalizer,
                 board,
                 store,
@@ -189,7 +197,8 @@ public partial class App : Application
                 appLauncher: new FloatingTransferStation.Services.AppLauncher(
                     packagedActivator: new FloatingTransferStation.Launcher.ShellPackagedAppActivator().Activate),
                 defaultSubgroup: defaultSubgroup,
-                aiImageNamingScheduler: aiImageNaming);
+                aiImageNamingScheduler: aiImageNaming,
+                clipboardAccess: clipboardAccess);
             MainWindow = window;
             // 先显示收起态窗口：分类轨只依赖已装载的偏好与设置，板面数据转入
             // 后台装载，大数据量不再拖住启动到可见的时间（见 LoadBoardInBackgroundAsync）。
@@ -316,6 +325,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _clipboardAccess?.Dispose();
         _lifecycle?.Dispose();
         base.OnExit(e);
     }

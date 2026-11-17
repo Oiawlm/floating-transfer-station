@@ -65,13 +65,18 @@ public partial class SettingsWindow : Window
 
     /// <summary>
     /// 剪贴板写入缝（同 MainWindow.ClipboardDelivery 约定）：测试注入捕获
-    /// 函数以断言负载，不触碰系统剪贴板；null 时走真实 Clipboard.SetDataObject。
+    /// 函数以断言负载，不触碰系统剪贴板；null 时走单入口服务的 RAII 物化写。
     /// </summary>
     internal Func<DataObject, bool>? ClipboardWriterOverride { get; set; }
 
-    public SettingsWindow(ISettingsHost host)
+    private readonly ClipboardAccessService _clipboardAccess;
+
+    public SettingsWindow(ISettingsHost host, ClipboardAccessService? clipboardAccess = null)
     {
         _host = host;
+        // 剪贴板访问单入口（2026-11-16 根治重构）：组合根注入共享实例；未注入时自建
+        // 兜底（测试写路径经 ClipboardWriterOverride 密封缝拦截，不触真实剪贴板）。
+        _clipboardAccess = clipboardAccess ?? new ClipboardAccessService();
         InitializeComponent();
         _imeGuard = ImeCompositionGuard.Attach(this);
         DesignThemeManager.Apply(this, host.CurrentTheme);
@@ -804,8 +809,7 @@ public partial class SettingsWindow : Window
                 return writer(data);
             }
 
-            Clipboard.SetDataObject(data, true);
-            return true;
+            return _clipboardAccess.TryWrite(data);
         }
         catch (Exception exception) when (
             exception is COMException or ExternalException or InvalidOperationException)
@@ -817,7 +821,7 @@ public partial class SettingsWindow : Window
     /// <summary>
     /// 复制二维码图片：剪贴板负载＝缩略图与放大层共用的同一冻结位图实例
     ///（DataObject.SetImage，同 DragPayloadService/InputDeliveryService 先例），
-    /// 经同一剪贴板写入缝落剪贴板、同异常捕获（失败如实反馈）。
+    /// 经同一剪贴板写入缝落剪贴板（单入口 RAII 物化写）、同异常捕获（失败如实反馈）。
     /// </summary>
     private bool WriteWeChatQrImageToClipboard()
     {
@@ -835,8 +839,7 @@ public partial class SettingsWindow : Window
                 return writer(data);
             }
 
-            Clipboard.SetDataObject(data, true);
-            return true;
+            return _clipboardAccess.TryWrite(data);
         }
         catch (Exception exception) when (
             exception is COMException or ExternalException or InvalidOperationException)

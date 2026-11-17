@@ -257,7 +257,7 @@ public partial class MainWindow : Window, ISettingsHost
             return;
         }
 
-        var settings = new SettingsWindow(this) { Owner = this };
+        var settings = new SettingsWindow(this, _clipboardAccess) { Owner = this };
         settings.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow = settings;
         settings.Show();

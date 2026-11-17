@@ -345,9 +345,9 @@ public sealed class DragPayloadServiceTests
         Assert.IsTrue(data.GetDataPresent(DataFormats.Bitmap));
         Assert.IsInstanceOfType(
             data.GetData(DragPayloadService.PreferredDropEffectFormat),
-            typeof(MemoryStream));
-        var bytes = ((MemoryStream)data.GetData(DragPayloadService.PreferredDropEffectFormat)!).ToArray();
-        Assert.AreEqual(4, bytes.Length, "CFSTR_PREFERREDDROPEFFECT 必须是 4 字节 DROPEFFECT 流。");
+            typeof(byte[]));
+        var bytes = (byte[])data.GetData(DragPayloadService.PreferredDropEffectFormat)!;
+        Assert.AreEqual(4, bytes.Length, "CFSTR_PREFERREDDROPEFFECT 必须是 4 字节 DROPEFFECT 物化。");
         Assert.AreEqual(
             (int)DragDropEffects.Copy,
             BitConverter.ToInt32(bytes, 0),
@@ -448,7 +448,7 @@ public sealed class DragPayloadServiceTests
             data.GetFileDropList().Cast<string>().ToArray(),
             "文件组必须按板内顺序。");
         Assert.IsFalse(data.GetDataPresent(DataFormats.Bitmap), "批量拖出与现状同构：无位图。");
-        var bytes = ((MemoryStream)data.GetData(DragPayloadService.PreferredDropEffectFormat)!).ToArray();
+        var bytes = (byte[])data.GetData(DragPayloadService.PreferredDropEffectFormat)!;
         Assert.AreEqual(4, bytes.Length);
         Assert.AreEqual((int)DragDropEffects.Copy, BitConverter.ToInt32(bytes, 0));
     }
@@ -511,7 +511,7 @@ public sealed class DragPayloadServiceTests
                 File.ReadAllBytes(delivered[0]),
                 "副本内容必须与受管本体逐字节一致。");
             Assert.IsTrue(data.GetDataPresent(DataFormats.Bitmap));
-            var bytes = ((MemoryStream)data.GetData(DragPayloadService.PreferredDropEffectFormat)!).ToArray();
+            var bytes = (byte[])data.GetData(DragPayloadService.PreferredDropEffectFormat)!;
             Assert.AreEqual((int)DragDropEffects.Copy, BitConverter.ToInt32(bytes, 0), "Preferred DropEffect(Copy) 声明照旧。");
         }
         finally

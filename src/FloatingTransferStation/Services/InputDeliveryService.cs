@@ -61,9 +61,13 @@ public interface IInputDeliveryNative
     Task DelayAsync(TimeSpan delay);
 }
 
-/// <summary>Win32/WPF 生产实现（剪贴板异常与 SendInput 结果如实返回）。</summary>
-internal sealed class Win32InputDeliveryNative : IInputDeliveryNative
+/// <summary>Win32 生产实现（剪贴板三操作委托单入口 <see cref="ClipboardAccessService"/>
+///——STA 线程＋硬超时读、RAII 全物化写；SendInput 结果如实返回）。</summary>
+internal sealed class Win32InputDeliveryNative(ClipboardAccessService? clipboardAccess = null)
+    : IInputDeliveryNative
 {
+    private readonly ClipboardAccessService _clipboardAccess = clipboardAccess ?? new();
+
     public nint GetForegroundWindow() => NativeMethods.GetForegroundWindow();
 
     public nint GetForegroundFocus() => NativeMethods.GetForegroundFocusWindow();
@@ -111,53 +115,13 @@ internal sealed class Win32InputDeliveryNative : IInputDeliveryNative
             Marshal.SizeOf<NativeMethods.Input>()) == inputs.Length;
     }
 
-    public IDataObject? GetClipboard()
-    {
-        try
-        {
-            if (Clipboard.GetDataObject() is not { } current)
-            {
-                return null;
-            }
+    /// <summary>备份读＝服务物化快照（UnicodeText/FileDrop/Bitmap；延迟渲染视图不能
+    /// 整体回写——2026-11-04 实测）。含 2s 硬超时，调用方须在后台线程（Task.Run 包裹）。</summary>
+    public IDataObject? GetClipboard() => _clipboardAccess.TryReadBackup();
 
-            // 系统剪贴板返回的数据对象视图不能整体回写（SetDataObject 回写实测
-            // 得到空剪贴板——延迟渲染视图不随对象迁移，2026-11-04 实测）。备份
-            // 必须物化：把送达通道可能覆盖的常用格式复制进新的 DataObject。
-            var snapshot = new DataObject();
-            var hasAny = false;
-            if (current.GetDataPresent(DataFormats.UnicodeText) &&
-                current.GetData(DataFormats.UnicodeText) is string text)
-            {
-                snapshot.SetText(text);
-                hasAny = true;
-            }
+    public bool WriteClipboard(IDataObject data) => TryClipboard(() => _clipboardAccess.TryWrite(data));
 
-            if (current.GetDataPresent(DataFormats.FileDrop) &&
-                current.GetData(DataFormats.FileDrop) is string[] files)
-            {
-                snapshot.SetFileDropList([.. files]);
-                hasAny = true;
-            }
-
-            if (current.GetDataPresent(DataFormats.Bitmap) &&
-                current.GetData(DataFormats.Bitmap) is System.Windows.Media.Imaging.BitmapSource bitmap)
-            {
-                snapshot.SetImage(bitmap);
-                hasAny = true;
-            }
-
-            return hasAny ? snapshot : null;
-        }
-        catch (Exception exception) when (
-            exception is COMException or ExternalException or InvalidOperationException)
-        {
-            return null;
-        }
-    }
-
-    public bool WriteClipboard(IDataObject data) => TryClipboard(() => Clipboard.SetDataObject(data, true));
-
-    public bool SetClipboard(IDataObject data) => TryClipboard(() => Clipboard.SetDataObject(data, true));
+    public bool SetClipboard(IDataObject data) => TryClipboard(() => _clipboardAccess.TryWrite(data));
 
     public uint GetClipboardSequenceNumber() => NativeMethods.GetClipboardSequenceNumber();
 
@@ -214,15 +178,20 @@ public sealed class InputDeliveryService
 
     private nint _targetWindow;
 
-    public InputDeliveryService(IInputDeliveryNative? native = null)
-        : this(native, null)
+    public InputDeliveryService(
+        IInputDeliveryNative? native = null,
+        ClipboardAccessService? clipboardAccess = null)
+        : this(native, null, clipboardAccess)
     {
     }
 
     /// <summary>测试可注入前台谓词上界（超时分支无需真实等待 2s）。</summary>
-    internal InputDeliveryService(IInputDeliveryNative? native, TimeSpan? foregroundWaitTimeout)
+    internal InputDeliveryService(
+        IInputDeliveryNative? native,
+        TimeSpan? foregroundWaitTimeout,
+        ClipboardAccessService? clipboardAccess = null)
     {
-        _native = native ?? new Win32InputDeliveryNative();
+        _native = native ?? new Win32InputDeliveryNative(clipboardAccess);
         _foregroundWaitTimeout = foregroundWaitTimeout ?? DefaultForegroundWaitTimeout;
     }
 
@@ -258,7 +227,9 @@ public sealed class InputDeliveryService
             return InputDeliveryOutcome.NoTarget;
         }
 
-        var backup = _native.GetClipboard();
+        // 备份读经后台线程（生产实现含 2s 硬超时的 STA 物化读）：送达序列由 UI 事件
+        // 触发，不让超时上限内的等待冻结 UI；假件即时返回，调用序不变。
+        var backup = await Task.Run(_native.GetClipboard);
         if (!await TryWriteClipboardWithRetryAsync(payload))
         {
             return InputDeliveryOutcome.ClipboardWriteFailed;
