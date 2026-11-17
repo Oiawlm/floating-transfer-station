@@ -2,6 +2,7 @@
 
 - 改进：fts-style-system 风格 Skill（维护者复用资产）迁仓管理——Skill 源码、语义 token 数值快照与再提取流程迁移至独立设计系统仓 [fts-design-system](https://github.com/Oiawlm/fts-design-system)（`skill/fts-style-system/` 随仓版本化，`scripts/sync-skill.ps1` 幂等部署到用户级 skills 目录，再提取按其 `docs/extraction-protocol.md` 执行）；本仓库代码与公开文档零变化。
 - 改进：动效与交互状态专题规范成文（docs 新增 `motion.md` 与 `interaction-states.md` 两篇，为 `design.md` 对应章的正文纵深）——动效篇六节（时长档位/缓动按语义/编排与可中断/窗口级例外通道/减动效退化/评审原则），状态篇五节（控件类型学/hover 双轨与 pressed 三范式/禁用两档/Focus 矩阵/分层叠加）；全部数值标注为示例值并统一指向 token 文件路径 `tokens/motion.tokens.json`（该文件建仓前数值权威仍为 Core `DesignTokens`），每篇内嵌 fts 溯源锚点 8 条（文件:行，按基线 commit 实测可回库核对）。
+- 新增：剪贴板锁死复发取证探针 `scripts/diagnose-clipboard.ps1`（只读诊断工具，报告剪贴板问题时人人可跑）——三种模式一次取证即定罪「复制粘贴全系统失效」类事故：`-Once` 单次快照（锁持有者 `GetOpenClipboardWindow`/数据 owner `GetClipboardOwner` 两角色分开呈现，各含 HWND/TID/PID/进程名/窗口类/标题＋剪贴板序号）、`-Watch` 1Hz 轮询直至 Ctrl+C（行式留档 `%TEMP%\FloatingTransferStation\forensics\clipboard-incident-<时间戳>.log`，UTF-8；持锁者非「无」整行黄字高亮＝有进程正占着剪贴板锁）、`-Guided` 打印复发判定阶梯（先采集后处置、不要先重启）。兼容 Windows PowerShell 5.1+，竞态容忍（持锁转瞬即逝或进程已退出如实记录不报错），默认只读——绝不结束进程、绝不改机器配置、不触碰剪贴板内容。同 PR 将仓库卫生检查的 scripts 前缀白名单扩至七族（新增 `diagnose-`，设计契约 #64 前缀表走评审扩容）。
 
 ## 1.72.0
 

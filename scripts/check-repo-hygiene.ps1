@@ -10,9 +10,9 @@
          $AllowedRootEntries below. Extra or missing entries are reported.
          Additionally every tracked scripts/*.ps1 must match the verb-prefix
          whitelist $AllowedScriptNamePattern (bootstrap-/build-/check-/
-         clear-/run-/test-); the prefix table is hardcoded here on purpose
-         so adding a prefix requires a reviewed change (R11 file charter,
-         design contract #64).
+         clear-/diagnose-/run-/test-); the prefix table is hardcoded here
+         on purpose so adding a prefix requires a reviewed change (R11 file
+         charter, design contract #64).
 
       B. README local link integrity
          Every relative Markdown link in README.md must resolve to an
@@ -265,7 +265,7 @@ else {
 # Verb-prefix whitelist for tracked scripts (R11 file charter, design
 # contract #64). The prefix table is hardcoded here on purpose: a new prefix
 # means editing this pattern in a reviewed change.
-$AllowedScriptNamePattern = '^(bootstrap-|build-|check-|clear-|run-|test-)[a-z0-9-]+\.ps1$'
+$AllowedScriptNamePattern = '^(bootstrap-|build-|check-|clear-|diagnose-|run-|test-)[a-z0-9-]+\.ps1$'
 
 $scriptFiles = @(
     $trackedFiles |
@@ -280,7 +280,7 @@ if ($badScriptNames.Count -eq 0) {
 }
 else {
     foreach ($scriptFile in $badScriptNames) {
-        Write-Output ("[FAIL] Script name outside the prefix whitelist (expected bootstrap-/build-/check-/clear-/run-/test- prefix): {0}" -f $scriptFile)
+        Write-Output ("[FAIL] Script name outside the prefix whitelist (expected bootstrap-/build-/check-/clear-/diagnose-/run-/test- prefix): {0}" -f $scriptFile)
         Add-Violation ("Check A: script '{0}' does not match the scripts naming whitelist '{1}'." -f $scriptFile, $AllowedScriptNamePattern)
     }
 }
