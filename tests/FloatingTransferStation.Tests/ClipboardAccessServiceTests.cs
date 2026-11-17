@@ -47,9 +47,9 @@ public sealed class ClipboardAccessServiceTests
             null,
             native,
             dataObjectSource: HangForever);
-        var exception = await Assert.ThrowsExactlyAsync<ExternalException>(() =>
+        var exception = await Assert.ThrowsExactlyAsync<ClipboardTimeoutException>(() =>
             service.ReadAsync(CancellationToken.None));
-        Assert.IsInstanceOfType(exception, typeof(ClipboardTimeoutException));
+        Assert.IsInstanceOfType(exception, typeof(ExternalException));
     }
 
     [TestMethod]

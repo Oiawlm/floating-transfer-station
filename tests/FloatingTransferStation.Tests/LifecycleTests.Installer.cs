@@ -208,9 +208,9 @@ public sealed partial class LifecycleTests
             "The installer must define exactly one [Code] bootstrap.");
         var code = NormalizeInstallerSectionBody(codeSections[0].Groups["Body"].Value);
         Assert.AreEqual(
-            1,
+            2,
             Regex.Matches(code, @"CheckForMutexes\(").Count,
-            "The bootstrap must check the product mutex exactly once.");
+            "The bootstrap must check the product mutex exactly twice: the grace-period entry check and the 500ms polling inside the loop.");
         StringAssert.Contains(code, "CreateInputDirPage(wpSelectDir");
         StringAssert.Contains(code, "PrepareToInstall");
         StringAssert.Contains(code, "CurStepChanged");
