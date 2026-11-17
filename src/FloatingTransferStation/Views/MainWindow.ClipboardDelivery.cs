@@ -22,7 +22,7 @@ public partial class MainWindow
 {
     /// <summary>
     /// 剪贴板写入缝：测试注入捕获函数以断言负载与提示，不触碰系统剪贴板；
-    /// null 时走真实 Clipboard.SetDataObject。
+    /// null 时走单入口服务的 RAII 物化写。
     /// </summary>
     internal Func<DataObject, bool>? ClipboardWriterOverride { get; set; }
 
@@ -204,8 +204,8 @@ public partial class MainWindow
                 return writer(data);
             }
 
-            Clipboard.SetDataObject(data, true);
-            return true;
+            // 单入口写（RAII＋全物化，零渲染义务）；硬超时经既有异常子句承接提示。
+            return _clipboardAccess.TryWrite(data);
         }
         catch (Exception exception) when (
             exception is COMException or ExternalException or InvalidOperationException)
@@ -294,11 +294,17 @@ public partial class MainWindow
             return;
         }
 
-        _ = DeliverCardTextAsync(item);
+        // 纳入 pending 追踪＋窗口取消令牌（2026-11-16 R4）：送达不再是 fire-and-forget
+        //——关闭排空与更新前排空都会等待在途送达收尾（含原剪贴板恢复），强杀打断
+        // OLE 写的通道（H4）就此闭合。
+        TrackPendingOperation(DeliverCardTextAsync(item, _windowOperationCancellation.Token));
     }
 
-    private async Task DeliverCardTextAsync(BoardItem item)
+    private async Task DeliverCardTextAsync(BoardItem item, CancellationToken cancellationToken)
     {
+        // 窗口取消令牌接入：关闭/搬迁取消后不再新起送达序列（在途序列自身有界：
+        // 备份读 2s＋前台谓词 2s＋稳定期与有界重试，远小于关闭排空超时）。
+        cancellationToken.ThrowIfCancellationRequested();
         DataObject payload;
         try
         {

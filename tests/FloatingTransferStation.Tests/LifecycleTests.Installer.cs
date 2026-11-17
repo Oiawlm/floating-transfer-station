@@ -118,9 +118,20 @@ public sealed partial class LifecycleTests
                 @"(?im)^[ \t]*AppMutex[ \t]*=[ \t]*\{#MyAppMutexName\}[ \t]*\r?$"),
             "The product mutex must remain Inno Setup's final overwrite guard.");
         Assert.AreEqual(
-            1,
+            2,
             Regex.Matches(installer, @"(?i)taskkill\.exe").Count,
-            "The entire installer must mention taskkill exactly once.");
+            "The installer must mention taskkill exactly twice: graceful close first, force close after the grace period.");
+        var gracefulTaskkill = Regex.Match(installer, @"(?is)taskkill\.exe'\),\s*'/IM");
+        var forceTaskkill = Regex.Match(installer, @"(?is)taskkill\.exe'\),\s*'/F /IM");
+        Assert.IsTrue(
+            gracefulTaskkill.Success && forceTaskkill.Success,
+            "The installer must close the running application gracefully (taskkill /IM = WM_CLOSE) before force closing (taskkill /F /IM).");
+        Assert.IsTrue(
+            gracefulTaskkill.Index < forceTaskkill.Index,
+            "The graceful close attempt must precede the force-close fallback.");
+        Assert.IsTrue(
+            installer.Contains("Sleep(500)", StringComparison.Ordinal),
+            "The grace period must poll the mutex with bounded sleeps (500ms steps).");
         Assert.IsTrue(
             Regex.IsMatch(installer, @"(?im)^[ \t]*DisableDirPage[ \t]*=[ \t]*no[ \t]*\r?$"),
             "The native installation directory page must remain enabled.");
@@ -175,6 +186,8 @@ public sealed partial class LifecycleTests
             "MyAppName",
             "MyAppMutexName",
             "MyAppExeName",
+            "MyAppMutexName",
+            "MyAppExeName",
         ];
         CollectionAssert.AreEqual(
             expectedInlinePreprocessorExpressions,
@@ -195,9 +208,9 @@ public sealed partial class LifecycleTests
             "The installer must define exactly one [Code] bootstrap.");
         var code = NormalizeInstallerSectionBody(codeSections[0].Groups["Body"].Value);
         Assert.AreEqual(
-            1,
+            2,
             Regex.Matches(code, @"CheckForMutexes\(").Count,
-            "The bootstrap must check the product mutex exactly once.");
+            "The bootstrap must check the product mutex exactly twice: the grace-period entry check and the 500ms polling inside the loop.");
         StringAssert.Contains(code, "CreateInputDirPage(wpSelectDir");
         StringAssert.Contains(code, "PrepareToInstall");
         StringAssert.Contains(code, "CurStepChanged");

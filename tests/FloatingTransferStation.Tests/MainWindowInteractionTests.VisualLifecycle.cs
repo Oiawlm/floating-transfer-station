@@ -1906,6 +1906,35 @@ public sealed partial class MainWindowInteractionTests
     }
 
     [STATestMethod]
+    public void Close_DrainPendingOperationsHasBoundedTimeoutAndContinues()
+    {
+        using var directory = new TestDirectory();
+        var window = CreateWindow(directory, new BoardService());
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            window.TrackPendingOperation(gate.Task);
+            // 测试档短时限（生产默认 10s；R4 上界不变量＝超时后继续而不是无限等）。
+            window.PendingDrainTimeout = TimeSpan.FromMilliseconds(200);
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            InvokePrivateTask(window, "DrainPendingOperationsAsync");
+            stopwatch.Stop();
+            Assert.IsTrue(
+                stopwatch.Elapsed >= TimeSpan.FromMilliseconds(150),
+                "排空必须真的等待在途操作（超时前不提前放弃）。");
+            Assert.IsTrue(
+                stopwatch.Elapsed < TimeSpan.FromSeconds(3),
+                "在途操作永不完时，排空必须在有界时限内放弃并继续（不无限等待）。");
+        }
+        finally
+        {
+            window.PendingDrainTimeout = TimeSpan.FromSeconds(10);
+            gate.TrySetResult();
+            CloseWindow(window);
+        }
+    }
+
+    [STATestMethod]
     public void Close_FinalSaveFailureReplacesCanceledClipboardTokenAndCapturesNextUpdate()
     {
         using var directory = new TestDirectory();

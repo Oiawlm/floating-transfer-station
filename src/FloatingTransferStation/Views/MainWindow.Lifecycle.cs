@@ -272,6 +272,12 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>关闭排空等待上界（2026-11-16 R4）：在途操作（含送达）总体有界，超时
+    /// 记录后继续关——「关不掉→被安装器强杀」的链条（H4）就此闭合。10s 覆盖最慢
+    /// 组合（送达备份读 2s＋写重试＋前台谓词 2s＋图片归一化等）仍有余量。实例字段
+    /// 供测试注入短时限（生产行为＝默认值）。</summary>
+    internal TimeSpan PendingDrainTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
     private async Task DrainPendingOperationsAsync()
     {
         Task[] operations;
@@ -280,7 +286,21 @@ public partial class MainWindow : Window
             operations = [.. _pendingOperations];
         }
 
-        await Task.WhenAll(operations);
+        if (operations.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.WhenAll(operations).WaitAsync(PendingDrainTimeout);
+        }
+        catch (TimeoutException)
+        {
+            // 超时即弃等继续关：残留任务由各自的移除续体观察收尾，不无限等待。
+            _clipboardAccess.LogDrainTimeout(
+                $"关闭排空等待 {PendingDrainTimeout.TotalSeconds:0}s 超时（{operations.Length} 项在途未收尾），继续关闭。");
+        }
     }
 
     private void StopClipboardListening()

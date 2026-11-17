@@ -69,6 +69,7 @@ public partial class MainWindow : Window
     private readonly ISecretProtector _secretProtector;
     private readonly DeepSeekClient _deepSeekClient;
     private readonly InputDeliveryService _inputDelivery;
+    private readonly ClipboardAccessService _clipboardAccess;
     private readonly BoardOperationGate? _operationGate;
     private readonly DataDirectoryChangeService? _dataDirectoryChangeService;
     private readonly string _dataDirectory;
@@ -148,7 +149,8 @@ public partial class MainWindow : Window
         InputDeliveryService? inputDelivery = null,
         Func<DateTimeOffset>? updateClock = null,
         DefaultSubgroupState? defaultSubgroup = null,
-        AiImageNamingScheduler? aiImageNamingScheduler = null)
+        AiImageNamingScheduler? aiImageNamingScheduler = null,
+        ClipboardAccessService? clipboardAccess = null)
     {
         InitializeComponent();
         _preferences = preferences ?? AppPreferences.Default;
@@ -160,9 +162,14 @@ public partial class MainWindow : Window
         // 未注入时用真实实现兜底（与 _startupManager/_globalHotkeySource 同法）。
         _secretProtector = secretProtector ?? new DpapiSecretProtector();
         _deepSeekClient = deepSeekClient ?? new DeepSeekClient();
+        // 剪贴板访问单入口（2026-11-16 根治重构）：组合根注入共享实例（与采集/设置窗
+        // 同一份——STA 线程与 clipboard.log 全进程一份）；未注入时自建兜底（测试写
+        // 路径经 ClipboardWriterOverride 密封缝拦截，不触真实剪贴板）。
+        _clipboardAccess = clipboardAccess ?? new ClipboardAccessService();
         // 输入送达（需求 6）：可注入（测试传假 Win32 接缝）；未注入时用真实实现兜底
-        //（与 _startupManager/_globalHotkeySource 同法）。
-        _inputDelivery = inputDelivery ?? new InputDeliveryService();
+        //（与 _startupManager/_globalHotkeySource 同法），其剪贴板三操作共享上面的
+        // 单入口服务。
+        _inputDelivery = inputDelivery ?? new InputDeliveryService(clipboardAccess: _clipboardAccess);
         // AI 整理编排（1.41.0）复用同一客户端实例；组合根显式装配，测试可注入
         // 挂假 HttpMessageHandler 客户端的编排器（全离线）。
         _aiTextOrganizer = aiTextOrganizer ?? new AiTextOrganizer(_deepSeekClient);

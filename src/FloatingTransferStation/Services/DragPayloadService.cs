@@ -216,9 +216,10 @@ public sealed class DragPayloadService
         _temporaryDeliveryFiles.Clear();
     }
 
-    /// <summary>CFSTR_PREFERREDDROPEFFECT：4 字节 DROPEFFECT_COPY 流（Shell 语义）
+    /// <summary>CFSTR_PREFERREDDROPEFFECT：4 字节 DROPEFFECT_COPY（Shell 语义）
     /// 声明「只复制」，防外部目标按 Move 处理而删除受管源文件；autoConvert:false
-    /// 保持原始流格式。</summary>
+    /// 保持原始格式。载荷＝byte[] 物化（2026-11-16 根治重构：Stream 支撑格式清零
+    /// ——拖出负载全物化，零渲染义务不依赖本进程 STA 存活）。</summary>
     private static void DeclarePreferredCopyEffect(DataObject data, bool declare)
     {
         if (!declare)
@@ -228,7 +229,7 @@ public sealed class DragPayloadService
 
         data.SetData(
             PreferredDropEffectFormat,
-            new MemoryStream(BitConverter.GetBytes((int)DragDropEffects.Copy)),
+            BitConverter.GetBytes((int)DragDropEffects.Copy),
             autoConvert: false);
     }
 

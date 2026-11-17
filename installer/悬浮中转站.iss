@@ -748,22 +748,50 @@ begin
   end;
 end;
 
+// 运行中应用的关闭序列（2026-11-16 剪贴板锁死事故 R5）：互斥锁在＝应用在运行。
+// 先优雅（taskkill 不带 /F＝向应用窗口投递 WM_CLOSE，应用走正常关闭序列——排空
+// 在途保存与送达、完成剪贴板写入），轮询互斥锁至宽限上限；仍持锁才强制结束。
+// 优雅通道消灭「强杀打断 OLE 剪贴板写入中段」的通道（H4）；宽限有界（15 秒），
+// 应用挂死时安装仍能继续（回落强制通道，行为与旧版一致）。
 procedure ForceCloseRunningApplication;
 var
   ResultCode: Integer;
+  Attempt: Integer;
+  GraceAttempts: Integer;
 begin
-  if CheckForMutexes('{#MyAppMutexName}') then
+  if not CheckForMutexes('{#MyAppMutexName}') then
   begin
-    if not Exec(
-      ExpandConstant('{sys}\taskkill.exe'),
-      '/F /IM "{#MyAppExeName}"',
-      '',
-      SW_HIDE,
-      ewWaitUntilTerminated,
-      ResultCode) then
+    Exit;
+  end;
+
+  Exec(
+    ExpandConstant('{sys}\taskkill.exe'),
+    '/IM "{#MyAppExeName}"',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode);
+  GraceAttempts := 30;
+  for Attempt := 1 to GraceAttempts do
+  begin
+    if not CheckForMutexes('{#MyAppMutexName}') then
     begin
-      Log('Failed to start taskkill; AppMutex will keep setup from overwriting the running application.');
+      Log('Running application closed gracefully within the grace period.');
+      Exit;
     end;
+    Sleep(500);
+  end;
+
+  Log('Running application did not close within the grace period; falling back to force close.');
+  if not Exec(
+    ExpandConstant('{sys}\taskkill.exe'),
+    '/F /IM "{#MyAppExeName}"',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode) then
+  begin
+    Log('Failed to start taskkill; AppMutex will keep setup from overwriting the running application.');
   end;
 end;
 
