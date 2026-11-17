@@ -99,7 +99,7 @@ internal sealed class ClipboardStaWorker : IDisposable
         }
     }
 
-    private static ExternalException CreateTimeoutException() =>
+    private static ClipboardTimeoutException CreateTimeoutException() =>
         new("A clipboard operation timed out; the worker thread was abandoned.");
 
     private Worker EnsureWorkerLocked()

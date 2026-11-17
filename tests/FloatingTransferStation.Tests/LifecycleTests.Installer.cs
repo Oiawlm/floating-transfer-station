@@ -186,6 +186,8 @@ public sealed partial class LifecycleTests
             "MyAppName",
             "MyAppMutexName",
             "MyAppExeName",
+            "MyAppMutexName",
+            "MyAppExeName",
         ];
         CollectionAssert.AreEqual(
             expectedInlinePreprocessorExpressions,

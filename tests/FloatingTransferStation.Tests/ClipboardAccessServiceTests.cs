@@ -370,11 +370,11 @@ public sealed class ClipboardAccessServiceTests
         return bitmap;
     }
 
-    /// <summary>假 Win32 面：记录调用序、注入失败与占用者快照，绝不触碰真实剪贴板。</summary>
+    /// <summary>假 Win32 面：记录调用序、注入失败与占用者快照，绝不触碰真实剪贴板；
+    /// HGLOBAL 用真实非托管内存承载（生产路径 Marshal.Copy 会写入 GlobalLock 指针）。</summary>
     private sealed class RecordingClipboardNative : IClipboardNative
     {
         private readonly List<string> _calls = [];
-        private nint _nextHandle = 0x1000;
         private uint _nextRegisteredFormat = 4901;
 
         public List<string> Calls => _calls;
@@ -421,7 +421,7 @@ public sealed class ClipboardAccessServiceTests
         public nint GlobalAlloc(uint flags, nuint bytes)
         {
             _calls.Add("alloc");
-            return _nextHandle++;
+            return Marshal.AllocHGlobal((nint)bytes);
         }
 
         public nint GlobalLock(nint hMem)
@@ -439,6 +439,7 @@ public sealed class ClipboardAccessServiceTests
         public nint GlobalFree(nint hMem)
         {
             FreedHandles.Add(hMem);
+            Marshal.FreeHGlobal(hMem);
             return 0;
         }
 
